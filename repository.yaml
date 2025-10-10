@@ -1,0 +1,4 @@
+# https://developers.home-assistant.io/docs/add-ons/repository#repository-configuration
+name: akentner Add-ons Repository
+url: 'https://github.com/akentner/homeassistant-addons'
+maintainer: Alexander Kentner <github@akentner.de>

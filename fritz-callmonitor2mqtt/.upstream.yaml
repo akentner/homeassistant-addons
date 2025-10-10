@@ -1,0 +1,22 @@
+# Upstream configuration for fritz-callmonitor2mqtt add-on
+# This file configures the automatic update system
+
+upstream:
+  # GitHub repository of the upstream project
+  repository: "akentner/fritz-callmonitor2mqtt"
+
+  # Pattern for version tags (default: v*)
+  version_pattern: "v*"
+
+  # Regex to remove prefixes from version tags (e.g. "v1.0.3" -> "1.0.3")
+  version_strip: "^v"
+
+addon:
+  # How should the add-on version be updated?
+  # - "auto": Automatically increment patch version (e.g. 0.1-3 -> 0.1-4)
+  # - "sync": Use the same version as upstream
+  version_pattern: "auto"
+
+  # Optional: Additional configuration
+  # changelog: true  # Automatically create CHANGELOG.md
+  # commit_message_template: "Update {upstream_name} from {old_version} to {new_version}"
