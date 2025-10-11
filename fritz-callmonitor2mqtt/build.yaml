@@ -6,4 +6,4 @@ build_from:
   # i386: "ghcr.io/home-assistant/i386-base:3.22"
 
 args:
-  VERSION: "latest"
+  VERSION: "1.1.7"

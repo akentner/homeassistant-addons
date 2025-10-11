@@ -5,7 +5,7 @@ FROM $BUILD_FROM
 RUN apk add --no-cache curl tar
 
 # Build arguments for version and architecture
-ARG VERSION="1.0.3"
+ARG VERSION=$VERSION
 ARG TARGETARCH
 
 # Download and extract Go binary based on architecture
