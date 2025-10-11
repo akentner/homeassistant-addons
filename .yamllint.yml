@@ -1,0 +1,47 @@
+# YAML Linting Configuration for yamllint
+# Used by pre-commit hooks and CI
+
+extends: relaxed
+
+rules:
+  # Line length - more relaxed for documentation
+  line-length:
+    max: 120
+    level: warning
+
+  # Indentation - consistent 2 spaces
+  indentation:
+    spaces: 2
+    indent-sequences: true
+
+  # Comments - require space after #
+  comments:
+    min-spaces-from-content: 1
+
+  # Empty lines
+  empty-lines:
+    max-start: 0
+    max-end: 1
+
+  # Trailing spaces
+  trailing-spaces: enable
+
+  # Document separators
+  document-start:
+    present: false  # Don't require --- at start
+
+  # Brackets and braces
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+
+# File patterns to ignore
+ignore: |
+  .git/
+  node_modules/
+  *.min.yaml
+  *.min.yml

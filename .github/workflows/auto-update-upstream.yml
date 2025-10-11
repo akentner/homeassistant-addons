@@ -75,7 +75,7 @@ jobs:
 
           # Convert array to JSON for matrix
           ADDONS_JSON=$(printf '%s\n' "${ADDONS[@]}" | jq -R . | jq -s .)
-          echo "addons=$ADDONS_JSON" >> $GITHUB_OUTPUT
+          echo "addons=$ADDONS_JSON" >> "$GITHUB_OUTPUT"
           echo "Discovered add-ons: $ADDONS_JSON"
 
   check-upstream-releases:
@@ -86,8 +86,6 @@ jobs:
       matrix:
         addon: ${{ fromJson(needs.discover-addons.outputs.addons) }}
       fail-fast: false
-    outputs:
-      updates: ${{ steps.collect_updates.outputs.updates }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -123,11 +121,18 @@ jobs:
           ADDON="${{ matrix.addon }}"
 
           # Read .upstream.yaml configuration
-          UPSTREAM_REPO=$(yq eval '.upstream.repository' "./${ADDON}/.upstream.yaml")
-          VERSION_PATTERN=$(yq eval '.upstream.version_pattern // "v*"' "./${ADDON}/.upstream.yaml")
-          VERSION_STRIP=$(yq eval '.upstream.version_strip // "^v"' "./${ADDON}/.upstream.yaml")          echo "upstream_repo=$UPSTREAM_REPO" >> $GITHUB_OUTPUT
-          echo "version_pattern=$VERSION_PATTERN" >> $GITHUB_OUTPUT
-          echo "version_strip=$VERSION_STRIP" >> $GITHUB_OUTPUT
+          UPSTREAM_REPO=$(yq eval '.upstream.repository' \
+            "./${ADDON}/.upstream.yaml")
+          VERSION_PATTERN=$(yq eval '.upstream.version_pattern // "v*"' \
+            "./${ADDON}/.upstream.yaml")
+          VERSION_STRIP=$(yq eval '.upstream.version_strip // "^v"' \
+            "./${ADDON}/.upstream.yaml")
+
+          {
+            echo "upstream_repo=$UPSTREAM_REPO"
+            echo "version_pattern=$VERSION_PATTERN"
+            echo "version_strip=$VERSION_STRIP"
+          } >> "$GITHUB_OUTPUT"
 
           echo "📦 Add-on: $ADDON"
           echo "🔗 Upstream: $UPSTREAM_REPO"
@@ -138,7 +143,7 @@ jobs:
         run: |
           ADDON="${{ matrix.addon }}"
           CURRENT=$(grep 'VERSION:' "./${ADDON}/build.yaml" | sed 's/.*VERSION: *"\([^"]*\)".*/\1/')
-          echo "current_version=$CURRENT" >> $GITHUB_OUTPUT
+          echo "current_version=$CURRENT" >> "$GITHUB_OUTPUT"
           echo "Current version in build.yaml: $CURRENT"
 
       - name: Get latest upstream version
@@ -148,10 +153,12 @@ jobs:
           VERSION_STRIP="${{ steps.read_config.outputs.version_strip }}"
 
           LATEST=$(curl -s "https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest" | jq -r '.tag_name')
-          LATEST_CLEAN=$(echo "$LATEST" | sed "s/${VERSION_STRIP}//")
+          LATEST_CLEAN="${LATEST//${VERSION_STRIP}/}"
 
-          echo "upstream_version=$LATEST_CLEAN" >> $GITHUB_OUTPUT
-          echo "upstream_tag=$LATEST" >> $GITHUB_OUTPUT
+          {
+            echo "upstream_version=$LATEST_CLEAN"
+            echo "upstream_tag=$LATEST"
+          } >> "$GITHUB_OUTPUT"
           echo "Latest upstream version: $LATEST -> $LATEST_CLEAN"
 
       - name: Check if update needed
@@ -163,23 +170,18 @@ jobs:
           FORCE="${{ github.event.inputs.force_update }}"
 
           if [[ "$CURRENT" == "latest" ]]; then
-            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
             echo "ℹ️ [$ADDON] Current version is 'latest' - no update needed"
           elif [[ "$CURRENT" != "$UPSTREAM" ]] || [[ "$FORCE" == "true" ]]; then
-            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
             echo "✅ [$ADDON] Update needed: $CURRENT -> $UPSTREAM"
           else
-            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
             echo "ℹ️ [$ADDON] Already up to date: $CURRENT"
           fi
 
-          # Collect update information for downstream jobs
-          if [[ "${{ steps.check_version.outputs.needs_update }}" == "true" ]]; then
-            echo "UPDATE_INFO=${ADDON}:${CURRENT}:${UPSTREAM}" >> $GITHUB_ENV
-          fi
-
   update-addons:
-    needs: check-upstream-releases
+    needs: [discover-addons, check-upstream-releases]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -223,11 +225,18 @@ jobs:
           ADDON="${{ matrix.addon }}"
 
           # Read .upstream.yaml configuration
-          UPSTREAM_REPO=$(yq eval '.upstream.repository' "./${ADDON}/.upstream.yaml")
-          VERSION_STRIP=$(yq eval '.upstream.version_strip // "^v"' "./${ADDON}/.upstream.yaml")
-          VERSION_PATTERN=$(yq eval '.addon.version_pattern // "auto"' "./${ADDON}/.upstream.yaml")          echo "upstream_repo=$UPSTREAM_REPO" >> $GITHUB_OUTPUT
-          echo "version_strip=$VERSION_STRIP" >> $GITHUB_OUTPUT
-          echo "version_pattern=$VERSION_PATTERN" >> $GITHUB_OUTPUT
+          UPSTREAM_REPO=$(yq eval '.upstream.repository' \
+            "./${ADDON}/.upstream.yaml")
+          VERSION_STRIP=$(yq eval '.upstream.version_strip // "^v"' \
+            "./${ADDON}/.upstream.yaml")
+          VERSION_PATTERN=$(yq eval '.addon.version_pattern // "auto"' \
+            "./${ADDON}/.upstream.yaml")
+
+          {
+            echo "upstream_repo=$UPSTREAM_REPO"
+            echo "version_strip=$VERSION_STRIP"
+            echo "version_pattern=$VERSION_PATTERN"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Cache API responses
         uses: actions/cache@v4
@@ -254,20 +263,27 @@ jobs:
           CACHE_FILE="$HOME/.cache/api-responses/${UPSTREAM_REPO//\//_}-latest.json"
 
           # Use cached response if less than 5 minutes old
-          if [[ -f "$CACHE_FILE" && $(find "$CACHE_FILE" -mmin -5) ]]; then
+          if [[ -f "$CACHE_FILE" && \
+            $(find "$CACHE_FILE" -mmin -5) ]]; then
             echo "Using cached API response for $UPSTREAM_REPO"
             LATEST=$(jq -r '.tag_name' "$CACHE_FILE")
           else
             echo "Fetching fresh API response for $UPSTREAM_REPO"
-            curl -s "https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest" > "$CACHE_FILE"
+            curl -s \
+              "https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest" \
+              > "$CACHE_FILE"
             LATEST=$(jq -r '.tag_name' "$CACHE_FILE")
           fi
 
-          LATEST_CLEAN=$(echo "$LATEST" | sed "s/${VERSION_STRIP}//")
+          LATEST_CLEAN="${LATEST//${VERSION_STRIP}/}"
 
-          echo "current_version=$CURRENT" >> $GITHUB_OUTPUT
-          echo "new_version=$LATEST_CLEAN" >> $GITHUB_OUTPUT
-          echo "upstream_tag=$LATEST" >> $GITHUB_OUTPUT      - name: Check if update needed for this addon
+          {
+            echo "current_version=$CURRENT"
+            echo "new_version=$LATEST_CLEAN"
+            echo "upstream_tag=$LATEST"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check if update needed for this addon
         id: check_update
         run: |
           ADDON="${{ matrix.addon }}"
@@ -276,13 +292,13 @@ jobs:
           FORCE="${{ github.event.inputs.force_update }}"
 
           if [[ "$CURRENT" == "latest" ]]; then
-            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
             echo "ℹ️ [$ADDON] Current version is 'latest' - no update needed"
           elif [[ "$CURRENT" != "$UPSTREAM" ]] || [[ "$FORCE" == "true" ]]; then
-            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
             echo "✅ [$ADDON] Update needed: $CURRENT -> $UPSTREAM"
           else
-            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
             echo "ℹ️ [$ADDON] Already up to date: $CURRENT"
           fi
 
@@ -302,7 +318,8 @@ jobs:
           VERSION_PATTERN="${{ steps.read_config.outputs.version_pattern }}"
 
           # Increment the add-on version (patch version)
-          CURRENT_ADDON_VERSION=$(grep 'version:' "./${ADDON}/config.yaml" | sed 's/version: *"\([^"]*\)".*/\1/')
+          CURRENT_ADDON_VERSION=$(grep 'version:' "./${ADDON}/config.yaml" | \
+            sed 's/version: *"\([^"]*\)".*/\1/')
 
           if [[ "$VERSION_PATTERN" == "sync" ]]; then
             # Use the same version as upstream
@@ -316,9 +333,11 @@ jobs:
           else
             # Fallback: add -auto1
             NEW_ADDON_VERSION="${CURRENT_ADDON_VERSION}-auto1"
-          fi          sed -i "s/version: \".*\"/version: \"$NEW_ADDON_VERSION\"/" "./${ADDON}/config.yaml"
+          fi
+
+          sed -i "s/version: \".*\"/version: \"$NEW_ADDON_VERSION\"/" "./${ADDON}/config.yaml"
           echo "Updated ${ADDON} Add-on version to: $NEW_ADDON_VERSION"
-          echo "NEW_ADDON_VERSION=$NEW_ADDON_VERSION" >> $GITHUB_ENV
+          echo "NEW_ADDON_VERSION=$NEW_ADDON_VERSION" >> "$GITHUB_ENV"
 
       - name: Update changelog
         if: steps.check_update.outputs.needs_update == 'true'
@@ -337,7 +356,9 @@ jobs:
 
           # Add new entry
           TODAY=$(date +%Y-%m-%d)
-          sed -i "3i\\## [${{ env.NEW_ADDON_VERSION }}] - $TODAY\\n\\n### Updated\\n- ${UPSTREAM_REPO##*/} from $OLD_VERSION to $NEW_VERSION\\n" "$CHANGELOG_FILE"      - name: Commit and push changes
+          sed -i "3i\\## [${{ env.NEW_ADDON_VERSION }}] - $TODAY\\n\\n### Updated\\n- ${UPSTREAM_REPO##*/} from $OLD_VERSION to $NEW_VERSION\\n" "$CHANGELOG_FILE"
+
+      - name: Commit and push changes
         if: steps.check_update.outputs.needs_update == 'true'
         run: |
           ADDON="${{ matrix.addon }}"

@@ -1,4 +1,5 @@
 #!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
 
 # FritzBox
 FRITZ_CALLMONITOR_FRITZBOX_HOST=$(bashio::config 'fritzbox_host')

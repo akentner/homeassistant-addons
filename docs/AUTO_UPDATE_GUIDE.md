@@ -2,13 +2,14 @@
 
 ## 🚀 Overview
 
-This system automatically monitors **multiple add-ons** for new upstream releases and updates them accordingly. It is fully scalable for any number of add-ons.
+This system automatically monitors **multiple add-ons** for new upstream releases and updates them accordingly.
+It is fully scalable for any number of add-ons.
 
 ## 📁 Add-on Setup
 
-### Create a `.upstream.yaml` for each add-on:
+### Create a `.upstream.yaml` for each add-on
 
-```
+```text
 your-addon/
 ├── config.yaml
 ├── build.yaml
@@ -17,7 +18,7 @@ your-addon/
 └── .upstream.yaml  ← This file configures auto-updates
 ```
 
-### Example `.upstream.yaml`:
+### Example `.upstream.yaml`
 
 ```yaml
 upstream:
@@ -37,7 +38,7 @@ addon:
   version_pattern: "auto"
 ```
 
-## 🔄 What happens automatically:
+## 🔄 What happens automatically
 
 ### 1. **Daily Check** (6:00 UTC)
 
@@ -62,15 +63,15 @@ For each add-on with available update:
 
 ## 🎯 Manual Control
 
-### Update all add-ons:
+### Update all add-ons
 
-```
+```text
 Actions → "Auto-Update Add-ons when upstream releases" → "Run workflow"
 ```
 
-### Specific add-on:
+### Specific add-on
 
-```
+```text
 Actions → "Run workflow"
 ├── addon_name: "fritz-callmonitor2mqtt"  ← Only this add-on
 └── force_update: true                    ← Force update
@@ -78,7 +79,7 @@ Actions → "Run workflow"
 
 ## 📋 Supported Configurations
 
-### Version Patterns:
+### Version Patterns
 
 ```yaml
 addon:
@@ -86,7 +87,7 @@ addon:
   version_pattern: "sync"    # 1.0.3 → 1.0.4 (follows upstream)
 ```
 
-### Upstream Patterns:
+### Upstream Patterns
 
 ```yaml
 upstream:
@@ -100,7 +101,7 @@ upstream:
 
 1. **Create add-on directory:**
 
-   ```
+   ```text
    my-new-addon/
    ├── config.yaml
    ├── build.yaml
@@ -123,13 +124,13 @@ upstream:
 
 ## 📊 Monitoring & Status
 
-### GitHub Actions Dashboard:
+### GitHub Actions Dashboard
 
 - **Last Run:** When add-ons were last checked
 - **Matrix View:** Status for each add-on individually
 - **Commit History:** All automatic updates
 
-### Automatic Issues:
+### Automatic Issues
 
 - On errors: Issue with label `addon:addon-name`
 - Detailed error description
@@ -137,7 +138,7 @@ upstream:
 
 ## 🔧 Advanced Configuration
 
-### Adjust Schedule:
+### Adjust Schedule
 
 ```yaml
 schedule:
@@ -146,7 +147,7 @@ schedule:
   - cron: "0 12 * * 1" # Mondays at 12:00 UTC
 ```
 
-### Webhook Integration (optional):
+### Webhook Integration (optional)
 
 The system can be extended to send webhooks when updates are available.
 

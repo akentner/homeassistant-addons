@@ -12,7 +12,6 @@ arch:
 url: "https://github.com/akentner/homeassistant-addons"
 startup: "application"
 boot: "auto"
-init: false
 host_network: false
 map:
   - "config:rw"

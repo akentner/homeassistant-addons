@@ -19,4 +19,4 @@ addon:
 
   # Optional: Additional configuration
   # changelog: true  # Automatically create CHANGELOG.md
-  # commit_message_template: "Update {upstream_name} from {old_version} to {new_version}"
+  # commit_message_template: "Update {upstream_name} from {old} to {new}"

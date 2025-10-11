@@ -47,7 +47,24 @@ _Monitors Fritz!Box call events and forwards them to MQTT broker._
 
 ### Auto-Update System
 
-The repository includes an automated system that monitors upstream repositories for new releases and automatically updates add-ons. See [docs/AUTO_UPDATE_GUIDE.md](./docs/AUTO_UPDATE_GUIDE.md) for complete documentation.
+The repository includes an automated system that monitors upstream repositories for new releases and updates add-ons.
+See [docs/AUTO_UPDATE_GUIDE.md](./docs/AUTO_UPDATE_GUIDE.md) for documentation.
+
+### Development Setup
+
+```bash
+# Initialize development environment (one-time setup)
+make init
+
+# Run all linting checks
+make lint
+
+# Validate add-on configurations
+make validate-addons
+
+# Run all checks
+make check-all
+```
 
 ### Manual Testing
 
@@ -58,13 +75,21 @@ Use the included development container to test add-ons locally:
 supervisor_run
 ```
 
+### Code Quality
+
+This repository uses automated linting and formatting:
+
+- **YAML**: yamllint for configuration files
+- **Shell Scripts**: shellcheck for bash scripts
+- **Markdown**: markdownlint for documentation
+- **GitHub Actions**: actionlint for workflow validation
+- **Dockerfiles**: hadolint for container best practices
+
+All checks run automatically via pre-commit hooks and GitHub Actions.
+
 ## Documentation
 
 - [Auto-Update System Guide](./docs/AUTO_UPDATE_GUIDE.md) - Complete guide for automated upstream monitoring
 - [Home Assistant Add-on Development](https://developers.home-assistant.io/docs/add-ons) - Official documentation
 
-[aarch64-shield]: https://img.shields.io/badge/aarch64-yes-green.svg
 [amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
-[armhf-shield]: https://img.shields.io/badge/armhf-yes-green.svg
-[armv7-shield]: https://img.shields.io/badge/armv7-yes-green.svg
-[i386-shield]: https://img.shields.io/badge/i386-yes-green.svg

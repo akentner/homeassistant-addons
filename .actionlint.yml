@@ -1,0 +1,17 @@
+# Configuration for actionlint
+# This file reduces shellcheck strictness for GitHub Actions workflows
+
+self-hosted-runner:
+  labels:
+    - ubuntu-latest
+
+config-variables:
+  # Define config variables that might be used in workflows
+
+# Disable specific shellcheck rules that are too strict for GitHub Actions
+shellcheck:
+  # Disable specific rules
+  exclude-rules:
+    - SC2086  # Double quote to prevent globbing and word splitting
+    - SC2129  # Consider using { cmd1; cmd2; } >> file instead of individual redirects
+    - SC2001  # See if you can use ${variable//search/replace} instead
