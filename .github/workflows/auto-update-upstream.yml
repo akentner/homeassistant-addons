@@ -74,7 +74,11 @@ jobs:
           done
 
           # Convert array to JSON for matrix (compact format)
-          ADDONS_JSON=$(printf '%s\n' "${ADDONS[@]}" | jq -R . | jq -s -c .)
+          if [[ ${#ADDONS[@]} -eq 0 ]]; then
+            ADDONS_JSON="[]"
+          else
+            ADDONS_JSON=$(printf '%s\n' "${ADDONS[@]}" | jq -R . | jq -sc .)
+          fi
           echo "addons=$ADDONS_JSON" >> "$GITHUB_OUTPUT"
           echo "Discovered add-ons: $ADDONS_JSON"
 
