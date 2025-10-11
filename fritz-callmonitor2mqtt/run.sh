@@ -8,7 +8,21 @@ export FRITZ_CALLMONITOR_FRITZBOX_HOST
 export FRITZ_CALLMONITOR_FRITZBOX_PORT
 
 # PBX
-FRITZ_CALLMONITOR_PBX_MSN=$(bashio::config 'pbx_msns' | jq -R -s -c 'split("\n") | map(select(length > 0)) | join(",")')
+# Handle MSNs - support both array and string format
+MSN_CONFIG=$(bashio::config 'pbx_msns')
+if [[ -n "$MSN_CONFIG" ]] && [[ "$MSN_CONFIG" != "null" ]] && [[ "$MSN_CONFIG" != "[]" ]]; then
+    # Check if it's a JSON array
+    if echo "$MSN_CONFIG" | jq -e '. | type == "array"' >/dev/null 2>&1; then
+        # It's an array - join with commas
+        FRITZ_CALLMONITOR_PBX_MSN=$(echo "$MSN_CONFIG" | jq -r '. | join(",")')
+    else
+        # It's a string - use as is
+        FRITZ_CALLMONITOR_PBX_MSN="$MSN_CONFIG"
+    fi
+else
+    FRITZ_CALLMONITOR_PBX_MSN=""
+fi
+
 FRITZ_CALLMONITOR_PBX_COUNTRY_CODE=$(bashio::config 'pbx_country_code')
 FRITZ_CALLMONITOR_PBX_LOCAL_AREA_CODE=$(bashio::config 'pbx_local_area_code')
 export FRITZ_CALLMONITOR_PBX_MSN
@@ -48,6 +62,34 @@ export FRITZ_CALLMONITOR_APP_CALL_HISTORY_SIZE
 export FRITZ_CALLMONITOR_APP_RECONNECT_DELAY
 export FRITZ_CALLMONITOR_APP_HEALTH_CHECK_PORT
 export FRITZ_CALLMONITOR_APP_TIMEZONE
+
+# Database
+FRITZ_CALLMONITOR_DATABASE_DATA_DIR=$(bashio::config 'database_data_dir')
+export FRITZ_CALLMONITOR_DATABASE_DATA_DIR
+
+# Extensions Configuration
+# Process pbx_extensions array from config
+PBX_EXTENSIONS=$(bashio::config 'pbx_extensions')
+if [[ -n "$PBX_EXTENSIONS" ]] && [[ "$PBX_EXTENSIONS" != "null" ]]; then
+    EXTENSION_COUNT=$(echo "$PBX_EXTENSIONS" | jq '. | length')
+
+    for ((i=0; i<EXTENSION_COUNT; i++)); do
+        EXTENSION_NUMBER=$(echo "$PBX_EXTENSIONS" | jq -r ".[$i].number // empty")
+        EXTENSION_NAME=$(echo "$PBX_EXTENSIONS" | jq -r ".[$i].name // empty")
+        EXTENSION_TYPE=$(echo "$PBX_EXTENSIONS" | jq -r ".[$i].type // empty")
+
+        if [[ -n "$EXTENSION_NUMBER" ]] && [[ -n "$EXTENSION_NAME" ]]; then
+            export "FRITZ_CALLMONITOR_PBX_EXTENSION_${i}_NUMBER=$EXTENSION_NUMBER"
+            export "FRITZ_CALLMONITOR_PBX_EXTENSION_${i}_NAME=$EXTENSION_NAME"
+
+            if [[ -n "$EXTENSION_TYPE" ]] && [[ "$EXTENSION_TYPE" != "null" ]]; then
+                export "FRITZ_CALLMONITOR_PBX_EXTENSION_${i}_TYPE=$EXTENSION_TYPE"
+            fi
+
+            bashio::log.debug "Extension $i: $EXTENSION_NUMBER -> $EXTENSION_NAME ($EXTENSION_TYPE)"
+        fi
+    done
+fi
 
 bashio::log.info "Starte fritz-callmonitor2mqtt..."
 

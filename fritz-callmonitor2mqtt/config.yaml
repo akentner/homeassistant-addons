@@ -1,6 +1,6 @@
 name: "Fritz!Box Call Monitor to MQTT"
 description: "Sends call monitor messages from a Fritz!Box to an MQTT broker"
-version: "1.1.7"
+version: "1.1.7-2"
 slug: "fritz-callmonitor2mqtt"
 init: false
 arch:
@@ -23,9 +23,10 @@ options:
   fritzbox_port: 1012
 
   # PBX
-  pbx_msns: []
   pbx_country_code: "49"
   pbx_local_area_code: ""
+  pbx_msns: []
+  pbx_extensions: []
 
   # MQTT
   mqtt_broker: "core-mosquitto"
@@ -46,13 +47,21 @@ options:
   app_health_check_port: 8080
   app_timezone: "Europe/Berlin"
 
+  # Database
+  database_data_dir: "/data"
+
+
 schema:
   fritzbox_host: "str"
   fritzbox_port: "int"
-  pbx_msns:
-    - "str"
   pbx_country_code: "str"
   pbx_local_area_code: "str"
+  pbx_msns:
+    - "str"
+  pbx_extensions:
+    - number: "str"
+      name: "str"
+      type: list(VOICEBOX|DECT|VOIP)?
   mqtt_broker: "str"
   mqtt_port: "int"
   mqtt_username: "str"
@@ -68,3 +77,4 @@ schema:
   app_reconnect_delay: "int"
   app_health_check_port: "int"
   app_timezone: "str"
+  database_data_dir: "str"

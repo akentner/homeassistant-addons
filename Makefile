@@ -1,7 +1,7 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks lint test clean format check-all
+.PHONY: help init install-hooks install-markdownlint lint test clean format fix lint-markdown-fix check-all
 
 # Default target
 help: ## Show this help message
@@ -99,6 +99,17 @@ install-hooks: ## Install pre-commit hooks
 	@echo "🔧 Installing pre-commit hooks..."
 	./scripts/setup-hooks.sh
 
+install-markdownlint: ## Install markdownlint-cli2 for auto-fixing
+	@echo "📦 Installing markdownlint-cli2..."
+	@if command -v npm >/dev/null 2>&1; then \
+		npm install -g markdownlint-cli2 && echo "✅ markdownlint-cli2 installed successfully"; \
+	else \
+		echo "❌ npm not found. Please install Node.js and npm first:"; \
+		echo "   • Ubuntu/Debian: sudo apt-get install nodejs npm"; \
+		echo "   • macOS: brew install node"; \
+		echo "   • Or download from: https://nodejs.org/"; \
+	fi
+
 lint: ## Run all linting checks
 	@echo "🔍 Running lint checks..."
 	pre-commit run --all-files
@@ -117,13 +128,38 @@ lint-shell: ## Lint shell scripts
 
 lint-markdown: ## Lint Markdown files
 	@echo "🔍 Linting Markdown files..."
-	markdownlint-cli2 "**/*.md" "#node_modules" "#.git"
+	@if command -v markdownlint-cli2 >/dev/null 2>&1; then \
+		markdownlint-cli2 "**/*.md" "#node_modules" "#.git"; \
+	else \
+		echo "⚠️  markdownlint-cli2 not found. Using pre-commit instead..."; \
+		pre-commit run markdownlint --all-files || echo "Install markdownlint-cli2: npm install -g markdownlint-cli2"; \
+	fi
+
+lint-markdown-fix: ## Lint and auto-fix Markdown files
+	@echo "🔧 Linting and fixing Markdown files..."
+	@if command -v markdownlint-cli2 >/dev/null 2>&1; then \
+		markdownlint-cli2 --fix "**/*.md" "#node_modules" "#.git"; \
+		echo "✅ Markdown files auto-fixed"; \
+	else \
+		echo "⚠️  markdownlint-cli2 not found. Using pre-commit for checking only..."; \
+		echo "💡 To enable auto-fix, install markdownlint-cli2: npm install -g markdownlint-cli2"; \
+		pre-commit run markdownlint --all-files || echo "❌ Some Markdown issues found but cannot auto-fix without markdownlint-cli2"; \
+	fi
 
 format: ## Format all files
 	@echo "🎨 Formatting files..."
 	pre-commit run --all-files trailing-whitespace
 	pre-commit run --all-files end-of-file-fixer
 	pre-commit run --all-files mixed-line-ending
+
+fix: ## Auto-fix all fixable issues
+	@echo "🔧 Auto-fixing all fixable issues..."
+	@echo "📝 Fixing Markdown files..."
+	$(MAKE) lint-markdown-fix
+	@echo "🎨 Formatting files..."
+	$(MAKE) format
+	@echo "🔍 Running final lint check..."
+	pre-commit run --all-files || echo "⚠️  Some issues may require manual fixing"
 
 validate-addons: ## Validate add-on configurations
 	@echo "✅ Validating add-on configurations..."
