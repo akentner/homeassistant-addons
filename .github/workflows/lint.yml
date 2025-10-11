@@ -57,11 +57,13 @@ jobs:
           # Create requirements file for caching
           pip freeze > requirements-lint.txt
 
-      - name: Install additional tools
+      - name: Install actionlint
         run: |
-          # Install actionlint for GitHub Actions validation
-          curl -sL https://github.com/rhysd/actionlint/releases/latest/download/actionlint_linux_amd64.tar.gz | tar xz -C /tmp
+          # Install actionlint binary directly
+          ACTIONLINT_VERSION=$(curl -s https://api.github.com/repos/rhysd/actionlint/releases/latest | jq -r .tag_name)
+          curl -sL "https://github.com/rhysd/actionlint/releases/download/${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION#v}_linux_amd64.tar.gz" | tar xz -C /tmp
           sudo mv /tmp/actionlint /usr/local/bin/
+          actionlint --version
 
       - name: Run pre-commit hooks
         run: |
