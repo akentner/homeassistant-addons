@@ -27,7 +27,7 @@ mqtt_retain: true
 mqtt_keep_alive: 60
 mqtt_connect_timeout: 30
 
-```yaml
+````yaml
 
 ## Advanced Configuration
 
@@ -38,7 +38,7 @@ mqtt_connect_timeout: 30
 pbx_msns: ["12345", "12346", "12347", "12348", "56789"]
 pbx_country_code: "49"
 pbx_local_area_code: "1234"
-```
+````
 
 ### Extensions Configuration
 
@@ -98,7 +98,7 @@ pbx_extensions:
 ### Application Settings
 
 ```yaml
-app_log_level: "info"  # debug, info, warning, error, critical
+app_log_level: "info" # debug, info, warning, error, critical
 app_call_history_size: 50
 app_reconnect_delay: 10
 app_health_check_port: 8080
@@ -152,7 +152,7 @@ database_data_dir: "/data"
 [forum]: https://community.home-assistant.io/
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-production-green.svg
-[release-shield]: https://img.shields.io/badge/version-v1.2.0-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.2.0
+[release-shield]: https://img.shields.io/badge/version-v1.3.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.3.0
 [screenshot]: https://github.com/akentner/homeassistant-addons/raw/main/fritz-callmonitor2mqtt/images/screenshot.png
 [fritz-callmonitor2mqtt]: https://github.com/akentner/fritz-callmonitor2mqtt

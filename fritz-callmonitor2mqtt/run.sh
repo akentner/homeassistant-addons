@@ -54,6 +54,8 @@ FRITZ_CALLMONITOR_PBX_LOCAL_AREA_CODE=$(bashio::config 'pbx_local_area_code')
 
 # Debug MSN processing (check log level safely)
 APP_LOG_LEVEL=$(bashio::config 'app_log_level' 2>/dev/null || echo "info")
+
+
 if [[ "$APP_LOG_LEVEL" == "debug" ]]; then
     bashio::log.debug "MSN Count: '$MSN_COUNT'"
     if [[ -n "${MSN_CONFIG:-}" ]]; then
@@ -106,14 +108,21 @@ export FRITZ_CALLMONITOR_DATABASE_DATA_DIR
 
 # Extensions Configuration
 # Process pbx_extensions array from config
-PBX_EXTENSIONS=$(bashio::config 'pbx_extensions')
-if [[ -n "$PBX_EXTENSIONS" ]] && [[ "$PBX_EXTENSIONS" != "null" ]]; then
-    EXTENSION_COUNT=$(echo "$PBX_EXTENSIONS" | jq '. | length')
+# First try to get the count of extension entries
+EXTENSION_COUNT=$(bashio::config 'pbx_extensions | length' 2>/dev/null || echo "0")
 
+# Clean the count value (remove newlines and non-numeric characters)
+EXTENSION_COUNT=$(echo "$EXTENSION_COUNT" | tr -d '\n\r' | grep -o '^[0-9]*' || echo "0")
+
+if [[ "$APP_LOG_LEVEL" == "debug" ]]; then
+    bashio::log.debug "Extension count: '$EXTENSION_COUNT'"
+fi
+
+if [[ "$EXTENSION_COUNT" -gt 0 ]]; then
     for ((i=0; i<EXTENSION_COUNT; i++)); do
-        EXTENSION_NUMBER=$(echo "$PBX_EXTENSIONS" | jq -r ".[$i].number // empty")
-        EXTENSION_NAME=$(echo "$PBX_EXTENSIONS" | jq -r ".[$i].name // empty")
-        EXTENSION_TYPE=$(echo "$PBX_EXTENSIONS" | jq -r ".[$i].type // empty")
+        EXTENSION_NUMBER=$(bashio::config "pbx_extensions[$i].number" 2>/dev/null || echo "")
+        EXTENSION_NAME=$(bashio::config "pbx_extensions[$i].name" 2>/dev/null || echo "")
+        EXTENSION_TYPE=$(bashio::config "pbx_extensions[$i].type" 2>/dev/null || echo "")
 
         if [[ -n "$EXTENSION_NUMBER" ]] && [[ -n "$EXTENSION_NAME" ]]; then
             export "FRITZ_CALLMONITOR_PBX_EXTENSION_${i}_NUMBER=$EXTENSION_NUMBER"
@@ -123,18 +132,52 @@ if [[ -n "$PBX_EXTENSIONS" ]] && [[ "$PBX_EXTENSIONS" != "null" ]]; then
                 export "FRITZ_CALLMONITOR_PBX_EXTENSION_${i}_TYPE=$EXTENSION_TYPE"
             fi
 
-            bashio::log.debug "Extension $i: $EXTENSION_NUMBER -> $EXTENSION_NAME ($EXTENSION_TYPE)"
+            if [[ "$APP_LOG_LEVEL" == "debug" ]]; then
+                bashio::log.debug "Extension $i: $EXTENSION_NUMBER -> $EXTENSION_NAME ($EXTENSION_TYPE)"
+            fi
         fi
     done
+else
+    # Fallback: Try to get as raw config and handle JSON format
+    PBX_EXTENSIONS=$(bashio::config 'pbx_extensions' 2>/dev/null || echo "[]")
+    if [[ -n "$PBX_EXTENSIONS" ]] && [[ "$PBX_EXTENSIONS" != "null" ]] && [[ "$PBX_EXTENSIONS" != "[]" ]]; then
+        if echo "$PBX_EXTENSIONS" | jq -e '. | type == "array"' >/dev/null 2>&1; then
+            FALLBACK_COUNT=$(echo "$PBX_EXTENSIONS" | jq '. | length' 2>/dev/null || echo "0")
+            FALLBACK_COUNT=$(echo "$FALLBACK_COUNT" | tr -d '\n\r' | grep -o '^[0-9]*' || echo "0")
+
+            if [[ "$APP_LOG_LEVEL" == "debug" ]]; then
+                bashio::log.debug "Fallback extension count: '$FALLBACK_COUNT'"
+            fi
+
+            for ((i=0; i<FALLBACK_COUNT; i++)); do
+                EXTENSION_NUMBER=$(echo "$PBX_EXTENSIONS" | jq -r ".[$i].number // empty" 2>/dev/null || echo "")
+                EXTENSION_NAME=$(echo "$PBX_EXTENSIONS" | jq -r ".[$i].name // empty" 2>/dev/null || echo "")
+                EXTENSION_TYPE=$(echo "$PBX_EXTENSIONS" | jq -r ".[$i].type // empty" 2>/dev/null || echo "")
+
+                if [[ -n "$EXTENSION_NUMBER" ]] && [[ -n "$EXTENSION_NAME" ]]; then
+                    export "FRITZ_CALLMONITOR_PBX_EXTENSION_${i}_NUMBER=$EXTENSION_NUMBER"
+                    export "FRITZ_CALLMONITOR_PBX_EXTENSION_${i}_NAME=$EXTENSION_NAME"
+
+                    if [[ -n "$EXTENSION_TYPE" ]] && [[ "$EXTENSION_TYPE" != "null" ]]; then
+                        export "FRITZ_CALLMONITOR_PBX_EXTENSION_${i}_TYPE=$EXTENSION_TYPE"
+                    fi
+
+                    if [[ "$APP_LOG_LEVEL" == "debug" ]]; then
+                        bashio::log.debug "Fallback Extension $i: $EXTENSION_NUMBER -> $EXTENSION_NAME ($EXTENSION_TYPE)"
+                    fi
+                fi
+            done
+        fi
+    fi
 fi
 
-bashio::log.info "Starte fritz-callmonitor2mqtt..."
+bashio::log.info "Starting fritz-callmonitor2mqtt..."
 
-# Debug: Zeige alle Umgebungsvariablen
-if [[ "${FRITZ_CALLMONITOR_APP_LOG_LEVEL}" == "debug" ]]; then
-    bashio::log.debug "Umgebungsvariablen:"
+# Debug: Show all environment variables
+if [[ "$APP_LOG_LEVEL" == "debug" ]]; then
+    bashio::log.debug "Environment variables:"
     env | grep FRITZ_CALLMONITOR_ | sort
 fi
 
-# Starte die Go-Anwendung
+# Start the Go application
 exec /usr/local/bin/fritz-callmonitor2mqtt
