@@ -52,8 +52,9 @@ fi
 FRITZ_CALLMONITOR_PBX_COUNTRY_CODE=$(bashio::config 'pbx_country_code')
 FRITZ_CALLMONITOR_PBX_LOCAL_AREA_CODE=$(bashio::config 'pbx_local_area_code')
 
-# Debug MSN processing
-if [[ "${FRITZ_CALLMONITOR_APP_LOG_LEVEL}" == "debug" ]]; then
+# Debug MSN processing (check log level safely)
+APP_LOG_LEVEL=$(bashio::config 'app_log_level' 2>/dev/null || echo "info")
+if [[ "$APP_LOG_LEVEL" == "debug" ]]; then
     bashio::log.debug "MSN Count: '$MSN_COUNT'"
     if [[ -n "${MSN_CONFIG:-}" ]]; then
         bashio::log.debug "MSN Config Raw: '$MSN_CONFIG'"
