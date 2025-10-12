@@ -1,7 +1,7 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks install-markdownlint lint test clean format fix lint-markdown-fix check-all
+.PHONY: help init install-hooks install-markdownlint lint test clean format fix lint-markdown-fix check-all validate-versions
 
 # Default target
 help: ## Show this help message
@@ -180,7 +180,11 @@ validate-addons: ## Validate add-on configurations
 		fi; \
 	done
 
-check-all: lint validate-addons ## Run all checks (lint + validate)
+validate-versions: ## Validate add-on versioning consistency
+	@echo "🔍 Validating add-on versions..."
+	./scripts/validate-versions.sh
+
+check-all: lint validate-addons validate-versions ## Run all checks (lint + validate + versions)
 
 test: check-all ## Run all tests and checks
 

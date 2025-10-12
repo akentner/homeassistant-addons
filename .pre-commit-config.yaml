@@ -56,6 +56,16 @@ repos:
       - id: pretty-format-json
         args: [--autofix, --indent=2]
 
+  # Custom version validation
+  - repo: local
+    hooks:
+      - id: validate-versions
+        name: Validate Add-on Versioning
+        entry: ./scripts/validate-versions.sh
+        language: script
+        files: ^fritz-callmonitor2mqtt/(config\.yaml|build\.yaml|README\.md)$
+        pass_filenames: false
+
 # Configuration
 default_language_version:
   python: python3.11
