@@ -9,22 +9,58 @@ export FRITZ_CALLMONITOR_FRITZBOX_PORT
 
 # PBX
 # Handle MSNs - support both array and string format
-MSN_CONFIG=$(bashio::config 'pbx_msns')
-if [[ -n "$MSN_CONFIG" ]] && [[ "$MSN_CONFIG" != "null" ]] && [[ "$MSN_CONFIG" != "[]" ]]; then
-    # Check if it's a JSON array
-    if echo "$MSN_CONFIG" | jq -e '. | type == "array"' >/dev/null 2>&1; then
-        # It's an array - join with commas
-        FRITZ_CALLMONITOR_PBX_MSN=$(echo "$MSN_CONFIG" | jq -r '. | join(",")')
-    else
-        # It's a string - use as is
-        FRITZ_CALLMONITOR_PBX_MSN="$MSN_CONFIG"
-    fi
+# First try to get the count of MSN entries
+MSN_COUNT=$(bashio::config 'pbx_msns | length' 2>/dev/null || echo "0")
+
+if [[ "$MSN_COUNT" -gt 0 ]]; then
+    # Build MSN list from array elements
+    MSN_LIST=""
+    for ((i=0; i<MSN_COUNT; i++)); do
+        MSN_ENTRY=$(bashio::config "pbx_msns[$i]" 2>/dev/null || echo "")
+        if [[ -n "$MSN_ENTRY" ]]; then
+            if [[ -z "$MSN_LIST" ]]; then
+                MSN_LIST="$MSN_ENTRY"
+            else
+                MSN_LIST="$MSN_LIST,$MSN_ENTRY"
+            fi
+        fi
+    done
+    FRITZ_CALLMONITOR_PBX_MSN="$MSN_LIST"
 else
-    FRITZ_CALLMONITOR_PBX_MSN=""
+    # Fallback: Try to get as raw config and handle different formats
+    MSN_CONFIG=$(bashio::config 'pbx_msns' 2>/dev/null || echo "")
+    if [[ -n "$MSN_CONFIG" ]] && [[ "$MSN_CONFIG" != "null" ]] && [[ "$MSN_CONFIG" != "[]" ]]; then
+        # Check if it's a JSON array
+        if echo "$MSN_CONFIG" | jq -e '. | type == "array"' >/dev/null 2>&1; then
+            # It's an array - join with commas
+            FRITZ_CALLMONITOR_PBX_MSN=$(echo "$MSN_CONFIG" | jq -r '. | join(",")')
+        else
+            # Handle newline-separated string format from bashio
+            if echo "$MSN_CONFIG" | grep -q $'\n'; then
+                # Convert newlines to commas and remove empty lines
+                FRITZ_CALLMONITOR_PBX_MSN=$(echo "$MSN_CONFIG" | tr '\n' ',' | sed 's/,,\+/,/g' | sed 's/^,\|,$//g')
+            else
+                # It's a single string - use as is
+                FRITZ_CALLMONITOR_PBX_MSN="$MSN_CONFIG"
+            fi
+        fi
+    else
+        FRITZ_CALLMONITOR_PBX_MSN=""
+    fi
 fi
 
 FRITZ_CALLMONITOR_PBX_COUNTRY_CODE=$(bashio::config 'pbx_country_code')
 FRITZ_CALLMONITOR_PBX_LOCAL_AREA_CODE=$(bashio::config 'pbx_local_area_code')
+
+# Debug MSN processing
+if [[ "${FRITZ_CALLMONITOR_APP_LOG_LEVEL}" == "debug" ]]; then
+    bashio::log.debug "MSN Count: '$MSN_COUNT'"
+    if [[ -n "${MSN_CONFIG:-}" ]]; then
+        bashio::log.debug "MSN Config Raw: '$MSN_CONFIG'"
+    fi
+    bashio::log.debug "MSN Final: '$FRITZ_CALLMONITOR_PBX_MSN'"
+fi
+
 export FRITZ_CALLMONITOR_PBX_MSN
 export FRITZ_CALLMONITOR_PBX_COUNTRY_CODE
 export FRITZ_CALLMONITOR_PBX_LOCAL_AREA_CODE
