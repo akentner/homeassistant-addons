@@ -152,7 +152,7 @@ database_data_dir: "/data"
 [forum]: https://community.home-assistant.io/
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-production-green.svg
-[release-shield]: https://img.shields.io/badge/version-v1.1.7-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.1.7
+[release-shield]: https://img.shields.io/badge/version-v1.2.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.2.0
 [screenshot]: https://github.com/akentner/homeassistant-addons/raw/main/fritz-callmonitor2mqtt/images/screenshot.png
 [fritz-callmonitor2mqtt]: https://github.com/akentner/fritz-callmonitor2mqtt

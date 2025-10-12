@@ -15,7 +15,7 @@ addon:
   # How should the add-on version be updated?
   # - "auto": Automatically increment patch version (e.g. 0.1-3 -> 0.1-4)
   # - "sync": Use the same version as upstream
-  version_pattern: "auto"
+  version_pattern: "sync"
 
   # Optional: Additional configuration
   # changelog: true  # Automatically create CHANGELOG.md

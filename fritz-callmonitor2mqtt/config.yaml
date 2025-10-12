@@ -1,6 +1,6 @@
 name: "Fritz!Box Call Monitor to MQTT"
 description: "Sends call monitor messages from a Fritz!Box to an MQTT broker"
-version: "1.1.7-2"
+version: "1.2.0"
 slug: "fritz-callmonitor2mqtt"
 init: false
 arch:
