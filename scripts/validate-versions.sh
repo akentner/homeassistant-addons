@@ -43,7 +43,7 @@ fi
 
 echo "📋 Found versions:"
 echo "   config.yaml: $CONFIG_VERSION"
-echo "   build.yaml:  $BUILD_VERSION"  
+echo "   build.yaml:  $BUILD_VERSION"
 echo "   README.md:   $README_VERSION"
 
 # Validation 1: config.yaml must have subpatch format (X.Y.Z-N)

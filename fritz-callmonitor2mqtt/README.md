@@ -1,27 +1,27 @@
-# Home Assistant Add-on: Fritz!Box Call Monitor to MQTT
+# Home Assistant Add-on: FRITZ!Box Call Monitor to MQTT
 
 [![Release][release-shield]][release] ![Project Stage][project-stage-shield] ![Project Maintenance][maintenance-shield]
 
 [![Discord][discord-shield]][discord] [![Community Forum][forum-shield]][forum]
 
-Monitor and forward Fritz!Box call events to MQTT.
+Monitor and forward FRITZ!Box call events to MQTT.
 
 ## About
 
-This add-on connects to your Fritz!Box call monitor and forwards all call events
+This add-on connects to your FRITZ!Box call monitor and forwards all call events
 (incoming, outgoing, connected, disconnected) to an MQTT broker. This allows you
-to integrate Fritz!Box telephony events into Home Assistant automations and
+to integrate FRITZ!Box telephony events into Home Assistant automations and
 notifications.
 
 The add-on is based on the [fritz-callmonitor2mqtt][fritz-callmonitor2mqtt] application and provides:
 
-- Real-time call monitoring from Fritz!Box
+- Real-time call monitoring from FRITZ!Box
 - MQTT integration with Home Assistant
 - Support for multiple MSNs (Multiple Service Numbers)
 - Extension configuration for better call identification
 - Comprehensive logging and debugging options
 
-![Fritz!Box Call Monitor Preview][screenshot]
+![FRITZ!Box Call Monitor Preview][screenshot]
 mqtt_qos: 1
 mqtt_retain: true
 mqtt_keep_alive: 60
@@ -152,7 +152,7 @@ database_data_dir: "/data"
 [forum]: https://community.home-assistant.io/
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-production-green.svg
-[release-shield]: https://img.shields.io/badge/version-v1.3.1-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.3.1
+[release-shield]: https://img.shields.io/badge/version-v1.4.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.4.0
 [screenshot]: https://github.com/akentner/homeassistant-addons/raw/main/fritz-callmonitor2mqtt/images/screenshot.png
 [fritz-callmonitor2mqtt]: https://github.com/akentner/fritz-callmonitor2mqtt

@@ -1,6 +1,6 @@
-# Home Assistant Add-on: Fritz!Box Call Monitor to MQTT
+# Home Assistant Add-on: FRITZ!Box Call Monitor to MQTT
 
-Monitor and forward Fritz!Box call events to MQTT for Home Assistant integration.
+Monitor and forward FRITZ!Box call events to MQTT for Home Assistant integration.
 
 ## Installation
 
@@ -12,9 +12,9 @@ comparison to installing any other Home Assistant add-on.
    [![Open this add-on in your Home Assistant instance.][addon-badge]][addon]
 
 1. Click the "Install" button to install the add-on.
-1. Start the "Fritz!Box Call Monitor to MQTT" add-on.
+1. Start the "FRITZ!Box Call Monitor to MQTT" add-on.
 1. Check the logs of the add-on to see if everything went well.
-1. Configure your Fritz!Box and MQTT settings (see configuration section).
+1. Configure your FRITZ!Box and MQTT settings (see configuration section).
 
 ## Configuration
 
@@ -50,13 +50,13 @@ app_log_level: "info"
 
 ### Option: `fritzbox_host`
 
-The hostname or IP address of your Fritz!Box. Default is `fritz.box`.
+The hostname or IP address of your FRITZ!Box. Default is `fritz.box`.
 
 ### Option: `fritzbox_port`
 
-The port of the Fritz!Box call monitor service. Default is `1012`.
+The port of the FRITZ!Box call monitor service. Default is `1012`.
 
-**Note**: _You need to enable the call monitor service on your Fritz!Box by dialing `#96*5*` on a connected phone._
+**Note**: _You need to enable the call monitor service on your FRITZ!Box by dialing `#96*5*` on a connected phone._
 
 ### Option: `pbx_msns`
 
@@ -192,11 +192,11 @@ The timezone for timestamp formatting. Default is `Europe/Berlin`.
 
 The directory where call data is stored. Default is `/data`.
 
-## Fritz!Box Setup
+## FRITZ!Box Setup
 
-To use this add-on, you need to enable the call monitor service on your Fritz!Box:
+To use this add-on, you need to enable the call monitor service on your FRITZ!Box:
 
-1. Pick up any phone connected to your Fritz!Box
+1. Pick up any phone connected to your FRITZ!Box
 2. Dial `#96*5*` to enable the call monitor
 3. Dial `#96*4*` to disable the call monitor (if needed)
 
@@ -229,7 +229,7 @@ compatibility with the upstream fritz-callmonitor2mqtt application:
 
 ## Known issues and limitations
 
-- The Fritz!Box call monitor must be manually enabled by dialing `#96*5*`
+- The FRITZ!Box call monitor must be manually enabled by dialing `#96*5*`
 - Only one application can connect to the call monitor at a time
 - The add-on currently only supports AMD64 architecture
 
