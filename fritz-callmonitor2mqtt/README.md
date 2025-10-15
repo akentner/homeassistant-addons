@@ -1,6 +1,7 @@
 # Home Assistant Add-on: FRITZ!Box Call Monitor to MQTT
 
-[![Release][release-shield]][release] ![Project Stage][project-stage-shield] ![Project Maintenance][maintenance-shield]
+[![Release][release-shield]][release] ![Project Stage][project-stage-shield] ![Project Maintenanc[release-shield]: https://img.shields.io/badge/version-v1.5.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.5.0[maintenance-shield]
 
 [![Discord][discord-shield]][discord] [![Community Forum][forum-shield]][forum]
 
@@ -152,7 +153,7 @@ database_data_dir: "/data"
 [forum]: https://community.home-assistant.io/
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-production-green.svg
-[release-shield]: https://img.shields.io/badge/version-v1.4.0-blue.svg
+[release-shield]: https://img.shields.io/badge/version-v1..0-blue.svg
 [release]: https://github.com/akentner/homeassistant-addons/tree/v1.4.0
 [screenshot]: https://github.com/akentner/homeassistant-addons/raw/main/fritz-callmonitor2mqtt/images/screenshot.png
 [fritz-callmonitor2mqtt]: https://github.com/akentner/fritz-callmonitor2mqtt
