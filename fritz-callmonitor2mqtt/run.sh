@@ -102,9 +102,18 @@ export FRITZ_CALLMONITOR_APP_RECONNECT_DELAY
 export FRITZ_CALLMONITOR_APP_HEALTH_CHECK_PORT
 export FRITZ_CALLMONITOR_APP_TIMEZONE
 
-# Database
-FRITZ_CALLMONITOR_DATABASE_DATA_DIR=$(bashio::config 'database_data_dir')
-export FRITZ_CALLMONITOR_DATABASE_DATA_DIR
+# Export for upstream binary compatibility
+FRITZ_CALLMONITOR_DATA_DIR="$FRITZ_CALLMONITOR_DATABASE_DATA_DIR"
+export FRITZ_CALLMONITOR_DATA_DIR
+
+# Ensure data directory exists
+bashio::log.info "Creating data directory: $FRITZ_CALLMONITOR_DATA_DIR"
+mkdir -p "$FRITZ_CALLMONITOR_DATA_DIR"
+
+# Set appropriate permissions for the data directory
+chmod 755 "$FRITZ_CALLMONITOR_DATA_DIR"
+
+bashio::log.info "Data will be stored in: $FRITZ_CALLMONITOR_DATA_DIR"
 
 # Extensions Configuration
 # Process pbx_extensions array from config
@@ -180,4 +189,4 @@ if [[ "$APP_LOG_LEVEL" == "debug" ]]; then
 fi
 
 # Start the Go application
-exec /usr/local/bin/fritz-callmonitor2mqtt
+exec ${WORKING_DIR}/fritz-callmonitor2mqtt

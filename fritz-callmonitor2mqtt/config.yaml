@@ -1,6 +1,6 @@
 name: "FRITZ!Box Call Monitor to MQTT"
 description: "Sends call monitor messages from a FRITZ!Box to an MQTT broker"
-version: "1.5.0-0"
+version: "1.6.1-1"
 slug: "fritz-callmonitor2mqtt"
 init: false
 arch:
@@ -14,8 +14,9 @@ startup: "application"
 boot: "auto"
 host_network: false
 map:
-  - "config:rw"
-  - "ssl"
+  - type: addon_config
+    read_only: false
+    path: /opt/fritz-callmonitor2mqtt/data
 
 options:
   # FritzBox
@@ -44,12 +45,7 @@ options:
   app_log_level: "info"
   app_call_history_size: 50
   app_reconnect_delay: 10
-  app_health_check_port: 8080
   app_timezone: "Europe/Berlin"
-
-  # Database
-  database_data_dir: "/data"
-
 
 schema:
   fritzbox_host: "str"
@@ -75,6 +71,4 @@ schema:
   app_log_level: list(debug|info|warning|error|critical)
   app_call_history_size: "int"
   app_reconnect_delay: "int"
-  app_health_check_port: "int"
   app_timezone: "str"
-  database_data_dir: "str"

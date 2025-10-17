@@ -104,7 +104,29 @@ app_call_history_size: 50
 app_reconnect_delay: 10
 app_health_check_port: 8080
 app_timezone: "Europe/Berlin"
-database_data_dir: "/data"
+```
+
+### Database Configuration
+
+The add-on stores call history and statistics in a SQLite database. The database is automatically stored in `/addons_config/fritz-callmonitor2mqtt`, which provides:
+
+- **Persistent storage**: Data survives add-on updates and restarts
+- **External access**: Database accessible from Home Assistant host at `/usr/share/hassio/addons/data/fritz-callmonitor2mqtt/`
+- **Backup compatibility**: Included in Home Assistant backups
+- **No configuration needed**: Location is pre-configured for optimal Home Assistant integration
+
+#### Accessing the Database
+
+From the Home Assistant host system, you can access the SQLite database:
+
+```bash
+# Default location on the host
+ls -la /usr/share/hassio/addons/data/fritz-callmonitor2mqtt/
+
+# Access with sqlite3 (install if needed)
+sqlite3 /usr/share/hassio/addons/data/fritz-callmonitor2mqtt/calls.db
+
+# Or use a SQLite browser tool
 ```
 
 ## Complete Example Configuration
@@ -144,7 +166,6 @@ app_call_history_size: 50
 app_reconnect_delay: 5
 app_health_check_port: 8080
 app_timezone: "Europe/Berlin"
-database_data_dir: "/data"
 ```
 
 [discord-shield]: https://img.shields.io/discord/478094546522079232.svg
