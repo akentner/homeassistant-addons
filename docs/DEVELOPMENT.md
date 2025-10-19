@@ -6,7 +6,7 @@
 
 **WICHTIG**: Die Versionierung folgt einem spezifischen Schema für bessere Add-on-Verwaltung.
 
-#### Versionsformat pro Datei:
+#### Versionsformat pro Datei
 
 | Datei | Format | Beispiel | Zweck |
 |-------|--------|----------|-------|
@@ -14,9 +14,9 @@
 | `build.yaml` | `X.Y.Z` | `1.3.1` | Upstream Binary Version |
 | `README.md` | `vX.Y.Z` | `v1.3.1` | Badge Display Version |
 
-#### Regeln:
+#### Regeln
 
-1. **config.yaml**: 
+1. **config.yaml**:
    - ✅ **IMMER** Subpatch-Format verwenden: `"X.Y.Z-N"`
    - ✅ Neue Upstream-Versionen starten mit `-0`
    - ✅ Add-on-Fixes inkrementieren: `-1`, `-2`, etc.
@@ -29,13 +29,13 @@
    - ✅ Badge zeigt Hauptversion: `version-vX.Y.Z`
    - ✅ Release-Link zeigt Hauptversion: `tree/vX.Y.Z`
 
-#### Beispiel einer korrekten Versionierung:
+#### Beispiel einer korrekten Versionierung
 
 ```yaml
 # config.yaml
 version: "1.3.1-0"
 
-# build.yaml  
+# build.yaml
 VERSION: "1.3.1"
 
 # README.md
@@ -53,6 +53,7 @@ VERSION: "1.3.1"
 ## Auto-Update-System
 
 Das Add-on verwendet `version_pattern: "sync"` in `.upstream.yaml`, wodurch:
+
 - Neue Upstream-Versionen automatisch erkannt werden
 - Die config.yaml entsprechend aktualisiert wird
 - Der Subpatch automatisch auf `-0` zurückgesetzt wird
@@ -60,6 +61,7 @@ Das Add-on verwendet `version_pattern: "sync"` in `.upstream.yaml`, wodurch:
 ## Pre-commit Validierung
 
 Ein pre-commit Hook validiert automatisch:
+
 - Korrekte Versionierung in allen Dateien
 - Konsistenz zwischen den Versionsangaben
 - Einhaltung des Subpatch-Formats

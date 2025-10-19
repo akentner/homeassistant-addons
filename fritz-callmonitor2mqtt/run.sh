@@ -189,4 +189,4 @@ if [[ "$APP_LOG_LEVEL" == "debug" ]]; then
 fi
 
 # Start the Go application
-exec ${WORKING_DIR}/fritz-callmonitor2mqtt
+exec "${WORKING_DIR}/fritz-callmonitor2mqtt"

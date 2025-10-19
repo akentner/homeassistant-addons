@@ -285,7 +285,8 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 [addon-badge]: https://my.home-assistant.io/badges/supervisor_addon.svg
-[addon]: https://my.home-assistant.io/redirect/supervisor_addon/?addon=fritz-callmonitor2mqtt&repository_url=https%3A%2F%2Fgithub.com%2Fakentner%2Fhomeassistant-addons
+[addon]:
+https://my.home-assistant.io/redirect/supervisor_addon/?addon=fritz-callmonitor2mqtt&repository_url=https%3A%2F%2Fgithub.com%2Fakentner%2Fhomeassistant-addons
 [contributors]: https://github.com/akentner/homeassistant-addons/graphs/contributors
 [forum]: https://community.home-assistant.io/
 [issue]: https://github.com/akentner/homeassistant-addons/issues

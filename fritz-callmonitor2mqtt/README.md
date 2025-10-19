@@ -1,7 +1,8 @@
 # Home Assistant Add-on: FRITZ!Box Call Monitor to MQTT
 
-[![Release][release-shield]][release] ![Project Stage][project-stage-shield] ![Project Maintenanc[release-shield]: https://img.shields.io/badge/version-v1.5.0-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.5.0[maintenance-shield]
+[![Release][release-shield]][release] ![Project Stage][project-stage-shield] ![Project Maintenanc[release-shield]:
+https://img.shields.io/badge/version-v1.7.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.7.0[maintenance-shield]
 
 [![Discord][discord-shield]][discord] [![Community Forum][forum-shield]][forum]
 
@@ -108,10 +109,12 @@ app_timezone: "Europe/Berlin"
 
 ### Database Configuration
 
-The add-on stores call history and statistics in a SQLite database. The database is automatically stored in `/addons_config/fritz-callmonitor2mqtt`, which provides:
+The add-on stores call history and statistics in a SQLite database. The database is automatically stored in
+`/addons_config/fritz-callmonitor2mqtt`, which provides:
 
 - **Persistent storage**: Data survives add-on updates and restarts
-- **External access**: Database accessible from Home Assistant host at `/usr/share/hassio/addons/data/fritz-callmonitor2mqtt/`
+- **External access**: Database accessible from Home Assistant host at  
+  `/usr/share/hassio/addons/data/fritz-callmonitor2mqtt/`
 - **Backup compatibility**: Included in Home Assistant backups
 - **No configuration needed**: Location is pre-configured for optimal Home Assistant integration
 

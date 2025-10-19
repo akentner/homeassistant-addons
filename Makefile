@@ -1,7 +1,7 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks install-markdownlint lint test clean format fix lint-markdown-fix check-all validate-versions
+.PHONY: help init install-hooks lint test clean format fix lint-markdown-fix fix-markdown-lines check-all validate-versions
 
 # Default target
 help: ## Show this help message
@@ -99,16 +99,7 @@ install-hooks: ## Install pre-commit hooks
 	@echo "🔧 Installing pre-commit hooks..."
 	./scripts/setup-hooks.sh
 
-install-markdownlint: ## Install markdownlint-cli2 for auto-fixing
-	@echo "📦 Installing markdownlint-cli2..."
-	@if command -v npm >/dev/null 2>&1; then \
-		npm install -g markdownlint-cli2 && echo "✅ markdownlint-cli2 installed successfully"; \
-	else \
-		echo "❌ npm not found. Please install Node.js and npm first:"; \
-		echo "   • Ubuntu/Debian: sudo apt-get install nodejs npm"; \
-		echo "   • macOS: brew install node"; \
-		echo "   • Or download from: https://nodejs.org/"; \
-	fi
+# Removed install-markdownlint target - we use the Python fix-markdown-lines.py script instead
 
 lint: ## Run all linting checks
 	@echo "🔍 Running lint checks..."
@@ -137,14 +128,13 @@ lint-markdown: ## Lint Markdown files
 
 lint-markdown-fix: ## Lint and auto-fix Markdown files
 	@echo "🔧 Linting and fixing Markdown files..."
-	@if command -v markdownlint-cli2 >/dev/null 2>&1; then \
-		markdownlint-cli2 --fix "**/*.md" "#node_modules" "#.git"; \
-		echo "✅ Markdown files auto-fixed"; \
-	else \
-		echo "⚠️  markdownlint-cli2 not found. Using pre-commit for checking only..."; \
-		echo "💡 To enable auto-fix, install markdownlint-cli2: npm install -g markdownlint-cli2"; \
-		pre-commit run markdownlint --all-files || echo "❌ Some Markdown issues found but cannot auto-fix without markdownlint-cli2"; \
-	fi
+	@echo "Using Python-based fix-markdown-lines.py script (no NodeJS required)"
+	@./scripts/fix-markdown-lines.py --glob "**/*.md"
+	@echo "✅ Markdown files checked and fixed"
+
+fix-markdown-lines: ## Fix long lines in Markdown files using Python script
+	@echo "📝 Fixing Markdown line lengths..."
+	@./scripts/fix-markdown-lines.py --glob "**/*.md"
 
 format: ## Format all files
 	@echo "🎨 Formatting files..."
@@ -154,6 +144,8 @@ format: ## Format all files
 
 fix: ## Auto-fix all fixable issues
 	@echo "🔧 Auto-fixing all fixable issues..."
+	@echo "📝 Fixing Markdown line lengths..."
+	@./scripts/fix-markdown-lines.py --glob "**/*.md"
 	@echo "📝 Fixing Markdown files..."
 	$(MAKE) lint-markdown-fix
 	@echo "🎨 Formatting files..."

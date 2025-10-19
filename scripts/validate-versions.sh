@@ -62,7 +62,7 @@ fi
 
 # Validation 3: Versions must be consistent (ignoring subpatch in config)
 if [[ -n "$CONFIG_VERSION" ]] && [[ -n "$BUILD_VERSION" ]]; then
-    CONFIG_BASE=$(echo "$CONFIG_VERSION" | sed 's/-[0-9]*$//')
+    CONFIG_BASE="${CONFIG_VERSION%-[0-9]*}"
     if [[ "$CONFIG_BASE" != "$BUILD_VERSION" ]]; then
         ERRORS+=("❌ Version mismatch: config.yaml base '$CONFIG_BASE' != build.yaml '$BUILD_VERSION'")
     fi
