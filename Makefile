@@ -1,12 +1,16 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks lint test clean format fix lint-markdown-fix fix-markdown-lines check-all validate-versions
+.PHONY: help init install-hooks lint test clean format fix lint-markdown-fix fix-markdown-lines check-all validate-versions update-version
 
 # Default target
 help: ## Show this help message
 	@echo "Available commands:"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@echo ""
+	@echo "Examples:"
+	@echo "  make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2"
+	@echo "  make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2 CHECK_RELEASE=yes"
 
 init: ## Initialize development environment (install dependencies and hooks)
 	@echo "🚀 Initializing development environment..."
@@ -164,7 +168,7 @@ validate-addons: ## Validate add-on configurations
 					exit 1; \
 				fi; \
 			done; \
-			if ! yq eval '.name' "$${addon_dir}config.yaml" >/dev/null 2>&1; then \
+			if ! python3 -c "import yaml; f=open('$${addon_dir}config.yaml'); d=yaml.safe_load(f); f.close(); exit(0 if 'name' in d else 1)" 2>/dev/null; then \
 				echo "ERROR: $${addon_dir}config.yaml is invalid or missing 'name' field"; \
 				exit 1; \
 			fi; \
@@ -175,6 +179,22 @@ validate-addons: ## Validate add-on configurations
 validate-versions: ## Validate add-on versioning consistency
 	@echo "🔍 Validating add-on versions..."
 	./scripts/validate-versions.sh
+
+update-version: ## Update add-on version (usage: make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2)
+	@if [ -z "$(ADDON)" ] || [ -z "$(VERSION)" ]; then \
+		echo "❌ Missing required parameters"; \
+		echo "Usage: make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2"; \
+		echo "       make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2 CHECK_RELEASE=yes"; \
+		exit 1; \
+	fi
+	@echo "🔄 Updating $(ADDON) to version $(VERSION)..."
+	@if [ "$(CHECK_RELEASE)" = "yes" ]; then \
+		./scripts/update-version.py $(ADDON) $(VERSION) --check-release; \
+	else \
+		./scripts/update-version.py $(ADDON) $(VERSION); \
+	fi
+	@echo "🔍 Running validation..."
+	@make validate-versions
 
 check-all: lint validate-addons validate-versions ## Run all checks (lint + validate + versions)
 

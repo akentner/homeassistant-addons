@@ -1,8 +1,6 @@
 # Home Assistant Add-on: FRITZ!Box Call Monitor to MQTT
 
-[![Release][release-shield]][release] ![Project Stage][project-stage-shield] ![Project Maintenanc[release-shield]:
-https://img.shields.io/badge/version-v1.7.0-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.7.0[maintenance-shield]
+[![Release][release-shield]][release] ![Project Stage][project-stage-shield] ![Project Maintenance][maintenance-shield]
 
 [![Discord][discord-shield]][discord] [![Community Forum][forum-shield]][forum]
 
@@ -113,7 +111,7 @@ The add-on stores call history and statistics in a SQLite database. The database
 `/addons_config/fritz-callmonitor2mqtt`, which provides:
 
 - **Persistent storage**: Data survives add-on updates and restarts
-- **External access**: Database accessible from Home Assistant host at  
+- **External access**: Database accessible from Home Assistant host at
   `/usr/share/hassio/addons/data/fritz-callmonitor2mqtt/`
 - **Backup compatibility**: Included in Home Assistant backups
 - **No configuration needed**: Location is pre-configured for optimal Home Assistant integration
@@ -177,7 +175,7 @@ app_timezone: "Europe/Berlin"
 [forum]: https://community.home-assistant.io/
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-production-green.svg
-[release-shield]: https://img.shields.io/badge/version-v1..0-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.4.0
+[release-shield]: https://img.shields.io/badge/version-v1.7.1-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.7.1
 [screenshot]: https://github.com/akentner/homeassistant-addons/raw/main/fritz-callmonitor2mqtt/images/screenshot.png
 [fritz-callmonitor2mqtt]: https://github.com/akentner/fritz-callmonitor2mqtt
