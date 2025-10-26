@@ -175,7 +175,7 @@ app_timezone: "Europe/Berlin"
 [forum]: https://community.home-assistant.io/
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-production-green.svg
-[release-shield]: https://img.shields.io/badge/version-v1.7.2-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.7.2
+[release-shield]: https://img.shields.io/badge/version-v1.7.3-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.7.3
 [screenshot]: https://github.com/akentner/homeassistant-addons/raw/main/fritz-callmonitor2mqtt/images/screenshot.png
 [fritz-callmonitor2mqtt]: https://github.com/akentner/fritz-callmonitor2mqtt
