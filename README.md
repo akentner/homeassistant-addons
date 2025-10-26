@@ -9,16 +9,6 @@ Add-on documentation: <https://developers.home-assistant.io/docs/add-ons>
 [![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL
 pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fakentner%2Fhomeassistant-addons)
 
-## Features
-
-✅ **Automated Updates** - Add-ons automatically track upstream releases
-🔄 **Multi-Add-on Support** - Scalable system for unlimited add-ons
-📝 **Version Management** - Automatic version bumping and changelog generation
-🛡️ **Error Handling** - Robust error handling with GitHub issue creation
-⚡ **Parallel Processing** - All add-ons updated simultaneously
-
-See [Auto-Update Documentation](./docs/AUTO_UPDATE_GUIDE.md) for details.
-
 ## Add-ons
 
 This repository contains the following add-ons:
