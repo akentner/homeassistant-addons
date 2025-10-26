@@ -15,6 +15,12 @@ on:
         required: false
         default: 'false'
 
+# Required permissions for the workflow
+permissions:
+  contents: write       # For creating commits and pushing changes
+  issues: write         # For creating issues when updates fail
+  pull-requests: write  # For creating pull requests (if needed in future)
+
 # Global environment variables for caching optimization
 env:
   CACHE_VERSION: v1
