@@ -68,7 +68,6 @@
     }
   ],
   "platformAutomerge": false,
-  "prTitle": "Update {{depName}} to {{newVersion}}",
   "schedule": [
     "at any time"
   ],
