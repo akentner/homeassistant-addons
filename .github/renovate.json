@@ -6,7 +6,7 @@
   "commitMessagePrefix": "chore:",
   "commitMessageTopic": "{{depName}}",
   "extends": [
-    "config:base"
+    "config:recommended"
   ],
   "labels": [
     "dependencies"
@@ -19,21 +19,22 @@
         "akentner/fritz-callmonitor2mqtt"
       ],
       "matchManagers": [
-        "regex"
+        "custom.regex"
       ],
       "semanticCommits": "enabled"
     }
   ],
   "platformAutomerge": false,
   "prTitle": "Update {{depName}} to {{newVersion}}",
-  "regexManagers": [
+  "customManagers": [
     {
+      "customType": "regex",
       "autoReplaceStringTemplate": "version: \"{{newValue}}-0\"",
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "akentner/fritz-callmonitor2mqtt",
       "extractVersionTemplate": "^v(?<version>.*)$",
-      "fileMatch": [
-        "^fritz-callmonitor2mqtt/config\\.yaml$"
+      "managerFilePatterns": [
+        "/^fritz-callmonitor2mqtt/config\\.yaml$/"
       ],
       "matchStrings": [
         "version:\\s+\"(?<currentValue>[^-\"]+)-\\d+\""
@@ -41,11 +42,12 @@
       "versioningTemplate": "semver"
     },
     {
+      "customType": "regex",
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "akentner/fritz-callmonitor2mqtt",
       "extractVersionTemplate": "^v(?<version>.*)$",
-      "fileMatch": [
-        "^fritz-callmonitor2mqtt/build\\.yaml$"
+      "managerFilePatterns": [
+        "/^fritz-callmonitor2mqtt/build\\.yaml$/"
       ],
       "matchStrings": [
         "VERSION:\\s+\"(?<currentValue>[^\"]+)\""
@@ -53,11 +55,12 @@
       "versioningTemplate": "semver"
     },
     {
+      "customType": "regex",
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "akentner/fritz-callmonitor2mqtt",
       "extractVersionTemplate": "^v(?<version>.*)$",
-      "fileMatch": [
-        "^fritz-callmonitor2mqtt/README\\.md$"
+      "managerFilePatterns": [
+        "/^fritz-callmonitor2mqtt/README\\.md$/"
       ],
       "matchStrings": [
         "\\[release-shield\\]:[^v]+v(?<currentValue>[^\\s-]+)",
