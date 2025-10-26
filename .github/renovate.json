@@ -1,0 +1,73 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "automerge": false,
+  "commitMessageAction": "update",
+  "commitMessageExtra": "to {{newVersion}}",
+  "commitMessagePrefix": "chore:",
+  "commitMessageTopic": "{{depName}}",
+  "extends": [
+    "config:base"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "packageRules": [
+    {
+      "additionalBranchPrefix": "fritz-callmonitor-",
+      "groupName": "fritz-callmonitor2mqtt",
+      "matchDepNames": [
+        "akentner/fritz-callmonitor2mqtt"
+      ],
+      "matchManagers": [
+        "regex"
+      ],
+      "semanticCommits": "enabled"
+    }
+  ],
+  "platformAutomerge": false,
+  "prTitle": "Update {{depName}} to {{newVersion}}",
+  "regexManagers": [
+    {
+      "autoReplaceStringTemplate": "version: \"{{newValue}}-0\"",
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "akentner/fritz-callmonitor2mqtt",
+      "extractVersionTemplate": "^v(?<version>.*)$",
+      "fileMatch": [
+        "^fritz-callmonitor2mqtt/config\\.yaml$"
+      ],
+      "matchStrings": [
+        "version:\\s+\"(?<currentValue>[^-\"]+)-\\d+\""
+      ],
+      "versioningTemplate": "semver"
+    },
+    {
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "akentner/fritz-callmonitor2mqtt",
+      "extractVersionTemplate": "^v(?<version>.*)$",
+      "fileMatch": [
+        "^fritz-callmonitor2mqtt/build\\.yaml$"
+      ],
+      "matchStrings": [
+        "VERSION:\\s+\"(?<currentValue>[^\"]+)\""
+      ],
+      "versioningTemplate": "semver"
+    },
+    {
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "akentner/fritz-callmonitor2mqtt",
+      "extractVersionTemplate": "^v(?<version>.*)$",
+      "fileMatch": [
+        "^fritz-callmonitor2mqtt/README\\.md$"
+      ],
+      "matchStrings": [
+        "\\[release-shield\\]:[^v]+v(?<currentValue>[^\\s-]+)",
+        "\\[release\\]:[^v]+v(?<currentValue>[^\\s/]+)"
+      ],
+      "versioningTemplate": "semver"
+    }
+  ],
+  "schedule": [
+    "every weekend"
+  ],
+  "timezone": "Europe/Berlin"
+}
