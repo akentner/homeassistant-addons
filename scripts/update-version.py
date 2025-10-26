@@ -7,15 +7,19 @@ import re
 import sys
 import argparse
 from pathlib import Path
-import yaml
+from typing import Tuple
 
 
-def update_config_yaml(addon_dir: Path, new_version: str) -> bool:
-    """Update version in config.yaml"""
+def update_config_yaml(addon_dir: Path, new_version: str, dry_run: bool = False) -> Tuple[bool, str, str]:
+    """Update version in config.yaml
+
+    Returns:
+        (success, old_version, new_version)
+    """
     config_file = addon_dir / "config.yaml"
     if not config_file.exists():
         print(f"❌ {config_file} not found")
-        return False
+        return False, "", ""
 
     try:
         with open(config_file, 'r') as f:
@@ -23,33 +27,47 @@ def update_config_yaml(addon_dir: Path, new_version: str) -> bool:
 
         # Pattern: version: "X.Y.Z-N"
         pattern = r'^(\s*version:\s*["\'])([0-9]+\.[0-9]+\.[0-9]+-[0-9]+)(["\'].*?)$'
+        match = re.search(pattern, content, flags=re.MULTILINE)
+
+        if not match:
+            print(f"⚠️  No version found in {config_file}")
+            return False, "", ""
+
+        old_version = match.group(2)
+        new_version_full = f"{new_version}-0"
+
         new_content = re.sub(
             pattern,
-            f'\\g<1>{new_version}-0\\g<3>',
+            f'\\g<1>{new_version_full}\\g<3>',
             content,
             flags=re.MULTILINE
         )
 
         if new_content != content:
-            with open(config_file, 'w') as f:
-                f.write(new_content)
-            print(f"✅ Updated {config_file}: version → {new_version}-0")
-            return True
+            if not dry_run:
+                with open(config_file, 'w') as f:
+                    f.write(new_content)
+            print(f"✅ {'Would update' if dry_run else 'Updated'} {config_file.name}: {old_version} → {new_version_full}")
+            return True, old_version, new_version_full
         else:
-            print(f"⚠️  No version found in {config_file}")
-            return False
+            print(f"⚠️  No changes needed in {config_file}")
+            return False, old_version, new_version_full
 
     except Exception as e:
         print(f"❌ Error updating {config_file}: {e}")
-        return False
+        return False, "", ""
 
 
-def update_build_yaml(addon_dir: Path, new_version: str) -> bool:
-    """Update VERSION in build.yaml"""
+def update_build_yaml(addon_dir: Path, new_version: str, dry_run: bool = False) -> Tuple[bool, str, str]:
+    """Update VERSION in build.yaml
+
+    Returns:
+        (success, old_version, new_version)
+    """
     build_file = addon_dir / "build.yaml"
     if not build_file.exists():
         print(f"❌ {build_file} not found")
-        return False
+        return False, "", ""
 
     try:
         with open(build_file, 'r') as f:
@@ -57,6 +75,14 @@ def update_build_yaml(addon_dir: Path, new_version: str) -> bool:
 
         # Pattern: VERSION: "X.Y.Z"
         pattern = r'^(\s*VERSION:\s*["\'])([0-9]+\.[0-9]+\.[0-9]+)(["\'].*?)$'
+        match = re.search(pattern, content, flags=re.MULTILINE)
+
+        if not match:
+            print(f"⚠️  No VERSION found in {build_file}")
+            return False, "", ""
+
+        old_version = match.group(2)
+
         new_content = re.sub(
             pattern,
             f'\\g<1>{new_version}\\g<3>',
@@ -65,58 +91,69 @@ def update_build_yaml(addon_dir: Path, new_version: str) -> bool:
         )
 
         if new_content != content:
-            with open(build_file, 'w') as f:
-                f.write(new_content)
-            print(f"✅ Updated {build_file}: VERSION → {new_version}")
-            return True
+            if not dry_run:
+                with open(build_file, 'w') as f:
+                    f.write(new_content)
+            print(f"✅ {'Would update' if dry_run else 'Updated'} {build_file.name}: {old_version} → {new_version}")
+            return True, old_version, new_version
         else:
-            print(f"⚠️  No VERSION found in {build_file}")
-            return False
+            print(f"⚠️  No changes needed in {build_file}")
+            return False, old_version, new_version
 
     except Exception as e:
         print(f"❌ Error updating {build_file}: {e}")
-        return False
+        return False, "", ""
 
 
-def update_readme_md(addon_dir: Path, new_version: str) -> bool:
-    """Update version badges and links in README.md"""
+def update_readme_md(addon_dir: Path, new_version: str, dry_run: bool = False) -> Tuple[bool, list]:
+    """Update version badges and links in README.md
+
+    Returns:
+        (success, list of changes)
+    """
     readme_file = addon_dir / "README.md"
     if not readme_file.exists():
         print(f"❌ {readme_file} not found")
-        return False
+        return False, []
 
     try:
         with open(readme_file, 'r') as f:
             content = f.read()
 
         original_content = content
+        changes = []
 
-        # Update version badge: version-vX.Y.Z-blue.svg
-        content = re.sub(
-            r'version-v[0-9]+\.[0-9]+\.[0-9]+-blue\.svg',
-            f'version-v{new_version}-blue.svg',
-            content
-        )
+        # Update Shields.io badge: [release-shield]: https://img.shields.io/badge/version-vX.Y.Z-blue.svg
+        shield_pattern = r'(\[release-shield\]:\s*https://img\.shields\.io/badge/version-v)([0-9]+\.[0-9]+\.[0-9]+)(-blue\.svg)'
+        shield_match = re.search(shield_pattern, content)
+        if shield_match:
+            old_shield_version = shield_match.group(2)
+            content = re.sub(shield_pattern, f'\\g<1>{new_version}\\g<3>', content)
+            changes.append(f"Badge: v{old_shield_version} → v{new_version}")
 
-        # Update release tree links: /tree/vX.Y.Z
-        content = re.sub(
-            r'/tree/v[0-9]+\.[0-9]+\.[0-9]+',
-            f'/tree/v{new_version}',
-            content
-        )
+        # Update release tree links: [release]: https://github.com/akentner/homeassistant-addons/tree/vX.Y.Z
+        release_pattern = r'(\[release\]:\s*https://github\.com/akentner/homeassistant-addons/tree/v)([0-9]+\.[0-9]+\.[0-9]+)'
+        release_match = re.search(release_pattern, content)
+        if release_match:
+            old_release_version = release_match.group(2)
+            content = re.sub(release_pattern, f'\\g<1>{new_version}', content)
+            changes.append(f"Release link: v{old_release_version} → v{new_version}")
 
         if content != original_content:
-            with open(readme_file, 'w') as f:
-                f.write(content)
-            print(f"✅ Updated {readme_file}: badges and links → v{new_version}")
-            return True
+            if not dry_run:
+                with open(readme_file, 'w') as f:
+                    f.write(content)
+            print(f"✅ {'Would update' if dry_run else 'Updated'} {readme_file.name}:")
+            for change in changes:
+                print(f"   • {change}")
+            return True, changes
         else:
             print(f"⚠️  No version patterns found in {readme_file}")
-            return False
+            return False, []
 
     except Exception as e:
         print(f"❌ Error updating {readme_file}: {e}")
-        return False
+        return False, []
 
 
 def validate_version_format(version: str) -> bool:
@@ -130,15 +167,26 @@ def check_github_release(version: str, addon_name: str) -> bool:
     try:
         import urllib.request
         url = f"https://github.com/akentner/{addon_name}/releases/tag/v{version}"
+        print(f"   Checking: {url}")
         req = urllib.request.Request(url, method='HEAD')
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             return response.status == 200
-    except:
-        return False  # Don't fail if we can't check
+    except Exception as e:
+        print(f"   ⚠️  Could not verify release: {e}")
+        return False
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Update add-on version across all files')
+    parser = argparse.ArgumentParser(
+        description='Update add-on version across all files',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s fritz-callmonitor2mqtt 1.7.2
+  %(prog)s fritz-callmonitor2mqtt 1.7.2 --check-release
+  %(prog)s fritz-callmonitor2mqtt 1.7.2 --dry-run
+        """
+    )
     parser.add_argument('addon_name', help='Name of the add-on directory (e.g., fritz-callmonitor2mqtt)')
     parser.add_argument('new_version', help='New version number (e.g., 1.7.2)')
     parser.add_argument('--check-release', action='store_true', help='Check if GitHub release exists')
@@ -162,10 +210,8 @@ def main():
         print(f"❌ Not a valid add-on directory (no config.yaml): {addon_dir}")
         return 1
 
-    print(f"🔄 Updating {args.addon_name} to version {args.new_version}")
-
-    if args.dry_run:
-        print("🏃 DRY RUN MODE - No files will be modified")
+    print(f"🔄 {'[DRY RUN] ' if args.dry_run else ''}Updating {args.addon_name} to version {args.new_version}")
+    print()
 
     # Optional: Check if GitHub release exists
     if args.check_release:
@@ -174,39 +220,42 @@ def main():
             print(f"✅ GitHub release v{args.new_version} found")
         else:
             print(f"⚠️  GitHub release v{args.new_version} not found or not accessible")
-            response = input("Continue anyway? [y/N]: ")
-            if response.lower() != 'y':
-                return 1
+            if not args.dry_run:
+                response = input("Continue anyway? [y/N]: ")
+                if response.lower() != 'y':
+                    print("❌ Aborted")
+                    return 1
+        print()
 
     success_count = 0
     total_files = 3
 
-    if args.dry_run:
-        print("\n📋 Would update the following files:")
-        print(f"   • {addon_dir}/config.yaml: version → {args.new_version}-0")
-        print(f"   • {addon_dir}/build.yaml: VERSION → {args.new_version}")
-        print(f"   • {addon_dir}/README.md: badges and links → v{args.new_version}")
-        return 0
-
     # Update all files
+    success, old_v, new_v = update_config_yaml(addon_dir, args.new_version, args.dry_run)
+    if success:
+        success_count += 1
+
+    success, old_v, new_v = update_build_yaml(addon_dir, args.new_version, args.dry_run)
+    if success:
+        success_count += 1
+
+    success, changes = update_readme_md(addon_dir, args.new_version, args.dry_run)
+    if success:
+        success_count += 1
+
     print()
-    if update_config_yaml(addon_dir, args.new_version):
-        success_count += 1
-
-    if update_build_yaml(addon_dir, args.new_version):
-        success_count += 1
-
-    if update_readme_md(addon_dir, args.new_version):
-        success_count += 1
-
-    print(f"\n📊 Updated {success_count}/{total_files} files")
+    print(f"📊 {'Would update' if args.dry_run else 'Updated'} {success_count}/{total_files} files")
 
     if success_count == total_files:
-        print("🎉 All files updated successfully!")
-        print(f"\n💡 Next steps:")
-        print(f"   • Run 'make validate-versions' to verify")
-        print(f"   • Run 'make check-all' for full validation")
-        print(f"   • Commit changes: git add -A && git commit -m 'Update {args.addon_name} to v{args.new_version}'")
+        print("🎉 All files updated successfully!" if not args.dry_run else "🎉 All files would be updated!")
+        if not args.dry_run:
+            print(f"\n💡 Next steps:")
+            print(f"   • Run 'make validate-versions' to verify")
+            print(f"   • Run 'make check-all' for full validation")
+            print(f"   • Commit: git add {args.addon_name} && git commit -m 'chore: update {args.addon_name} to v{args.new_version}'")
+        return 0
+    elif success_count == 0:
+        print("⚠️  No files needed updating (already at target version?)")
         return 0
     else:
         print("⚠️  Some files could not be updated")

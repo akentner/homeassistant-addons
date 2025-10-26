@@ -12,8 +12,8 @@
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "akentner/fritz-callmonitor2mqtt",
       "extractVersionTemplate": "^v(?<version>.*)$",
-      "managerFilePatterns": [
-        "/^fritz-callmonitor2mqtt/config\\.yaml$/"
+      "fileMatch": [
+        "^fritz-callmonitor2mqtt/config\\.yaml$"
       ],
       "matchStrings": [
         "version:\\s+\"(?<currentValue>[^-\"]+)-\\d+\""
@@ -25,8 +25,8 @@
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "akentner/fritz-callmonitor2mqtt",
       "extractVersionTemplate": "^v(?<version>.*)$",
-      "managerFilePatterns": [
-        "/^fritz-callmonitor2mqtt/build\\.yaml$/"
+      "fileMatch": [
+        "^fritz-callmonitor2mqtt/build\\.yaml$"
       ],
       "matchStrings": [
         "VERSION:\\s+\"(?<currentValue>[^\"]+)\""
@@ -38,12 +38,12 @@
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "akentner/fritz-callmonitor2mqtt",
       "extractVersionTemplate": "^v(?<version>.*)$",
-      "managerFilePatterns": [
-        "/^fritz-callmonitor2mqtt/README\\.md$/"
+      "fileMatch": [
+        "^fritz-callmonitor2mqtt/README\\.md$"
       ],
       "matchStrings": [
-        "\\[release-shield\\]:[^v]+v(?<currentValue>[^\\s-]+)",
-        "\\[release\\]:[^v]+v(?<currentValue>[^\\s/]+)"
+        "\\[release-shield\\]: https://img\\.shields\\.io/badge/version-v(?<currentValue>[^-]+)-blue\\.svg",
+        "\\[release\\]: https://github\\.com/akentner/homeassistant-addons/tree/v(?<currentValue>[^\\s]+)"
       ],
       "versioningTemplate": "semver"
     }
