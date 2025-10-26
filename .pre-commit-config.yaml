@@ -68,7 +68,7 @@ repos:
 
 # Configuration
 default_language_version:
-  python: python3.11
+  python: python3  # Use system default Python 3.x
 
 # Global settings
 fail_fast: false

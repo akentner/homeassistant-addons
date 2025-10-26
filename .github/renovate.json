@@ -5,31 +5,10 @@
   "commitMessageExtra": "to {{newVersion}}",
   "commitMessagePrefix": "chore:",
   "commitMessageTopic": "{{depName}}",
-  "extends": [
-    "config:recommended"
-  ],
-  "labels": [
-    "dependencies"
-  ],
-  "packageRules": [
-    {
-      "additionalBranchPrefix": "fritz-callmonitor-",
-      "groupName": "fritz-callmonitor2mqtt",
-      "matchDepNames": [
-        "akentner/fritz-callmonitor2mqtt"
-      ],
-      "matchManagers": [
-        "custom.regex"
-      ],
-      "semanticCommits": "enabled"
-    }
-  ],
-  "platformAutomerge": false,
-  "prTitle": "Update {{depName}} to {{newVersion}}",
   "customManagers": [
     {
-      "customType": "regex",
       "autoReplaceStringTemplate": "version: \"{{newValue}}-0\"",
+      "customType": "regex",
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "akentner/fritz-callmonitor2mqtt",
       "extractVersionTemplate": "^v(?<version>.*)$",
@@ -69,6 +48,27 @@
       "versioningTemplate": "semver"
     }
   ],
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "packageRules": [
+    {
+      "additionalBranchPrefix": "fritz-callmonitor-",
+      "groupName": "fritz-callmonitor2mqtt",
+      "matchDepNames": [
+        "akentner/fritz-callmonitor2mqtt"
+      ],
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "semanticCommits": "enabled"
+    }
+  ],
+  "platformAutomerge": false,
+  "prTitle": "Update {{depName}} to {{newVersion}}",
   "schedule": [
     "at any time"
   ],
