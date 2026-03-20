@@ -1,0 +1,86 @@
+name: "Phone Logger"
+description: "Phone logging and adapter integration for Home Assistant. Based on https://github.com/akentner/phone-logger."
+version: "0.1.0-7"
+slug: "phone-logger"
+init: false
+ingress: true
+ingress_port: 8080
+arch:
+  - amd64
+url: "https://github.com/akentner/phone-logger"
+startup: "application"
+boot: "auto"
+host_network: false
+map:
+  - type: addon_config
+    read_only: false
+    path: /addon_config
+options:
+  input_adapters:
+    fritz_callmonitor:
+      enabled: false
+      host: "192.168.178.1"
+      port: 1012
+  resolver_adapters:
+    tellows:
+      enabled: false
+      cache_ttl_days: 30
+  output_webhooks: []
+  mqtt:
+    host: ""
+    port: 1883
+    client_id: "phone-logger"
+    username: ""
+    password: ""
+    topic: "phone-logger"
+  pbx:
+    phone:
+      country_code: "+49"
+      local_area_code: ""
+    trunks: []
+    msns: []
+    devices: []
+  log_level: "INFO"
+  timezone: "Europe/Berlin"
+
+schema:
+  input_adapters:
+    fritz_callmonitor:
+      enabled: bool?
+      host: str?
+      port: int?
+  resolver_adapters:
+    tellows:
+      enabled: bool?
+      cache_ttl_days: int?
+  output_webhooks:
+    - url: url
+      method: list(GET|POST)?
+      headers:
+        - key: str
+          value: str
+  pbx:
+    phone:
+      country_code: str
+      local_area_code: str
+    trunks:
+      - id: str
+        type: str
+        label: str
+    msns:
+      - number: str
+        label: str
+    devices:
+      - id: str
+        name: str
+        type: list(voicebox|dect|voip)
+        extension: str
+  mqtt:
+    host: str?
+    port: int?
+    client_id: str?
+    username: str?
+    password: str?
+    topic: str?
+  log_level: list(DEBUG|INFO|WARNING|ERROR|CRITICAL)
+  timezone: str
