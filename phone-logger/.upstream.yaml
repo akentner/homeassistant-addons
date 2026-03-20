@@ -1,0 +1,7 @@
+upstream:
+  repository: "akentner/phone-logger"
+  version_pattern: "v*"
+  version_strip: "^v"
+addon:
+  version_pattern: "sync"
+
