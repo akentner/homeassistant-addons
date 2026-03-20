@@ -7,7 +7,7 @@ repos:
 
   # General code formatting and linting
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -51,7 +51,7 @@ repos:
 
   # JSON formatting
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
       - id: pretty-format-json
         args: [--autofix, --indent=2]
