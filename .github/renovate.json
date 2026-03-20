@@ -46,6 +46,33 @@
         "\\[release\\]: https://github\\.com/akentner/homeassistant-addons/tree/v(?<currentValue>[^\\s]+)"
       ],
       "versioningTemplate": "semver"
+    },
+    {
+      "autoReplaceStringTemplate": "version: \"{{newValue}}-0\"",
+      "customType": "regex",
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "akentner/phone-logger",
+      "extractVersionTemplate": "^v(?<version>.*)$",
+      "fileMatch": [
+        "^phone-logger/config\\.yaml$"
+      ],
+      "matchStrings": [
+        "version:\\s+\"(?<currentValue>[^-\"]+)-\\d+\""
+      ],
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "akentner/phone-logger",
+      "extractVersionTemplate": "^v(?<version>.*)$",
+      "fileMatch": [
+        "^phone-logger/build\\.yaml$"
+      ],
+      "matchStrings": [
+        "VERSION:\\s+\"(?<currentValue>[^\"]+)\""
+      ],
+      "versioningTemplate": "semver"
     }
   ],
   "extends": [
@@ -60,6 +87,17 @@
       "groupName": "fritz-callmonitor2mqtt",
       "matchDepNames": [
         "akentner/fritz-callmonitor2mqtt"
+      ],
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "semanticCommits": "enabled"
+    },
+    {
+      "additionalBranchPrefix": "phone-logger-",
+      "groupName": "phone-logger",
+      "matchDepNames": [
+        "akentner/phone-logger"
       ],
       "matchManagers": [
         "custom.regex"
