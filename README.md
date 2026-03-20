@@ -34,6 +34,7 @@ _Monitors Fritz!Box call events and forwards them to MQTT broker._
 _Telefon-Logging und flexible Adapter-Integration für Home Assistant._
 
 **Features:**
+
 - Flexible Konfiguration von Input-, Resolver- und Output-Adaptern
 - Strenges, Home Assistant-konformes Schema
 - Datenpersistenz über das Add-on-Volume

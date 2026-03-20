@@ -8,10 +8,9 @@ Monitor and forward FRITZ!Box call events to MQTT.
 
 ## About
 
-This add-on connects to your FRITZ!Box call monitor and forwards all call events
-(incoming, outgoing, connected, disconnected) to an MQTT broker. This allows you
-to integrate FRITZ!Box telephony events into Home Assistant automations and
-notifications.
+This add-on connects to your FRITZ!Box call monitor and forwards all call events (incoming, outgoing, connected,
+disconnected) to an MQTT broker. This allows you to integrate FRITZ!Box telephony events into Home Assistant automations
+and notifications.
 
 The add-on is based on the [fritz-callmonitor2mqtt][fritz-callmonitor2mqtt] application and provides:
 
@@ -21,11 +20,7 @@ The add-on is based on the [fritz-callmonitor2mqtt][fritz-callmonitor2mqtt] appl
 - Extension configuration for better call identification
 - Comprehensive logging and debugging options
 
-![FRITZ!Box Call Monitor Preview][screenshot]
-mqtt_qos: 1
-mqtt_retain: true
-mqtt_keep_alive: 60
-mqtt_connect_timeout: 30
+![FRITZ!Box Call Monitor Preview][screenshot] mqtt_qos: 1 mqtt_retain: true mqtt_keep_alive: 60 mqtt_connect_timeout: 30
 
 ````yaml
 

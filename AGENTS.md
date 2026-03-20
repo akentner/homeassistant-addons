@@ -1,12 +1,15 @@
 # AGENTS.md - AI Agent Guide for Home Assistant Add-ons Repository
 
-This guide helps AI coding agents understand the structure, conventions, and workflows specific to this Home Assistant add-ons repository.
+This guide helps AI coding agents understand the structure, conventions, and workflows specific to this Home Assistant
+add-ons repository.
 
 ## 🏗️ Architecture Overview
 
-**What this is:** A Home Assistant add-ons repository with automated upstream version monitoring. Currently hosts one production add-on: **FRITZ!Box Call Monitor to MQTT**.
+**What this is:** A Home Assistant add-ons repository with automated upstream version monitoring. Currently hosts one
+production add-on: **FRITZ!Box Call Monitor to MQTT**.
 
 **Key structural decision:** Each add-on lives in its own directory with:
+
 - `config.yaml` - Home Assistant add-on manifest (defines options, schema, Docker settings)
 - `build.yaml` - Docker build configuration with upstream version tracking
 - `Dockerfile` - Container image definition
@@ -14,28 +17,32 @@ This guide helps AI coding agents understand the structure, conventions, and wor
 - `.upstream.yaml` - Auto-update configuration (monitors external GitHub repos for releases)
 - `DOCS.md` - User-facing configuration documentation
 
-**Why this structure:** Allows for independent, scalable management of multiple add-ons with automated version bumping. The `.upstream.yaml` enables daily automatic checks for upstream releases and parallel updates.
+**Why this structure:** Allows for independent, scalable management of multiple add-ons with automated version bumping.
+The `.upstream.yaml` enables daily automatic checks for upstream releases and parallel updates.
 
 ## 🔑 Critical Versioning Scheme
 
 **IMPORTANT: This project uses a unique 3-file versioning system that MUST be kept in sync.**
 
-| File | Format | Example | Rule |
-|------|--------|---------|------|
-| `config.yaml` | `X.Y.Z-N` | `1.7.3-0` | **Always** use subpatch format with dash-separated number |
-| `build.yaml` | `X.Y.Z` | `1.7.3` | Upstream binary version, NO subpatch |
-| `README.md` badges | `vX.Y.Z` | `v1.7.3` | Display version with `v` prefix in badges/links |
+| File               | Format    | Example   | Rule                                                      |
+| ------------------ | --------- | --------- | --------------------------------------------------------- |
+| `config.yaml`      | `X.Y.Z-N` | `1.7.3-0` | **Always** use subpatch format with dash-separated number |
+| `build.yaml`       | `X.Y.Z`   | `1.7.3`   | Upstream binary version, NO subpatch                      |
+| `README.md` badges | `vX.Y.Z`  | `v1.7.3`  | Display version with `v` prefix in badges/links           |
 
 **Versioning rules:**
+
 - When upstream releases new version: `config.yaml` gets `X.Y.Z-0`, `build.yaml` gets `X.Y.Z`
 - When applying add-on-only fixes: increment subpatch `-1`, `-2`, etc. (don't touch `build.yaml`)
 - **Validation is enforced by pre-commit hook:** `scripts/validate-versions.sh` checks all three files match
 
-**Why this design:** Separates upstream version tracking (build.yaml) from add-on-specific patches (config.yaml subpatch). Enables automated upstream sync while allowing local bug fixes without breaking the sync mechanism.
+**Why this design:** Separates upstream version tracking (build.yaml) from add-on-specific patches (config.yaml
+subpatch). Enables automated upstream sync while allowing local bug fixes without breaking the sync mechanism.
 
 ## ⚙️ Auto-Update System
 
 **How it works:**
+
 1. Each add-on has `.upstream.yaml` defining GitHub repository to monitor
 2. GitHub Actions workflow runs daily at 6:00 UTC
 3. For each add-on: fetches latest release, compares versions
@@ -43,21 +50,24 @@ This guide helps AI coding agents understand the structure, conventions, and wor
 5. Updates run in parallel with independent error handling (one failure doesn't block others)
 
 **Example `.upstream.yaml`:**
+
 ```yaml
 upstream:
   repository: "owner/project-name"
-  version_pattern: "v*"        # Match tags like v1.0.0
-  version_strip: "^v"          # Remove v prefix from version
+  version_pattern: "v*" # Match tags like v1.0.0
+  version_strip: "^v" # Remove v prefix from version
 
 addon:
-  version_pattern: "sync"      # Use same version as upstream (auto-increment subpatch to -0)
+  version_pattern: "sync" # Use same version as upstream (auto-increment subpatch to -0)
 ```
 
-**When adding new add-ons:** Include `.upstream.yaml` with proper repository configuration. Without it, the add-on won't participate in auto-updates.
+**When adding new add-ons:** Include `.upstream.yaml` with proper repository configuration. Without it, the add-on won't
+participate in auto-updates.
 
 ## 🛠️ Developer Workflows
 
 ### Version Updates (Manual)
+
 ```bash
 # Update fritz-callmonitor2mqtt to version 1.7.2
 make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2
@@ -69,9 +79,11 @@ make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2 CHECK_RELEASE=yes
 ./scripts/update-version.py fritz-callmonitor2mqtt 1.7.2 --dry-run
 ```
 
-**What this does:** Python script (`scripts/update-version.py`) automatically updates all three version files and badges. Always run this for version bumps—never manually edit versions.
+**What this does:** Python script (`scripts/update-version.py`) automatically updates all three version files and
+badges. Always run this for version bumps—never manually edit versions.
 
 ### Code Quality & Validation
+
 ```bash
 # One-time development setup (installs all linters)
 make init
@@ -85,6 +97,7 @@ make validate-addons        # Validates add-on configs
 ```
 
 **Pre-commit hooks enforce:**
+
 - YAML syntax and style (via yamllint)
 - Shell script correctness (via shellcheck, ignoring SC1091 for sourcing)
 - Markdown formatting (via markdownlint-cli2)
@@ -94,18 +107,25 @@ make validate-addons        # Validates add-on configs
 ## 📋 Project Conventions
 
 ### FRITZ!Box Call Monitor Add-on Specifics
-- **MQTT Integration:** Connects to FRITZ!Box via TCP port 1012, forwards call events to MQTT broker (default: `core-mosquitto:1883`)
-- **Configuration:** Complex schema with PBX settings (MSNs, country codes, extensions), MQTT connection settings, app logging
+
+- **MQTT Integration:** Connects to FRITZ!Box via TCP port 1012, forwards call events to MQTT broker (default:
+  `core-mosquitto:1883`)
+- **Configuration:** Complex schema with PBX settings (MSNs, country codes, extensions), MQTT connection settings, app
+  logging
 - **Docker:** Runs as Alpine Linux container with call monitoring daemon
-- **Home Assistant Integration:** Uses Home Assistant supervisor to mount config volume at `/opt/fritz-callmonitor2mqtt/data`
+- **Home Assistant Integration:** Uses Home Assistant supervisor to mount config volume at
+  `/opt/fritz-callmonitor2mqtt/data`
 
 ### File Naming & Location Conventions
+
 - Add-on-specific logic: keep in `{addon-name}/` directory
 - Global utilities: place in `scripts/` (Python for complex logic, shell for simple tasks)
-- Documentation: `README.md` for user docs, `DOCS.md` for configuration reference, `DEVELOPMENT.md` for developer guidelines
+- Documentation: `README.md` for user docs, `DOCS.md` for configuration reference, `DEVELOPMENT.md` for developer
+  guidelines
 - GitHub Workflows: stored in `.github/workflows/` (currently only `lint.yml`)
 
 ### Configuration Standards
+
 - All user-facing configuration in add-on `config.yaml` with `options` section defining defaults
 - Schema section validates configuration types (string, int, bool, list)
 - Use descriptive names with underscores: `mqtt_broker`, `fritzbox_host`, `pbx_country_code`
@@ -114,16 +134,19 @@ make validate-addons        # Validates add-on configs
 ## 🔗 Integration Points
 
 ### Home Assistant Integration
+
 - Add-ons communicate with HA Supervisor via config volume mounts
 - Home Assistant provides MQTT broker (`core-mosquitto`) automatically
 - Add-on discovery via `repository.yaml` (defines repository name, URL, maintainer)
 
 ### External Dependencies
+
 - Upstream project: [fritz-callmonitor2mqtt](https://github.com/) (Docker image source)
 - Build relies on external Docker images defined in `Dockerfile`
 - GitHub Actions for CI/CD (no external service dependencies for workflow execution)
 
 ### Linting & CI/CD Pipeline
+
 - Pre-commit hooks run before every commit (enforce consistency locally)
 - GitHub Actions (`lint.yml`) runs on push to main/develop and on PRs
 - Workflow caches Python/Node dependencies and pre-commit environments for speed
@@ -131,6 +154,7 @@ make validate-addons        # Validates add-on configs
 ## 📝 Common Editing Scenarios
 
 ### Adding a new add-on
+
 1. Create directory: `{addon-name}/`
 2. Add required files: `config.yaml`, `build.yaml`, `Dockerfile`, `run.sh`, `README.md`, `.upstream.yaml`
 3. Update root `README.md` to list new add-on
@@ -138,32 +162,40 @@ make validate-addons        # Validates add-on configs
 5. Run `make validate-addons` to verify config structure
 
 ### Updating fritz-callmonitor2mqtt to new upstream release
+
 1. **Don't edit versions manually.** Use: `make update-version ADDON=fritz-callmonitor2mqtt VERSION=X.Y.Z`
 2. Script automatically updates all three version files and badges
 3. Pre-commit hook validates consistency before commit
 
 ### Fixing a bug in the add-on (not upstream)
+
 1. Make code changes in `fritz-callmonitor2mqtt/` (shell, Dockerfile, etc.)
 2. Increment subpatch: manually edit `config.yaml` version from `1.7.3-0` to `1.7.3-1` (don't change `build.yaml`)
 3. Pre-commit hook validates this is correct
 4. Commit normally
 
 ### Adding markdown documentation
+
 - Use `markdownlint-cli2` formatting rules (enforced by pre-commit)
 - Max line length: 120 characters (enforced by `.markdownlint.json`)
 - Use standard GitHub markdown syntax
 
 ## 🚨 Critical Gotchas
 
-1. **Never manually edit versions.** Use `make update-version` script. The three-file sync is enforced by validation, so manual changes will fail pre-commit.
+1. **Never manually edit versions.** Use `make update-version` script. The three-file sync is enforced by validation, so
+   manual changes will fail pre-commit.
 
-2. **Subpatch always resets to -0 on upstream update.** When upstream releases new version, the automation sets subpatch back to `-0`. This is intentional—local fixes are temporary.
+2. **Subpatch always resets to -0 on upstream update.** When upstream releases new version, the automation sets subpatch
+   back to `-0`. This is intentional—local fixes are temporary.
 
-3. **YAML special tags:** Pre-commit uses `check-yaml --unsafe` to allow Home Assistant custom YAML tags (like `!secret`, `!include`). Normal YAML validators would fail on these.
+3. **YAML special tags:** Pre-commit uses `check-yaml --unsafe` to allow Home Assistant custom YAML tags (like
+   `!secret`, `!include`). Normal YAML validators would fail on these.
 
-4. **Shell script sourcing:** shellcheck ignores `SC1091` (can't follow source). Add-ons often source files from other directories, so this warning is disabled globally.
+4. **Shell script sourcing:** shellcheck ignores `SC1091` (can't follow source). Add-ons often source files from other
+   directories, so this warning is disabled globally.
 
-5. **Auto-update parallel execution:** Updates run independently (`fail-fast: false`). One failing add-on doesn't block others, but issues are created per add-on.
+5. **Auto-update parallel execution:** Updates run independently (`fail-fast: false`). One failing add-on doesn't block
+   others, but issues are created per add-on.
 
 ## 📚 Key Files to Understand First
 
@@ -175,4 +207,3 @@ make validate-addons        # Validates add-on configs
 - **`scripts/update-version.py`** - Automated version update tool
 - **`.pre-commit-config.yaml`** - All linting tools and rules
 - **`fritz-callmonitor2mqtt/config.yaml`** - Example add-on manifest structure
-

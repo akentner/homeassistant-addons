@@ -29,12 +29,12 @@ repos:
       - id: shellcheck
         args: [-e, SC1091, -e, SC2034]  # Ignore sourcing and unused variables
 
-  # Markdown linting
-  - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.41.0
+  # Markdown formatting
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
     hooks:
-      - id: markdownlint
-        args: [--fix]
+      - id: prettier
+        types: [markdown]
 
   # GitHub Actions workflow linting (disabled - repository not available)
   - repo: https://github.com/rhysd/actionlint

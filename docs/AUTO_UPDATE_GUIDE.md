@@ -2,8 +2,8 @@
 
 ## 🚀 Overview
 
-This system automatically monitors **multiple add-ons** for new upstream releases and updates them accordingly.
-It is fully scalable for any number of add-ons.
+This system automatically monitors **multiple add-ons** for new upstream releases and updates them accordingly. It is
+fully scalable for any number of add-ons.
 
 ## 📁 Add-on Setup
 
@@ -153,11 +153,8 @@ The system can be extended to send webhooks when updates are available.
 
 ## ✅ Benefits
 
-🔄 **Scalable** - Unlimited number of add-ons
-🎯 **Specific** - Each add-on individually configurable
-🛡️ **Robust** - Errors in one add-on don't stop the others
-📝 **Traceable** - Complete commit and issue history
-⚡ **Efficient** - Parallel processing of all add-ons
-🔧 **Flexible** - Manually controllable or fully automatic
+🔄 **Scalable** - Unlimited number of add-ons 🎯 **Specific** - Each add-on individually configurable 🛡️ **Robust** -
+Errors in one add-on don't stop the others 📝 **Traceable** - Complete commit and issue history ⚡ **Efficient** -
+Parallel processing of all add-ons 🔧 **Flexible** - Manually controllable or fully automatic
 
 The system grows automatically with your add-ons! 🚀

@@ -4,8 +4,8 @@ Monitor and forward FRITZ!Box call events to MQTT for Home Assistant integration
 
 ## Installation
 
-The installation of this add-on is pretty straightforward and not different in
-comparison to installing any other Home Assistant add-on.
+The installation of this add-on is pretty straightforward and not different in comparison to installing any other Home
+Assistant add-on.
 
 1. Click the Home Assistant My button below to open the add-on on your Home Assistant instance.
 
@@ -157,9 +157,8 @@ The MQTT connection timeout in seconds. Default is `30`.
 
 ### Option: `app_log_level`
 
-The `app_log_level` option controls the level of log output by the add-on and can
-be changed to be more or less verbose, which might be useful when you are
-dealing with an unknown issue. Possible values are:
+The `app_log_level` option controls the level of log output by the add-on and can be changed to be more or less verbose,
+which might be useful when you are dealing with an unknown issue. Possible values are:
 
 - `trace`: Show every detail, like all called internal functions.
 - `debug`: Shows detailed debug information.
@@ -168,9 +167,9 @@ dealing with an unknown issue. Possible values are:
 - `error`: Runtime errors that do not require immediate action.
 - `fatal`: Something went terribly wrong. Add-on becomes unusable.
 
-Please note that each level automatically includes log messages from a more severe
-level, e.g., `debug` also shows `info` messages. By default, the `app_log_level`
-is set to `info`, which is the recommended setting unless you are troubleshooting.
+Please note that each level automatically includes log messages from a more severe level, e.g., `debug` also shows
+`info` messages. By default, the `app_log_level` is set to `info`, which is the recommended setting unless you are
+troubleshooting.
 
 ### Option: `app_call_history_size`
 
@@ -219,8 +218,8 @@ Each message contains detailed information about the call including:
 
 ## Environment Variable Mapping
 
-The add-on automatically maps the configuration to environment variables for full
-compatibility with the upstream fritz-callmonitor2mqtt application:
+The add-on automatically maps the configuration to environment variables for full compatibility with the upstream
+fritz-callmonitor2mqtt application:
 
 - `pbx_msns` → `FRITZ_CALLMONITOR_PBX_MSN` (comma-separated)
 - `pbx_extensions[i].number` → `FRITZ_CALLMONITOR_PBX_EXTENSION_i_NUMBER`
@@ -237,8 +236,8 @@ compatibility with the upstream fritz-callmonitor2mqtt application:
 
 This repository keeps a change log using [GitHub's releases][releases] functionality.
 
-Releases are based on [Semantic Versioning][semver], and use the format of
-`MAJOR.MINOR.PATCH`. In a nutshell, the version will be incremented based on the following:
+Releases are based on [Semantic Versioning][semver], and use the format of `MAJOR.MINOR.PATCH`. In a nutshell, the
+version will be incremented based on the following:
 
 - `MAJOR`: Incompatible or major changes.
 - `MINOR`: Backwards-compatible new features and enhancements.
@@ -267,26 +266,22 @@ MIT License
 
 Copyright (c) 2025 Alexander Kentner
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this
-software and associated documentation files (the "Software"), to deal in the
-Software without restriction, including without limitation the rights to use,
-copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
-Software, and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 [addon-badge]: https://my.home-assistant.io/badges/supervisor_addon.svg
 [addon]:
-https://my.home-assistant.io/redirect/supervisor_addon/?addon=fritz-callmonitor2mqtt&repository_url=https%3A%2F%2Fgithub.com%2Fakentner%2Fhomeassistant-addons
+  https://my.home-assistant.io/redirect/supervisor_addon/?addon=fritz-callmonitor2mqtt&repository_url=https%3A%2F%2Fgithub.com%2Fakentner%2Fhomeassistant-addons
 [contributors]: https://github.com/akentner/homeassistant-addons/graphs/contributors
 [forum]: https://community.home-assistant.io/
 [issue]: https://github.com/akentner/homeassistant-addons/issues

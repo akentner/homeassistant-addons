@@ -9,8 +9,8 @@ echo "🔧 Setting up pre-commit hooks for Home Assistant Add-ons repository..."
 
 # Check if pre-commit is installed
 if ! command -v pre-commit &> /dev/null; then
-    echo "Installing pre-commit..."
-    pip install pre-commit
+    echo "Installing pre-commit via uv..."
+    uv tool install pre-commit
 fi
 
 # Install the hooks

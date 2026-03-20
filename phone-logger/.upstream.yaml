@@ -4,4 +4,3 @@ upstream:
   version_strip: "^v"
 addon:
   version_pattern: "sync"
-
