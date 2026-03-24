@@ -2,5 +2,5 @@ build_from:
   amd64: "ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.20"
 
 args:
-  VERSION: "0.1.4"
+  VERSION: "0.3.0"
   WORKING_DIR: "/app"
