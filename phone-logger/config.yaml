@@ -1,6 +1,6 @@
 name: "Phone Logger"
 description: "Phone logging and adapter integration for Home Assistant. Based on https://github.com/akentner/phone-logger."
-version: "0.3.0-0"
+version: "0.3.0-1"
 slug: "phone-logger"
 init: false
 ingress: true
@@ -26,6 +26,8 @@ options:
       enabled: false
       cache_ttl_days: 30
   output_webhooks: []
+  call_log:
+    history_size: 50
   mqtt:
     host: ""
     port: 1883
@@ -33,6 +35,14 @@ options:
     username: ""
     password: ""
     topic: "phone-logger"
+    qos: 0
+    retain: false
+    keep_alive: 60
+    connect_timeout: 30
+    reconnect_delay: 10
+    ha_discovery: false
+    ha_discovery_prefix: "homeassistant"
+    ha_entity_id_prefix: ""
   pbx:
     phone:
       country_code: "+49"
@@ -75,6 +85,8 @@ schema:
         name: str
         type: list(voicebox|dect|voip)
         extension: str
+  call_log:
+    history_size: int?
   mqtt:
     host: str?
     port: int?
@@ -82,5 +94,13 @@ schema:
     username: str?
     password: str?
     topic: str?
+    qos: int?
+    retain: bool?
+    keep_alive: int?
+    connect_timeout: int?
+    reconnect_delay: int?
+    ha_discovery: bool?
+    ha_discovery_prefix: str?
+    ha_entity_id_prefix: str?
   log_level: list(DEBUG|INFO|WARNING|ERROR|CRITICAL)
   timezone: str

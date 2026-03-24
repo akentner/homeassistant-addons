@@ -47,20 +47,23 @@ def transform(options: dict) -> dict:
 
     # input_adapters
     fritz_raw = options.get("input_adapters", {}).get("fritz_callmonitor", {})
+    fritz_config: dict = {
+        "host": fritz_raw.get("host", "192.168.178.1"),
+        "port": fritz_raw.get("port", 1012),
+    }
+    if "reconnect_delay" in fritz_raw:
+        fritz_config["reconnect_delay"] = fritz_raw["reconnect_delay"]
     config["input_adapters"] = [
         {
-            "type": "fritz",
-            "name": "fritz",
+            "type": "fritz_callmonitor",
+            "name": "fritz_callmonitor",
             "enabled": fritz_raw.get("enabled", False),
-            "config": {
-                "host": fritz_raw.get("host", "192.168.178.1"),
-                "port": fritz_raw.get("port", 1012),
-            },
+            "config": fritz_config,
         },
         {"type": "rest", "name": "rest", "enabled": True},
     ]
 
-    # resolver_adapters — sqlite and json_file always enabled
+    # resolver_adapters — json_file, sqlite, msn always enabled
     tellows_raw = options.get("resolver_adapters", {}).get("tellows", {})
     config["resolver_adapters"] = [
         {
@@ -70,6 +73,7 @@ def transform(options: dict) -> dict:
             "config": {"path": "contacts.json"},
         },
         {"type": "sqlite", "name": "sqlite", "enabled": True},
+        {"type": "msn", "name": "msn", "enabled": True},
         {
             "type": "tellows",
             "name": "tellows",
@@ -85,8 +89,11 @@ def transform(options: dict) -> dict:
     ]
 
     # output_adapters — call_log always enabled
+    call_log_config: dict = {}
+    if "history_size" in options.get("call_log", {}):
+        call_log_config["history_size"] = options["call_log"]["history_size"]
     output_adapters: list = [
-        {"type": "call_log", "name": "call_log", "enabled": True},
+        {"type": "call_log", "name": "call_log", "enabled": True, "config": call_log_config},
     ]
 
     # Webhooks
@@ -115,6 +122,12 @@ def transform(options: dict) -> dict:
             "topic_prefix": mqtt.get("topic", "phone-logger"),
         }
         for key in ("client_id", "username", "password"):
+            if mqtt.get(key):
+                mqtt_config[key] = mqtt[key]
+        for key in ("qos", "retain", "keep_alive", "connect_timeout", "reconnect_delay"):
+            if key in mqtt:
+                mqtt_config[key] = mqtt[key]
+        for key in ("ha_discovery", "ha_discovery_prefix", "ha_entity_id_prefix"):
             if key in mqtt:
                 mqtt_config[key] = mqtt[key]
         output_adapters.append(
