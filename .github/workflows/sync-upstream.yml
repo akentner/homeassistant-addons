@@ -72,8 +72,16 @@ jobs:
         run: |
           ADDON_PATH="${{ steps.addon.outputs.path }}"
           NEW_VERSION="${{ steps.sync.outputs.new_version }}"
+
+          # Update config.yaml (addon version shown in HA UI)
           yq -i ".version = \"$NEW_VERSION\"" "$ADDON_PATH/config.yaml"
-          echo "Updated $ADDON_PATH/config.yaml to $NEW_VERSION"
+          echo "Updated $ADDON_PATH/config.yaml"
+
+          # Update build.yaml (VERSION arg used by Dockerfile to download source)
+          if [[ -f "$ADDON_PATH/build.yaml" ]]; then
+            yq -i ".args.VERSION = \"$NEW_VERSION\"" "$ADDON_PATH/build.yaml"
+            echo "Updated $ADDON_PATH/build.yaml"
+          fi
 
       - name: Commit directly to main
         if: steps.sync.outputs.needs_update == 'true'
@@ -84,7 +92,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$ADDON_PATH/config.yaml"
+          git add "$ADDON_PATH/config.yaml" "$ADDON_PATH/build.yaml"
 
           if git diff --cached --quiet; then
             echo "No changes to commit"
