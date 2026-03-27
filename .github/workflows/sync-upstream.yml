@@ -1,0 +1,129 @@
+name: Sync upstream releases
+
+on:
+  repository_dispatch:
+    types: [upstream-release]
+  workflow_dispatch:
+    inputs:
+      addon:
+        description: 'Addon directory to sync'
+        required: true
+        default: 'phone-logger'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Sync ${{ github.event.client_payload.addon || inputs.addon }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set addon path
+        id: addon
+        run: |
+          ADDON="${{ github.event.client_payload.addon || inputs.addon }}"
+          echo "path=${ADDON}" >> $GITHUB_OUTPUT
+          echo "upstream_file=${ADDON}/.upstream.yaml" >> $GITHUB_OUTPUT
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml
+
+      - name: Sync version from upstream
+        id: sync
+        run: |
+          ADDON_PATH="${{ steps.addon.outputs.path }}"
+          UPSTREAM_FILE="${{ steps.addon.outputs.upstream_file }}"
+
+          if [[ ! -f "$UPSTREAM_FILE" ]]; then
+            echo "Upstream config not found: $UPSTREAM_FILE"
+            exit 1
+          fi
+
+          UPSTREAM_REPO=$(python -c "
+          import yaml
+          with open('$UPSTREAM_FILE') as f:
+              config = yaml.safe_load(f)
+              print(config['upstream']['repository'])
+          ")
+
+          echo "Upstream repository: $UPSTREAM_REPO"
+
+          LATEST_RELEASE=$(gh api repos/$UPSTREAM_REPO/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+
+          if [[ -z "$LATEST_RELEASE" ]]; then
+            echo "Could not fetch latest release from $UPSTREAM_REPO"
+            exit 1
+          fi
+
+          echo "Latest release: $LATEST_RELEASE"
+          echo "release_tag=$LATEST_RELEASE" >> $GITHUB_OUTPUT
+
+          CURRENT_VERSION=$(python -c "
+          import yaml
+          with open('$ADDON_PATH/config.yaml') as f:
+              config = yaml.safe_load(f)
+              print(config.get('version', '0.0.0'))
+          ")
+
+          echo "Current addon version: $CURRENT_VERSION"
+
+          RELEASE_VERSION=${LATEST_RELEASE#v}
+
+          if [[ "$CURRENT_VERSION" == "$RELEASE_VERSION" ]]; then
+            echo "Addon is already at latest version"
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+          else
+            echo "Updating from $CURRENT_VERSION to $RELEASE_VERSION"
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "new_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update addon config
+        if: steps.sync.outputs.needs_update == 'true'
+        run: |
+          ADDON_PATH="${{ steps.addon.outputs.path }}"
+          NEW_VERSION="${{ steps.sync.outputs.new_version }}"
+
+          python << 'PYTHON_EOF'
+          import yaml
+
+          addon_path = "$ADDON_PATH"
+          new_version = "$NEW_VERSION"
+
+          config_file = f"{addon_path}/config.yaml"
+          with open(config_file) as f:
+              config = yaml.safe_load(f)
+
+          config['version'] = new_version
+
+          with open(config_file, 'w') as f:
+              yaml.dump(config, f, sort_keys=False, default_flow_style=False)
+
+          print(f"Updated {config_file} to version {new_version}")
+          PYTHON_EOF
+
+      - name: Create Pull Request
+        if: steps.sync.outputs.needs_update == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          commit-message: "chore(${{ steps.addon.outputs.path }}): sync upstream to ${{ steps.sync.outputs.new_version }}"
+          title: "chore(${{ steps.addon.outputs.path }}): sync upstream to ${{ steps.sync.outputs.new_version }}"
+          body: |
+            Addon: ${{ steps.addon.outputs.path }}
+            New version: ${{ steps.sync.outputs.new_version }}
+            Release: https://github.com/${{ github.event.client_payload.repository }}/releases/tag/${{ steps.sync.outputs.release_tag }}
+          branch: "sync/${{ steps.addon.outputs.path }}-${{ steps.sync.outputs.new_version }}"
+          delete-branch: true
