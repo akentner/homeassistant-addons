@@ -1,6 +1,6 @@
 name: "Phone Logger"
 description: "Phone logging and adapter integration for Home Assistant. Based on https://github.com/akentner/phone-logger."
-version: "0.3.3"
+version: "0.3.4"
 slug: "phone-logger"
 init: false
 ingress: true
