@@ -54,7 +54,7 @@ intervention. **Requirements:** AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05
 
 Plans:
 
-- [ ] 02-01-PLAN.md — Create auto-update.yml workflow for scheduled upstream version detection and commit (AUTO-01,
+- [x] 02-01-PLAN.md — Create auto-update.yml workflow for scheduled upstream version detection and commit (AUTO-01,
       AUTO-02, AUTO-03, AUTO-04, AUTO-05)
 
 ---

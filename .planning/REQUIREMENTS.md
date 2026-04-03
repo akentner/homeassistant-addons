@@ -7,13 +7,13 @@ zero manual version tracking.
 
 ### Auto-Update Workflow
 
-- [ ] **AUTO-01**: GitHub Actions workflow runs daily (cron) and checks each add-on's upstream for new releases using
+- [x] **AUTO-01**: GitHub Actions workflow runs daily (cron) and checks each add-on's upstream for new releases using
       `gh     release view --repo <upstream>`
-- [ ] **AUTO-02**: When a new version is detected, `scripts/update-version.py` is called to synchronize the 3-file
+- [x] **AUTO-02**: When a new version is detected, `scripts/update-version.py` is called to synchronize the 3-file
       version set (config.yaml, build.yaml, README.md)
-- [ ] **AUTO-03**: Updated files are committed directly to `main` branch (no PR step, fully automatic merge)
-- [ ] **AUTO-04**: Workflow skips commit when no version change is detected (prevents empty commits)
-- [ ] **AUTO-05**: Workflow authenticates via `GITHUB_TOKEN` — no additional secrets required
+- [x] **AUTO-03**: Updated files are committed directly to `main` branch (no PR step, fully automatic merge)
+- [x] **AUTO-04**: Workflow skips commit when no version change is detected (prevents empty commits)
+- [x] **AUTO-05**: Workflow authenticates via `GITHUB_TOKEN` — no additional secrets required
 
 ### Meridian Add-on
 
@@ -69,11 +69,11 @@ zero manual version tracking.
 | FIX-01      | Phase 1 | Complete |
 | FIX-02      | Phase 1 | Complete |
 | FIX-03      | Phase 1 | Complete |
-| AUTO-01     | Phase 2 | Pending  |
-| AUTO-02     | Phase 2 | Pending  |
-| AUTO-03     | Phase 2 | Pending  |
-| AUTO-04     | Phase 2 | Pending  |
-| AUTO-05     | Phase 2 | Pending  |
+| AUTO-01     | Phase 2 | Complete |
+| AUTO-02     | Phase 2 | Complete |
+| AUTO-03     | Phase 2 | Complete |
+| AUTO-04     | Phase 2 | Complete |
+| AUTO-05     | Phase 2 | Complete |
 | MER-01      | Phase 3 | Pending  |
 | MER-02      | Phase 3 | Pending  |
 | MER-03      | Phase 3 | Pending  |
