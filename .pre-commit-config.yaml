@@ -42,12 +42,20 @@ repos:
     hooks:
       - id: actionlint
 
-  # Dockerfile linting (disabled - hadolint not available)
-  # - repo: https://github.com/hadolint/hadolint
-  #   rev: v2.12.0
-  #   hooks:
-  #     - id: hadolint
-  #       args: [--ignore, DL3008, --ignore, DL3009]  # Ignore apt pinning
+  # Dockerfile linting
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.14.0
+    hooks:
+      - id: hadolint
+        args:
+          - --ignore
+          - DL3006  # ARG before FROM is the HA base-image pattern
+          - --ignore
+          - DL3018  # apk packages are not version-pinned in HA add-on Dockerfiles
+          - --ignore
+          - DL3059  # Multiple consecutive RUN instructions are intentional for clarity
+          - --ignore
+          - DL4006  # pipefail not applicable with alpine/busybox sh
 
   # JSON formatting
   - repo: https://github.com/pre-commit/pre-commit-hooks
