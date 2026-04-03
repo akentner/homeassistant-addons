@@ -7,7 +7,7 @@ _Milestone 1 — CI fixes, auto-update workflow, and Meridian add-on_
 | #   | Phase                | Goal                                                          | Requirements                                                   | Plans      |
 | --- | -------------------- | ------------------------------------------------------------- | -------------------------------------------------------------- | ---------- |
 | 1   | Quality Fixes        | 2/2                                                           | Complete                                                       | 2026-04-03 |
-| 2   | Auto-Update Workflow | Daily upstream version checking commits to main automatically | AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05                    | TBD        |
+| 2   | Auto-Update Workflow | Daily upstream version checking commits to main automatically | AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05                    | 1 plan     |
 | 3   | Meridian Add-on      | Claude Max proxy add-on installable from the repository       | MER-01, MER-02, MER-03, MER-04, MER-05, MER-06, MER-07, MER-08 | TBD        |
 
 ## Phase 1: Quality Fixes
@@ -50,7 +50,12 @@ intervention. **Requirements:** AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05
 
 ### Plans
 
-TBD
+**Plans:** 1 plan
+
+Plans:
+
+- [ ] 02-01-PLAN.md — Create auto-update.yml workflow for scheduled upstream version detection and commit (AUTO-01,
+      AUTO-02, AUTO-03, AUTO-04, AUTO-05)
 
 ---
 
@@ -81,8 +86,8 @@ TBD
 
 ## Progress
 
-| Phase                   | Plans Complete | Status      | Completed |
-| ----------------------- | -------------- | ----------- | --------- |
-| 1. Quality Fixes        | 0/2            | Not started | -         |
-| 2. Auto-Update Workflow | 0/?            | Not started | -         |
-| 3. Meridian Add-on      | 0/?            | Not started | -         |
+| Phase                   | Plans Complete | Status      | Completed  |
+| ----------------------- | -------------- | ----------- | ---------- |
+| 1. Quality Fixes        | 2/2            | Complete    | 2026-04-03 |
+| 2. Auto-Update Workflow | 0/1            | Not started | -          |
+| 3. Meridian Add-on      | 0/?            | Not started | -          |
