@@ -50,6 +50,7 @@ jobs:
             }
 
             # Strip version prefix using version_strip as a sed regex (e.g. "^v" -> sed 's/^v//')
+            # shellcheck disable=SC2001
             latest_version=$(echo "$latest_tag" | sed "s/${version_strip}//")
 
             # Read current version from build.yaml (plain X.Y.Z, no subpatch)
