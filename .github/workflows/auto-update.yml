@@ -1,0 +1,92 @@
+name: Auto Update
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # NOTE: Pushes made with GITHUB_TOKEN do not trigger other GitHub Actions workflows
+      # (documented GitHub limitation). Auto-update commits will not be validated by lint.yml
+      # automatically. Developers can manually trigger lint.yml if validation is needed.
+      # See: https://docs.github.com/actions/using-workflows/triggering-a-workflow
+      - name: Check and update add-ons
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eo pipefail
+
+          ERRORS=0
+          UPDATES_MADE=0
+
+          while IFS= read -r upstream_file; do
+            addon_dir=$(dirname "$upstream_file")
+            addon_name=$(basename "$addon_dir")
+
+            echo "INFO: checking $addon_name"
+
+            # Parse .upstream.yaml with yq (pre-installed on ubuntu-latest 4.52.4)
+            upstream_repo=$(yq eval '.upstream.repository' "$upstream_file")
+            version_strip=$(yq eval '.upstream.version_strip' "$upstream_file")
+
+            # Get latest upstream release tag via gh CLI (AUTO-01)
+            latest_tag=$(gh release view --repo "$upstream_repo" --json tagName --jq .tagName 2>/dev/null) || {
+              echo "ERROR: could not fetch release for $upstream_repo"
+              ERRORS=1
+              continue
+            }
+
+            # Strip version prefix using version_strip as a sed regex (e.g. "^v" -> sed 's/^v//')
+            latest_version=$(echo "$latest_tag" | sed "s/${version_strip}//")
+
+            # Read current version from build.yaml (plain X.Y.Z, no subpatch)
+            current_version=$(yq eval '.args.VERSION' "$addon_dir/build.yaml")
+
+            if [ "$latest_version" = "$current_version" ]; then
+              echo "INFO: $addon_name already at $current_version, skipping"
+              continue
+            fi
+
+            echo "INFO: $addon_name needs update $current_version -> $latest_version"
+
+            # Update the 3-file version set (AUTO-02)
+            # Do NOT pass --check-release (that flag is interactive and will hang the workflow)
+            python3 scripts/update-version.py "$addon_name" "$latest_version" || {
+              echo "ERROR: update-version.py failed for $addon_name"
+              ERRORS=1
+              continue
+            }
+
+            # Detect actual file changes (AUTO-04) — script exits 0 for both updated AND no-op
+            if git diff --quiet; then
+              echo "INFO: no file changes after update-version.py for $addon_name"
+              continue
+            fi
+
+            # Stage only the three known version files (never git add -A)
+            git add "$addon_dir/config.yaml" "$addon_dir/build.yaml" "$addon_dir/README.md"
+            git commit -m "chore($addon_name): update to $latest_version"
+            UPDATES_MADE=1
+
+          done < <(find . -maxdepth 2 -name .upstream.yaml | sort)
+
+          # Push once at the end — only if commits were made (AUTO-03)
+          if [ "$UPDATES_MADE" -eq 1 ]; then
+            git push
+          fi
+
+          # Exit non-zero if any per-addon error occurred (D-04)
+          exit $ERRORS
