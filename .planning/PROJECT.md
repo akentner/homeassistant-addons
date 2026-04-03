@@ -23,6 +23,10 @@ Any upstream release is automatically reflected in the add-on within 24 hours �
 - ✓ 3-file version synchronization enforced by pre-commit hooks — existing
 - ✓ CI/CD with YAML lint, shellcheck, structure validation, version validation via GitHub Actions — existing
 - ✓ `make update-version` tooling for safe version bumping — existing
+- ✓ `validate-versions` hook extended to cover `phone-logger` — Validated in Phase 01: quality-fixes
+- ✓ `phone-logger/DOCS.md` adapter type corrected (`fritz_callmonitor`) — Validated in Phase 01: quality-fixes
+- ✓ Hadolint re-enabled in `.pre-commit-config.yaml` with HA-specific ignore rules — Validated in Phase 01:
+  quality-fixes
 
 ### Active
 
@@ -32,9 +36,6 @@ Any upstream release is automatically reflected in the add-on within 24 hours �
       detected
 - [ ] `meridian` add-on: Claude Max subscription → local Anthropic-compatible API proxy (port 3456), source fetched from
       GitHub at build time, `claude login` via HA terminal, token persisted in `/data`
-- [ ] `validate-versions` pre-commit hook extended to cover `phone-logger` (currently only `fritz-callmonitor2mqtt`)
-- [ ] Fix `phone-logger/DOCS.md` type mismatch (`type: fritz` → `type: fritz_callmonitor`)
-- [ ] Re-enable hadolint in `.pre-commit-config.yaml`
 
 ### Out of Scope
 
@@ -96,4 +97,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-04-03 after initialization_
+_Last updated: 2026-04-04 after Phase 01: quality-fixes complete_
