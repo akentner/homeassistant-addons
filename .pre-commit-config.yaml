@@ -63,7 +63,7 @@ repos:
         name: Validate Add-on Versioning
         entry: ./scripts/validate-versions.sh
         language: script
-        files: ^fritz-callmonitor2mqtt/(config\.yaml|build\.yaml|README\.md)$
+        files: ^(fritz-callmonitor2mqtt|phone-logger)/(config\.yaml|build\.yaml|README\.md)$
         pass_filenames: false
 
 # Configuration
