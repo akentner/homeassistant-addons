@@ -33,9 +33,9 @@ zero manual version tracking.
 
 ### Quality Fixes
 
-- [ ] **FIX-01**: `validate-versions` pre-commit hook covers `phone-logger` (currently scoped to
+- [x] **FIX-01**: `validate-versions` pre-commit hook covers `phone-logger` (currently scoped to
       `fritz-callmonitor2mqtt` only)
-- [ ] **FIX-02**: `phone-logger/DOCS.md` adapter type example corrected (`type: fritz` → `type: fritz_callmonitor`)
+- [x] **FIX-02**: `phone-logger/DOCS.md` adapter type example corrected (`type: fritz` → `type: fritz_callmonitor`)
 - [ ] **FIX-03**: `hadolint` re-enabled in `.pre-commit-config.yaml` (currently disabled)
 
 ## v2 Requirements
@@ -66,8 +66,8 @@ zero manual version tracking.
 
 | Requirement | Phase   | Status  |
 | ----------- | ------- | ------- |
-| FIX-01      | Phase 1 | Pending |
-| FIX-02      | Phase 1 | Pending |
+| FIX-01      | Phase 1 | Complete |
+| FIX-02      | Phase 1 | Complete |
 | FIX-03      | Phase 1 | Pending |
 | AUTO-01     | Phase 2 | Pending |
 | AUTO-02     | Phase 2 | Pending |
