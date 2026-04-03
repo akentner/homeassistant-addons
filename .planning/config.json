@@ -20,6 +20,7 @@
   "resolve_model_ids": "omit",
   "search_gitignored": false,
   "workflow": {
+    "_auto_chain_active": false,
     "auto_advance": false,
     "discuss_mode": "discuss",
     "node_repair": true,

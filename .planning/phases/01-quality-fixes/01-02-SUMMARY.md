@@ -71,8 +71,10 @@ Each task was committed atomically:
 
 - Ignored DL3006 (ARG before FROM): required by HA Supervisor's dynamic base-image injection pattern
 - Ignored DL3018 (unpinned apk): intentional in HA add-ons, Alpine version in base image pins the package universe
-- Ignored DL3059 (multiple consecutive RUN): plan explicitly called this out as needed if it fires — it did on both Dockerfiles
-- Ignored DL4006 (pipefail before pipe): `curl | tar` pattern in phone-logger uses alpine busybox sh where pipefail is not applicable
+- Ignored DL3059 (multiple consecutive RUN): plan explicitly called this out as needed if it fires — it did on both
+  Dockerfiles
+- Ignored DL4006 (pipefail before pipe): `curl | tar` pattern in phone-logger uses alpine busybox sh where pipefail is
+  not applicable
 
 ## Deviations from Plan
 
@@ -81,7 +83,8 @@ Each task was committed atomically:
 **1. [Rule 1 - Bug] Added DL3059 and DL4006 to ignore list**
 
 - **Found during:** Task 1 verification
-- **Issue:** `pre-commit run hadolint --all-files` failed with DL3059 (both Dockerfiles) and DL4006 (phone-logger). Plan pre-authorized DL3059 addition: "Do NOT add DL3059 unless hadolint actually fires on it". DL4006 was not anticipated.
+- **Issue:** `pre-commit run hadolint --all-files` failed with DL3059 (both Dockerfiles) and DL4006 (phone-logger). Plan
+  pre-authorized DL3059 addition: "Do NOT add DL3059 unless hadolint actually fires on it". DL4006 was not anticipated.
 - **Fix:** Added `--ignore DL3059` and `--ignore DL4006` to hadolint args in `.pre-commit-config.yaml`
 - **Files modified:** `.pre-commit-config.yaml`
 - **Verification:** `pre-commit run hadolint --all-files` exits 0
@@ -98,8 +101,8 @@ Each task was committed atomically:
 
 ---
 
-**Total deviations:** 2 auto-fixed (1 bug/additional ignores, 1 blocking installation)
-**Impact on plan:** Both fixes necessary for the hook to pass. DL3059 addition was pre-authorized by the plan. No scope creep.
+**Total deviations:** 2 auto-fixed (1 bug/additional ignores, 1 blocking installation) **Impact on plan:** Both fixes
+necessary for the hook to pass. DL3059 addition was pre-authorized by the plan. No scope creep.
 
 ## Issues Encountered
 
@@ -108,7 +111,8 @@ Each task was committed atomically:
 
 ## User Setup Required
 
-None — hadolint binary was installed to `~/.local/bin` during execution. If another developer needs it, they should download `hadolint-Linux-x86_64` v2.14.0 from GitHub Releases to their PATH.
+None — hadolint binary was installed to `~/.local/bin` during execution. If another developer needs it, they should
+download `hadolint-Linux-x86_64` v2.14.0 from GitHub Releases to their PATH.
 
 ## Next Phase Readiness
 
@@ -117,5 +121,4 @@ None — hadolint binary was installed to `~/.local/bin` during execution. If an
 
 ---
 
-*Phase: 01-quality-fixes*
-*Completed: 2026-04-04*
+_Phase: 01-quality-fixes_ _Completed: 2026-04-04_

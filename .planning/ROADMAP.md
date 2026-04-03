@@ -4,11 +4,11 @@ _Milestone 1 — CI fixes, auto-update workflow, and Meridian add-on_
 
 ## Overview
 
-| #   | Phase                | Goal                                                          | Requirements                                                   | Plans |
-| --- | -------------------- | ------------------------------------------------------------- | -------------------------------------------------------------- | ----- |
-| 1   | Quality Fixes        | 2/2 | Complete   | 2026-04-03 |
-| 2   | Auto-Update Workflow | Daily upstream version checking commits to main automatically | AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05                    | TBD   |
-| 3   | Meridian Add-on      | Claude Max proxy add-on installable from the repository       | MER-01, MER-02, MER-03, MER-04, MER-05, MER-06, MER-07, MER-08 | TBD   |
+| #   | Phase                | Goal                                                          | Requirements                                                   | Plans      |
+| --- | -------------------- | ------------------------------------------------------------- | -------------------------------------------------------------- | ---------- |
+| 1   | Quality Fixes        | 2/2                                                           | Complete                                                       | 2026-04-03 |
+| 2   | Auto-Update Workflow | Daily upstream version checking commits to main automatically | AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05                    | TBD        |
+| 3   | Meridian Add-on      | Claude Max proxy add-on installable from the repository       | MER-01, MER-02, MER-03, MER-04, MER-05, MER-06, MER-07, MER-08 | TBD        |
 
 ## Phase 1: Quality Fixes
 

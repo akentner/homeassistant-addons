@@ -26,23 +26,22 @@ metrics:
 
 # Phase 01 Plan 01: Fix validate-versions hook scope and DOCS.md adapter type Summary
 
-Extend validate-versions pre-commit hook to trigger on phone-logger version files, and correct the wrong adapter
-type name `fritz` to `fritz_callmonitor` in the example config block of phone-logger/DOCS.md.
+Extend validate-versions pre-commit hook to trigger on phone-logger version files, and correct the wrong adapter type
+name `fritz` to `fritz_callmonitor` in the example config block of phone-logger/DOCS.md.
 
 ## Tasks Completed
 
-| Task | Name                                                     | Commit  | Files                   |
-| ---- | -------------------------------------------------------- | ------- | ----------------------- |
-| 1    | Extend validate-versions hook to cover phone-logger      | 415eec4 | .pre-commit-config.yaml |
-| 2    | Correct adapter type in phone-logger/DOCS.md             | 683e84a | phone-logger/DOCS.md    |
+| Task | Name                                                | Commit  | Files                   |
+| ---- | --------------------------------------------------- | ------- | ----------------------- |
+| 1    | Extend validate-versions hook to cover phone-logger | 415eec4 | .pre-commit-config.yaml |
+| 2    | Correct adapter type in phone-logger/DOCS.md        | 683e84a | phone-logger/DOCS.md    |
 
 ## Decisions Made
 
 - Extended the `files:` pattern in the `validate-versions` hook entry from
   `^fritz-callmonitor2mqtt/(config\.yaml|build\.yaml|README\.md)$` to
-  `^(fritz-callmonitor2mqtt|phone-logger)/(config\.yaml|build\.yaml|README\.md)$`
-  using regex alternation. The `validate-versions.sh` script already auto-discovers all add-ons — only the trigger
-  pattern needed updating.
+  `^(fritz-callmonitor2mqtt|phone-logger)/(config\.yaml|build\.yaml|README\.md)$` using regex alternation. The
+  `validate-versions.sh` script already auto-discovers all add-ons — only the trigger pattern needed updating.
 
 ## Deviations from Plan
 

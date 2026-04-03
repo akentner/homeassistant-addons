@@ -64,24 +64,24 @@ zero manual version tracking.
 
 ## Traceability
 
-| Requirement | Phase   | Status  |
-| ----------- | ------- | ------- |
+| Requirement | Phase   | Status   |
+| ----------- | ------- | -------- |
 | FIX-01      | Phase 1 | Complete |
 | FIX-02      | Phase 1 | Complete |
 | FIX-03      | Phase 1 | Complete |
-| AUTO-01     | Phase 2 | Pending |
-| AUTO-02     | Phase 2 | Pending |
-| AUTO-03     | Phase 2 | Pending |
-| AUTO-04     | Phase 2 | Pending |
-| AUTO-05     | Phase 2 | Pending |
-| MER-01      | Phase 3 | Pending |
-| MER-02      | Phase 3 | Pending |
-| MER-03      | Phase 3 | Pending |
-| MER-04      | Phase 3 | Pending |
-| MER-05      | Phase 3 | Pending |
-| MER-06      | Phase 3 | Pending |
-| MER-07      | Phase 3 | Pending |
-| MER-08      | Phase 3 | Pending |
+| AUTO-01     | Phase 2 | Pending  |
+| AUTO-02     | Phase 2 | Pending  |
+| AUTO-03     | Phase 2 | Pending  |
+| AUTO-04     | Phase 2 | Pending  |
+| AUTO-05     | Phase 2 | Pending  |
+| MER-01      | Phase 3 | Pending  |
+| MER-02      | Phase 3 | Pending  |
+| MER-03      | Phase 3 | Pending  |
+| MER-04      | Phase 3 | Pending  |
+| MER-05      | Phase 3 | Pending  |
+| MER-06      | Phase 3 | Pending  |
+| MER-07      | Phase 3 | Pending  |
+| MER-08      | Phase 3 | Pending  |
 
 **Coverage:**
 

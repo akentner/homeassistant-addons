@@ -22,8 +22,8 @@ tracking. **Current focus:** Phase 01 — quality-fixes
 
 ## Current Phase
 
-**Phase:** 1 — Quality Fixes **Status:** Executing Phase 01
-existing codebase with no excluded tools or incorrect documentation.
+**Phase:** 1 — Quality Fixes **Status:** Executing Phase 01 existing codebase with no excluded tools or incorrect
+documentation.
 
 ## Phase Progress
 
@@ -43,8 +43,8 @@ existing codebase with no excluded tools or incorrect documentation.
 
 ## Key Decisions Log
 
-- [01-quality-fixes/01-01] Extended validate-versions hook files pattern with regex alternation to cover
-  phone-logger alongside fritz-callmonitor2mqtt
+- [01-quality-fixes/01-01] Extended validate-versions hook files pattern with regex alternation to cover phone-logger
+  alongside fritz-callmonitor2mqtt
 - [01-quality-fixes/01-02] hadolint ignore list: DL3006/DL3018/DL3059/DL4006 cover all HA base-image and apk patterns
 
 _Last session: 2026-04-04T00:20:00Z — Completed 01-quality-fixes-01-02-PLAN.md_
