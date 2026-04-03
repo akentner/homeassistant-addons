@@ -6,7 +6,7 @@ _Milestone 1 — CI fixes, auto-update workflow, and Meridian add-on_
 
 | #   | Phase                | Goal                                                          | Requirements                                                   | Plans |
 | --- | -------------------- | ------------------------------------------------------------- | -------------------------------------------------------------- | ----- |
-| 1   | Quality Fixes        | Unblock CI and correct existing add-on defects                | FIX-01, FIX-02, FIX-03                                         | TBD   |
+| 1   | Quality Fixes        | Unblock CI and correct existing add-on defects                | FIX-01, FIX-02, FIX-03                                         | 2     |
 | 2   | Auto-Update Workflow | Daily upstream version checking commits to main automatically | AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05                    | TBD   |
 | 3   | Meridian Add-on      | Claude Max proxy add-on installable from the repository       | MER-01, MER-02, MER-03, MER-04, MER-05, MER-06, MER-07, MER-08 | TBD   |
 
@@ -24,7 +24,12 @@ _Milestone 1 — CI fixes, auto-update workflow, and Meridian add-on_
 
 ### Plans
 
-TBD
+**Plans:** 2 plans
+
+Plans:
+
+- [ ] 01-01-PLAN.md — Extend validate-versions hook to phone-logger and fix DOCS.md adapter type (FIX-01, FIX-02)
+- [ ] 01-02-PLAN.md — Re-enable hadolint in pre-commit with correct ignore rules (FIX-03)
 
 ---
 
@@ -78,6 +83,6 @@ TBD
 
 | Phase                   | Plans Complete | Status      | Completed |
 | ----------------------- | -------------- | ----------- | --------- |
-| 1. Quality Fixes        | 0/?            | Not started | -         |
+| 1. Quality Fixes        | 0/2            | Not started | -         |
 | 2. Auto-Update Workflow | 0/?            | Not started | -         |
 | 3. Meridian Add-on      | 0/?            | Not started | -         |
