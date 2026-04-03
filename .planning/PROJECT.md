@@ -27,13 +27,13 @@ Any upstream release is automatically reflected in the add-on within 24 hours �
 - ✓ `phone-logger/DOCS.md` adapter type corrected (`fritz_callmonitor`) — Validated in Phase 01: quality-fixes
 - ✓ Hadolint re-enabled in `.pre-commit-config.yaml` with HA-specific ignore rules — Validated in Phase 01:
   quality-fixes
+- ✓ Auto-update GitHub Actions workflow: daily upstream version check (06:00 UTC), fully automatic 3-file version update
+  - commit to main via GITHUB_TOKEN — Validated in Phase 02: auto-update-workflow
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-- [ ] Auto-update GitHub Actions workflow: daily upstream version check, fully automatic commit + merge when new version
-      detected
 - [ ] `meridian` add-on: Claude Max subscription → local Anthropic-compatible API proxy (port 3456), source fetched from
       GitHub at build time, `claude login` via HA terminal, token persisted in `/data`
 
@@ -54,9 +54,8 @@ Any upstream release is automatically reflected in the add-on within 24 hours �
 - **Meridian specifics**: Originally named `opencode-claude-max-proxy`, renamed to `meridian`. Requires `claude login`
   (OAuth) for first-time auth. The HA terminal approach (one-time manual login, token persisted in `/data`) was chosen
   over credential injection to avoid handling OAuth tokens as plain config values.
-- **Auto-update gap**: `.upstream.yaml` files are fully configured in both existing add-ons but the GitHub Actions
-  workflow that reads them does not exist yet. The tooling (`scripts/update-version.py`) is ready.
-- **Codebase map**: Full analysis at `.planning/codebase/` (generated 2026-04-03)
+- **Auto-update gap**: Resolved — `.github/workflows/auto-update.yml` now implements daily upstream version sync.
+  `.upstream.yaml` files in both existing add-ons are fully wired.
 
 ## Constraints
 
@@ -74,7 +73,7 @@ Any upstream release is automatically reflected in the add-on within 24 hours �
 | Download upstream at build time, no bundled source    | Keeps repo lean; version updates are a Dockerfile ARG change   | ✓ Good    |
 | `claude login` via HA terminal for Meridian           | Avoids OAuth token in plaintext config; simpler setup          | — Pending |
 | Meridian source from GitHub (not npm) at build time   | Consistent with existing add-on pattern; no node_modules bloat | — Pending |
-| Fully automatic auto-update merge (no manual PR step) | Upstream releases are trusted (own projects + meridian)        | — Pending |
+| Fully automatic auto-update merge (no manual PR step) | Upstream releases are trusted (own projects + meridian)        | ✓ Good    |
 
 ## Evolution
 
@@ -97,4 +96,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-04-04 after Phase 01: quality-fixes complete_
+_Last updated: 2026-04-04 after Phase 02: auto-update-workflow complete_
