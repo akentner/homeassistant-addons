@@ -1,0 +1,6 @@
+build_from:
+  amd64: "ghcr.io/home-assistant/amd64-base:3.22"
+
+args:
+  VERSION: "1.26.6"
+  WORKING_DIR: "/opt/meridian"
