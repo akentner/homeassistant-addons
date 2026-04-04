@@ -65,6 +65,14 @@ jobs:
           sudo mv /tmp/actionlint /usr/local/bin/
           actionlint --version
 
+      - name: Install hadolint
+        run: |
+          HADOLINT_VERSION=$(curl -s https://api.github.com/repos/hadolint/hadolint/releases/latest | jq -r .tag_name)
+          curl -sL "https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}/hadolint-Linux-x86_64" -o /tmp/hadolint
+          sudo mv /tmp/hadolint /usr/local/bin/hadolint
+          sudo chmod +x /usr/local/bin/hadolint
+          hadolint --version
+
       - name: Run pre-commit hooks
         run: |
           pre-commit install
