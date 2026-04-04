@@ -29,7 +29,7 @@ options:
   max_concurrent: 10
   max_sessions: 1000
   max_stored_sessions: 10000
-  workdir: "/data/workdir"
+  workdir: "/data/meridian"
   idle_timeout_seconds: 120
   telemetry_size: 1000
   no_file_changes: false
