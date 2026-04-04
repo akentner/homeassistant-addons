@@ -39,6 +39,19 @@ _Telefon-Logging und flexible Adapter-Integration für Home Assistant._
 - Strenges, Home Assistant-konformes Schema
 - Datenpersistenz über das Add-on-Volume
 
+### [Meridian Claude Max Proxy](./meridian)
+
+![Supports amd64 Architecture][amd64-shield]
+
+_Exposes a local Anthropic-compatible API on port 3456 backed by a Claude Max subscription._
+
+**Features:**
+
+- Local Anthropic API proxy via Claude Max account
+- Drop-in replacement for `api.anthropic.com` on your local network
+- Configurable port (default: 3456)
+- Automatic upstream version tracking
+
 ## Development
 
 ### Adding New Add-ons
