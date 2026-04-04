@@ -2,17 +2,17 @@
 # shellcheck shell=bash
 
 # Ensure .claude directory exists on persistent volume
-mkdir -p /data/.claude
+mkdir -p /data/claude/.claude
 
-# Symlink /root/.claude and /root/.claude.json to /data so credentials survive container restarts
+# Symlink /root/.claude and /root/.claude.json to /data/claude so credentials survive container restarts
 # rm -rf required: ln -sf cannot replace an existing directory, only files
 rm -rf /root/.claude
-ln -s /data/.claude /root/.claude
+ln -s /data/claude/.claude /root/.claude
 rm -f /root/.claude.json
-ln -s /data/.claude.json /root/.claude.json
+ln -s /data/claude/.claude.json /root/.claude.json
 
 # If credentials missing: keep container running so docker exec works, then poll for credentials
-if [[ ! -f /data/.claude/.claude.json ]]; then
+if [[ ! -f /data/claude/.claude.json ]]; then
     bashio::log.warning "Claude credentials not found. Container stays running for interactive login."
     bashio::log.warning ""
     ADDON_SLUG=$(curl -sf -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
@@ -25,7 +25,7 @@ if [[ ! -f /data/.claude/.claude.json ]]; then
     bashio::log.warning "After completing the OAuth flow, Meridian starts automatically."
 
     # Keep container alive and poll — no restart needed after claude login
-    while [[ ! -f /data/.claude.json ]]; do
+    while [[ ! -f /data/claude/.claude.json ]]; do
         bashio::log.debug "Check for credentials... not found yet"
         sleep 10
     done
