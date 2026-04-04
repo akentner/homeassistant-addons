@@ -36,11 +36,12 @@ Run `/gsd:new-milestone` to define v1.1 scope.
 
 ### Quick Tasks Completed
 
-| #          | Description                                            | Date       | Commit  | Directory                                                                                                           |
-| ---------- | ------------------------------------------------------ | ---------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
-| 260404-ksc | Add Claude and GSD best-practice entries to .gitignore | 2026-04-04 | a0a9402 | [260404-ksc-add-claude-and-gsd-best-practice-entries](./quick/260404-ksc-add-claude-and-gsd-best-practice-entries/) |
+| #          | Description                                                             | Date       | Commit  | Directory                                                                                                           |
+| ---------- | ----------------------------------------------------------------------- | ---------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| 260404-ksc | Add Claude and GSD best-practice entries to .gitignore                  | 2026-04-04 | a0a9402 | [260404-ksc-add-claude-and-gsd-best-practice-entries](./quick/260404-ksc-add-claude-and-gsd-best-practice-entries/) |
+| 260404-o5b | Simplify meridian Dockerfile to single-stage npm + oauth polling run.sh | 2026-04-04 | 19af0b3 | [260404-o5b-meridian-dockerfile-vereinfachen-mehrstu](./quick/260404-o5b-meridian-dockerfile-vereinfachen-mehrstu/) |
 
 ---
 
 _State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_ _Last activity: 2026-04-04 - Completed quick task
-260404-ksc: Add Claude and GSD best-practice entries to .gitignore_
+260404-o5b: Simplify meridian Dockerfile to single-stage npm + oauth polling run.sh_
