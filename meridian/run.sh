@@ -4,10 +4,12 @@
 # Ensure .claude directory exists on persistent volume
 mkdir -p /data/.claude
 
-# Symlink /root/.claude to /data/.claude so OAuth token survives container restarts
+# Symlink /root/.claude and /root/.claude.json to /data so credentials survive container restarts
 # rm -rf required: ln -sf cannot replace an existing directory, only files
 rm -rf /root/.claude
 ln -s /data/.claude /root/.claude
+rm -f /root/.claude.json
+ln -s /data/.claude.json /root/.claude.json
 
 # If credentials missing: keep container running so docker exec works, then poll for credentials
 if [[ ! -f /data/.claude/.claude.json ]]; then
