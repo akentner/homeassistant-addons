@@ -7,18 +7,22 @@ mkdir -p /data/.claude
 # Symlink /root/.claude to /data/.claude so OAuth token survives container restarts
 ln -sf /data/.claude /root/.claude
 
-# If credentials missing: print instructions and exit — claude login requires an interactive TTY
+# If credentials missing: keep container running so docker exec works, then poll for credentials
 if [[ ! -f /data/.claude/.claude.json ]]; then
-    bashio::log.error "Claude credentials not found at /data/.claude/.claude.json"
-    bashio::log.error ""
-    bashio::log.error "One-time setup required:"
-    bashio::log.error "  1. Install the 'Terminal & SSH' add-on from the HA add-on store"
-    bashio::log.error "  2. Open the terminal and run:"
-    bashio::log.error "       docker exec -it \$(docker ps -qf name=meridian) sh"
-    bashio::log.error "  3. Inside the container run:  claude login"
-    bashio::log.error "  4. Complete the OAuth flow in your browser"
-    bashio::log.error "  5. Restart this add-on"
-    exit 1
+    bashio::log.warning "Claude credentials not found. Container stays running for interactive login."
+    bashio::log.warning ""
+    bashio::log.warning "One-time setup — run these commands in the Terminal & SSH add-on:"
+    bashio::log.warning "  docker exec -it \$(docker ps -qf name=meridian) sh"
+    bashio::log.warning "  claude login"
+    bashio::log.warning ""
+    bashio::log.warning "After completing the OAuth flow, Meridian starts automatically."
+
+    # Keep container alive and poll — no restart needed after claude login
+    while [[ ! -f /data/.claude/.claude.json ]]; do
+        sleep 10
+    done
+
+    bashio::log.info "Credentials found. Starting Meridian..."
 fi
 
 # Read add-on configuration
