@@ -17,10 +17,7 @@ ports:
   3456/tcp: 3456
 ports_description:
   3456/tcp: "Anthropic-compatible API endpoint"
-map:
-  - type: addon_config
-    read_only: false
-    path: /opt/meridian/data
+map: []
 
 options:
   log_level: "info"
