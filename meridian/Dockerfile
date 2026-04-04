@@ -1,46 +1,22 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.23
-# Stage 1: Build — compile TypeScript with bun
-FROM oven/bun:1 AS build
-
-ARG VERSION
-WORKDIR /build
-
-# Download upstream source archive and install + build
-# hadolint ignore=DL3008
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tar && \
-    curl -fsSL "https://github.com/rynfar/meridian/archive/refs/tags/v${VERSION}.tar.gz" \
-    | tar xz --strip-components=1
-
-RUN bun install --frozen-lockfile
-RUN bun run build
-
-# Stage 2: Runtime — HA base image with Node.js
 FROM $BUILD_FROM
 
-# Install Node.js and npm to run dist/cli.js and install @anthropic-ai/claude-code
+# Install Node.js and npm
 RUN apk add --no-cache nodejs npm
 
 ARG VERSION
-ARG WORKING_DIR=/opt/meridian
 
-ENV WORKING_DIR=${WORKING_DIR}
-
-# Install @anthropic-ai/claude-code globally to provide the claude CLI binary
+# Install meridian CLI and claude-code CLI globally
+# hadolint ignore=DL3016
+RUN npm install -g @rynfar/meridian@${VERSION}
 # hadolint ignore=DL3016
 RUN npm install -g @anthropic-ai/claude-code
 
-RUN mkdir -p ${WORKING_DIR}
-
-# Copy compiled output and node_modules from build stage
-COPY --from=build /build/dist ${WORKING_DIR}/dist
-COPY --from=build /build/node_modules ${WORKING_DIR}/node_modules
-
 # Copy run script
-COPY run.sh ${WORKING_DIR}/
-RUN chmod +x ${WORKING_DIR}/run.sh
+COPY run.sh /run.sh
+RUN chmod +x /run.sh
 
-WORKDIR ${WORKING_DIR}
-CMD ["./run.sh"]
+CMD ["/run.sh"]
 
 # ### LABELS
 ARG BUILD_ARCH
