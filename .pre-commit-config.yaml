@@ -56,6 +56,8 @@ repos:
           - DL3059  # Multiple consecutive RUN instructions are intentional for clarity
           - --ignore
           - DL4006  # pipefail not applicable with alpine/busybox sh
+          - --ignore
+          - DL3016  # npm install -g without version pin — required for @anthropic-ai/claude-code
 
   # JSON formatting
   - repo: https://github.com/pre-commit/pre-commit-hooks
