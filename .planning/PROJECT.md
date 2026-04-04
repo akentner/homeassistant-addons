@@ -5,8 +5,8 @@
 A Home Assistant Add-ons repository providing containerized wrappers for upstream applications. The repository does not
 contain application source code — Dockerfiles download upstream release artifacts at build time. Each add-on provides a
 `config.yaml` manifest, Dockerfile, and `run.sh` entrypoint that bridges HA configuration (via bashio/options.json) to
-the application. Currently hosts `fritz-callmonitor2mqtt` (FRITZ!Box → MQTT bridge) and `phone-logger` (call logging
-with adapter architecture). A third add-on, `meridian` (Claude Max → local API proxy), is in active development.
+the application. Currently hosts `fritz-callmonitor2mqtt` (FRITZ!Box → MQTT bridge), `phone-logger` (call logging with
+adapter architecture), and `meridian` (Claude Max → local Anthropic-compatible API proxy on port 3456).
 
 ## Core Value
 
@@ -34,8 +34,9 @@ Any upstream release is automatically reflected in the add-on within 24 hours �
 
 <!-- Current scope. Building toward these. -->
 
-- [ ] `meridian` add-on: Claude Max subscription → local Anthropic-compatible API proxy (port 3456), source fetched from
-      GitHub at build time, `claude login` via HA terminal, token persisted in `/data`
+- ✓ `meridian` add-on: Claude Max subscription → local Anthropic-compatible API proxy (port 3456), source fetched from
+  GitHub at build time, `claude login` via HA terminal, token persisted in `/data` — Validated in Phase 03:
+  meridian-add-on
 
 ### Out of Scope
 
@@ -68,12 +69,12 @@ Any upstream release is automatically reflected in the add-on within 24 hours �
 
 ## Key Decisions
 
-| Decision                                              | Rationale                                                      | Outcome   |
-| ----------------------------------------------------- | -------------------------------------------------------------- | --------- |
-| Download upstream at build time, no bundled source    | Keeps repo lean; version updates are a Dockerfile ARG change   | ✓ Good    |
-| `claude login` via HA terminal for Meridian           | Avoids OAuth token in plaintext config; simpler setup          | — Pending |
-| Meridian source from GitHub (not npm) at build time   | Consistent with existing add-on pattern; no node_modules bloat | — Pending |
-| Fully automatic auto-update merge (no manual PR step) | Upstream releases are trusted (own projects + meridian)        | ✓ Good    |
+| Decision                                              | Rationale                                                      | Outcome |
+| ----------------------------------------------------- | -------------------------------------------------------------- | ------- |
+| Download upstream at build time, no bundled source    | Keeps repo lean; version updates are a Dockerfile ARG change   | ✓ Good  |
+| `claude login` via HA terminal for Meridian           | Avoids OAuth token in plaintext config; simpler setup          | ✓ Good  |
+| Meridian source from GitHub (not npm) at build time   | Consistent with existing add-on pattern; no node_modules bloat | ✓ Good  |
+| Fully automatic auto-update merge (no manual PR step) | Upstream releases are trusted (own projects + meridian)        | ✓ Good  |
 
 ## Evolution
 
@@ -96,4 +97,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-04-04 after Phase 02: auto-update-workflow complete_
+_Last updated: 2026-04-04 after Phase 03: meridian-add-on complete_
