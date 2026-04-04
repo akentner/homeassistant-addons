@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Executing Phase 03
-last_updated: "2026-04-04T09:36:17.031Z"
+status: Phase 03 Complete
+last_updated: "2026-04-04T09:44:03.134Z"
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 6
 ---
 
 # Project State
@@ -30,16 +30,17 @@ tracking. **Current focus:** Phase 03 — meridian-add-on
 | ----- | -------------------- | -------- |
 | 1     | Quality Fixes        | Complete |
 | 2     | Auto-Update Workflow | Complete |
-| 3     | Meridian Add-on      | Pending  |
+| 3     | Meridian Add-on      | Complete |
 
 ## Completed Phases
 
 - Phase 01: quality-fixes (2026-04-04)
 - Phase 02: auto-update-workflow (2026-04-04)
+- Phase 03: meridian-add-on (2026-04-04)
 
 ## Progress
 
-[███████░░░] 67% (4/6 plans complete)
+[██████████] 100% (6/6 plans complete)
 
 ## Key Decisions Log
 
@@ -57,16 +58,19 @@ tracking. **Current focus:** Phase 03 — meridian-add-on
 - [03-meridian-add-on/03-01] Multi-stage Dockerfile: oven/bun:1 compiles TypeScript, HA amd64-base:3.22 is the runtime
   stage (D-01 through D-04)
 
-- [03-meridian-add-on/03-01] node_modules copied from bun build stage to runtime — no network access at container
-  start; @anthropic-ai/claude-code installed globally for claude CLI binary (D-03, D-04)
+- [03-meridian-add-on/03-01] node_modules copied from bun build stage to runtime — no network access at container start;
+  @anthropic-ai/claude-code installed globally for claude CLI binary (D-03, D-04)
 
-- [03-meridian-add-on/03-02] Port 3456/tcp declared in ports section (not host_network) — LAN/Tailscale reachability
-  via HA port mapping per D-13/MER-04
+- [03-meridian-add-on/03-02] Port 3456/tcp declared in ports section (not host_network) — LAN/Tailscale reachability via
+  HA port mapping per D-13/MER-04
 
 - [03-meridian-add-on/03-02] MERIDIAN_HOST hardcoded to 0.0.0.0 (not user-configurable) — all-interface bind is the
   correct default for LAN/Tailscale reachability per D-08; no reason to expose this as a user option
 
-_Last session: 2026-04-04T09:39:00Z — Completed 03-meridian-add-on/03-02-PLAN.md_
+- [03-meridian-add-on/03-03] validate-versions files pattern already included meridian from plan 03-01 — no change
+  needed for D-15; DL3016 added globally to hadolint args per D-16 (inline ignore also remains in Dockerfile)
+
+_Last session: 2026-04-04T09:43:16Z — Completed 03-meridian-add-on/03-03-PLAN.md_
 
 ---
 

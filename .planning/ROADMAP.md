@@ -4,11 +4,11 @@ _Milestone 1 — CI fixes, auto-update workflow, and Meridian add-on_
 
 ## Overview
 
-| #   | Phase                | Goal                                                          | Requirements                                                   | Plans      |
-| --- | -------------------- | ------------------------------------------------------------- | -------------------------------------------------------------- | ---------- |
-| 1   | Quality Fixes        | 2/2                                                           | Complete                                                       | 2026-04-03 |
-| 2   | Auto-Update Workflow | Daily upstream version checking commits to main automatically | AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05                    | 1 plan     |
-| 3   | Meridian Add-on      | 1/3 | In Progress|  |
+| #   | Phase                | Goal                                                          | Requirements                                | Plans      |
+| --- | -------------------- | ------------------------------------------------------------- | ------------------------------------------- | ---------- |
+| 1   | Quality Fixes        | 2/2                                                           | Complete                                    | 2026-04-03 |
+| 2   | Auto-Update Workflow | Daily upstream version checking commits to main automatically | AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05 | 1 plan     |
+| 3   | Meridian Add-on      | 3/3                                                           | Complete                                    | 2026-04-04 |
 
 ## Phase 1: Quality Fixes
 
@@ -80,7 +80,7 @@ MER-08
 
 ### Plans
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 
@@ -88,7 +88,7 @@ Plans:
       MER-08)
 - [x] 03-02-PLAN.md — Create config.yaml (port 3456, options schema) and run.sh (credential guard, symlink, proxy
       launch) (MER-01, MER-04, MER-05, MER-06, MER-07)
-- [ ] 03-03-PLAN.md — Create README.md, DOCS.md, update .pre-commit-config.yaml (validate-versions + DL3016) (MER-01)
+- [x] 03-03-PLAN.md — Create README.md, DOCS.md, update .pre-commit-config.yaml (validate-versions + DL3016) (MER-01)
 
 ---
 
