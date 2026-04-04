@@ -107,7 +107,8 @@
     {
       "enabled": false,
       "matchDepNames": [
-        "python"
+        "python",
+        "node"
       ],
       "matchManagers": [
         "github-actions"
