@@ -125,5 +125,14 @@ None - no external service configuration required at this stage.
 
 ---
 
+## Self-Check: PASSED
+
+- FOUND: meridian/Dockerfile
+- FOUND: meridian/build.yaml
+- FOUND: meridian/.upstream.yaml
+- FOUND: .planning/phases/03-meridian-add-on/03-01-SUMMARY.md
+- FOUND: commit 55d15ca (Task 1)
+- FOUND: commit b483f37 (Task 2)
+
 _Phase: 03-meridian-add-on_
 _Completed: 2026-04-04_
