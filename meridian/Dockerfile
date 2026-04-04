@@ -1,3 +1,4 @@
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.23
 # Stage 1: Build — compile TypeScript with bun
 FROM oven/bun:1 AS build
 
@@ -14,7 +15,6 @@ RUN bun install --frozen-lockfile
 RUN bun run build
 
 # Stage 2: Runtime — HA base image with Node.js
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.23
 FROM $BUILD_FROM
 
 # Install Node.js and npm to run dist/cli.js and install @anthropic-ai/claude-code

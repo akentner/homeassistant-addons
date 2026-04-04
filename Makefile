@@ -1,7 +1,7 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions update-version
+.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions update-version validate-dockerfiles docker-build-check
 
 # Default target
 help: ## Show this help message
@@ -94,6 +94,34 @@ validate-versions: ## Validate add-on versioning consistency
 	@echo "🔍 Validating add-on versions..."
 	./scripts/validate-versions.sh
 
+validate-dockerfiles: ## Validate ARG-before-FROM scope in all Dockerfiles
+	@echo "🔍 Validating Dockerfile ARG scope..."
+	./scripts/validate-dockerfile-args.sh
+
+docker-build-check: ## Check Dockerfile correctness without a full build (hadolint + ARG scope validation)
+	@echo "🐳 Checking Dockerfile correctness (no full build required)..."
+	@echo "  Running hadolint (full ruleset, including DL3006 ARG-before-FROM)..."
+	@FAILED=0; \
+	for addon_dir in fritz-callmonitor2mqtt phone-logger meridian; do \
+		if [ -f "$${addon_dir}/Dockerfile" ]; then \
+			if ! hadolint \
+				--ignore DL3018 \
+				--ignore DL3059 \
+				--ignore DL4006 \
+				--ignore DL3016 \
+				"$${addon_dir}/Dockerfile"; then \
+				FAILED=$$((FAILED + 1)); \
+			fi; \
+		fi; \
+	done; \
+	if [ "$$FAILED" -gt 0 ]; then \
+		echo "❌ $$FAILED Dockerfile(s) failed hadolint check."; \
+		exit 1; \
+	fi
+	@echo "  Running ARG-before-FROM scope check..."
+	@./scripts/validate-dockerfile-args.sh
+	@echo "✅ All Dockerfile checks passed."
+
 update-version: ## Update add-on version (usage: make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2)
 	@if [ -z "$(ADDON)" ] || [ -z "$(VERSION)" ]; then \
 		echo "❌ Missing required parameters"; \
@@ -110,7 +138,7 @@ update-version: ## Update add-on version (usage: make update-version ADDON=fritz
 	@echo "🔍 Running validation..."
 	@make validate-versions
 
-check-all: lint validate-addons validate-versions ## Run all checks (lint + validate + versions)
+check-all: lint validate-addons validate-versions validate-dockerfiles ## Run all checks (lint + validate + versions + dockerfile args)
 
 test: check-all ## Run all tests and checks
 

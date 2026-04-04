@@ -49,8 +49,6 @@ repos:
       - id: hadolint
         args:
           - --ignore
-          - DL3006  # ARG before FROM is the HA base-image pattern
-          - --ignore
           - DL3018  # apk packages are not version-pinned in HA add-on Dockerfiles
           - --ignore
           - DL3059  # Multiple consecutive RUN instructions are intentional for clarity
@@ -69,6 +67,12 @@ repos:
   # Custom validation hooks
   - repo: local
     hooks:
+      - id: validate-dockerfile-args
+        name: Validate Dockerfile ARG-before-FROM scope
+        entry: ./scripts/validate-dockerfile-args.sh
+        language: script
+        files: ^(fritz-callmonitor2mqtt|phone-logger|meridian)/Dockerfile$
+        pass_filenames: true
       - id: validate-versions
         name: Validate Add-on Versioning
         entry: ./scripts/validate-versions.sh
