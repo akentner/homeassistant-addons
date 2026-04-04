@@ -11,9 +11,9 @@ ln -sf /data/.claude /root/.claude
 if [[ ! -f /data/.claude/.claude.json ]]; then
     bashio::log.warning "Claude credentials not found. Container stays running for interactive login."
     bashio::log.warning ""
-    CONTAINER_ID=$(cat /etc/hostname)
+    CONTAINER_NAME="addon_$(bashio::addon.slug)"
     bashio::log.warning "One-time setup — run these commands in the Terminal & SSH add-on:"
-    bashio::log.warning "  docker exec -it ${CONTAINER_ID} sh"
+    bashio::log.warning "  docker exec -it ${CONTAINER_NAME} sh"
     bashio::log.warning "  claude login"
     bashio::log.warning ""
     bashio::log.warning "After completing the OAuth flow, Meridian starts automatically."
