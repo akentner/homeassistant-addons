@@ -46,5 +46,9 @@ export MERIDIAN_HOST
 
 bashio::log.info "Starting Meridian proxy on port ${MERIDIAN_PORT}..."
 
+# Start nginx as ingress frontend (port 8099 -> meridian 3456)
+nginx
+bashio::log.info "nginx ingress proxy started on port 8099"
+
 # Hand off to S6 — exec replaces shell process; HA restart policy handles recovery
 exec meridian

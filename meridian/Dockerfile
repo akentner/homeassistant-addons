@@ -1,8 +1,8 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.23
 FROM $BUILD_FROM
 
-# Install Node.js and npm
-RUN apk add --no-cache nodejs npm
+# Install Node.js, npm, and nginx (nginx provides the Ingress-facing reverse proxy)
+RUN apk add --no-cache nodejs npm nginx
 
 ARG VERSION
 
@@ -12,9 +12,10 @@ RUN npm install -g @rynfar/meridian@${VERSION}
 # hadolint ignore=DL3016
 RUN npm install -g @anthropic-ai/claude-code
 
-# Copy run script
+# Copy run script and nginx config
 COPY run.sh /run.sh
 RUN chmod +x /run.sh
+COPY nginx.conf /etc/nginx/nginx.conf
 
 CMD ["/run.sh"]
 

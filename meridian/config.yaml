@@ -14,7 +14,7 @@ startup: "application"
 boot: "auto"
 host_network: false
 ingress: true
-ingress_port: 3456
+ingress_port: 8099
 ports:
   3456/tcp: 3456
 ports_description:
