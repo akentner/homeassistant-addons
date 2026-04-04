@@ -19,12 +19,33 @@ ports:
   3456/tcp: 3456
 ports_description:
   3456/tcp: "Anthropic-compatible API endpoint"
-map: []
+map:
+  - data:rw
 
 options:
   log_level: "info"
   port: 3456
+  passthrough: false
+  max_concurrent: 10
+  max_sessions: 1000
+  max_stored_sessions: 10000
+  workdir: "/data/workdir"
+  idle_timeout_seconds: 120
+  telemetry_size: 1000
+  no_file_changes: false
+  sonnet_model: "sonnet[1m]"
+  default_agent: "opencode"
 
 schema:
   log_level: list(debug|info|warning|error)
   port: int
+  passthrough: bool
+  max_concurrent: int
+  max_sessions: int
+  max_stored_sessions: int
+  workdir: str
+  idle_timeout_seconds: int
+  telemetry_size: int
+  no_file_changes: bool
+  sonnet_model: "list(sonnet|sonnet[1m])"
+  default_agent: "list(opencode|pi|crush|droid|passthrough)"
