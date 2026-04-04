@@ -49,7 +49,7 @@ Dieses Add-on ermöglicht die flexible Konfiguration von Telefon-Logging und Ada
 
 ```yaml
 input_adapters:
-  - type: fritz
+  - type: fritz_callmonitor
     name: fritz
     enabled: true
     config:

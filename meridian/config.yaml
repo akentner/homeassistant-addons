@@ -1,0 +1,31 @@
+name: "Meridian Claude Max Proxy"
+description: "Exposes a local Anthropic-compatible API on port 3456 backed by a Claude Max subscription"
+version: "1.26.6-0"
+slug: "meridian"
+init: false
+arch:
+  # - aarch64
+  - amd64
+  # - armhf
+  # - armv7
+  # - i386
+url: "https://github.com/akentner/homeassistant-addons"
+startup: "application"
+boot: "auto"
+host_network: false
+ports:
+  3456/tcp: "Meridian proxy port"
+ports_description:
+  3456/tcp: "Anthropic-compatible API endpoint"
+map:
+  - type: addon_config
+    read_only: false
+    path: /opt/meridian/data
+
+options:
+  log_level: "info"
+  port: 3456
+
+schema:
+  log_level: list(debug|info|warning|error)
+  port: int
