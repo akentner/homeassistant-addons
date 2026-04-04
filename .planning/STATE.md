@@ -39,8 +39,9 @@ Run `/gsd:new-milestone` to define v1.1 scope.
 | #          | Description                                            | Date       | Commit  | Directory                                                                                                           |
 | ---------- | ------------------------------------------------------ | ---------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
 | 260404-ksc | Add Claude and GSD best-practice entries to .gitignore | 2026-04-04 | a0a9402 | [260404-ksc-add-claude-and-gsd-best-practice-entries](./quick/260404-ksc-add-claude-and-gsd-best-practice-entries/) |
+| 260404-n7n | Replace bun run build in meridian Dockerfile           | 2026-04-04 | 8c05acf | [260404-n7n-replace-bun-run-build-in-meridian-docker](./quick/260404-n7n-replace-bun-run-build-in-meridian-docker/) |
 
 ---
 
 _State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_ _Last activity: 2026-04-04 - Completed quick task
-260404-ksc: Add Claude and GSD best-practice entries to .gitignore_
+260404-n7n: Replace bun run build in meridian Dockerfile_
