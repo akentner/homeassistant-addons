@@ -7,34 +7,18 @@ mkdir -p /data/.claude
 # Symlink /root/.claude to /data/.claude so OAuth token survives container restarts
 ln -sf /data/.claude /root/.claude
 
-# If credentials missing: start claude login (prints OAuth URL to stdout/stderr -> HA logs)
+# If credentials missing: print instructions and exit — claude login requires an interactive TTY
 if [[ ! -f /data/.claude/.claude.json ]]; then
-    bashio::log.info "Claude credentials not found. Starting OAuth login..."
-    bashio::log.info "Check the add-on logs for an OAuth URL, open it in your browser to authenticate."
-
-    # Run claude login in background — it prints the OAuth URL and waits for browser completion
-    # Claude Max OAuth does not require interactive TTY; URL appears in logs
-    claude login &
-    LOGIN_PID=$!
-
-    # Poll until credentials file appears (up to 10 minutes, check every 5 seconds)
-    TIMEOUT=600
-    ELAPSED=0
-    while [[ ! -f /data/.claude/.claude.json ]]; do
-        sleep 5
-        ELAPSED=$((ELAPSED + 5))
-        if [[ $ELAPSED -ge $TIMEOUT ]]; then
-            bashio::log.error "OAuth login timed out after ${TIMEOUT}s. Restart the add-on to try again."
-            kill "$LOGIN_PID" 2>/dev/null || true
-            exit 1
-        fi
-        bashio::log.info "Waiting for OAuth completion... (${ELAPSED}s elapsed)"
-    done
-
-    bashio::log.info "Credentials found. Proceeding to start Meridian."
-    # Give claude login a moment to finalise writing, then kill the process if still running
-    sleep 2
-    kill "$LOGIN_PID" 2>/dev/null || true
+    bashio::log.error "Claude credentials not found at /data/.claude/.claude.json"
+    bashio::log.error ""
+    bashio::log.error "One-time setup required:"
+    bashio::log.error "  1. Install the 'Terminal & SSH' add-on from the HA add-on store"
+    bashio::log.error "  2. Open the terminal and run:"
+    bashio::log.error "       docker exec -it \$(docker ps -qf name=meridian) sh"
+    bashio::log.error "  3. Inside the container run:  claude login"
+    bashio::log.error "  4. Complete the OAuth flow in your browser"
+    bashio::log.error "  5. Restart this add-on"
+    exit 1
 fi
 
 # Read add-on configuration
