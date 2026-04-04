@@ -122,7 +122,7 @@ docker-build-check: ## Check Dockerfile correctness without a full build (hadoli
 	@./scripts/validate-dockerfile-args.sh
 	@echo "✅ All Dockerfile checks passed."
 
-build-addon: ## Build an add-on image locally, replicating the HA build process (usage: make build-addon ADDON=meridian)
+build-addon: ## Build an add-on image locally, replicating the HA build process (usage: make build-addon ADDON=meridian [TIMEOUT=600])
 	@if [ -z "$(ADDON)" ]; then \
 		echo "❌ Missing required parameter"; \
 		echo "Usage: make build-addon ADDON=meridian"; \
@@ -134,8 +134,9 @@ build-addon: ## Build an add-on image locally, replicating the HA build process 
 	fi
 	$(eval VERSION   := $(shell grep 'VERSION:' $(ADDON)/build.yaml | awk '{print $$2}' | tr -d '"'))
 	$(eval BUILD_FROM := $(shell grep 'amd64:' $(ADDON)/build.yaml | awk '{print $$2}' | tr -d '"'))
-	@echo "🐳 Building $(ADDON) v$(VERSION) (BUILD_FROM=$(BUILD_FROM))..."
-	docker build \
+	$(eval _TIMEOUT  := $(if $(TIMEOUT),$(TIMEOUT),600))
+	@echo "🐳 Building $(ADDON) v$(VERSION) (BUILD_FROM=$(BUILD_FROM), timeout=$(_TIMEOUT)s)..."
+	timeout $(_TIMEOUT) docker build \
 		--progress=plain \
 		--build-arg BUILD_FROM="$(BUILD_FROM)" \
 		--build-arg VERSION="$(VERSION)" \
@@ -147,10 +148,17 @@ build-addon: ## Build an add-on image locally, replicating the HA build process 
 		--build-arg BUILD_REPOSITORY="$(shell git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git||')" \
 		--build-arg BUILD_VERSION="$(VERSION)" \
 		-t "local/$(ADDON):$(VERSION)" \
-		$(ADDON)/
-	@echo ""
-	@echo "✅ Built image: local/$(ADDON):$(VERSION)"
-	@echo "   Run with:  docker run --rm -it local/$(ADDON):$(VERSION) sh"
+		$(ADDON)/ \
+	&& echo "" \
+	&& echo "✅ Built image: local/$(ADDON):$(VERSION)" \
+	&& echo "   Run with:  docker run --rm -it local/$(ADDON):$(VERSION) sh" \
+	|| { EC=$$?; \
+	     if [ $$EC -eq 124 ]; then \
+	       echo "❌ Build timed out after $(_TIMEOUT)s (increase with TIMEOUT=<seconds>)"; \
+	     else \
+	       echo "❌ Build failed (exit code $$EC)"; \
+	     fi; \
+	     exit $$EC; }
 
 update-version: ## Update add-on version (usage: make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2)
 	@if [ -z "$(ADDON)" ] || [ -z "$(VERSION)" ]; then \
