@@ -5,7 +5,9 @@
 mkdir -p /data/.claude
 
 # Symlink /root/.claude to /data/.claude so OAuth token survives container restarts
-ln -sf /data/.claude /root/.claude
+# rm -rf required: ln -sf cannot replace an existing directory, only files
+rm -rf /root/.claude
+ln -s /data/.claude /root/.claude
 
 # If credentials missing: keep container running so docker exec works, then poll for credentials
 if [[ ! -f /data/.claude/.claude.json ]]; then
@@ -16,7 +18,7 @@ if [[ ! -f /data/.claude/.claude.json ]]; then
     CONTAINER_NAME="addon_${ADDON_SLUG}"
     bashio::log.warning "One-time setup — run these commands in the Terminal & SSH add-on:"
     bashio::log.warning "  docker exec -it ${CONTAINER_NAME} sh"
-    bashio::log.warning "  claude login"
+    bashio::log.warning "  claude"
     bashio::log.warning ""
     bashio::log.warning "After completing the OAuth flow, Meridian starts automatically."
 
