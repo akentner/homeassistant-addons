@@ -29,14 +29,15 @@ Any upstream release is automatically reflected in the add-on within 24 hours �
   quality-fixes
 - ✓ Auto-update GitHub Actions workflow: daily upstream version check (06:00 UTC), fully automatic 3-file version update
   - commit to main via GITHUB_TOKEN — Validated in Phase 02: auto-update-workflow
+- ✓ `meridian` add-on: Claude Max subscription → local Anthropic-compatible API proxy (port 3456), two-stage Dockerfile
+  (bun + HA base), `claude login` via HA terminal, OAuth token persisted in `/data/.claude` — Validated in Phase 03:
+  meridian-add-on
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-- ✓ `meridian` add-on: Claude Max subscription → local Anthropic-compatible API proxy (port 3456), source fetched from
-  GitHub at build time, `claude login` via HA terminal, token persisted in `/data` — Validated in Phase 03:
-  meridian-add-on
+_Nothing active — v1.0 shipped. Run `/gsd:new-milestone` to define v1.1 scope._
 
 ### Out of Scope
 
@@ -55,8 +56,10 @@ Any upstream release is automatically reflected in the add-on within 24 hours �
 - **Meridian specifics**: Originally named `opencode-claude-max-proxy`, renamed to `meridian`. Requires `claude login`
   (OAuth) for first-time auth. The HA terminal approach (one-time manual login, token persisted in `/data`) was chosen
   over credential injection to avoid handling OAuth tokens as plain config values.
-- **Auto-update gap**: Resolved — `.github/workflows/auto-update.yml` now implements daily upstream version sync.
-  `.upstream.yaml` files in both existing add-ons are fully wired.
+- **v1.0 state**: All three add-ons fully scaffolded and passing CI. Meridian requires one-time `claude login` via HA
+  terminal; subsequent restarts use persisted token in `/data/.claude`.
+- **Auto-update**: `.github/workflows/auto-update.yml` runs daily at 06:00 UTC, discovers add-ons via `.upstream.yaml`,
+  and commits 3-file version updates directly to main.
 
 ## Constraints
 
@@ -97,4 +100,6 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-04-04 after Phase 03: meridian-add-on complete_
+---
+
+_Last updated: 2026-04-04 after v1.0 milestone_

@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-status: Milestone complete
-last_updated: "2026-04-04T09:45:45.260Z"
+milestone_name: MVP
+status: Archived — planning next milestone
+last_updated: "2026-04-04T12:00:00.000Z"
 progress:
   total_phases: 3
   completed_phases: 3
@@ -15,63 +15,25 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-03)
+See: .planning/PROJECT.md (updated 2026-04-04)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Phase 03 — meridian-add-on
+tracking. **Current focus:** Planning next milestone
 
-## Current Phase
+## Milestone v1.0 — COMPLETE
 
-**Phase:** 03
+All 3 phases shipped. Archived to `.planning/milestones/v1.0-ROADMAP.md`.
 
-## Phase Progress
+| Phase | Name                 | Status   | Completed  |
+| ----- | -------------------- | -------- | ---------- |
+| 1     | Quality Fixes        | Complete | 2026-04-03 |
+| 2     | Auto-Update Workflow | Complete | 2026-04-04 |
+| 3     | Meridian Add-on      | Complete | 2026-04-04 |
 
-| Phase | Name                 | Status   |
-| ----- | -------------------- | -------- |
-| 1     | Quality Fixes        | Complete |
-| 2     | Auto-Update Workflow | Complete |
-| 3     | Meridian Add-on      | Complete |
+## Next Step
 
-## Completed Phases
-
-- Phase 01: quality-fixes (2026-04-04)
-- Phase 02: auto-update-workflow (2026-04-04)
-- Phase 03: meridian-add-on (2026-04-04)
-
-## Progress
-
-[██████████] 100% (6/6 plans complete)
-
-## Key Decisions Log
-
-- [01-quality-fixes/01-01] Extended validate-versions hook files pattern with regex alternation to cover phone-logger
-  alongside fritz-callmonitor2mqtt
-
-- [01-quality-fixes/01-02] hadolint ignore list: DL3006/DL3018/DL3059/DL4006 cover all HA base-image and apk patterns
-
-- [02-auto-update-workflow/02-01] Permissions block at job-level (not workflow-level) for minimum-privilege — only the
-  update job needs contents:write
-
-- [02-auto-update-workflow/02-01] Inline SC2001 shellcheck disable for sed version strip — version_strip is a dynamic
-  regex from yaml config; bash parameter expansion cannot substitute dynamic regex patterns
-
-- [03-meridian-add-on/03-01] Multi-stage Dockerfile: oven/bun:1 compiles TypeScript, HA amd64-base:3.22 is the runtime
-  stage (D-01 through D-04)
-
-- [03-meridian-add-on/03-01] node_modules copied from bun build stage to runtime — no network access at container start;
-  @anthropic-ai/claude-code installed globally for claude CLI binary (D-03, D-04)
-
-- [03-meridian-add-on/03-02] Port 3456/tcp declared in ports section (not host_network) — LAN/Tailscale reachability via
-  HA port mapping per D-13/MER-04
-
-- [03-meridian-add-on/03-02] MERIDIAN_HOST hardcoded to 0.0.0.0 (not user-configurable) — all-interface bind is the
-  correct default for LAN/Tailscale reachability per D-08; no reason to expose this as a user option
-
-- [03-meridian-add-on/03-03] validate-versions files pattern already included meridian from plan 03-01 — no change
-  needed for D-15; DL3016 added globally to hadolint args per D-16 (inline ignore also remains in Dockerfile)
-
-_Last session: 2026-04-04T09:43:16Z — Completed 03-meridian-add-on/03-03-PLAN.md_
+Run `/gsd:new-milestone` to define v1.1 scope.
 
 ---
 
-_State initialized: 2026-04-04_
+_State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_
