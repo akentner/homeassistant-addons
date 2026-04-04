@@ -25,7 +25,8 @@ if [[ ! -f /data/.claude/.claude.json ]]; then
     bashio::log.warning "After completing the OAuth flow, Meridian starts automatically."
 
     # Keep container alive and poll — no restart needed after claude login
-    while [[ ! -f /data/.claude/.claude.json ]]; do
+    while [[ ! -f /data/.claude.json ]]; do
+        bashio::log.debug "Check for credentials... not found yet"
         sleep 10
     done
 
