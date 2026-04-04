@@ -11,7 +11,9 @@ ln -sf /data/.claude /root/.claude
 if [[ ! -f /data/.claude/.claude.json ]]; then
     bashio::log.warning "Claude credentials not found. Container stays running for interactive login."
     bashio::log.warning ""
-    CONTAINER_NAME="addon_$(bashio::addon.slug)"
+    ADDON_SLUG=$(curl -sf -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+        http://supervisor/addons/self/info | grep -o '"slug":"[^"]*"' | cut -d'"' -f4)
+    CONTAINER_NAME="addon_${ADDON_SLUG}"
     bashio::log.warning "One-time setup — run these commands in the Terminal & SSH add-on:"
     bashio::log.warning "  docker exec -it ${CONTAINER_NAME} sh"
     bashio::log.warning "  claude login"
