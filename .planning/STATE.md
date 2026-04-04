@@ -54,6 +54,12 @@ tracking. **Current focus:** Phase 03 — meridian-add-on
 - [02-auto-update-workflow/02-01] Inline SC2001 shellcheck disable for sed version strip — version_strip is a dynamic
   regex from yaml config; bash parameter expansion cannot substitute dynamic regex patterns
 
+- [03-meridian-add-on/03-01] Multi-stage Dockerfile: oven/bun:1 compiles TypeScript, HA amd64-base:3.22 is the runtime
+  stage (D-01 through D-04)
+
+- [03-meridian-add-on/03-01] node_modules copied from bun build stage to runtime — no network access at container
+  start; @anthropic-ai/claude-code installed globally for claude CLI binary (D-03, D-04)
+
 - [03-meridian-add-on/03-02] Port 3456/tcp declared in ports section (not host_network) — LAN/Tailscale reachability
   via HA port mapping per D-13/MER-04
 

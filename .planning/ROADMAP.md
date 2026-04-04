@@ -80,11 +80,11 @@ MER-08
 
 ### Plans
 
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 
-- [ ] 03-01-PLAN.md — Create Dockerfile (multi-stage bun + HA runtime), build.yaml, .upstream.yaml (MER-02, MER-03,
+- [x] 03-01-PLAN.md — Create Dockerfile (multi-stage bun + HA runtime), build.yaml, .upstream.yaml (MER-02, MER-03,
       MER-08)
 - [x] 03-02-PLAN.md — Create config.yaml (port 3456, options schema) and run.sh (credential guard, symlink, proxy
       launch) (MER-01, MER-04, MER-05, MER-06, MER-07)
