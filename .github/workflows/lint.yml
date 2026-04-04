@@ -22,18 +22,18 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.14'
+          python-version: '3.12'
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '22'
 
       - name: Cache Python dependencies
         uses: actions/cache@v5
         with:
           path: ~/.cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('**/requirements-lint.txt', '.pre-commit-config.yaml') }}
+          key: pip-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: |
             pip-${{ runner.os }}-
 
@@ -53,9 +53,6 @@ jobs:
 
           # Install Node.js dependencies
           npm install -g markdownlint-cli2
-
-          # Create requirements file for caching
-          pip freeze > requirements-lint.txt
 
       - name: Install actionlint
         run: |
