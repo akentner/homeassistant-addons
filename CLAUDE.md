@@ -348,6 +348,26 @@ Use these entry points:
 
 Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
 
+## Milestone Branch Convention
+
+Every milestone is developed on a dedicated branch `milestone/vX.Y` and squash-merged into `main` upon completion.
+
+When `/gsd:new-milestone` is invoked:
+
+1. Create branch: `git checkout -b milestone/vX.Y`
+2. Push to origin: `git push -u origin milestone/vX.Y`
+3. All milestone development happens on this branch
+
+When the milestone is complete (`/gsd:complete-milestone`):
+
+```bash
+git checkout main
+git merge --squash milestone/vX.Y
+git commit -m "feat(vX.Y): <milestone summary>"
+git tag vX.Y
+git push origin main --tags
+```
+
 <!-- GSD:workflow-end -->
 
 <!-- GSD:profile-start -->
