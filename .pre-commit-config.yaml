@@ -66,7 +66,7 @@ repos:
       - id: pretty-format-json
         args: [--autofix, --indent=2]
 
-  # Custom version validation
+  # Custom validation hooks
   - repo: local
     hooks:
       - id: validate-versions
@@ -74,6 +74,12 @@ repos:
         entry: ./scripts/validate-versions.sh
         language: script
         files: ^(fritz-callmonitor2mqtt|phone-logger|meridian)/(config\.yaml|build\.yaml|README\.md)$
+        pass_filenames: false
+      - id: validate-addon-config
+        name: Validate Add-on config.yaml Schema
+        entry: python3 scripts/validate-addon-config.py
+        language: system
+        files: ^(fritz-callmonitor2mqtt|phone-logger|meridian)/config\.yaml$
         pass_filenames: false
 
 # Configuration
