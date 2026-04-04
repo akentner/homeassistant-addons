@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     | tar xz --strip-components=1
 
 RUN bun install --frozen-lockfile
-RUN bun run build
+RUN bun build bin/cli.ts src/proxy/server.ts --outdir dist --target node --splitting --external @anthropic-ai/claude-agent-sdk --entry-naming '[name].js' && \
+    tsc -p tsconfig.build.json
 
 # Stage 2: Runtime — HA base image with Node.js
 FROM $BUILD_FROM
