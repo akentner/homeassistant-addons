@@ -1,7 +1,7 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions update-version validate-dockerfiles docker-build-check
+.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions update-version validate-dockerfiles docker-build-check build-addon
 
 # Default target
 help: ## Show this help message
@@ -121,6 +121,36 @@ docker-build-check: ## Check Dockerfile correctness without a full build (hadoli
 	@echo "  Running ARG-before-FROM scope check..."
 	@./scripts/validate-dockerfile-args.sh
 	@echo "✅ All Dockerfile checks passed."
+
+build-addon: ## Build an add-on image locally, replicating the HA build process (usage: make build-addon ADDON=meridian)
+	@if [ -z "$(ADDON)" ]; then \
+		echo "❌ Missing required parameter"; \
+		echo "Usage: make build-addon ADDON=meridian"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(ADDON)/build.yaml" ]; then \
+		echo "❌ $(ADDON)/build.yaml not found"; \
+		exit 1; \
+	fi
+	$(eval VERSION   := $(shell grep 'VERSION:' $(ADDON)/build.yaml | awk '{print $$2}' | tr -d '"'))
+	$(eval BUILD_FROM := $(shell grep 'amd64:' $(ADDON)/build.yaml | awk '{print $$2}' | tr -d '"'))
+	@echo "🐳 Building $(ADDON) v$(VERSION) (BUILD_FROM=$(BUILD_FROM))..."
+	docker build \
+		--progress=plain \
+		--build-arg BUILD_FROM="$(BUILD_FROM)" \
+		--build-arg VERSION="$(VERSION)" \
+		--build-arg BUILD_ARCH="amd64" \
+		--build-arg BUILD_DATE="$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" \
+		--build-arg BUILD_DESCRIPTION="local test build" \
+		--build-arg BUILD_NAME="$(ADDON)" \
+		--build-arg BUILD_REF="$(shell git rev-parse --short HEAD)" \
+		--build-arg BUILD_REPOSITORY="$(shell git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git||')" \
+		--build-arg BUILD_VERSION="$(VERSION)" \
+		-t "local/$(ADDON):$(VERSION)" \
+		$(ADDON)/
+	@echo ""
+	@echo "✅ Built image: local/$(ADDON):$(VERSION)"
+	@echo "   Run with:  docker run --rm -it local/$(ADDON):$(VERSION) sh"
 
 update-version: ## Update add-on version (usage: make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2)
 	@if [ -z "$(ADDON)" ] || [ -z "$(VERSION)" ]; then \

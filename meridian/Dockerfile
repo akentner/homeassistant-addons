@@ -7,7 +7,7 @@ WORKDIR /build
 
 # Download upstream source archive and install + build
 # hadolint ignore=DL3008
-RUN apt-get update && apt-get install -y --no-install-recommends curl tar && \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tar && \
     curl -fsSL "https://github.com/rynfar/meridian/archive/refs/tags/v${VERSION}.tar.gz" \
     | tar xz --strip-components=1
 
