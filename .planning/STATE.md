@@ -34,6 +34,13 @@ All 3 phases shipped. Archived to `.planning/milestones/v1.0-ROADMAP.md`.
 
 Run `/gsd:new-milestone` to define v1.1 scope.
 
+### Quick Tasks Completed
+
+| #          | Description                                            | Date       | Commit  | Directory                                                                                                           |
+| ---------- | ------------------------------------------------------ | ---------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| 260404-ksc | Add Claude and GSD best-practice entries to .gitignore | 2026-04-04 | a0a9402 | [260404-ksc-add-claude-and-gsd-best-practice-entries](./quick/260404-ksc-add-claude-and-gsd-best-practice-entries/) |
+
 ---
 
-_State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_
+_State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_ _Last activity: 2026-04-04 - Completed quick task
+260404-ksc: Add Claude and GSD best-practice entries to .gitignore_
