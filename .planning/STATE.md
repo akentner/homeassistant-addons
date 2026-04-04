@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to plan
-last_updated: "2026-04-03T23:43:28.606Z"
+status: Executing Phase 03
+last_updated: "2026-04-04T09:36:17.031Z"
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 6
+  completed_plans: 4
 ---
 
 # Project State
@@ -18,7 +18,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-03)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Phase 02 — auto-update-workflow
+tracking. **Current focus:** Phase 03 — meridian-add-on
 
 ## Current Phase
 
@@ -39,7 +39,7 @@ tracking. **Current focus:** Phase 02 — auto-update-workflow
 
 ## Progress
 
-[██████████] 100% (3/3 plans complete)
+[███████░░░] 67% (4/6 plans complete)
 
 ## Key Decisions Log
 
@@ -54,7 +54,13 @@ tracking. **Current focus:** Phase 02 — auto-update-workflow
 - [02-auto-update-workflow/02-01] Inline SC2001 shellcheck disable for sed version strip — version_strip is a dynamic
   regex from yaml config; bash parameter expansion cannot substitute dynamic regex patterns
 
-_Last session: 2026-04-03T23:37:49Z — Completed 02-auto-update-workflow-02-01-PLAN.md_
+- [03-meridian-add-on/03-02] Port 3456/tcp declared in ports section (not host_network) — LAN/Tailscale reachability
+  via HA port mapping per D-13/MER-04
+
+- [03-meridian-add-on/03-02] MERIDIAN_HOST hardcoded to 0.0.0.0 (not user-configurable) — all-interface bind is the
+  correct default for LAN/Tailscale reachability per D-08; no reason to expose this as a user option
+
+_Last session: 2026-04-04T09:39:00Z — Completed 03-meridian-add-on/03-02-PLAN.md_
 
 ---
 

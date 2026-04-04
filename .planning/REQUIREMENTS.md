@@ -17,18 +17,18 @@ zero manual version tracking.
 
 ### Meridian Add-on
 
-- [ ] **MER-01**: `meridian/` add-on directory with complete standard structure: `config.yaml`, `build.yaml`,
+- [x] **MER-01**: `meridian/` add-on directory with complete standard structure: `config.yaml`, `build.yaml`,
       `Dockerfile`, `run.sh`, `README.md`, `DOCS.md`, `.upstream.yaml`
 - [ ] **MER-02**: Dockerfile uses multi-stage build: `oven/bun:1` for TypeScript compilation,
       `ghcr.io/home-assistant/amd64-base` as runtime base with `nodejs` and `npm` installed via `apk`
 - [ ] **MER-03**: Source is fetched from the GitHub Release archive (`rynfar/meridian`) at Docker build time — no
       bundled source in this repo
-- [ ] **MER-04**: Port 3456 is declared in `config.yaml` and accessible from LAN and Tailscale
-- [ ] **MER-05**: `run.sh` creates `/root/.claude → /data/.claude` symlink so the OAuth token persists across container
+- [x] **MER-04**: Port 3456 is declared in `config.yaml` and accessible from LAN and Tailscale
+- [x] **MER-05**: `run.sh` creates `/root/.claude → /data/.claude` symlink so the OAuth token persists across container
       restarts
-- [ ] **MER-06**: `run.sh` detects missing Claude credentials and prints clear setup instructions (how to run
+- [x] **MER-06**: `run.sh` detects missing Claude credentials and prints clear setup instructions (how to run
       `claude     login` via the HA terminal add-on), then exits with an error
-- [ ] **MER-07**: `MERIDIAN_HOST=0.0.0.0` is set so the proxy accepts connections from outside the container
+- [x] **MER-07**: `MERIDIAN_HOST=0.0.0.0` is set so the proxy accepts connections from outside the container
 - [ ] **MER-08**: Version tracked via 3-file scheme; `.upstream.yaml` watches `rynfar/meridian` for new releases
 
 ### Quality Fixes
@@ -74,13 +74,13 @@ zero manual version tracking.
 | AUTO-03     | Phase 2 | Complete |
 | AUTO-04     | Phase 2 | Complete |
 | AUTO-05     | Phase 2 | Complete |
-| MER-01      | Phase 3 | Pending  |
+| MER-01      | Phase 3 | Complete |
 | MER-02      | Phase 3 | Pending  |
 | MER-03      | Phase 3 | Pending  |
-| MER-04      | Phase 3 | Pending  |
-| MER-05      | Phase 3 | Pending  |
-| MER-06      | Phase 3 | Pending  |
-| MER-07      | Phase 3 | Pending  |
+| MER-04      | Phase 3 | Complete |
+| MER-05      | Phase 3 | Complete |
+| MER-06      | Phase 3 | Complete |
+| MER-07      | Phase 3 | Complete |
 | MER-08      | Phase 3 | Pending  |
 
 **Coverage:**

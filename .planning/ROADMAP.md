@@ -8,7 +8,7 @@ _Milestone 1 — CI fixes, auto-update workflow, and Meridian add-on_
 | --- | -------------------- | ------------------------------------------------------------- | -------------------------------------------------------------- | ---------- |
 | 1   | Quality Fixes        | 2/2                                                           | Complete                                                       | 2026-04-03 |
 | 2   | Auto-Update Workflow | Daily upstream version checking commits to main automatically | AUTO-01, AUTO-02, AUTO-03, AUTO-04, AUTO-05                    | 1 plan     |
-| 3   | Meridian Add-on      | Claude Max proxy add-on installable from the repository       | MER-01, MER-02, MER-03, MER-04, MER-05, MER-06, MER-07, MER-08 | 3 plans    |
+| 3   | Meridian Add-on      | 1/3 | In Progress|  |
 
 ## Phase 1: Quality Fixes
 
@@ -80,13 +80,13 @@ MER-08
 
 ### Plans
 
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 
 - [ ] 03-01-PLAN.md — Create Dockerfile (multi-stage bun + HA runtime), build.yaml, .upstream.yaml (MER-02, MER-03,
       MER-08)
-- [ ] 03-02-PLAN.md — Create config.yaml (port 3456, options schema) and run.sh (credential guard, symlink, proxy
+- [x] 03-02-PLAN.md — Create config.yaml (port 3456, options schema) and run.sh (credential guard, symlink, proxy
       launch) (MER-01, MER-04, MER-05, MER-06, MER-07)
 - [ ] 03-03-PLAN.md — Create README.md, DOCS.md, update .pre-commit-config.yaml (validate-versions + DL3016) (MER-01)
 
