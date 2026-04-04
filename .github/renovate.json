@@ -103,6 +103,15 @@
         "custom.regex"
       ],
       "semanticCommits": "enabled"
+    },
+    {
+      "enabled": false,
+      "matchDepNames": [
+        "python"
+      ],
+      "matchManagers": [
+        "github-actions"
+      ]
     }
   ],
   "platformAutomerge": false,
