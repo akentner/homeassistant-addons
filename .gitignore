@@ -4,3 +4,11 @@
 # Editor/IDE
 .idea/
 .vscode/
+
+# Claude Code local state
+.claude/*
+!.claude/hooks/
+!.claude/commands/
+
+# GSD research artifacts
+.planning/research/
