@@ -44,6 +44,36 @@ export MERIDIAN_LOG_LEVEL
 export MERIDIAN_PORT
 export MERIDIAN_HOST
 
+# Create workdir if it does not exist
+MERIDIAN_WORKDIR=$(bashio::config 'workdir')
+mkdir -p "${MERIDIAN_WORKDIR}"
+
+# Numeric / string options — always export
+MERIDIAN_MAX_CONCURRENT=$(bashio::config 'max_concurrent')
+MERIDIAN_MAX_SESSIONS=$(bashio::config 'max_sessions')
+MERIDIAN_MAX_STORED_SESSIONS=$(bashio::config 'max_stored_sessions')
+MERIDIAN_IDLE_TIMEOUT_SECONDS=$(bashio::config 'idle_timeout_seconds')
+MERIDIAN_TELEMETRY_SIZE=$(bashio::config 'telemetry_size')
+MERIDIAN_SONNET_MODEL=$(bashio::config 'sonnet_model')
+MERIDIAN_DEFAULT_AGENT=$(bashio::config 'default_agent')
+
+export MERIDIAN_WORKDIR
+export MERIDIAN_MAX_CONCURRENT
+export MERIDIAN_MAX_SESSIONS
+export MERIDIAN_MAX_STORED_SESSIONS
+export MERIDIAN_IDLE_TIMEOUT_SECONDS
+export MERIDIAN_TELEMETRY_SIZE
+export MERIDIAN_SONNET_MODEL
+export MERIDIAN_DEFAULT_AGENT
+
+# Boolean options — upstream treats presence of var as enabled (unset = disabled)
+if bashio::config.true 'passthrough'; then
+    export MERIDIAN_PASSTHROUGH=true
+fi
+if bashio::config.true 'no_file_changes'; then
+    export MERIDIAN_NO_FILE_CHANGES=true
+fi
+
 bashio::log.info "Starting Meridian proxy on port ${MERIDIAN_PORT}..."
 
 # Start nginx as ingress frontend (port 8099 -> meridian 3456)
