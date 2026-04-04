@@ -1,6 +1,6 @@
 name: "Meridian Claude Max Proxy"
 description: "Exposes a local Anthropic-compatible API on port 3456 backed by a Claude Max subscription"
-version: "1.26.6-1"
+version: "1.26.6-2"
 slug: "meridian"
 init: false
 arch:
