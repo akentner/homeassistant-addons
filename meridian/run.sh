@@ -15,6 +15,8 @@ ln -s /data/claude/.claude.json /root/.claude.json
 if [[ ! -f /data/claude/.claude.json ]]; then
     bashio::log.warning "Claude credentials not found. Container stays running for interactive login."
     bashio::log.warning ""
+    # SUPERVISOR_TOKEN is injected by the HA supervisor at runtime — not assigned in script
+    # shellcheck disable=SC2154
     ADDON_SLUG=$(curl -sf -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
         http://supervisor/addons/self/info | grep -o '"slug":"[^"]*"' | cut -d'"' -f4)
     CONTAINER_NAME="addon_${ADDON_SLUG}"
