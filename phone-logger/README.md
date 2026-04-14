@@ -1,5 +1,7 @@
 # Home Assistant Add-on: Phone Logger
 
+[![Release][release-shield]][release] [![License][license-shield]][license]
+
 Dieses Add-on integriert das Python-Projekt [phone-logger](https://github.com/akentner/phone-logger) als Home Assistant
 Add-on.
 
@@ -22,3 +24,10 @@ Dieses Add-on basiert auf: <https://github.com/akentner/phone-logger>
 
 - MQTT-Unterstützung folgt in einer späteren Version.
 - Für Webhooks ist aktuell nur die URL konfigurierbar.
+
+<!-- Badge Links -->
+
+[release-shield]: https://img.shields.io/badge/version-v1.0.1-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.0.1
+[license-shield]: https://img.shields.io/badge/license-MIT-green.svg
+[license]: https://github.com/akentner/homeassistant-addons/blob/main/LICENSE

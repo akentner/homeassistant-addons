@@ -8,8 +8,8 @@ upstream:
   # Pattern for version tags (default: v*)
   version_pattern: "*"
 
-  # Regex to remove prefixes from version tags (e.g. "meridian-v1.37.2" -> "1.37.2" or "v1.0.3" -> "1.0.3")
-  version_strip: "^(meridian-)?v"
+  # Regex to remove prefixes from version tags (e.g. "meridian-v1.37.2" -> "1.37.2")
+  version_strip: "^meridian-v"
 
 addon:
   # How should the add-on version be updated?
