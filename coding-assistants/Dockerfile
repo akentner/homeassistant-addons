@@ -8,8 +8,11 @@ RUN apk add --no-cache \
     curl wget git jq yq make \
     nodejs npm \
     ripgrep fd fzf bat shellcheck \
-    python3 py3-pip py3-httpie \
+    python3 py3-pip \
     github-cli
+
+# hadolint ignore=DL3013
+RUN pip install --no-cache-dir --break-system-packages httpie
 
 # ttyd — static web terminal binary
 RUN TTYD_VER=$(curl -sf https://api.github.com/repos/tsl0922/ttyd/releases/latest \
