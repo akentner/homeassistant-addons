@@ -1,0 +1,45 @@
+name: "Coding Assistants"
+description: "Terminal with Claude Code, OpenCode, and GitHub Copilot CLI — SSH + web terminal"
+version: "1.0.0-alpha1"
+slug: "coding_assistants"
+init: false
+arch:
+  - amd64
+url: "https://github.com/akentner/homeassistant-addons"
+startup: "application"
+boot: "manual"
+host_network: false
+ingress: true
+ingress_port: 7681
+ports:
+  2222/tcp: 2222
+ports_description:
+  2222/tcp: "SSH server"
+map:
+  - homeassistant_config:rw
+  - data:rw
+  - share:rw
+  - media:rw
+
+backup_exclude:
+  - ".config/opencode/cache/*"
+  - ".local/share/opencode/cache/*"
+  - ".npm/*"
+  - ".cache/*"
+
+options:
+  log_level: "info"
+  authorized_keys: []
+  terminal_font_size: 16
+  terminal_theme: "default"
+  env_vars: []
+
+schema:
+  log_level: list(debug|info|warning|error)
+  authorized_keys:
+    - str
+  terminal_font_size: int
+  terminal_theme: "list(default|solarized-dark|solarized-light|monokai|tomorrow-night|zenburn)"
+  env_vars:
+    - name: str
+      value: str

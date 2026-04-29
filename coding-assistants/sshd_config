@@ -1,0 +1,27 @@
+Port 2222
+AddressFamily inet
+ListenAddress 0.0.0.0
+
+# Host keys are generated at runtime and persisted in /data/ssh
+HostKey /data/ssh/ssh_host_rsa_key
+HostKey /data/ssh/ssh_host_ecdsa_key
+HostKey /data/ssh/ssh_host_ed25519_key
+
+PermitRootLogin yes
+PubkeyAuthentication yes
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+KbdInteractiveAuthentication no
+UsePAM no
+
+AuthorizedKeysFile /root/.ssh/authorized_keys
+
+# Allow passing through common env vars from SSH client
+AcceptEnv LANG LC_* TERM COLORTERM
+
+PrintMotd yes
+PrintLastLog no
+
+Subsystem sftp internal-sftp
+
+LogLevel INFO
