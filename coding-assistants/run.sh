@@ -10,11 +10,69 @@ mkdir -p \
     /data/.config/opencode \
     /data/.local/share/opencode
 
+# Fish config persistence — copy defaults on first run, then symlink
+if [[ ! -d /data/.config/fish ]]; then
+    cp -a /root/.config/fish /data/.config/fish
+    bashio::log.info "Initialized fish config in persistent storage"
+fi
+rm -rf /root/.config/fish
+ln -s /data/.config/fish /root/.config/fish
+
 # Claude Code — symlink ~/.claude* into /data (does not honour XDG)
 rm -rf /root/.claude
 ln -s /data/claude/.claude /root/.claude 2>/dev/null || true
 rm -f /root/.claude.json
 ln -s /data/claude/.claude.json /root/.claude.json 2>/dev/null || true
+
+# Inject tool context into AI assistant configs (first run only)
+TOOLS_MD="/etc/coding-assistants/TOOLS.md"
+CLAUDE_MD="/data/claude/.claude/CLAUDE.md"
+mkdir -p /data/claude/.claude
+if [[ ! -f "${CLAUDE_MD}" ]] || ! grep -q "coding-assistants" "${CLAUDE_MD}" 2>/dev/null; then
+    cat "${TOOLS_MD}" >> "${CLAUDE_MD}"
+    bashio::log.info "Injected tool context into Claude Code CLAUDE.md"
+fi
+
+OPENCODE_JSON="/data/.config/opencode/opencode.json"
+[[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
+if ! jq -e '.instructions' "${OPENCODE_JSON}" > /dev/null 2>&1; then
+    tmp=$(mktemp)
+    jq --rawfile inst "${TOOLS_MD}" '.instructions = $inst' "${OPENCODE_JSON}" > "${tmp}"
+    cp "${tmp}" "${OPENCODE_JSON}"
+    rm "${tmp}"
+    bashio::log.info "Injected tool context into OpenCode instructions"
+fi
+
+# MCP server auto-registration — merge addon config into ~/.claude.json
+CLAUDE_JSON="/data/claude/.claude.json"
+[[ -f "${CLAUDE_JSON}" ]] || echo '{}' > "${CLAUDE_JSON}"
+if jq -e '.mcp_servers | length > 0' /data/options.json > /dev/null 2>&1; then
+    # Claude Code format: { name: { command, args } }
+    MCP_OBJ=$(jq -c '
+        .mcp_servers
+        | map({ (.name): { command: .command, args: (.args // []) } })
+        | add // {}
+    ' /data/options.json)
+    tmp=$(mktemp)
+    jq --argjson mcp "${MCP_OBJ}" '.mcpServers = ($mcp + (.mcpServers // {}))' "${CLAUDE_JSON}" > "${tmp}"
+    cp "${tmp}" "${CLAUDE_JSON}"
+    rm "${tmp}"
+
+    # OpenCode format: { name: { type, command: [...], enabled } }
+    OPENCODE_JSON="/data/.config/opencode/opencode.json"
+    [[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
+    MCP_OBJ_OC=$(jq -c '
+        .mcp_servers
+        | map({ (.name): { type: "local", command: ([.command] + (.args // [])), enabled: true } })
+        | add // {}
+    ' /data/options.json)
+    tmp=$(mktemp)
+    jq --argjson mcp "${MCP_OBJ_OC}" '.mcp = ($mcp + (.mcp // {}))' "${OPENCODE_JSON}" > "${tmp}"
+    cp "${tmp}" "${OPENCODE_JSON}"
+    rm "${tmp}"
+
+    bashio::log.info "Registered $(echo "${MCP_OBJ}" | jq -r 'keys | length') MCP server(s) in Claude Code + OpenCode config"
+fi
 
 # Write env profile (picked up by SSH login shells and ttyd/tmux via bash -l)
 mkdir -p /etc/profile.d
@@ -23,15 +81,39 @@ chmod +x /etc/profile.d/00-coding-assistants.sh
 
 # XDG redirects — opencode (and other XDG-compliant tools) store data in /data
 # Tool paths
-cat >> /etc/profile.d/00-coding-assistants.sh << 'EOF'
+HA_URL=$(bashio::config 'ha_url')
+HA_TOKEN=$(bashio::config 'ha_token')
+
+{
+    cat << 'EOF'
 export XDG_CONFIG_HOME="/data/.config"
 export XDG_DATA_HOME="/data/.local/share"
 export PATH="/root/.local/bin:/usr/local/bin:$PATH"
 EOF
+    printf 'export HA_URL=%q\n' "${HA_URL}"
+    printf 'export HA_TOKEN=%q\n' "${HA_TOKEN}"
+    cat << 'EOF'
+# SSH: auto-attach to shared tmux session (enables web/SSH tmux sharing)
+if [[ -n "$SSH_CONNECTION" ]] && [[ -z "$TMUX" ]]; then
+    exec tmux new-session -A -s main -c /homeassistant
+fi
+EOF
+} > /etc/profile.d/00-coding-assistants.sh
+
+# Inject user-configured bash aliases
+if jq -e '.bash_aliases | length > 0' /data/options.json > /dev/null 2>&1; then
+    while IFS= read -r entry; do
+        alias_name=$(echo "$entry" | jq -r '.name')
+        alias_cmd=$(echo "$entry" | jq -r '.command')
+        printf "alias %s=%q\n" "$alias_name" "$alias_cmd" >> /etc/profile.d/00-coding-assistants.sh
+    done < <(jq -c '.bash_aliases[]' /data/options.json)
+fi
 
 # Export for current process so ttyd/sshd children inherit them
 export XDG_CONFIG_HOME="/data/.config"
 export XDG_DATA_HOME="/data/.local/share"
+export HA_URL
+export HA_TOKEN
 
 # Inject user-configured env vars
 if jq -e '.env_vars | length > 0' /data/options.json > /dev/null 2>&1; then
@@ -41,6 +123,49 @@ if jq -e '.env_vars | length > 0' /data/options.json > /dev/null 2>&1; then
         printf 'export %s=%q\n' "$name" "$val" >> /etc/profile.d/00-coding-assistants.sh
         # Also export for the current process (ttyd inherits this)
         declare -x "$name=$val"
+    done < <(jq -c '.env_vars[]' /data/options.json)
+fi
+
+# Fish config — write runtime env to conf.d (overwritten each start)
+FISH_CONF="/data/.config/fish/conf.d/00-coding-assistants.fish"
+mkdir -p /data/.config/fish/conf.d
+{
+    cat << 'EOF'
+set -x XDG_CONFIG_HOME /data/.config
+set -x XDG_DATA_HOME /data/.local/share
+fish_add_path /root/.local/bin /usr/local/bin
+
+# Tool integrations
+zoxide init fish | source
+atuin init fish | source
+direnv hook fish | source
+EOF
+    printf 'set -x HA_URL %s\n' "${HA_URL}"
+    printf 'set -x HA_TOKEN %s\n' "${HA_TOKEN}"
+    cat << 'EOF'
+
+# SSH: auto-attach to shared tmux session
+if set -q SSH_CONNECTION; and not set -q TMUX
+    exec tmux new-session -A -s main -c /homeassistant
+end
+EOF
+} > "${FISH_CONF}"
+
+# User-configured bash_aliases → fish aliases
+if jq -e '.bash_aliases | length > 0' /data/options.json > /dev/null 2>&1; then
+    while IFS= read -r entry; do
+        alias_name=$(echo "$entry" | jq -r '.name')
+        alias_cmd=$(echo "$entry" | jq -r '.command')
+        printf "alias %s %q\n" "$alias_name" "$alias_cmd" >> "${FISH_CONF}"
+    done < <(jq -c '.bash_aliases[]' /data/options.json)
+fi
+
+# User-configured env_vars → fish
+if jq -e '.env_vars | length > 0' /data/options.json > /dev/null 2>&1; then
+    while IFS= read -r entry; do
+        name=$(echo "$entry" | jq -r '.name')
+        val=$(echo "$entry" | jq -r '.value')
+        printf 'set -x %s %s\n' "$name" "$val" >> "${FISH_CONF}"
     done < <(jq -c '.env_vars[]' /data/options.json)
 fi
 
@@ -107,6 +232,6 @@ ttyd \
     --writable \
     --client-option "fontSize=${FONT_SIZE}" \
     --client-option "theme=${THEME_JSON}" \
-    tmux new-session -A -s main &
+    tmux new-session -A -s main -c /homeassistant &
 
 wait

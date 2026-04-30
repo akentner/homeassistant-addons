@@ -1,6 +1,6 @@
 name: "Coding Assistants"
 description: "Terminal with Claude Code, OpenCode, and GitHub Copilot CLI — SSH + web terminal"
-version: "1.0.0-alpha1"
+version: "1.0.0-alpha2"
 slug: "coding_assistants"
 init: false
 arch:
@@ -32,7 +32,11 @@ options:
   authorized_keys: []
   terminal_font_size: 16
   terminal_theme: "default"
+  ha_url: "http://homeassistant:8123"
+  ha_token: ""
+  mcp_servers: []
   env_vars: []
+  bash_aliases: []
 
 schema:
   log_level: list(debug|info|warning|error)
@@ -40,6 +44,16 @@ schema:
     - str
   terminal_font_size: int
   terminal_theme: "list(default|solarized-dark|solarized-light|monokai|tomorrow-night|zenburn)"
+  ha_url: str
+  ha_token: str
+  mcp_servers:
+    - name: str
+      command: str
+      args:
+        - str
   env_vars:
     - name: str
       value: str
+  bash_aliases:
+    - name: str
+      command: str

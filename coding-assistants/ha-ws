@@ -1,0 +1,844 @@
+#!/usr/bin/env python3
+"""
+ha-ws - Home Assistant WebSocket CLI
+
+A universal tool for managing Home Assistant via WebSocket API.
+https://github.com/danbuhler/claude-code-ha
+
+REGISTRY COMMANDS
+  entity list [filter]              List entities (filter by ID substring)
+  entity get <entity_id>            Get entity details
+  entity update <id> key=value...   Update entity (icon, name, new_entity_id, etc.)
+  entity remove <entity_id>         Remove entity from registry
+
+  device list [filter]              List devices
+  device get <device_id>            Get device details
+  device update <id> key=value...   Update device (area_id, name_by_user, etc.)
+  device remove <device_id>         Remove device
+
+  area list                         List all areas
+  area create <name>                Create new area
+  area update <id> key=value...     Update area (name, icon, etc.)
+  area delete <area_id>             Delete area
+
+STATE & SERVICE COMMANDS
+  state <entity_id>                 Get current state of entity
+  states [domain]                   List all states (optionally filter by domain)
+
+  call <domain>.<service> [data]    Call a service
+                                    e.g., call light.turn_on entity_id=light.kitchen
+
+  services [domain]                 List available services
+
+SEARCH & INSPECT
+  search <query>                    Search for related entities
+  related <entity_id>               Find entities related to this one
+
+SYSTEM
+  config                            Get HA configuration
+  info                              Get HA core info
+
+RAW WEBSOCKET
+  raw <type> [key=value...]         Send raw WebSocket message
+                                    e.g., raw config/entity_registry/list
+
+BATCH MODE
+  batch                             Read commands from stdin (one per line)
+
+OPTIONS
+  --json                            Output as JSON
+  --quiet                           Minimal output
+
+VALUE SYNTAX
+  key=value                         String value
+  key=123                           Integer
+  key=true / key=false              Boolean
+  key=null / key=none               None (clears field)
+  key="quoted string"               Quoted string (preserves spaces)
+
+EXAMPLES
+  ha-ws entity list light
+  ha-ws entity update light.kitchen icon=mdi:lamp name="Kitchen Light"
+  ha-ws entity update light.old new_entity_id=light.new
+  ha-ws device update abc123 area_id=kitchen name_by_user="My Lamp"
+  ha-ws area create "Guest Room"
+  ha-ws call light.turn_on entity_id=light.kitchen brightness=255
+  ha-ws state sensor.temperature
+  ha-ws raw config/core/info
+"""
+
+import asyncio
+import json
+import os
+import ssl
+import sys
+from pathlib import Path
+from typing import Any, Optional
+
+import websockets
+
+
+class HAWebSocket:
+    """Home Assistant WebSocket client."""
+
+    def __init__(self, json_output: bool = False, quiet: bool = False):
+        self.ws = None
+        self.msg_id = 0
+        self.json_output = json_output
+        self.quiet = quiet
+        self._load_env()
+
+    def _load_env(self):
+        """Load environment from .env file or environment variables."""
+        env_files = [
+            os.environ.get('HA_ENV_FILE', ''),
+            '/config/.env',
+            '/homeassistant/.env',
+            './.env',
+            str(Path.home() / '.config/ha-cli.env'),
+            str(Path.home() / '.ha-cli.env'),
+        ]
+
+        for env_file in env_files:
+            if env_file and os.path.exists(env_file):
+                with open(env_file) as f:
+                    for line in f:
+                        line = line.strip()
+                        if '=' in line and not line.startswith('#'):
+                            k, v = line.split('=', 1)
+                            os.environ[k] = v
+                break
+
+        self.ha_url = os.environ.get('HA_URL', '').replace('https://', 'wss://').replace('http://', 'ws://')
+        self.ha_token = os.environ.get('HA_TOKEN', '')
+
+    async def connect(self):
+        if not self.ha_url or not self.ha_token:
+            self._error("HA_URL and HA_TOKEN must be set in .env or environment")
+            return False
+
+        # Only use SSL for wss:// URLs
+        ssl_ctx = None
+        if self.ha_url.startswith('wss://'):
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+
+        try:
+            self.ws = await websockets.connect(
+                f'{self.ha_url}/api/websocket',
+                ssl=ssl_ctx,
+                max_size=50_000_000
+            )
+
+            msg = json.loads(await self.ws.recv())
+            if msg["type"] != "auth_required":
+                self._error(f"Unexpected: {msg}")
+                return False
+
+            await self.ws.send(json.dumps({"type": "auth", "access_token": self.ha_token}))
+            msg = json.loads(await self.ws.recv())
+            if msg["type"] != "auth_ok":
+                self._error(f"Auth failed: {msg}")
+                return False
+
+            return True
+        except Exception as e:
+            self._error(f"Connection failed: {e}")
+            return False
+
+    async def send(self, msg_type: str, **kwargs) -> dict:
+        self.msg_id += 1
+        payload = {"id": self.msg_id, "type": msg_type, **kwargs}
+        await self.ws.send(json.dumps(payload))
+        return json.loads(await self.ws.recv())
+
+    async def close(self):
+        if self.ws:
+            await self.ws.close()
+
+    def _print(self, msg: str):
+        if not self.quiet:
+            print(msg)
+
+    def _error(self, msg: str):
+        print(f"ERROR: {msg}", file=sys.stderr)
+
+    def _output(self, data: Any, formatter=None):
+        if self.json_output:
+            print(json.dumps(data, indent=2, default=str))
+        elif formatter:
+            formatter(data)
+        else:
+            print(data)
+
+
+def parse_value(v: str) -> Any:
+    """Parse string value to appropriate Python type."""
+    v_lower = v.lower()
+    if v_lower in ('null', 'none'):
+        return None
+    if v_lower == 'true':
+        return True
+    if v_lower == 'false':
+        return False
+
+    try:
+        return int(v)
+    except ValueError:
+        pass
+
+    try:
+        return float(v)
+    except ValueError:
+        pass
+
+    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+        return v[1:-1]
+
+    return v
+
+
+def parse_kv_args(args: list) -> dict:
+    """Parse key=value arguments into a dict."""
+    result = {}
+    for arg in args:
+        if '=' in arg:
+            key, val = arg.split('=', 1)
+            result[key] = parse_value(val)
+    return result
+
+
+# ==============================================================================
+# ENTITY REGISTRY COMMANDS
+# ==============================================================================
+
+async def entity_list(ha: HAWebSocket, filter_str: Optional[str] = None):
+    result = await ha.send("config/entity_registry/list")
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    entities = result["result"]
+
+    if filter_str:
+        f = filter_str.lower()
+        filtered = []
+        for e in entities:
+            searchable = " ".join([
+                e.get("entity_id") or "",
+                e.get("name") or "",
+                e.get("original_name") or "",
+                e.get("platform") or "",
+                e.get("device_class") or "",
+                e.get("original_device_class") or "",
+                e.get("area_id") or "",
+            ]).lower()
+
+            if f in searchable:
+                filtered.append(e)
+        entities = filtered
+
+    def fmt(data):
+        for e in sorted(data, key=lambda x: x["entity_id"]):
+            parts = [e["entity_id"]]
+            if e.get("platform"):
+                parts.append(f"platform={e['platform']}")
+            if e.get("device_class") or e.get("original_device_class"):
+                parts.append(f"class={e.get('device_class') or e.get('original_device_class')}")
+            if e.get("device_id"):
+                parts.append(f"device={e['device_id'][:12]}")
+            if e.get("area_id"):
+                parts.append(f"area={e['area_id']}")
+            if e.get("name"):
+                parts.append(f"name={e['name']}")
+            if e.get("icon") or e.get("original_icon"):
+                parts.append(f"icon={e.get('icon') or e.get('original_icon')}")
+            if e.get("disabled_by"):
+                parts.append("DISABLED")
+            print(" | ".join(parts))
+
+    ha._output(entities, fmt)
+    return True
+
+
+async def entity_get(ha: HAWebSocket, entity_id: str):
+    result = await ha.send("config/entity_registry/get", entity_id=entity_id)
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    entity = result["result"]
+
+    states_result = await ha.send("get_states")
+    state = None
+    if states_result.get("success"):
+        for s in states_result["result"]:
+            if s["entity_id"] == entity_id:
+                state = s
+                break
+
+    related_result = await ha.send("search/related", item_type="entity", item_id=entity_id)
+    related = related_result.get("result", {}) if related_result.get("success") else {}
+
+    full_info = {
+        "entity": entity,
+        "state": state,
+        "related": related
+    }
+
+    def fmt(data):
+        e = data["entity"]
+        s = data["state"]
+        rel = data["related"]
+
+        reg_parts = [f"entity_id={e['entity_id']}"]
+        reg_parts.append(f"platform={e.get('platform')}")
+        if e.get('device_class') or e.get('original_device_class'):
+            reg_parts.append(f"class={e.get('device_class') or e.get('original_device_class')}")
+        if e.get('device_id'):
+            reg_parts.append(f"device_id={e['device_id']}")
+        if e.get('area_id'):
+            reg_parts.append(f"area={e['area_id']}")
+        if e.get('name'):
+            reg_parts.append(f"name={e['name']}")
+        if e.get('icon') or e.get('original_icon'):
+            reg_parts.append(f"icon={e.get('icon') or e.get('original_icon')}")
+        if e.get('disabled_by'):
+            reg_parts.append(f"disabled={e['disabled_by']}")
+        if e.get('entity_category'):
+            reg_parts.append(f"category={e['entity_category']}")
+        print("registry: " + " | ".join(reg_parts))
+
+        if s:
+            state_parts = [f"state={s['state']}"]
+            attrs = s.get("attributes", {})
+            if attrs.get("friendly_name"):
+                state_parts.append(f"friendly_name={attrs['friendly_name']}")
+            for k, v in sorted(attrs.items()):
+                if k not in ["friendly_name", "effect_list", "supported_color_modes", "icon"] and not isinstance(v, (list, dict)):
+                    state_parts.append(f"{k}={v}")
+            print("state: " + " | ".join(state_parts))
+
+        if rel.get("device"):
+            print(f"device: {rel['device'][0]}")
+        if rel.get("area"):
+            print(f"area: {rel['area'][0]}")
+        if rel.get("automation"):
+            print(f"automations: {', '.join(rel['automation'])}")
+        if rel.get("scene"):
+            print(f"scenes: {', '.join(rel['scene'])}")
+        if rel.get("script"):
+            print(f"scripts: {', '.join(rel['script'])}")
+
+    ha._output(full_info, fmt)
+    return True
+
+
+async def entity_update(ha: HAWebSocket, entity_id: str, updates: dict):
+    result = await ha.send("config/entity_registry/update", entity_id=entity_id, **updates)
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    ha._print(f"OK: {entity_id}")
+    for k, v in updates.items():
+        ha._print(f"  {k} = {v}")
+    return True
+
+
+async def entity_remove(ha: HAWebSocket, entity_id: str):
+    result = await ha.send("config/entity_registry/remove", entity_id=entity_id)
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+    ha._print(f"Removed: {entity_id}")
+    return True
+
+
+# ==============================================================================
+# DEVICE REGISTRY COMMANDS
+# ==============================================================================
+
+async def device_list(ha: HAWebSocket, filter_str: Optional[str] = None):
+    result = await ha.send("config/device_registry/list")
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    devices = result["result"]
+
+    if filter_str:
+        f = filter_str.lower()
+        filtered = []
+        for d in devices:
+            searchable = " ".join([
+                d.get("name") or "",
+                d.get("name_by_user") or "",
+                d["id"],
+                d.get("manufacturer") or "",
+                d.get("model") or "",
+                d.get("area_id") or "",
+            ]).lower()
+
+            for ident in d.get("identifiers", []):
+                if isinstance(ident, list):
+                    searchable += " " + " ".join(str(i) for i in ident).lower()
+
+            if f in searchable:
+                filtered.append(d)
+        devices = filtered
+
+    def fmt(data):
+        for d in sorted(data, key=lambda x: x.get("name") or x["id"]):
+            parts = [f"id={d['id']}"]
+            if d.get("name_by_user") or d.get("name"):
+                parts.append(f"name={d.get('name_by_user') or d.get('name')}")
+            if d.get("identifiers"):
+                for ident in d["identifiers"]:
+                    if isinstance(ident, list) and len(ident) > 0:
+                        parts.append(f"integration={ident[0]}")
+                        break
+            if d.get("manufacturer"):
+                parts.append(f"mfr={d['manufacturer']}")
+            if d.get("model"):
+                parts.append(f"model={d['model']}")
+            if d.get("area_id"):
+                parts.append(f"area={d['area_id']}")
+            if d.get("via_device_id"):
+                parts.append(f"via={d['via_device_id'][:12]}")
+            if d.get("disabled_by"):
+                parts.append("DISABLED")
+            print(" | ".join(parts))
+
+    ha._output(devices, fmt)
+    return True
+
+
+async def device_get(ha: HAWebSocket, device_id: str, full: bool = False):
+    result = await ha.send("config/device_registry/list")
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    device = None
+    for d in result["result"]:
+        if d["id"] == device_id or d["id"].startswith(device_id):
+            device = d
+            break
+
+    if not device:
+        ha._error(f"Device not found: {device_id}")
+        return False
+
+    related_result = await ha.send("search/related", item_type="device", item_id=device["id"])
+    related = related_result.get("result", {}) if related_result.get("success") else {}
+
+    entities_result = await ha.send("config/entity_registry/list")
+    device_entities = []
+    if entities_result.get("success"):
+        device_entities = [e for e in entities_result["result"] if e.get("device_id") == device["id"]]
+
+    full_info = {
+        "device": device,
+        "related": related,
+        "entities": device_entities
+    }
+
+    def fmt(data):
+        d = data["device"]
+        rel = data["related"]
+
+        dev_parts = [f"id={d['id']}"]
+        dev_parts.append(f"name={d.get('name_by_user') or d.get('name')}")
+        if d.get('manufacturer'):
+            dev_parts.append(f"mfr={d['manufacturer']}")
+        if d.get('model'):
+            dev_parts.append(f"model={d['model']}")
+        if d.get('area_id'):
+            dev_parts.append(f"area={d['area_id']}")
+        if d.get('sw_version'):
+            dev_parts.append(f"sw={d['sw_version']}")
+        if d.get('via_device_id'):
+            dev_parts.append(f"via={d['via_device_id']}")
+        if d.get('disabled_by'):
+            dev_parts.append(f"disabled={d['disabled_by']}")
+        if d.get("identifiers"):
+            for ident in d["identifiers"]:
+                if isinstance(ident, list) and len(ident) > 0:
+                    dev_parts.append(f"integration={ident[0]}")
+                    break
+        print("device: " + " | ".join(dev_parts))
+
+        if data["entities"]:
+            ent_list = []
+            for e in sorted(data["entities"], key=lambda x: x["entity_id"]):
+                ent_str = e['entity_id']
+                if e.get("disabled_by"):
+                    ent_str += "[disabled]"
+                ent_list.append(ent_str)
+            print(f"entities: {', '.join(ent_list)}")
+
+        if rel.get("automation"):
+            print(f"automations: {', '.join(rel['automation'])}")
+        if rel.get("scene"):
+            print(f"scenes: {', '.join(rel['scene'])}")
+        if rel.get("script"):
+            print(f"scripts: {', '.join(rel['script'])}")
+
+    ha._output(full_info, fmt)
+    return True
+
+
+async def device_update(ha: HAWebSocket, device_id: str, updates: dict):
+    result = await ha.send("config/device_registry/update", device_id=device_id, **updates)
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    ha._print(f"OK: {device_id}")
+    for k, v in updates.items():
+        ha._print(f"  {k} = {v}")
+    return True
+
+
+async def device_remove(ha: HAWebSocket, device_id: str):
+    result = await ha.send("config/device_registry/remove", device_id=device_id)
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+    ha._print(f"Removed: {device_id}")
+    return True
+
+
+# ==============================================================================
+# AREA REGISTRY COMMANDS
+# ==============================================================================
+
+async def area_list(ha: HAWebSocket):
+    result = await ha.send("config/area_registry/list")
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    def fmt(data):
+        for a in sorted(data, key=lambda x: x["name"]):
+            icon = a.get("icon") or ""
+            print(f"{a['area_id']:40} {a['name']:25} {icon}")
+
+    ha._output(result["result"], fmt)
+    return True
+
+
+async def area_create(ha: HAWebSocket, name: str):
+    result = await ha.send("config/area_registry/create", name=name)
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    area = result["result"]
+    ha._print(f"Created: {area['area_id']} ({area['name']})")
+    return True
+
+
+async def area_update(ha: HAWebSocket, area_id: str, updates: dict):
+    result = await ha.send("config/area_registry/update", area_id=area_id, **updates)
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    ha._print(f"OK: {area_id}")
+    for k, v in updates.items():
+        ha._print(f"  {k} = {v}")
+    return True
+
+
+async def area_delete(ha: HAWebSocket, area_id: str):
+    result = await ha.send("config/area_registry/delete", area_id=area_id)
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+    ha._print(f"Deleted: {area_id}")
+    return True
+
+
+# ==============================================================================
+# STATE & SERVICE COMMANDS
+# ==============================================================================
+
+async def get_state(ha: HAWebSocket, entity_id: str):
+    result = await ha.send("get_states")
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    for state in result["result"]:
+        if state["entity_id"] == entity_id:
+            def fmt(data):
+                print(f"state: {data['state']}")
+                print(f"last_changed: {data['last_changed']}")
+                if data.get("attributes"):
+                    print("attributes:")
+                    for k, v in sorted(data["attributes"].items()):
+                        print(f"  {k}: {v}")
+            ha._output(state, fmt)
+            return True
+
+    ha._error(f"Entity not found: {entity_id}")
+    return False
+
+
+async def get_states(ha: HAWebSocket, domain: Optional[str] = None):
+    result = await ha.send("get_states")
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    states = result["result"]
+    if domain:
+        states = [s for s in states if s["entity_id"].startswith(f"{domain}.")]
+
+    def fmt(data):
+        for s in sorted(data, key=lambda x: x["entity_id"]):
+            state = s["state"][:20] if len(s["state"]) > 20 else s["state"]
+            name = s.get("attributes", {}).get("friendly_name", "")[:30]
+            print(f"{s['entity_id']:50} {state:22} {name}")
+
+    ha._output(states, fmt)
+    return True
+
+
+async def call_service(ha: HAWebSocket, service: str, data: dict):
+    if '.' not in service:
+        ha._error("Service must be domain.service format")
+        return False
+
+    domain, service_name = service.split('.', 1)
+
+    target = {}
+    service_data = {}
+    for k, v in data.items():
+        if k == "entity_id":
+            target["entity_id"] = v
+        elif k == "device_id":
+            target["device_id"] = v
+        elif k == "area_id":
+            target["area_id"] = v
+        else:
+            service_data[k] = v
+
+    call_args = {
+        "domain": domain,
+        "service": service_name,
+    }
+    if service_data:
+        call_args["service_data"] = service_data
+    if target:
+        call_args["target"] = target
+
+    result = await ha.send("call_service", **call_args)
+
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    ha._print(f"Called: {service}")
+    return True
+
+
+async def list_services(ha: HAWebSocket, domain: Optional[str] = None):
+    result = await ha.send("get_services")
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    services = result["result"]
+
+    def fmt(data):
+        for d, svcs in sorted(data.items()):
+            if domain and d != domain:
+                continue
+            for s, info in sorted(svcs.items()):
+                desc = info.get("description", "")[:50]
+                print(f"{d}.{s:40} {desc}")
+
+    ha._output(services, fmt)
+    return True
+
+
+# ==============================================================================
+# SEARCH & INSPECT
+# ==============================================================================
+
+async def search_related(ha: HAWebSocket, item_type: str, item_id: str):
+    result = await ha.send("search/related", item_type=item_type, item_id=item_id)
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    def fmt(data):
+        for category, items in sorted(data.items()):
+            if items:
+                print(f"{category}:")
+                for item in items:
+                    print(f"  {item}")
+
+    ha._output(result["result"], fmt)
+    return True
+
+
+# ==============================================================================
+# SYSTEM
+# ==============================================================================
+
+async def get_config(ha: HAWebSocket):
+    result = await ha.send("get_config")
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    def fmt(data):
+        for k in ["location_name", "version", "config_dir", "time_zone", "unit_system"]:
+            if k in data:
+                print(f"{k}: {data[k]}")
+
+    ha._output(result["result"], fmt)
+    return True
+
+
+async def get_info(ha: HAWebSocket):
+    result = await ha.send("config/core/info")
+    if not result.get("success"):
+        result = await ha.send("get_config")
+
+    if not result.get("success"):
+        ha._error(result.get("error", result))
+        return False
+
+    ha._output(result["result"], lambda d: print(json.dumps(d, indent=2)))
+    return True
+
+
+# ==============================================================================
+# RAW WEBSOCKET
+# ==============================================================================
+
+async def raw_call(ha: HAWebSocket, msg_type: str, params: dict):
+    result = await ha.send(msg_type, **params)
+    print(json.dumps(result, indent=2, default=str))
+    return result.get("success", True)
+
+
+# ==============================================================================
+# MAIN
+# ==============================================================================
+
+async def run_command(args: list, json_output: bool = False, quiet: bool = False) -> bool:
+    if not args:
+        return False
+
+    ha = HAWebSocket(json_output=json_output, quiet=quiet)
+    if not await ha.connect():
+        return False
+
+    try:
+        cmd = args[0]
+
+        if cmd == "entity" and len(args) >= 2:
+            subcmd = args[1]
+            if subcmd == "list":
+                return await entity_list(ha, args[2] if len(args) > 2 else None)
+            elif subcmd == "get" and len(args) >= 3:
+                return await entity_get(ha, args[2])
+            elif subcmd == "update" and len(args) >= 4:
+                return await entity_update(ha, args[2], parse_kv_args(args[3:]))
+            elif subcmd == "remove" and len(args) >= 3:
+                return await entity_remove(ha, args[2])
+
+        elif cmd == "device" and len(args) >= 2:
+            subcmd = args[1]
+            if subcmd == "list":
+                return await device_list(ha, args[2] if len(args) > 2 else None)
+            elif subcmd == "get" and len(args) >= 3:
+                return await device_get(ha, args[2])
+            elif subcmd == "update" and len(args) >= 4:
+                return await device_update(ha, args[2], parse_kv_args(args[3:]))
+            elif subcmd == "remove" and len(args) >= 3:
+                return await device_remove(ha, args[2])
+
+        elif cmd == "area" and len(args) >= 2:
+            subcmd = args[1]
+            if subcmd == "list":
+                return await area_list(ha)
+            elif subcmd == "create" and len(args) >= 3:
+                return await area_create(ha, args[2])
+            elif subcmd == "update" and len(args) >= 4:
+                return await area_update(ha, args[2], parse_kv_args(args[3:]))
+            elif subcmd == "delete" and len(args) >= 3:
+                return await area_delete(ha, args[2])
+
+        elif cmd == "state" and len(args) >= 2:
+            return await get_state(ha, args[1])
+        elif cmd == "states":
+            return await get_states(ha, args[1] if len(args) > 1 else None)
+
+        elif cmd == "call" and len(args) >= 2:
+            return await call_service(ha, args[1], parse_kv_args(args[2:]))
+        elif cmd == "services":
+            return await list_services(ha, args[1] if len(args) > 1 else None)
+
+        elif cmd == "search" and len(args) >= 2:
+            return await search_related(ha, "entity", args[1])
+        elif cmd == "related" and len(args) >= 2:
+            return await search_related(ha, "entity", args[1])
+
+        elif cmd == "config":
+            return await get_config(ha)
+        elif cmd == "info":
+            return await get_info(ha)
+
+        elif cmd == "raw" and len(args) >= 2:
+            return await raw_call(ha, args[1], parse_kv_args(args[2:]))
+
+        print(__doc__)
+        return False
+
+    finally:
+        await ha.close()
+
+
+def main():
+    args = sys.argv[1:]
+    json_output = False
+    quiet = False
+
+    if "--json" in args:
+        json_output = True
+        args.remove("--json")
+    if "--quiet" in args:
+        quiet = True
+        args.remove("--quiet")
+    if "-q" in args:
+        quiet = True
+        args.remove("-q")
+
+    if not args or args[0] in ("-h", "--help", "help"):
+        print(__doc__)
+        sys.exit(0)
+
+    if args[0] == "batch":
+        success = True
+        for line in sys.stdin:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                cmd_args = line.split()
+                if not asyncio.run(run_command(cmd_args, json_output, quiet)):
+                    success = False
+        sys.exit(0 if success else 1)
+
+    success = asyncio.run(run_command(args, json_output, quiet))
+    sys.exit(0 if success else 1)
+
+
+if __name__ == "__main__":
+    main()

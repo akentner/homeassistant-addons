@@ -1,0 +1,129 @@
+#!/bin/bash
+# Home Assistant REST API CLI tool
+# https://github.com/danbuhler/claude-code-ha
+
+set -e
+
+# Find and load .env file
+load_env() {
+    local env_files=(
+        "${HA_ENV_FILE:-}"
+        "/config/.env"
+        "/homeassistant/.env"
+        "./.env"
+        "$HOME/.config/ha-cli.env"
+        "$HOME/.ha-cli.env"
+    )
+
+    for f in "${env_files[@]}"; do
+        if [[ -n "$f" && -f "$f" ]]; then
+            # shellcheck source=/dev/null
+            source "$f"
+            return 0
+        fi
+    done
+
+    # Check if vars are already set
+    if [[ -n "${HA_URL:-}" && -n "${HA_TOKEN:-}" ]]; then
+        return 0
+    fi
+
+    echo "Error: No .env file found and HA_URL/HA_TOKEN not set" >&2
+    echo "Searched: ${env_files[*]}" >&2
+    exit 1
+}
+
+load_env
+
+usage() {
+    cat <<EOF
+Usage: ha-api <command> [options]
+
+Commands:
+  states [filter]           List all entities (optional grep filter)
+  state <entity_id>         Get state of specific entity
+  domains                   List entity counts by domain
+  devices <device_class>    Find entities by device_class (motion, door, temperature, etc.)
+  search <pattern>          Search entity IDs by pattern
+  call <domain> <service>   Call a service (e.g., call light turn_on)
+  attr <entity_id>          Show all attributes of an entity
+  history <entity_id> [hrs] Get history for entity (default: 24 hours)
+  get <endpoint>            GET any API endpoint (e.g., get config)
+  post <endpoint> [json]    POST to any API endpoint with optional JSON body
+
+Examples:
+  ha-api states
+  ha-api states light
+  ha-api state sensor.temperature
+  ha-api devices motion
+  ha-api devices occupancy
+  ha-api search bedroom
+  ha-api call automation reload
+  ha-api attr sensor.living_room_temperature
+  ha-api history sensor.temperature 48
+  ha-api get config
+  ha-api get events
+  ha-api post services/light/turn_on '{"entity_id":"light.living_room"}'
+EOF
+    exit 1
+}
+
+api_get() {
+    curl -sk -H "Authorization: Bearer $HA_TOKEN" "$HA_URL/api/$1"
+}
+
+api_post() {
+    curl -sk -X POST -H "Authorization: Bearer $HA_TOKEN" -H "Content-Type: application/json" "$HA_URL/api/$1" ${2:+-d "$2"}
+}
+
+case "${1:-}" in
+    states)
+        if [ -n "${2:-}" ]; then
+            api_get "states" | jq -r '.[].entity_id' | grep -i "$2"
+        else
+            api_get "states" | jq -r '.[].entity_id' | sort
+        fi
+        ;;
+    state)
+        [ -z "${2:-}" ] && usage
+        api_get "states/$2" | jq -r 'if .state then "\(.entity_id): \(.state)" else . end'
+        ;;
+    domains)
+        api_get "states" | jq -r '.[].entity_id' | cut -d. -f1 | sort | uniq -c | sort -rn
+        ;;
+    devices)
+        [ -z "${2:-}" ] && usage
+        api_get "states" | jq -r --arg class "$2" \
+            '.[] | select(.attributes.device_class == $class) | "\(.entity_id) = \(.state)"'
+        ;;
+    search)
+        [ -z "${2:-}" ] && usage
+        api_get "states" | jq -r '.[].entity_id' | grep -i "$2"
+        ;;
+    call)
+        [ -z "${2:-}" ] || [ -z "${3:-}" ] && usage
+        api_post "services/$2/$3" "${4:-}"
+        echo "Service $2.$3 called"
+        ;;
+    attr)
+        [ -z "${2:-}" ] && usage
+        api_get "states/$2" | jq '.attributes'
+        ;;
+    history)
+        [ -z "${2:-}" ] && usage
+        hours="${3:-24}"
+        start=$(date -u -d "$hours hours ago" +%Y-%m-%dT%H:%M:%S)
+        api_get "history/period/$start?filter_entity_id=$2" | jq -r '.[][] | "\(.last_changed): \(.state)"'
+        ;;
+    get)
+        [ -z "${2:-}" ] && usage
+        api_get "$2" | jq '.'
+        ;;
+    post)
+        [ -z "${2:-}" ] && usage
+        api_post "$2" "${3:-}" | jq '.'
+        ;;
+    *)
+        usage
+        ;;
+esac
