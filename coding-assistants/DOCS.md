@@ -57,6 +57,17 @@ ssh root@<ha-host> -p 2222
 
 SSH host keys are generated on first start and stored in `/data/ssh` — they persist across restarts.
 
+The SSH session **automatically attaches to the shared tmux session** (`main`) on login — no manual attach needed. Both
+the web terminal and SSH sessions share the same tmux session, so you see the same panes in both.
+
+If the auto-attach is bypassed (e.g. non-interactive use) or you detach and want to re-attach manually:
+
+```bash
+tmux attach -t main
+# or, to create the session if it doesn't exist yet:
+tmux new-session -A -s main -c /homeassistant
+```
+
 ## Installed Tools
 
 | Tool           | Purpose                |
