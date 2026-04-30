@@ -86,6 +86,8 @@ HA_TOKEN=$(bashio::config 'ha_token')
 
 {
     cat << 'EOF'
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
 export XDG_CONFIG_HOME="/data/.config"
 export XDG_DATA_HOME="/data/.local/share"
 export PATH="/root/.local/bin:/usr/local/bin:$PATH"
@@ -131,6 +133,8 @@ FISH_CONF="/data/.config/fish/conf.d/00-coding-assistants.fish"
 mkdir -p /data/.config/fish/conf.d
 {
     cat << 'EOF'
+set -x LANG en_US.UTF-8
+set -x LC_ALL en_US.UTF-8
 set -x XDG_CONFIG_HOME /data/.config
 set -x XDG_DATA_HOME /data/.local/share
 fish_add_path /root/.local/bin /usr/local/bin
@@ -223,6 +227,7 @@ case "${THEME}" in
 esac
 
 FONT_SIZE=$(bashio::config 'terminal_font_size')
+FONT_FAMILY=$(bashio::config 'terminal_font_family')
 
 # Start ttyd — web terminal via HA ingress (port 7681)
 bashio::log.info "Starting web terminal on port 7681..."
@@ -231,6 +236,7 @@ ttyd \
     --interface 0.0.0.0 \
     --writable \
     --client-option "fontSize=${FONT_SIZE}" \
+    --client-option "fontFamily=${FONT_FAMILY}" \
     --client-option "theme=${THEME_JSON}" \
     tmux new-session -A -s main -c /homeassistant &
 
