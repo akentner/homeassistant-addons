@@ -5,7 +5,6 @@ FROM $BUILD_FROM
 RUN apk add --no-cache \
     bash tmux \
     openssh-server openssh-client \
-    libc6-compat \
     curl wget git jq yq make \
     nodejs npm \
     ripgrep fd fzf bat shellcheck \
@@ -120,11 +119,11 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && ln -sf /root/.local/bin/uv /usr/local/bin/uv \
     && ln -sf /root/.local/bin/uvx /usr/local/bin/uvx
 
-# opencode — download glibc binary directly (npm postinstall fails on Alpine musl)
-RUN OPENCODE_VER=$(curl -sf https://api.github.com/repos/opencode-ai/opencode/releases/latest \
+# opencode — musl build from sst/opencode (npm package targets wrong repo)
+RUN OPENCODE_VER=$(curl -sfL https://api.github.com/repos/sst/opencode/releases/latest \
         | jq -r '.tag_name | ltrimstr("v")') \
     && curl -fsSL \
-        "https://github.com/opencode-ai/opencode/releases/download/v${OPENCODE_VER}/opencode-linux-x86_64.tar.gz" \
+        "https://github.com/sst/opencode/releases/download/v${OPENCODE_VER}/opencode-linux-x64-musl.tar.gz" \
         | tar xz -C /usr/local/bin \
     && chmod +x /usr/local/bin/opencode
 
