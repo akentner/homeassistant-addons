@@ -15,6 +15,16 @@ def is_prerelease(version: str) -> bool:
     return bool(re.search(r'-(alpha|beta|rc)[0-9]+$', version))
 
 
+def has_subpatch(version: str) -> bool:
+    """Return True if version already carries an explicit numeric subpatch (X.Y.Z-N)."""
+    return bool(re.search(r'-[0-9]+$', version))
+
+
+def base_version(version: str) -> str:
+    """Strip numeric subpatch suffix; leave pre-release suffix intact."""
+    return re.sub(r'-[0-9]+$', '', version)
+
+
 def update_config_yaml(addon_dir: Path, new_version: str, dry_run: bool = False) -> Tuple[bool, str, str]:
     """Update version in config.yaml
 
@@ -39,7 +49,8 @@ def update_config_yaml(addon_dir: Path, new_version: str, dry_run: bool = False)
             return False, "", ""
 
         old_version = match.group(2)
-        new_version_full = new_version if is_prerelease(new_version) else f"{new_version}-0"
+        # Pre-release and explicit subpatch (X.Y.Z-N) are written as-is; plain X.Y.Z gets -0
+        new_version_full = new_version if (is_prerelease(new_version) or has_subpatch(new_version)) else f"{new_version}-0"
 
         new_content = re.sub(
             pattern,
@@ -87,10 +98,11 @@ def update_build_yaml(addon_dir: Path, new_version: str, dry_run: bool = False) 
             return False, "", ""
 
         old_version = match.group(2)
+        build_ver = base_version(new_version)  # build.yaml never carries the subpatch
 
         new_content = re.sub(
             pattern,
-            f'\\g<1>{new_version}\\g<3>',
+            f'\\g<1>{build_ver}\\g<3>',
             content,
             flags=re.MULTILINE
         )
@@ -99,11 +111,11 @@ def update_build_yaml(addon_dir: Path, new_version: str, dry_run: bool = False) 
             if not dry_run:
                 with open(build_file, 'w') as f:
                     f.write(new_content)
-            print(f"✅ {'Would update' if dry_run else 'Updated'} {build_file.name}: {old_version} → {new_version}")
-            return True, old_version, new_version
+            print(f"✅ {'Would update' if dry_run else 'Updated'} {build_file.name}: {old_version} → {build_ver}")
+            return True, old_version, build_ver
         else:
             print(f"⚠️  No changes needed in {build_file}")
-            return False, old_version, new_version
+            return False, old_version, build_ver
 
     except Exception as e:
         print(f"❌ Error updating {build_file}: {e}")
@@ -128,23 +140,24 @@ def update_readme_md(addon_dir: Path, new_version: str, dry_run: bool = False) -
         original_content = content
         changes = []
 
+        readme_ver = base_version(new_version)  # README never shows the subpatch
         # shields.io uses "--" to represent "-" in badge text
-        badge_version = new_version.replace('-', '--') if is_prerelease(new_version) else new_version
+        badge_version = readme_ver.replace('-', '--') if is_prerelease(readme_ver) else readme_ver
         # Update Shields.io badge: [release-shield]: https://img.shields.io/badge/version-vX.Y.Z-COLOR.svg
         shield_pattern = r'(\[release-shield\]:\s*https://img\.shields\.io/badge/version-v)([0-9]+\.[0-9]+\.[0-9]+(?:--(?:alpha|beta|rc)[0-9]+)?)(-\w+\.svg)'
         shield_match = re.search(shield_pattern, content)
         if shield_match:
             old_shield_version = shield_match.group(2).replace('--', '-')
             content = re.sub(shield_pattern, f'\\g<1>{badge_version}\\g<3>', content)
-            changes.append(f"Badge: v{old_shield_version} → v{new_version}")
+            changes.append(f"Badge: v{old_shield_version} → v{readme_ver}")
 
         # Update release tree links: [release]: https://github.com/akentner/homeassistant-addons/tree/vX.Y.Z
         release_pattern = r'(\[release\]:\s*https://github\.com/akentner/homeassistant-addons/tree/v)([0-9]+\.[0-9]+\.[0-9]+(?:-(alpha|beta|rc)[0-9]+)?)'
         release_match = re.search(release_pattern, content)
         if release_match:
             old_release_version = release_match.group(2)
-            content = re.sub(release_pattern, f'\\g<1>{new_version}', content)
-            changes.append(f"Release link: v{old_release_version} → v{new_version}")
+            content = re.sub(release_pattern, f'\\g<1>{readme_ver}', content)
+            changes.append(f"Release link: v{old_release_version} → v{readme_ver}")
 
         if content != original_content:
             if not dry_run:
@@ -164,8 +177,8 @@ def update_readme_md(addon_dir: Path, new_version: str, dry_run: bool = False) -
 
 
 def validate_version_format(version: str) -> bool:
-    """Validate version: X.Y.Z (stable) or X.Y.Z-{alpha|beta|rc}N (pre-release)"""
-    pattern = r'^[0-9]+\.[0-9]+\.[0-9]+(?:-(alpha|beta|rc)[0-9]+)?$'
+    """Validate version: X.Y.Z, X.Y.Z-N (stable) or X.Y.Z-{alpha|beta|rc}N (pre-release)"""
+    pattern = r'^[0-9]+\.[0-9]+\.[0-9]+(?:-(?:(?:alpha|beta|rc)[0-9]+|[0-9]+))?$'
     return re.match(pattern, version) is not None
 
 
@@ -204,7 +217,8 @@ Examples:
     # Validate version format
     if not validate_version_format(args.new_version):
         print(f"❌ Invalid version format: {args.new_version}")
-        print("   Stable:      X.Y.Z            (e.g., 1.7.2)")
+        print("   Stable:      X.Y.Z            (e.g., 1.7.2)    → config: 1.7.2-0")
+        print("                X.Y.Z-N          (e.g., 1.7.2-1)  → config: 1.7.2-1")
         print("   Pre-release: X.Y.Z-alphaN     (e.g., 1.0.0-alpha9)")
         print("                X.Y.Z-betaN      (e.g., 2.0.0-beta1)")
         print("                X.Y.Z-rcN        (e.g., 1.5.0-rc2)")
