@@ -42,8 +42,9 @@ Run `/gsd:new-milestone` to define v1.1 scope.
 | 260404-o5b | Simplify meridian Dockerfile to single-stage npm + oauth polling run.sh | 2026-04-04 | 19af0b3 | [260404-o5b-meridian-dockerfile-vereinfachen-mehrstu](./quick/260404-o5b-meridian-dockerfile-vereinfachen-mehrstu/) |
 | 260404-rsj | Meridian Ingress nginx reverse proxy fuer path rewriting                | 2026-04-04 | 9407184 | [260404-rsj-meridian-ingress-nginx-reverse-proxy-fue](./quick/260404-rsj-meridian-ingress-nginx-reverse-proxy-fue/) |
 | 260404-s1t | Meridian: expose all upstream config options in config.yaml and run.sh  | 2026-04-04 | 3ed58d3 | [260404-s1t-meridian-alle-upstream-config-optionen-i](./quick/260404-s1t-meridian-alle-upstream-config-optionen-i/) |
+| 260502-0kw | coding-assistants: make args and env optional in mcp_servers schema     | 2026-05-02 | 1f17a3b | [260502-0kw-coding-assistants-config-yaml-make-args-](./quick/260502-0kw-coding-assistants-config-yaml-make-args-/) |
 
 ---
 
-_State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_ _Last activity: 2026-04-04 - Completed quick task
-260404-s1t: Meridian expose all upstream config options in config.yaml and run.sh_
+_State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_ _Last activity: 2026-05-02 - Completed quick task
+260502-0kw: coding-assistants make args and env optional in mcp_servers schema_
