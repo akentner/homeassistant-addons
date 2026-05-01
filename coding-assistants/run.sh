@@ -37,7 +37,7 @@ OPENCODE_JSON="/data/.config/opencode/opencode.json"
 [[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
 if ! jq -e '.instructions' "${OPENCODE_JSON}" > /dev/null 2>&1; then
     tmp=$(mktemp)
-    jq --rawfile inst "${TOOLS_MD}" '.instructions = $inst' "${OPENCODE_JSON}" > "${tmp}"
+    jq --rawfile inst "${TOOLS_MD}" '.instructions = [$inst]' "${OPENCODE_JSON}" > "${tmp}"
     cp "${tmp}" "${OPENCODE_JSON}"
     rm "${tmp}"
     bashio::log.info "Injected tool context into OpenCode instructions"
