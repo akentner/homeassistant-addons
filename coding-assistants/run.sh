@@ -47,10 +47,22 @@ fi
 CLAUDE_JSON="/data/claude/.claude.json"
 [[ -f "${CLAUDE_JSON}" ]] || echo '{}' > "${CLAUDE_JSON}"
 if jq -e '.mcp_servers | length > 0' /data/options.json > /dev/null 2>&1; then
-    # Claude Code format: { name: { command, args } }
+    # Claude Code format: stdio → { type, command, args, env }  http → { type, url }
     MCP_OBJ=$(jq -c '
         .mcp_servers
-        | map({ (.name): { command: .command, args: (.args // []) } })
+        | map(
+            if .type == "http" then
+                { (.name): { type: "http", url: .url } }
+            else
+                { (.name): {
+                    type: "stdio",
+                    command: .command,
+                    args: (.args // []),
+                    env: ((.env // []) | map({ (.name): .value }) | add // {})
+                  }
+                }
+            end
+          )
         | add // {}
     ' /data/options.json)
     tmp=$(mktemp)
@@ -63,6 +75,7 @@ if jq -e '.mcp_servers | length > 0' /data/options.json > /dev/null 2>&1; then
     [[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
     MCP_OBJ_OC=$(jq -c '
         .mcp_servers
+        | map(select(.type != "http"))
         | map({ (.name): { type: "local", command: ([.command] + (.args // [])), enabled: true } })
         | add // {}
     ' /data/options.json)

@@ -35,7 +35,12 @@ options:
   terminal_font_family: "JetBrainsMono Nerd Font Mono, monospace"
   ha_url: "http://homeassistant:8123"
   ha_token: ""
-  mcp_servers: []
+  mcp_servers:
+    - name: fff
+      type: stdio
+      command: /usr/local/bin/fff-mcp
+      args: []
+      env: []
   env_vars: []
   bash_aliases: []
 
@@ -50,9 +55,14 @@ schema:
   ha_token: str
   mcp_servers:
     - name: str
-      command: str
+      type: list(stdio|http)
+      command: str?
+      url: str?
       args:
         - str
+      env:
+        - name: str
+          value: str
   env_vars:
     - name: str
       value: str
