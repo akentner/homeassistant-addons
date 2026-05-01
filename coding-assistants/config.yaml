@@ -61,9 +61,9 @@ schema:
       type: list(stdio|http)
       command: str?
       url: str?
-      args:
+      args?:
         - str
-      env:
+      env?:
         - name: str
           value: str
   env_vars:
