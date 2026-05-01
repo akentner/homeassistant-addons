@@ -10,6 +10,11 @@ from pathlib import Path
 from typing import Tuple
 
 
+def is_prerelease(version: str) -> bool:
+    """Return True if version has a pre-release suffix (alpha/beta/rc)."""
+    return bool(re.search(r'-(alpha|beta|rc)[0-9]+$', version))
+
+
 def update_config_yaml(addon_dir: Path, new_version: str, dry_run: bool = False) -> Tuple[bool, str, str]:
     """Update version in config.yaml
 
@@ -25,8 +30,8 @@ def update_config_yaml(addon_dir: Path, new_version: str, dry_run: bool = False)
         with open(config_file, 'r') as f:
             content = f.read()
 
-        # Pattern: version: "X.Y.Z-N"
-        pattern = r'^(\s*version:\s*["\'])([0-9]+\.[0-9]+\.[0-9]+-[0-9]+)(["\'].*?)$'
+        # Pattern: version: "X.Y.Z-N" (stable) or "X.Y.Z-{alpha|beta|rc}N" (pre-release)
+        pattern = r'^(\s*version:\s*["\'])([0-9]+\.[0-9]+\.[0-9]+-(?:(?:alpha|beta|rc)[0-9]+|[0-9]+))(["\'].*?)$'
         match = re.search(pattern, content, flags=re.MULTILINE)
 
         if not match:
@@ -34,7 +39,7 @@ def update_config_yaml(addon_dir: Path, new_version: str, dry_run: bool = False)
             return False, "", ""
 
         old_version = match.group(2)
-        new_version_full = f"{new_version}-0"
+        new_version_full = new_version if is_prerelease(new_version) else f"{new_version}-0"
 
         new_content = re.sub(
             pattern,
@@ -73,8 +78,8 @@ def update_build_yaml(addon_dir: Path, new_version: str, dry_run: bool = False) 
         with open(build_file, 'r') as f:
             content = f.read()
 
-        # Pattern: VERSION: "X.Y.Z"
-        pattern = r'^(\s*VERSION:\s*["\'])([0-9]+\.[0-9]+\.[0-9]+)(["\'].*?)$'
+        # Pattern: VERSION: "X.Y.Z" (stable) or "X.Y.Z-{alpha|beta|rc}N" (pre-release)
+        pattern = r'^(\s*VERSION:\s*["\'])([0-9]+\.[0-9]+\.[0-9]+(?:-(alpha|beta|rc)[0-9]+)?)(["\'].*?)$'
         match = re.search(pattern, content, flags=re.MULTILINE)
 
         if not match:
@@ -123,16 +128,18 @@ def update_readme_md(addon_dir: Path, new_version: str, dry_run: bool = False) -
         original_content = content
         changes = []
 
-        # Update Shields.io badge: [release-shield]: https://img.shields.io/badge/version-vX.Y.Z-blue.svg
-        shield_pattern = r'(\[release-shield\]:\s*https://img\.shields\.io/badge/version-v)([0-9]+\.[0-9]+\.[0-9]+)(-blue\.svg)'
+        # shields.io uses "--" to represent "-" in badge text
+        badge_version = new_version.replace('-', '--') if is_prerelease(new_version) else new_version
+        # Update Shields.io badge: [release-shield]: https://img.shields.io/badge/version-vX.Y.Z-COLOR.svg
+        shield_pattern = r'(\[release-shield\]:\s*https://img\.shields\.io/badge/version-v)([0-9]+\.[0-9]+\.[0-9]+(?:--(?:alpha|beta|rc)[0-9]+)?)(-\w+\.svg)'
         shield_match = re.search(shield_pattern, content)
         if shield_match:
-            old_shield_version = shield_match.group(2)
-            content = re.sub(shield_pattern, f'\\g<1>{new_version}\\g<3>', content)
+            old_shield_version = shield_match.group(2).replace('--', '-')
+            content = re.sub(shield_pattern, f'\\g<1>{badge_version}\\g<3>', content)
             changes.append(f"Badge: v{old_shield_version} → v{new_version}")
 
         # Update release tree links: [release]: https://github.com/akentner/homeassistant-addons/tree/vX.Y.Z
-        release_pattern = r'(\[release\]:\s*https://github\.com/akentner/homeassistant-addons/tree/v)([0-9]+\.[0-9]+\.[0-9]+)'
+        release_pattern = r'(\[release\]:\s*https://github\.com/akentner/homeassistant-addons/tree/v)([0-9]+\.[0-9]+\.[0-9]+(?:-(alpha|beta|rc)[0-9]+)?)'
         release_match = re.search(release_pattern, content)
         if release_match:
             old_release_version = release_match.group(2)
@@ -157,8 +164,8 @@ def update_readme_md(addon_dir: Path, new_version: str, dry_run: bool = False) -
 
 
 def validate_version_format(version: str) -> bool:
-    """Validate that version follows semantic versioning (X.Y.Z)"""
-    pattern = r'^[0-9]+\.[0-9]+\.[0-9]+$'
+    """Validate version: X.Y.Z (stable) or X.Y.Z-{alpha|beta|rc}N (pre-release)"""
+    pattern = r'^[0-9]+\.[0-9]+\.[0-9]+(?:-(alpha|beta|rc)[0-9]+)?$'
     return re.match(pattern, version) is not None
 
 
@@ -197,7 +204,10 @@ Examples:
     # Validate version format
     if not validate_version_format(args.new_version):
         print(f"❌ Invalid version format: {args.new_version}")
-        print("   Expected format: X.Y.Z (e.g., 1.7.2)")
+        print("   Stable:      X.Y.Z            (e.g., 1.7.2)")
+        print("   Pre-release: X.Y.Z-alphaN     (e.g., 1.0.0-alpha9)")
+        print("                X.Y.Z-betaN      (e.g., 2.0.0-beta1)")
+        print("                X.Y.Z-rcN        (e.g., 1.5.0-rc2)")
         return 1
 
     # Find add-on directory
