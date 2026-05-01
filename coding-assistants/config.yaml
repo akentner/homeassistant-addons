@@ -36,6 +36,9 @@ options:
   ha_url: "http://homeassistant:8123"
   ha_token: ""
   mcp_servers:
+    - name: ha-mcp
+      type: http
+      url: http://81f33d0f-ha-mcp:9583/private_REPLACE_WITH_SECRET
     - name: fff
       type: stdio
       command: /usr/local/bin/fff-mcp
