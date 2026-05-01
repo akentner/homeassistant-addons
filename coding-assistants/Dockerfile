@@ -4,7 +4,7 @@ FROM $BUILD_FROM
 # System packages (Alpine community repo)
 RUN apk add --no-cache \
     bash tmux \
-    openssh-server \
+    openssh-server openssh-client \
     curl wget git jq yq make \
     nodejs npm \
     ripgrep fd fzf bat shellcheck \
