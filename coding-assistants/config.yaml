@@ -42,8 +42,6 @@ options:
     - name: fff
       type: stdio
       command: /usr/local/bin/fff-mcp
-      args: []
-      env: []
   env_vars: []
   bash_aliases: []
 
@@ -61,11 +59,6 @@ schema:
       type: list(stdio|http)
       command: str?
       url: str?
-      args?:
-        - str
-      env?:
-        - name: str
-          value: str
   env_vars:
     - name: str
       value: str
