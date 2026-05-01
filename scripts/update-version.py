@@ -90,7 +90,7 @@ def update_build_yaml(addon_dir: Path, new_version: str, dry_run: bool = False) 
             content = f.read()
 
         # Pattern: VERSION: "X.Y.Z" (stable) or "X.Y.Z-{alpha|beta|rc}N" (pre-release)
-        pattern = r'^(\s*VERSION:\s*["\'])([0-9]+\.[0-9]+\.[0-9]+(?:-(alpha|beta|rc)[0-9]+)?)(["\'].*?)$'
+        pattern = r'^(\s*VERSION:\s*["\'])([0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)[0-9]+)?)(["\'].*?)$'
         match = re.search(pattern, content, flags=re.MULTILINE)
 
         if not match:
