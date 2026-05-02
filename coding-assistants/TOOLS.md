@@ -16,6 +16,9 @@ Persistent storage is at `/data`.
 - `delta` — syntax-highlighted diff pager (active as git pager)
 - `difft` — structural diff tool (difftastic); use `difft <file1> <file2>`
 - `gh` — GitHub CLI
+- `git-submodule-changes <path>` — git diff stats for a repo or submodule as JSON
+- `generate-commit-prompt` — generate an AI prompt for a commit message from staged changes
+- `git-commit-with-ai` — generate commit message via HA Conversation Agent, then commit and push
 
 ## Search & Inspection
 
@@ -39,6 +42,9 @@ Persistent storage is at `/data`.
 - `ha` — HA supervisor CLI (uses `$SUPERVISOR_TOKEN`, injected automatically)
 - `ha-api` — REST API tool; requires `$HA_URL` + `$HA_TOKEN`
 - `ha-ws` — WebSocket API tool; requires `$HA_URL` + `$HA_TOKEN`
+- `ha-check-logs [lines] [show-warnings]` — fetch and summarize HA core logs; e.g. `ha-check-logs 200 true`
+- `ha-check-repairs` — list open HA repairs/issues
+- `lovelace-sync <dashboard>` — push local `.storage/lovelace.<dashboard>` to HA via WebSocket without restart
 - `sqlite3` — query HA database: `sqlite3 /homeassistant/home-assistant_v2.db`
 
 ## AI & MCP
