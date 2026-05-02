@@ -1,0 +1,113 @@
+#!/bin/bash
+# generate_commit_prompt.sh
+# Erzeugt einen Prompt für eine KI, um eine Git-Commit-Message zu generieren.
+#
+# Usage: ./generate_commit_prompt.sh [OPTIONS]
+#   -C <path>     Git-Verzeichnis (default: aktuelles Verzeichnis)
+#   -m <lines>    Max. Zeilen Diff-Kontext pro Datei (default: unbegrenzt)
+#   -t <chars>    Max. Gesamtzeichen des Prompts (default: unbegrenzt)
+#   -h            Diese Hilfe anzeigen
+
+set -euo pipefail
+
+GIT_DIR="."
+MAX_DIFF_LINES=""
+MAX_CHARS=""
+
+usage() {
+  grep '^#' "$0" | grep -v '#!/' | sed 's/^# \?//'
+  exit 0
+}
+
+while getopts "C:m:t:h" opt; do
+  case $opt in
+    C) GIT_DIR="$OPTARG" ;;
+    m) MAX_DIFF_LINES="$OPTARG" ;;
+    t) MAX_CHARS="$OPTARG" ;;
+    h) usage ;;
+    *) usage ;;
+  esac
+done
+
+# Prüfen ob Git-Verzeichnis gültig ist
+if ! git -C "$GIT_DIR" rev-parse --git-dir > /dev/null 2>&1; then
+  echo "❌ Kein Git-Repository: $GIT_DIR" >&2
+  exit 1
+fi
+
+# Geänderte Dateien ermitteln
+CHANGED_FILES=$(git -C "$GIT_DIR" diff --name-status 2>/dev/null)
+if [ -z "$CHANGED_FILES" ]; then
+  echo "ℹ️  Keine Änderungen im Working Tree gefunden." >&2
+  exit 0
+fi
+
+# Statistik
+NUMSTAT=$(git -C "$GIT_DIR" diff --numstat 2>/dev/null)
+TOTAL_ADDED=$(echo "$NUMSTAT" | awk '{s+=$1} END {print s+0}')
+TOTAL_DELETED=$(echo "$NUMSTAT" | awk '{s+=$2} END {print s+0}')
+FILE_COUNT=$(echo "$CHANGED_FILES" | wc -l | tr -d ' ')
+
+# Diff aufbauen (optional mit Zeilenlimit pro Datei)
+build_diff() {
+  while IFS=$'\t' read -r modifier file _rest; do
+    echo "### $file ($modifier)"
+    if [ "$modifier" = "D" ]; then
+      echo "(Datei gelöscht)"
+    else
+      raw_diff=$(git -C "$GIT_DIR" diff -- "$file" 2>/dev/null || true)
+      if [ -n "$MAX_DIFF_LINES" ]; then
+        line_count=$(echo "$raw_diff" | wc -l)
+        echo "$raw_diff" | head -n "$MAX_DIFF_LINES"
+        if [ "$line_count" -gt "$MAX_DIFF_LINES" ]; then
+          echo "... [$(( line_count - MAX_DIFF_LINES )) weitere Zeilen gekürzt]"
+        fi
+      else
+        echo "$raw_diff"
+      fi
+    fi
+    echo ""
+  done <<< "$CHANGED_FILES"
+}
+
+DIFF_CONTEXT=$(build_diff)
+
+# Prompt zusammenbauen
+PROMPT=$(cat <<EOF
+Du bist ein Experte für saubere Git-History. Schreibe eine präzise Commit-Message für die folgenden Änderungen.
+
+## Regeln
+- Erste Zeile: Imperativ, max. 72 Zeichen, kein Punkt am Ende
+- Format: "<typ>: <kurzbeschreibung>" (Typen: feat, fix, refactor, chore, docs, style)
+- Optional: Leerzeile, dann ein kurzer erläuternder Absatz (max. 3 Sätze)
+- Kein Aufzählen jeder einzelnen Datei – stattdessen die inhaltliche Absicht beschreiben
+- Sprache: Englisch
+
+## Änderungsübersicht
+- Dateien geändert: $FILE_COUNT
+- Zeilen hinzugefügt: +$TOTAL_ADDED
+- Zeilen entfernt: -$TOTAL_DELETED
+
+## Geänderte Dateien
+$CHANGED_FILES
+
+## Diff
+\`\`\`diff
+$DIFF_CONTEXT
+\`\`\`
+
+Antworte nur mit der Commit-Message, ohne Erklärungen oder Markdown-Formatierung drumherum.
+EOF
+)
+
+# Zeichenlimit anwenden
+if [ -n "$MAX_CHARS" ]; then
+  ACTUAL_CHARS=${#PROMPT}
+  if [ "$ACTUAL_CHARS" -gt "$MAX_CHARS" ]; then
+    PROMPT="${PROMPT:0:$MAX_CHARS}"
+    PROMPT="${PROMPT}
+... [Prompt bei $MAX_CHARS Zeichen gekürzt, ursprünglich $ACTUAL_CHARS Zeichen]"
+  fi
+fi
+
+echo "$PROMPT"

@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+"""
+lovelace-sync - Sync .storage/lovelace to Home Assistant via WebSocket API.
+
+Pushes local lovelace dashboard changes to HA without requiring a restart.
+https://github.com/danbuhler/claude-code-ha
+
+Usage:
+  1. Edit your .storage/lovelace file
+  2. Run: lovelace-sync
+  3. Refresh your browser/app to see changes
+"""
+
+import json
+import asyncio
+import ssl
+import os
+import sys
+from pathlib import Path
+
+import websockets
+
+
+def find_env_file():
+    """Find the .env file in common locations."""
+    env_files = [
+        os.environ.get('HA_ENV_FILE', ''),
+        '/config/.env',
+        '/homeassistant/.env',
+        './.env',
+        str(Path.home() / '.ha-cli.env'),
+    ]
+
+    for f in env_files:
+        if f and os.path.exists(f):
+            return f
+    return None
+
+
+def find_lovelace_file():
+    """Find the lovelace storage file."""
+    locations = [
+        '/root/config/.storage/lovelace',
+        '/config/.storage/lovelace',
+        '/homeassistant/.storage/lovelace',
+        './.storage/lovelace',
+    ]
+
+    for f in locations:
+        if os.path.exists(f):
+            return f
+    return None
+
+
+def load_env(env_file):
+    """Load environment variables from file."""
+    with open(env_file, 'r') as f:
+        for line in f:
+            if '=' in line and not line.startswith('#'):
+                key, value = line.strip().split('=', 1)
+                os.environ[key] = value
+
+
+async def sync_lovelace(lovelace_file):
+    """Push lovelace config to Home Assistant."""
+    token = os.environ.get('HA_TOKEN')
+    url = os.environ.get('HA_URL', 'https://172.30.32.1:8128')
+
+    if not token:
+        print("Error: HA_TOKEN not set")
+        return False
+
+    # Convert to WebSocket URL
+    ws_url = url.replace('https://', 'wss://').replace('http://', 'ws://') + '/api/websocket'
+
+    # Load the lovelace file
+    print(f"Reading {lovelace_file}...")
+    with open(lovelace_file, 'r') as f:
+        data = json.load(f)
+
+    # Extract the config from the storage format
+    config = data.get('data', {}).get('config', data)
+
+    # Extract url_path from storage key
+    # Key format: "lovelace" (default), "lovelace.lovelace", "lovelace.dashboard_admin"
+    storage_key = data.get('key', '')
+    url_path = None
+
+    if storage_key:
+        if storage_key == 'lovelace':
+            # Default dashboard (no url_path needed, but let's be explicit)
+            url_path = None
+        elif storage_key.startswith('lovelace.lovelace'):
+            # Main named dashboard: lovelace.lovelace -> "lovelace"
+            url_path = 'lovelace'
+        elif storage_key.startswith('lovelace.dashboard_'):
+            # Named dashboard: lovelace.dashboard_admin -> "admin"
+            url_path = storage_key.replace('lovelace.dashboard_', '')
+        else:
+            print(f"Warning: Unknown storage key format: {storage_key}")
+
+    print(f"Dashboard: {storage_key or 'unknown'} (url_path: {url_path or 'default'})")
+
+    view_count = len(config.get('views', []))
+    view_paths = [v.get('path', '?') for v in config.get('views', [])]
+    print(f"Found {view_count} views: {view_paths}")
+
+    # Only use SSL for wss:// URLs
+    ssl_context = None
+    if ws_url.startswith('wss://'):
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+
+    print(f"Connecting to Home Assistant...")
+
+    async with websockets.connect(ws_url, ssl=ssl_context) as ws:
+        # Wait for auth_required
+        msg = json.loads(await ws.recv())
+
+        # Send auth
+        await ws.send(json.dumps({
+            "type": "auth",
+            "access_token": token
+        }))
+
+        # Wait for auth_ok
+        msg = json.loads(await ws.recv())
+
+        if msg['type'] != 'auth_ok':
+            print(f"Auth failed: {msg}")
+            return False
+
+        # Send lovelace save command
+        print("Pushing config to Home Assistant...")
+        save_cmd = {
+            "id": 1,
+            "type": "lovelace/config/save",
+            "config": config
+        }
+
+        # Add url_path for named dashboards
+        if url_path:
+            save_cmd["url_path"] = url_path
+
+        await ws.send(json.dumps(save_cmd))
+
+        # Wait for result
+        msg = json.loads(await ws.recv())
+        if msg.get('success'):
+            print("Done! Refresh your browser/app to see changes.")
+            return True
+        else:
+            print(f"Failed: {msg.get('error', msg)}")
+            return False
+
+
+def main():
+    # Find and load env
+    env_file = find_env_file()
+    if env_file:
+        load_env(env_file)
+    elif not os.environ.get('HA_TOKEN'):
+        print("Error: No .env file found and HA_TOKEN not set")
+        print("Create a .env file with HA_URL and HA_TOKEN")
+        sys.exit(1)
+
+    # Find lovelace file
+    lovelace_file = sys.argv[1] if len(sys.argv) > 1 else find_lovelace_file()
+
+    if not lovelace_file:
+        print("Error: Could not find .storage/lovelace file")
+        print("Searched: /config/.storage/lovelace, /homeassistant/.storage/lovelace")
+        print("Usage: lovelace-sync [path/to/.storage/lovelace]")
+        sys.exit(1)
+
+    if not os.path.exists(lovelace_file):
+        print(f"Error: {lovelace_file} not found")
+        sys.exit(1)
+
+    success = asyncio.run(sync_lovelace(lovelace_file))
+    sys.exit(0 if success else 1)
+
+
+if __name__ == '__main__':
+    main()

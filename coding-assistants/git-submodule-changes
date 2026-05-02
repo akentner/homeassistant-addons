@@ -1,0 +1,30 @@
+#!/bin/bash
+# git-submodule-changes <path>
+# Returns git diff stats as JSON for a repo or submodule.
+# Use '.' or omit argument for the main repo.
+# Example: git-submodule-changes blueprints/automation/akentner
+
+REPO_PATH="/config/${1:-.}"
+
+{
+  git -C "$REPO_PATH" diff --numstat 2>/dev/null \
+    | awk '{added+=$1; deleted+=$2; if($1+$2>0) files++} END {printf "%d %d %d\n", files, added, deleted}'
+  git -C "$REPO_PATH" diff --name-status 2>/dev/null
+} | awk '
+  NR==1 {
+    fc=$1; la=$2; ld=$3; total=la+ld;
+    is_clean=(total==0?"true":"false");
+    next
+  }
+  NF>=2 {
+    modifier=$1; file=$2;
+    gsub(/"/, "\\\"", file);
+    if (count>0) fl=fl",";
+    fl=fl"{\"modifier\":\"" modifier "\",\"file\":\"" file "\"}";
+    count++
+  }
+  END {
+    printf "{\"files_changed\":%d,\"lines_added\":%d,\"lines_deleted\":%d,\"total_lines\":%d,\"is_clean\":%s,\"changed_files\":[%s]}\n",
+           fc, la, ld, total, is_clean, fl
+  }
+' || echo '{"files_changed":0,"lines_added":0,"lines_deleted":0,"total_lines":0,"is_clean":true,"changed_files":[]}'

@@ -1,0 +1,102 @@
+#!/bin/bash
+# git_commit_with_ai
+# Generiert via HA Conversation Agent eine Commit-Message und commitet + pusht.
+#
+# Usage: ./git_commit_with_ai [OPTIONS]
+#   -C <path>   Git-Verzeichnis (default: /config)
+#   -m <lines>  Max. Zeilen Diff-Kontext pro Datei (default: 50)
+#   -t <chars>  Max. Gesamtzeichen des Prompts (default: 4000)
+#   -d          Dry-run: Zeigt nur Prompt und generierte Message, kein Commit
+#   -h          Diese Hilfe anzeigen
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+GIT_DIR="/config"
+MAX_DIFF_LINES="50"
+MAX_CHARS="4000"
+DRY_RUN=false
+AGENT_ID="conversation.google_ai_conversation"
+
+usage() {
+  grep '^#' "$0" | grep -v '#!/' | sed 's/^# \?//'
+  exit 0
+}
+
+while getopts "C:m:t:dh" opt; do
+  case $opt in
+    C) GIT_DIR="$OPTARG" ;;
+    m) MAX_DIFF_LINES="$OPTARG" ;;
+    t) MAX_CHARS="$OPTARG" ;;
+    d) DRY_RUN=true ;;
+    h) usage ;;
+    *) usage ;;
+  esac
+done
+
+echo "🔍 Prüfe Änderungen in $GIT_DIR ..."
+
+# Abbrechen wenn nichts zu committen
+CHANGED=$(git -C "$GIT_DIR" diff --name-only 2>/dev/null)
+if [ -z "$CHANGED" ]; then
+  echo "ℹ️  Keine Änderungen vorhanden, nichts zu committen."
+  exit 0
+fi
+
+# Prompt generieren
+echo "📝 Generiere Prompt ..."
+PROMPT=$("$SCRIPT_DIR/generate_commit_prompt" -C "$GIT_DIR" -m "$MAX_DIFF_LINES" -t "$MAX_CHARS")
+
+if [ -z "$PROMPT" ]; then
+  echo "❌ Prompt-Generierung fehlgeschlagen." >&2
+  exit 1
+fi
+
+# JSON escapen (Newlines und Anführungszeichen)
+PROMPT_ESCAPED=$(echo "$PROMPT" | python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))")
+
+# Conversation Agent via HA API aufrufen
+echo "🤖 Frage Conversation Agent ($AGENT_ID) ..."
+RESPONSE=$("$SCRIPT_DIR/ha-api" POST /api/conversation/process \
+  "{\"text\": $PROMPT_ESCAPED, \"agent_id\": \"$AGENT_ID\"}" 2>/dev/null)
+
+# Commit-Message aus Response extrahieren
+COMMIT_MSG=$(echo "$RESPONSE" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+# HA gibt die Antwort unter response.speech.plain.speech zurück
+msg = data.get('response', {}).get('speech', {}).get('plain', {}).get('speech', '')
+print(msg.strip())
+" 2>/dev/null)
+
+if [ -z "$COMMIT_MSG" ]; then
+  echo "❌ Keine Commit-Message aus API-Antwort extrahierbar." >&2
+  echo "Raw response: $RESPONSE" >&2
+  exit 1
+fi
+
+echo ""
+echo "💬 Generierte Commit-Message:"
+echo "---"
+echo "$COMMIT_MSG"
+echo "---"
+
+if [ "$DRY_RUN" = true ]; then
+  echo ""
+  echo "🏃 Dry-run aktiv – kein Commit durchgeführt."
+  exit 0
+fi
+
+# Alle Änderungen stagen, committen und pushen
+echo ""
+echo "📦 Staging aller Änderungen ..."
+git -C "$GIT_DIR" add -A
+
+echo "✅ Committe ..."
+git -C "$GIT_DIR" commit -m "$COMMIT_MSG"
+
+echo "🚀 Pushe ..."
+git -C "$GIT_DIR" push
+
+echo ""
+echo "🎉 Fertig!"

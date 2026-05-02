@@ -1,0 +1,36 @@
+#!/bin/bash
+# Home Assistant Log Analyzer
+# Analyzes recent HA logs and reports errors/warnings
+
+set -e
+
+LINES=${1:-100}  # Default: last 100 lines
+SHOW_WARNINGS=${2:-false}
+
+echo "🔍 Analyzing last $LINES log entries..."
+echo ""
+
+# Get logs via SSH
+# shellcheck disable=SC2029
+LOGS=$(ssh haos-op3050-1 "ha core logs -n $LINES" 2>&1)
+
+# Count error types
+echo "📊 Error Summary:"
+echo "$LOGS" | grep -E "ERROR|WARNING" | \
+    sed 's/.*\[\([^]]*\)\].*/\1/' | \
+    sort | uniq -c | sort -rn | head -10
+
+echo ""
+echo "🔴 Recent Errors (last 5):"
+echo "$LOGS" | grep "ERROR" | tail -5
+
+if [ "$SHOW_WARNINGS" = "true" ]; then
+    echo ""
+    echo "⚠️  Recent Warnings (last 5):"
+    echo "$LOGS" | grep "WARNING" | tail -5
+fi
+
+echo ""
+echo "💡 Usage:"
+echo "  ha-check-logs [lines] [show-warnings]"
+echo "  ha-check-logs 200 true  # Check 200 lines, show warnings"

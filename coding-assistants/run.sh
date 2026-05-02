@@ -121,7 +121,7 @@ export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 export XDG_CONFIG_HOME="/data/.config"
 export XDG_DATA_HOME="/data/.local/share"
-export PATH="/homeassistant/bin:/homeassistant/scripts/bin:/root/.local/bin:/usr/local/bin:$PATH"
+export PATH="/root/.local/bin:/usr/local/bin:$PATH"
 EOF
     printf 'export HA_URL=%q\n' "${HA_URL}"
     printf 'export HA_TOKEN=%q\n' "${HA_TOKEN}"
@@ -169,7 +169,7 @@ set -x LANG en_US.UTF-8
 set -x LC_ALL en_US.UTF-8
 set -x XDG_CONFIG_HOME /data/.config
 set -x XDG_DATA_HOME /data/.local/share
-fish_add_path /homeassistant/bin /homeassistant/scripts/bin /root/.local/bin /usr/local/bin
+fish_add_path /root/.local/bin /usr/local/bin
 
 # Tool integrations
 zoxide init fish | source
