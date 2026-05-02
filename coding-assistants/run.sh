@@ -87,6 +87,24 @@ if jq -e '.mcp_servers | length > 0' /data/options.json > /dev/null 2>&1; then
     bashio::log.info "Registered $(echo "${MCP_OBJ}" | jq -r 'keys | length') MCP server(s) in Claude Code + OpenCode config"
 fi
 
+# Cleanup stale stdio MCP entries from manually-managed global claude config
+GLOBAL_CLAUDE_JSON="/homeassistant/.claudecode/.claude.json"
+if [[ -f "${GLOBAL_CLAUDE_JSON}" ]] && jq -e '.mcpServers' "${GLOBAL_CLAUDE_JSON}" > /dev/null 2>&1; then
+    while IFS=$'\t' read -r name cmd; do
+        if [[ -n "$cmd" ]] && ! command -v "$cmd" > /dev/null 2>&1; then
+            bashio::log.warning "Removing stale MCP entry '${name}': command '${cmd}' not found"
+            tmp=$(mktemp)
+            jq --arg n "$name" 'del(.mcpServers[$n])' "${GLOBAL_CLAUDE_JSON}" > "${tmp}" \
+                && cp "${tmp}" "${GLOBAL_CLAUDE_JSON}"
+            rm -f "${tmp}"
+        fi
+    done < <(jq -r '
+        .mcpServers | to_entries[]
+        | select(.value.type != "http")
+        | [.key, (.value.command // "")] | @tsv
+    ' "${GLOBAL_CLAUDE_JSON}")
+fi
+
 # Write env profile (picked up by SSH login shells and ttyd/tmux via bash -l)
 mkdir -p /etc/profile.d
 : > /etc/profile.d/00-coding-assistants.sh
@@ -103,10 +121,11 @@ export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 export XDG_CONFIG_HOME="/data/.config"
 export XDG_DATA_HOME="/data/.local/share"
-export PATH="/root/.local/bin:/usr/local/bin:$PATH"
+export PATH="/homeassistant/bin:/homeassistant/scripts/bin:/root/.local/bin:/usr/local/bin:$PATH"
 EOF
     printf 'export HA_URL=%q\n' "${HA_URL}"
     printf 'export HA_TOKEN=%q\n' "${HA_TOKEN}"
+    printf 'export SUPERVISOR_TOKEN=%q\n' "${SUPERVISOR_TOKEN}"
     cat << 'EOF'
 # SSH: auto-attach to shared tmux session (enables web/SSH tmux sharing)
 if [[ -n "$SSH_CONNECTION" ]] && [[ -z "$TMUX" ]]; then
@@ -150,7 +169,7 @@ set -x LANG en_US.UTF-8
 set -x LC_ALL en_US.UTF-8
 set -x XDG_CONFIG_HOME /data/.config
 set -x XDG_DATA_HOME /data/.local/share
-fish_add_path /root/.local/bin /usr/local/bin
+fish_add_path /homeassistant/bin /homeassistant/scripts/bin /root/.local/bin /usr/local/bin
 
 # Tool integrations
 zoxide init fish | source
@@ -159,6 +178,7 @@ direnv hook fish | source
 EOF
     printf 'set -x HA_URL %s\n' "${HA_URL}"
     printf 'set -x HA_TOKEN %s\n' "${HA_TOKEN}"
+    printf 'set -x SUPERVISOR_TOKEN %s\n' "${SUPERVISOR_TOKEN}"
     cat << 'EOF'
 
 # SSH: auto-attach to shared tmux session
