@@ -190,6 +190,7 @@ set -x LANG en_US.UTF-8
 set -x LC_ALL en_US.UTF-8
 set -x XDG_CONFIG_HOME /data/.config
 set -x XDG_DATA_HOME /data/.local/share
+set -U fish_user_paths (string match -rv '^/homeassistant/(bin|scripts/bin)' $fish_user_paths)
 fish_add_path /root/.local/bin /usr/local/bin
 
 # Tool integrations
