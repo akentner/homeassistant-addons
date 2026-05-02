@@ -4,6 +4,16 @@
 LOG_LEVEL=$(bashio::config 'log_level')
 bashio::log.level "${LOG_LEVEL}"
 
+# Write MOTD with current addon version and tool versions
+ADDON_VERSION=$(bashio::addon.version)
+CLAUDE_VERSION=$(claude --version 2>/dev/null | awk '{print $1}')
+OPENCODE_VERSION=$(opencode --version 2>/dev/null | head -1)
+MOTD_HA_URL=$(bashio::config 'ha_url')
+cat > /etc/motd << EOF
+Coding Assistants ${ADDON_VERSION}  |  claude ${CLAUDE_VERSION}  |  opencode ${OPENCODE_VERSION}
+HA: ${MOTD_HA_URL}
+EOF
+
 # Persist /data directories for all coding assistants
 mkdir -p \
     /data/claude \
