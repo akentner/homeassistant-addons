@@ -24,24 +24,34 @@ ln -s /data/claude/.claude /root/.claude 2>/dev/null || true
 rm -f /root/.claude.json
 ln -s /data/claude/.claude.json /root/.claude.json 2>/dev/null || true
 
-# Inject tool context into AI assistant configs (first run only)
+# Inject tool context into AI assistant configs (always updated on start)
 TOOLS_MD="/etc/coding-assistants/TOOLS.md"
 CLAUDE_MD="/data/claude/.claude/CLAUDE.md"
 mkdir -p /data/claude/.claude
-if [[ ! -f "${CLAUDE_MD}" ]] || ! grep -q "coding-assistants" "${CLAUDE_MD}" 2>/dev/null; then
-    cat "${TOOLS_MD}" >> "${CLAUDE_MD}"
-    bashio::log.info "Injected tool context into Claude Code CLAUDE.md"
-fi
+python3 - <<'PYEOF'
+import re, pathlib
+BEGIN = "<!-- coding-assistants:begin -->\n"
+END = "<!-- coding-assistants:end -->\n"
+tools = pathlib.Path("/etc/coding-assistants/TOOLS.md").read_text()
+section = BEGIN + tools + "\n" + END
+p = pathlib.Path("/data/claude/.claude/CLAUDE.md")
+content = p.read_text() if p.exists() else ""
+if BEGIN in content:
+    content = re.sub(r"<!-- coding-assistants:begin -->.*?<!-- coding-assistants:end -->\n?",
+                     section, content, flags=re.DOTALL)
+else:
+    content = (content.rstrip("\n") + "\n\n" + section) if content else section
+p.write_text(content)
+PYEOF
+bashio::log.info "Updated tool context in Claude Code CLAUDE.md"
 
 OPENCODE_JSON="/data/.config/opencode/opencode.json"
 [[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
-if ! jq -e '.instructions' "${OPENCODE_JSON}" > /dev/null 2>&1; then
-    tmp=$(mktemp)
-    jq --rawfile inst "${TOOLS_MD}" '.instructions = [$inst]' "${OPENCODE_JSON}" > "${tmp}"
-    cp "${tmp}" "${OPENCODE_JSON}"
-    rm "${tmp}"
-    bashio::log.info "Injected tool context into OpenCode instructions"
-fi
+tmp=$(mktemp)
+jq --rawfile inst "${TOOLS_MD}" '.instructions = [$inst]' "${OPENCODE_JSON}" > "${tmp}"
+cp "${tmp}" "${OPENCODE_JSON}"
+rm "${tmp}"
+bashio::log.info "Updated tool context in OpenCode instructions"
 
 # MCP server auto-registration — merge addon config into ~/.claude.json
 CLAUDE_JSON="/data/claude/.claude.json"
