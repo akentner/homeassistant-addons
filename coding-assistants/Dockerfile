@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir --break-system-packages httpie websockets
 
 # HA API tools
 COPY ha-api ha-ws lovelace-sync ha-check-logs ha-check-repairs \
-     generate_commit_prompt git_commit_with_ai git-submodule-changes \
+     generate-commit-prompt git-commit-with-ai git-submodule-changes \
      /usr/local/bin/
 RUN chmod +x \
     /usr/local/bin/ha-api \
@@ -31,8 +31,8 @@ RUN chmod +x \
     /usr/local/bin/lovelace-sync \
     /usr/local/bin/ha-check-logs \
     /usr/local/bin/ha-check-repairs \
-    /usr/local/bin/generate_commit_prompt \
-    /usr/local/bin/git_commit_with_ai \
+    /usr/local/bin/generate-commit-prompt \
+    /usr/local/bin/git-commit-with-ai \
     /usr/local/bin/git-submodule-changes
 
 # Home Assistant CLI — uses $SUPERVISOR_TOKEN injected by HA supervisor
