@@ -94,7 +94,7 @@ jobs:
       - name: Lint Markdown files
         run: |
           echo "Linting Markdown files..."
-          markdownlint-cli2 "**/*.md" "#node_modules" "#.git" "#.planning"
+          markdownlint-cli2 "**/*.md" "#node_modules" "#.git" "#.planning" "#**/.planning"
 
       - name: Validate Add-on configurations
         run: |

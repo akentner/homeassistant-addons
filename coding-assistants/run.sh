@@ -158,6 +158,7 @@ export XDG_CONFIG_HOME="/data/.config"
 export XDG_DATA_HOME="/data/.local/share"
 export HA_URL
 export HA_TOKEN
+export SUPERVISOR_TOKEN
 
 # Inject user-configured env vars
 if jq -e '.env_vars | length > 0' /data/options.json > /dev/null 2>&1; then
