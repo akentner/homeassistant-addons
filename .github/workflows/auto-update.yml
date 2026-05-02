@@ -77,6 +77,21 @@ jobs:
               continue
             fi
 
+            # Fetch upstream release notes and prepend to CHANGELOG.md
+            release_body=$(gh release view --repo "$upstream_repo" \
+              --json body --jq .body 2>/dev/null || true)
+            if [[ -n "$release_body" ]]; then
+              changelog="$addon_dir/CHANGELOG.md"
+              tmp=$(mktemp)
+              if [[ -f "$changelog" ]]; then
+                { printf '%s\n\n' "$release_body"; cat "$changelog"; } > "$tmp"
+              else
+                printf '%s\n' "$release_body" > "$tmp"
+              fi
+              mv "$tmp" "$changelog"
+              git add "$changelog"
+            fi
+
             # Stage only the three known version files (never git add -A)
             git add "$addon_dir/config.yaml" "$addon_dir/build.yaml" "$addon_dir/README.md"
             git commit -m "chore($addon_name): update to $latest_version"
