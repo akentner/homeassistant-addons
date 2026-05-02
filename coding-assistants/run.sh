@@ -196,6 +196,10 @@ fish_add_path /root/.local/bin /usr/local/bin
 zoxide init fish | source
 atuin init fish | source
 direnv hook fish | source
+
+function fish_greeting
+    cat /etc/motd
+end
 EOF
     printf 'set -x HA_URL %s\n' "${HA_URL}"
     printf 'set -x HA_TOKEN %s\n' "${HA_TOKEN}"
