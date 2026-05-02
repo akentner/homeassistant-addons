@@ -10,9 +10,7 @@ SHOW_WARNINGS=${2:-false}
 echo "🔍 Analyzing last $LINES log entries..."
 echo ""
 
-# Get logs via SSH
-# shellcheck disable=SC2029
-LOGS=$(ssh haos-op3050-1 "ha core logs -n $LINES" 2>&1)
+LOGS=$(ha core logs -n "$LINES" 2>&1)
 
 # Count error types
 echo "📊 Error Summary:"
