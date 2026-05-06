@@ -1,3 +1,28 @@
+## [1.42.0](https://github.com/rynfar/meridian/compare/meridian-v1.41.1...meridian-v1.42.0) (2026-05-06)
+
+
+### Features
+
+* **diagnostics:** surface resolved Claude executable + source in /health and startup log ([#485](https://github.com/rynfar/meridian/issues/485)) ([c875cb4](https://github.com/rynfar/meridian/commit/c875cb49008641e252f968e8cb4e27a360dd369b))
+* register OAuth token as profile (closes [#446](https://github.com/rynfar/meridian/issues/446)) ([e2c9b81](https://github.com/rynfar/meridian/commit/e2c9b8181d62fcacc9ec740a606af66e719aa781))
+* **tokenRefresh:** background scheduler keeps refresh chain warm ([becf7f7](https://github.com/rynfar/meridian/commit/becf7f7cebc8fa8dafc631fc4e15e48b2f2af5e9))
+* **tokenRefresh:** make scheduler activity visible in default logs ([59270c2](https://github.com/rynfar/meridian/commit/59270c21a4c2fcd878a88c2b2a59ecef98d24b89))
+* **tokenRefresh:** proactive ensureFreshToken before SDK call ([0b82dfc](https://github.com/rynfar/meridian/commit/0b82dfca47e93aef34bff3d24c6ff313bfe69bb4))
+
+
+### Bug Fixes
+
+* **errors:** broaden isExpiredTokenError to catch generic 401s ([91e1bb3](https://github.com/rynfar/meridian/commit/91e1bb3964ea369a514ed0aa9f6ae76b6c9ffd95))
+* **plugins:** convert Windows paths to file:// URLs for ESM import ([554d70c](https://github.com/rynfar/meridian/commit/554d70cf1ab0359137816a590d7aa5d5608a8812))
+* **plugins:** gate pathToFileURL on win32 + add loader to windows-smoke CI ([150a456](https://github.com/rynfar/meridian/commit/150a4568a33753af1f1aabe6918bbcf6ceaa16ed))
+* **profiles:** clean oauth-token isolation dir on profile remove ([39dd273](https://github.com/rynfar/meridian/commit/39dd2730b3ea6a4bbb0a8d486e0e9df4aa176aef))
+* **profiles:** isolate oauth-token profile from host ~/.claude ([d400c55](https://github.com/rynfar/meridian/commit/d400c5525aaeee7834e0db6bfddfd48b82d6343a))
+* **proxy:** fall back to process.cwd() when SDK cwd doesn't exist ([#381](https://github.com/rynfar/meridian/issues/381)) ([#473](https://github.com/rynfar/meridian/issues/473)) ([232f727](https://github.com/rynfar/meridian/commit/232f727d5dfb3d28fc5c7bfeabb4344292fb9878))
+* **proxy:** forward auth headers on /v1/chat/completions internal hop ([#470](https://github.com/rynfar/meridian/issues/470)) ([6567639](https://github.com/rynfar/meridian/commit/65676394198cb1fc47b9b30704a872ee1cc57031)), closes [#415](https://github.com/rynfar/meridian/issues/415)
+* **query:** preserve CLAUDE_CONFIG_DIR for oauth-token profiles under sharedMemory ([274dbf1](https://github.com/rynfar/meridian/commit/274dbf18653882e6761ee1fa6676827274c16e3c))
+* **security:** require auth on /settings/api/* and /settings (closes [#477](https://github.com/rynfar/meridian/issues/477)) ([#486](https://github.com/rynfar/meridian/issues/486)) ([5db6341](https://github.com/rynfar/meridian/commit/5db63417ef0e14e63c57f079ce92432f527d9a26))
+* **tokenRefresh:** generation-track scheduler to kill orphan chains ([aac7c9a](https://github.com/rynfar/meridian/commit/aac7c9a0122410b3fa83487f38a8f4810cb6ab86))
+
 ## [1.41.1](https://github.com/rynfar/meridian/compare/meridian-v1.41.0...meridian-v1.41.1) (2026-05-01)
 
 ### Bug Fixes
