@@ -43,8 +43,9 @@ Run `/gsd:new-milestone` to define v1.1 scope.
 | 260404-rsj | Meridian Ingress nginx reverse proxy fuer path rewriting                | 2026-04-04 | 9407184 | [260404-rsj-meridian-ingress-nginx-reverse-proxy-fue](./quick/260404-rsj-meridian-ingress-nginx-reverse-proxy-fue/) |
 | 260404-s1t | Meridian: expose all upstream config options in config.yaml and run.sh  | 2026-04-04 | 3ed58d3 | [260404-s1t-meridian-alle-upstream-config-optionen-i](./quick/260404-s1t-meridian-alle-upstream-config-optionen-i/) |
 | 260502-0kw | coding-assistants: make args and env optional in mcp_servers schema     | 2026-05-02 | 1f17a3b | [260502-0kw-coding-assistants-config-yaml-make-args-](./quick/260502-0kw-coding-assistants-config-yaml-make-args-/) |
+| 260507-vjm | Integriere MCP2ZigBee2MQTT in coding-assistants                         | 2026-05-07 | 0afa2db | [260507-vjm-integriere-mcp2zigbee2mqtt-in-coding-ass](./quick/260507-vjm-integriere-mcp2zigbee2mqtt-in-coding-ass/) |
 
 ---
 
-_State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_ _Last activity: 2026-05-02 - Completed quick task
-260502-0kw: coding-assistants make args and env optional in mcp_servers schema_
+_State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_ _Last activity: 2026-05-07 - Completed quick task
+260507-vjm: Integriere MCP2ZigBee2MQTT in coding-assistants_
