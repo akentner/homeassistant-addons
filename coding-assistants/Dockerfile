@@ -59,6 +59,18 @@ RUN FFF_VER=$(curl -sf https://api.github.com/repos/dmtrKovalenko/fff/releases/l
         -o /usr/local/bin/fff-mcp \
     && chmod +x /usr/local/bin/fff-mcp
 
+# MCP2ZigBee2MQTT — Zigbee2MQTT MCP server for AI assistants (TypeScript, no releases — build from main)
+# hadolint ignore=DL3003
+RUN apk add --no-cache --virtual .build-mcp2z2m python3 make g++ \
+    && mkdir -p /opt/mcp2zigbee2mqtt \
+    && curl -fsSL "https://github.com/ichbinder/MCP2ZigBee2MQTT/archive/refs/heads/main.tar.gz" \
+        | tar xz -C /opt/mcp2zigbee2mqtt --strip-components=1 \
+    && (cd /opt/mcp2zigbee2mqtt \
+        && npm ci \
+        && npm run build \
+        && npm prune --omit=dev) \
+    && apk del .build-mcp2z2m
+
 # eza — modern ls replacement, musl build for Alpine
 RUN EZA_VER=$(curl -sf https://api.github.com/repos/eza-community/eza/releases/latest \
         | jq -r '.tag_name | ltrimstr("v")') \
