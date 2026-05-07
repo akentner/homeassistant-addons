@@ -53,6 +53,8 @@ Persistent storage is at `/data`.
 - `opencode` — OpenCode AI CLI
 - `gh copilot` — GitHub Copilot CLI (`gh copilot suggest`, `gh copilot explain`)
 - `fff-mcp` — fast file search MCP server (register in Claude Code / OpenCode config)
+- `node /opt/mcp2zigbee2mqtt/dist/index.js` — Zigbee2MQTT MCP server; register as a `stdio` entry in `mcp_servers`
+  config with `MQTT_BROKER_URL`, `MQTT_BASE_TOPIC`, and `DB_PATH` env vars
 
 ## Utilities
 
@@ -71,3 +73,28 @@ Persistent storage is at `/data`.
 | `/data`                               | Persistent addon storage (survives restarts)  |
 | `/share`                              | HA shared storage                             |
 | `/media`                              | HA media storage                              |
+
+## MCP Server Registration Examples
+
+### zigbee2mqtt (Zigbee device control)
+
+Add to `mcp_servers` in the add-on options:
+
+```yaml
+- name: zigbee2mqtt
+  type: stdio
+  command: node /opt/mcp2zigbee2mqtt/dist/index.js
+  env:
+    - name: MQTT_BROKER_URL
+      value: mqtt://homeassistant:1883
+    - name: MQTT_BASE_TOPIC
+      value: zigbee2mqtt
+    - name: DB_PATH
+      value: /data/zigbee2mqtt-mcp.db
+```
+
+`DB_PATH` must point to a writable location. `/data/` is the add-on persistent storage. Set `MQTT_USERNAME` and
+`MQTT_PASSWORD` env entries if your MQTT broker requires authentication.
+
+> Note: MCP2ZigBee2MQTT is built from the upstream `main` branch at Docker build time. There are no versioned releases —
+> the installed version reflects the state of the upstream repo at the time the add-on image was built.
