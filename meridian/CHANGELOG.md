@@ -1,3 +1,11 @@
+## [1.42.1](https://github.com/rynfar/meridian/compare/meridian-v1.42.0...meridian-v1.42.1) (2026-05-06)
+
+
+### Bug Fixes
+
+* **auth-status:** route claude auth status/login through resolver, not PATH ([#478](https://github.com/rynfar/meridian/issues/478)) ([#492](https://github.com/rynfar/meridian/issues/492)) ([5ca8212](https://github.com/rynfar/meridian/commit/5ca82120d3e5114dcc8fce926ee156d9a3380ca0))
+* **passthrough:** strip SDK tool catalog and CLAUDE.md from upstream payload ([#490](https://github.com/rynfar/meridian/issues/490)) ([b279fee](https://github.com/rynfar/meridian/commit/b279feed06c8ba035256370c0ccefc712522130d))
+
 ## [1.42.0](https://github.com/rynfar/meridian/compare/meridian-v1.41.1...meridian-v1.42.0) (2026-05-06)
 
 
