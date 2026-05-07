@@ -44,6 +44,16 @@ options:
     - name: fff
       type: stdio
       command: /usr/local/bin/fff-mcp
+    - name: zigbee2mqtt
+      type: stdio
+      command: node /opt/mcp2zigbee2mqtt/dist/index.js
+      env:
+        - name: MQTT_BROKER_URL
+          value: mqtt://homeassistant:1883
+        - name: MQTT_BASE_TOPIC
+          value: zigbee2mqtt
+        - name: DB_PATH
+          value: /data/zigbee2mqtt-mcp.db
   env_vars: []
   bash_aliases: []
 
@@ -61,6 +71,9 @@ schema:
       type: list(stdio|http)
       command: str?
       url: str?
+      env:
+        - name: str
+          value: str
   env_vars:
     - name: str
       value: str
