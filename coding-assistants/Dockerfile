@@ -66,7 +66,7 @@ RUN apk add --no-cache --virtual .build-mcp2z2m python3 make g++ \
     && curl -fsSL "https://github.com/ichbinder/MCP2ZigBee2MQTT/archive/refs/heads/main.tar.gz" \
         | tar xz -C /opt/mcp2zigbee2mqtt --strip-components=1 \
     && (cd /opt/mcp2zigbee2mqtt \
-        && npm ci \
+        && npm install \
         && npm run build \
         && npm prune --omit=dev) \
     && apk del .build-mcp2z2m
