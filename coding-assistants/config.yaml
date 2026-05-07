@@ -37,6 +37,14 @@ options:
   terminal_font_family: "JetBrainsMono Nerd Font Mono, monospace"
   ha_url: "http://homeassistant:8123"
   ha_token: ""
+  zigbee2mqtt:
+    enabled: false
+    mqtt_broker_url: "mqtt://homeassistant:1883"
+    mqtt_username: ""
+    mqtt_password: ""
+    mqtt_base_topic: "zigbee2mqtt"
+    db_path: "/data/zigbee2mqtt-mcp.db"
+    log_level: "info"
   mcp_servers:
     - name: ha-mcp
       type: http
@@ -44,16 +52,6 @@ options:
     - name: fff
       type: stdio
       command: /usr/local/bin/fff-mcp
-    - name: zigbee2mqtt
-      type: stdio
-      command: node /opt/mcp2zigbee2mqtt/dist/index.js
-      env:
-        - name: MQTT_BROKER_URL
-          value: mqtt://homeassistant:1883
-        - name: MQTT_BASE_TOPIC
-          value: zigbee2mqtt
-        - name: DB_PATH
-          value: /data/zigbee2mqtt-mcp.db
   env_vars: []
   bash_aliases: []
 
@@ -66,6 +64,14 @@ schema:
   terminal_font_family: str
   ha_url: str
   ha_token: str
+  zigbee2mqtt:
+    enabled: bool
+    mqtt_broker_url: str
+    mqtt_username: str
+    mqtt_password: password
+    mqtt_base_topic: str
+    db_path: str
+    log_level: list(debug|info|warning|error)
   mcp_servers:
     - name: str
       type: list(stdio|http)
