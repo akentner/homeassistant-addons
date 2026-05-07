@@ -107,6 +107,78 @@ if jq -e '.mcp_servers | length > 0' /data/options.json > /dev/null 2>&1; then
     bashio::log.info "Registered $(echo "${MCP_OBJ}" | jq -r 'keys | length') MCP server(s) in Claude Code + OpenCode config"
 fi
 
+# Zigbee2MQTT MCP auto-registration — registers the dedicated MCP server when enabled
+if bashio::config.true 'zigbee2mqtt.enabled'; then
+    Z2M_BROKER_URL=$(bashio::config 'zigbee2mqtt.mqtt_broker_url')
+    Z2M_USERNAME=$(bashio::config 'zigbee2mqtt.mqtt_username')
+    Z2M_PASSWORD=$(bashio::config 'zigbee2mqtt.mqtt_password')
+    Z2M_BASE_TOPIC=$(bashio::config 'zigbee2mqtt.mqtt_base_topic')
+    Z2M_DB_PATH=$(bashio::config 'zigbee2mqtt.db_path')
+    Z2M_LOG_LEVEL=$(bashio::config 'zigbee2mqtt.log_level')
+
+    # Build env object for the MCP server command
+    Z2M_ENV_JSON=$(jq -n \
+        --arg broker "${Z2M_BROKER_URL}" \
+        --arg user "${Z2M_USERNAME}" \
+        --arg pass "${Z2M_PASSWORD}" \
+        --arg topic "${Z2M_BASE_TOPIC}" \
+        --arg db "${Z2M_DB_PATH}" \
+        --arg log "${Z2M_LOG_LEVEL}" \
+        '{
+            MQTT_BROKER_URL: $broker,
+            MQTT_USERNAME: $user,
+            MQTT_PASSWORD: $pass,
+            MQTT_BASE_TOPIC: $topic,
+            DB_PATH: $db,
+            LOG_LEVEL: $log
+        }')
+
+    # Register in Claude Code ~/.claude.json
+    CLAUDE_JSON="/data/claude/.claude.json"
+    [[ -f "${CLAUDE_JSON}" ]] || echo '{}' > "${CLAUDE_JSON}"
+    tmp=$(mktemp)
+    jq --argjson env "${Z2M_ENV_JSON}" \
+        '.mcpServers["zigbee2mqtt"] = {
+            type: "stdio",
+            command: "node",
+            args: ["/opt/mcp2zigbee2mqtt/dist/index.js"],
+            env: $env
+        }' "${CLAUDE_JSON}" > "${tmp}"
+    cp "${tmp}" "${CLAUDE_JSON}"
+    rm "${tmp}"
+
+    # Register in OpenCode opencode.json
+    OPENCODE_JSON="/data/.config/opencode/opencode.json"
+    [[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
+    tmp=$(mktemp)
+    jq '.mcp["zigbee2mqtt"] = {
+            type: "local",
+            command: ["node", "/opt/mcp2zigbee2mqtt/dist/index.js"],
+            enabled: true
+        }' "${OPENCODE_JSON}" > "${tmp}"
+    cp "${tmp}" "${OPENCODE_JSON}"
+    rm "${tmp}"
+
+    bashio::log.info "Registered zigbee2mqtt MCP server in Claude Code + OpenCode config"
+
+    # Inject MQTT env vars into profile scripts for use by other tools
+    {
+        printf 'export MQTT_BROKER_URL=%q\n' "${Z2M_BROKER_URL}"
+        printf 'export MQTT_USERNAME=%q\n' "${Z2M_USERNAME}"
+        printf 'export MQTT_PASSWORD=%q\n' "${Z2M_PASSWORD}"
+        printf 'export MQTT_BASE_TOPIC=%q\n' "${Z2M_BASE_TOPIC}"
+    } >> /etc/profile.d/00-coding-assistants.sh
+
+    # Fish config — append MQTT env vars
+    FISH_CONF="/data/.config/fish/conf.d/00-coding-assistants.fish"
+    {
+        printf 'set -x MQTT_BROKER_URL %s\n' "${Z2M_BROKER_URL}"
+        printf 'set -x MQTT_USERNAME %s\n' "${Z2M_USERNAME}"
+        printf 'set -x MQTT_PASSWORD %s\n' "${Z2M_PASSWORD}"
+        printf 'set -x MQTT_BASE_TOPIC %s\n' "${Z2M_BASE_TOPIC}"
+    } >> "${FISH_CONF}"
+fi
+
 # Cleanup stale stdio MCP entries from manually-managed global claude config
 GLOBAL_CLAUDE_JSON="/homeassistant/.claudecode/.claude.json"
 if [[ -f "${GLOBAL_CLAUDE_JSON}" ]] && jq -e '.mcpServers' "${GLOBAL_CLAUDE_JSON}" > /dev/null 2>&1; then
