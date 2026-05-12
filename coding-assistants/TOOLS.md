@@ -66,7 +66,7 @@ Persistent storage is at `/data`.
 - `tldr` — simplified man pages (`tldr <command>`)
 - `shellcheck` — shell script linter
 - `curl`, `wget` — HTTP download tools
-- `mosquitto_pub` / `mosquitto_sub` — MQTT CLI clients (via `mosquitto-client`); Python-Alternative: `paho-mqtt`
+- `paho-mqtt` — MQTT Python-Bibliothek (vorinstalliert); kein `mosquitto_pub`/`mosquitto_sub` CLI verfügbar
 - **apk install:** `apk update` vor jedem `apk add` ausführen — Index ist im laufenden Container nicht automatisch
   aktuell
 
