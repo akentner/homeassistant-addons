@@ -34,6 +34,9 @@ Persistent storage is at `/data`.
 
 - `node`, `npm`, `bun` — JavaScript / TypeScript
 - `python3`, `uv`, `uvx` — Python; prefer `uv` over pip
+  - **Shebang:** `#!/usr/bin/python3` (kein `#!/usr/bin/env -S` — BusyBox `env` unterstützt `-S` nicht)
+  - **Runtime-Deps:** `pip install --break-system-packages <pkg>`; vorinstalliert: `pyyaml`, `python-dotenv`,
+    `paho-mqtt`, `httpie`, `websockets`
 - `task` — Taskfile runner (`task <target>`)
 - `make` — Makefile runner
 
@@ -63,6 +66,9 @@ Persistent storage is at `/data`.
 - `tldr` — simplified man pages (`tldr <command>`)
 - `shellcheck` — shell script linter
 - `curl`, `wget` — HTTP download tools
+- `mosquitto_pub` / `mosquitto_sub` — MQTT CLI clients (via `mosquitto-client`); Python-Alternative: `paho-mqtt`
+- **apk install:** `apk update` vor jedem `apk add` ausführen — Index ist im laufenden Container nicht automatisch
+  aktuell
 
 ## Key Paths
 
