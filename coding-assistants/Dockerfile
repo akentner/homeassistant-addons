@@ -11,7 +11,8 @@ RUN apk add --no-cache \
     python3 py3-pip \
     github-cli \
     tig ncdu btop direnv sqlite zoxide unzip \
-    fish mc
+    fish mc \
+    mosquitto-clients
 
 # Fisher plugin manager + tide prompt (installed to /root/.config/fish — persisted at runtime)
 RUN fish -c "curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source \
