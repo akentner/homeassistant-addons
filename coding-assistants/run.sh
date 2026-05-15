@@ -34,6 +34,11 @@ ln -s /data/claude/.claude /root/.claude 2>/dev/null || true
 rm -f /root/.claude.json
 ln -s /data/claude/.claude.json /root/.claude.json 2>/dev/null || true
 
+# Claude Code agents — symlink ~/.agents into /data
+mkdir -p /data/.agents
+rm -rf /root/.agents
+ln -s /data/.agents /root/.agents
+
 # Git config persistence — copy on first run, then symlink
 if [[ -f /root/.gitconfig ]] && [[ ! -f /data/.gitconfig ]]; then
     cp /root/.gitconfig /data/.gitconfig
