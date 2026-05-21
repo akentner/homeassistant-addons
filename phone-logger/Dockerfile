@@ -4,7 +4,7 @@ FROM ${BUILD_FROM}
 ARG VERSION
 ARG WORKING_DIR=/app
 
-# Install build deps for lxml + runtime tools
+# Install build deps for lxml + frontend build tools
 RUN apk add --no-cache \
     gcc \
     musl-dev \
@@ -13,7 +13,9 @@ RUN apk add --no-cache \
     python3-dev \
     tzdata \
     curl \
-    tar
+    tar \
+    nodejs \
+    npm
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -26,8 +28,12 @@ RUN curl -fsSL "https://github.com/akentner/phone-logger/archive/refs/tags/v${VE
 # Install Python dependencies from uv.lock
 RUN uv sync --frozen --no-dev --no-install-project
 
+# Build React frontend
+RUN npm ci --prefix src/frontend && npm run build --prefix src/frontend
+
 # Remove build dependencies
-RUN apk del gcc musl-dev python3-dev
+RUN apk del gcc musl-dev python3-dev nodejs npm \
+    && rm -rf src/frontend/node_modules
 
 # Copy addon-specific files (override upstream placeholders)
 COPY run.sh generate_config.py ./
