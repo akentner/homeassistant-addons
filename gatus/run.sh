@@ -14,4 +14,8 @@ export GATUS_LOG_LEVEL="$LOG_LEVEL"
 
 export GATUS_CONFIG_PATH=/tmp/gatus-config.yaml
 
+# NGINX proxies ingress port 8099 → Gatus on 8080, injecting <base href> via sub_filter
+mkdir -p /var/run /var/lib/nginx/tmp/client_body
+nginx -g "daemon off;" -c /etc/nginx/gatus-nginx.conf &
+
 exec /usr/local/bin/gatus

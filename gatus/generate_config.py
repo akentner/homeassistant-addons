@@ -16,7 +16,7 @@ OPTIONS_PATH = "/data/options.json"
 USER_CONFIG_PATH = "/addon_config/config.yaml"
 OUTPUT_PATH = "/tmp/gatus-config.yaml"
 
-INGRESS_PORT = 8099
+GATUS_PORT = 8080  # internal port; NGINX on 8099 proxies to this
 
 EXAMPLE_CONFIG = {
     "endpoints": [
@@ -55,7 +55,7 @@ def build_config(options: dict, user_config: dict) -> dict:
     web = config.get("web", {})
     if not isinstance(web, dict):
         web = {}
-    web["port"] = INGRESS_PORT
+    web["port"] = GATUS_PORT
     web["address"] = "0.0.0.0"
     config["web"] = web
 

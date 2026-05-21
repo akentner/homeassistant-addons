@@ -11,14 +11,15 @@ FROM ${BUILD_FROM}
 # Re-declare VERSION for use in this stage
 ARG VERSION
 
-# CA certificates for HTTPS endpoint monitoring; python3 + py3-yaml for generate_config.py
-RUN apk add --no-cache ca-certificates python3 py3-yaml
+# CA certificates for HTTPS monitoring; nginx for ingress proxy; python3 + py3-yaml for generate_config.py
+RUN apk add --no-cache ca-certificates nginx python3 py3-yaml
 
 # Copy statically-linked binary — no additional runtime dependencies needed
 COPY --from=gatus-source /gatus /usr/local/bin/gatus
 
-# Copy add-on scripts
+# Copy add-on scripts and nginx config
 COPY run.sh generate_config.py /
+COPY nginx.conf /etc/nginx/gatus-nginx.conf
 
 RUN chmod +x /run.sh /usr/local/bin/gatus
 
