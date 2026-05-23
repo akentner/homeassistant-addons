@@ -1,6 +1,6 @@
 name: "Gatus"
 description: "Automated status and uptime monitoring with a beautiful dashboard"
-version: "5.36.0-6"
+version: "5.36.0-7"
 slug: "gatus"
 init: false
 arch:
