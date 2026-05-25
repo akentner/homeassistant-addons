@@ -1,0 +1,35 @@
+# Base image update configuration for each add-on.
+# Used by scripts/update-base-image.py and .github/workflows/base-image-update.yml.
+#
+# Strategy: Instead of querying GHCR tag listings (incomplete API),
+# we read the canonical Alpine/Python version from the home-assistant/docker-base
+# Dockerfile directly to determine the latest tag.
+#
+# Fields:
+#   image:            Full image reference without tag (ghcr.io/home-assistant/...)
+#   source_repo:      GitHub repo that publishes the base image
+#   source_file:      Path within source_repo to read the version from
+#   version_pattern:  Regex with named group "version" to extract the tag from source_file
+#
+# coding-assistants uses a fixed "bookworm" tag (Debian stable codename) — no semver tracking.
+
+addons:
+  meridian:
+    image: "ghcr.io/home-assistant/amd64-base"
+    source_repo: "home-assistant/docker-base"
+    source_file: "alpine/Dockerfile"
+    version_pattern: 'ARG ALPINE_VERSION=(?P<version>\d+\.\d+)'
+
+  gatus:
+    image: "ghcr.io/home-assistant/amd64-base"
+    source_repo: "home-assistant/docker-base"
+    source_file: "alpine/Dockerfile"
+    version_pattern: 'ARG ALPINE_VERSION=(?P<version>\d+\.\d+)'
+
+  phone-logger:
+    image: "ghcr.io/home-assistant/amd64-base-python"
+    source_repo: "home-assistant/docker-base"
+    source_file: "python/3.12/Dockerfile"
+    # BASE_VERSION is the Alpine version; PYTHON_VERSION is full (3.12.13) but tag uses major.minor
+    version_pattern: 'ARG BASE_VERSION=(?P<alpine_version>\d+\.\d+).*?ARG PYTHON_VERSION=(?P<python_full>\d+\.\d+)\.\d+'
+    tag_template: "{python_full}-alpine{alpine_version}"

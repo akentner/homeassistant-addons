@@ -1,0 +1,76 @@
+name: Base Image Update
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install pyyaml
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # NOTE: Pushes made with GITHUB_TOKEN do not trigger other GitHub Actions workflows
+      # (documented GitHub limitation). Base-image-update commits will not be validated by
+      # lint.yml automatically. Developers can manually trigger lint.yml if needed.
+      - name: Check and update base images
+        run: |
+          set -eo pipefail
+
+          ERRORS=0
+          UPDATES_MADE=0
+
+          # Run per-add-on so one failure doesn't block others
+          while IFS= read -r addon; do
+            echo "INFO: checking base image for $addon"
+
+            python3 scripts/update-base-image.py "$addon" || {
+              echo "ERROR: update-base-image.py failed for $addon"
+              ERRORS=1
+              continue
+            }
+
+            if git diff --quiet; then
+              echo "INFO: no file changes for $addon"
+              continue
+            fi
+
+            # Determine new config version for commit message
+            new_version=$(grep -m1 '^version:' "$addon/config.yaml" | \
+              sed 's/version:[[:space:]]*["\x27]\(.*\)["\x27]/\1/')
+
+            git add "$addon/build.yaml" "$addon/config.yaml" "$addon/README.md"
+            git commit -m "chore($addon): bump base image, update to $new_version"
+            UPDATES_MADE=1
+
+          done < <(python3 - <<'EOF'
+          import yaml, sys
+          from pathlib import Path
+          cfg = yaml.safe_load(Path("scripts/base-image-config.yaml").read_text())
+          for name in cfg.get("addons", {}):
+              print(name)
+          EOF
+          )
+
+          if [ "$UPDATES_MADE" -eq 1 ]; then
+            git push
+          fi
+
+          exit $ERRORS
