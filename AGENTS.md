@@ -3,10 +3,20 @@
 This guide helps AI coding agents understand the structure, conventions, and workflows specific to this Home Assistant
 add-ons repository.
 
+## 🤖 Agent Behavior Guidelines
+
+Before taking action on critical tasks (version bumps, deployment changes, add-on removals, CI/CD modifications):
+
+- **Ask first, act later.** If the intent or scope is unclear, ask a clarifying question before making changes.
+- **Challenge the approach.** If the user's plan seems risky, inconsistent with conventions, or likely to cause
+  problems, say so — even if it contradicts what was asked.
+
+For trivial changes (docs, formatting, comments), proceed directly without asking.
+
 ## 🏗️ Architecture Overview
 
-**What this is:** A Home Assistant add-ons repository with automated upstream version monitoring. Currently hosts one
-production add-on: **FRITZ!Box Call Monitor to MQTT**.
+**What this is:** A Home Assistant add-ons repository with automated upstream version monitoring. Currently hosts the
+following production add-ons: **Phone Logger** and **Meridian Claude Max Proxy**.
 
 **Key structural decision:** Each add-on lives in its own directory with:
 
@@ -69,14 +79,14 @@ participate in auto-updates.
 ### Version Updates (Manual)
 
 ```bash
-# Update fritz-callmonitor2mqtt to version 1.7.2
-make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2
+# Update an add-on to version 1.7.2
+make update-version ADDON=<addon-name> VERSION=1.7.2
 
 # With GitHub release verification
-make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2 CHECK_RELEASE=yes
+make update-version ADDON=<addon-name> VERSION=1.7.2 CHECK_RELEASE=yes
 
 # Dry-run (shows what would change without modifying files)
-./scripts/update-version.py fritz-callmonitor2mqtt 1.7.2 --dry-run
+./scripts/update-version.py <addon-name> 1.7.2 --dry-run
 ```
 
 **What this does:** Python script (`scripts/update-version.py`) automatically updates all three version files and
@@ -106,16 +116,6 @@ make validate-addons        # Validates add-on configs
 
 ## 📋 Project Conventions
 
-### FRITZ!Box Call Monitor Add-on Specifics
-
-- **MQTT Integration:** Connects to FRITZ!Box via TCP port 1012, forwards call events to MQTT broker (default:
-  `core-mosquitto:1883`)
-- **Configuration:** Complex schema with PBX settings (MSNs, country codes, extensions), MQTT connection settings, app
-  logging
-- **Docker:** Runs as Alpine Linux container with call monitoring daemon
-- **Home Assistant Integration:** Uses Home Assistant supervisor to mount config volume at
-  `/opt/fritz-callmonitor2mqtt/data`
-
 ### File Naming & Location Conventions
 
 - Add-on-specific logic: keep in `{addon-name}/` directory
@@ -128,7 +128,7 @@ make validate-addons        # Validates add-on configs
 
 - All user-facing configuration in add-on `config.yaml` with `options` section defining defaults
 - Schema section validates configuration types (string, int, bool, list)
-- Use descriptive names with underscores: `mqtt_broker`, `fritzbox_host`, `pbx_country_code`
+- Use descriptive names with underscores: `mqtt_broker`, `port`, `log_level`
 - YAML files: always quoted strings for versions and sensitive values
 
 ## 🔗 Integration Points
@@ -141,7 +141,6 @@ make validate-addons        # Validates add-on configs
 
 ### External Dependencies
 
-- Upstream project: [fritz-callmonitor2mqtt](https://github.com/) (Docker image source)
 - Build relies on external Docker images defined in `Dockerfile`
 - GitHub Actions for CI/CD (no external service dependencies for workflow execution)
 
@@ -161,15 +160,15 @@ make validate-addons        # Validates add-on configs
 4. Version in `config.yaml` should be `X.Y.Z-0` format
 5. Run `make validate-addons` to verify config structure
 
-### Updating fritz-callmonitor2mqtt to new upstream release
+### Updating an add-on to a new upstream release
 
-1. **Don't edit versions manually.** Use: `make update-version ADDON=fritz-callmonitor2mqtt VERSION=X.Y.Z`
+1. **Don't edit versions manually.** Use: `make update-version ADDON=<addon-name> VERSION=X.Y.Z`
 2. Script automatically updates all three version files and badges
 3. Pre-commit hook validates consistency before commit
 
 ### Fixing a bug in the add-on (not upstream)
 
-1. Make code changes in `fritz-callmonitor2mqtt/` (shell, Dockerfile, etc.)
+1. Make code changes in `{addon-name}/` (shell, Dockerfile, etc.)
 2. Increment subpatch: manually edit `config.yaml` version from `1.7.3-0` to `1.7.3-1` (don't change `build.yaml`)
 3. Pre-commit hook validates this is correct
 4. Commit normally
@@ -206,4 +205,4 @@ make validate-addons        # Validates add-on configs
 - **`scripts/validate-versions.sh`** - Pre-commit version validation logic
 - **`scripts/update-version.py`** - Automated version update tool
 - **`.pre-commit-config.yaml`** - All linting tools and rules
-- **`fritz-callmonitor2mqtt/config.yaml`** - Example add-on manifest structure
+- **`phone-logger/config.yaml`** - Example add-on manifest structure

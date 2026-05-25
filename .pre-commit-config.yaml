@@ -71,7 +71,7 @@ repos:
         name: Validate Dockerfile ARG-before-FROM scope
         entry: ./scripts/validate-dockerfile-args.sh
         language: script
-        files: ^(fritz-callmonitor2mqtt|phone-logger|meridian)/Dockerfile$
+        files: ^(phone-logger|meridian)/Dockerfile$
         pass_filenames: true
       - id: validate-versions
         name: Validate Add-on Versioning

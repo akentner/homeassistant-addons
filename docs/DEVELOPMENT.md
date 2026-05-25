@@ -2,36 +2,34 @@
 
 ## Versioning Rules
 
-### Fritz!Box Call Monitor to MQTT Add-on
+Each add-on follows a specific versioning scheme for better management.
 
-**WICHTIG**: Die Versionierung folgt einem spezifischen Schema für bessere Add-on-Verwaltung.
+### Version Format per File
 
-#### Versionsformat pro Datei
+| File          | Format    | Example   | Purpose                      |
+| ------------- | --------- | --------- | ---------------------------- |
+| `config.yaml` | `X.Y.Z-N` | `1.3.1-0` | Add-on version with subpatch |
+| `build.yaml`  | `X.Y.Z`   | `1.3.1`   | Upstream binary version      |
+| `README.md`   | `vX.Y.Z`  | `v1.3.1`  | Badge display version        |
 
-| Datei         | Format    | Beispiel  | Zweck                       |
-| ------------- | --------- | --------- | --------------------------- |
-| `config.yaml` | `X.Y.Z-N` | `1.3.1-0` | Add-on Version mit Subpatch |
-| `build.yaml`  | `X.Y.Z`   | `1.3.1`   | Upstream Binary Version     |
-| `README.md`   | `vX.Y.Z`  | `v1.3.1`  | Badge Display Version       |
-
-#### Regeln
+### Rules
 
 1. **config.yaml**:
 
-   - ✅ **IMMER** Subpatch-Format verwenden: `"X.Y.Z-N"`
-   - ✅ Neue Upstream-Versionen starten mit `-0`
-   - ✅ Add-on-Fixes inkrementieren: `-1`, `-2`, etc.
+   - Always use subpatch format: `"X.Y.Z-N"`
+   - New upstream versions start with `-0`
+   - Add-on-only fixes increment: `-1`, `-2`, etc.
 
 2. **build.yaml**:
 
-   - ✅ Nur Upstream-Version ohne Subpatch: `"X.Y.Z"`
-   - ✅ Entspricht der Docker-Image-Version
+   - Upstream version only, no subpatch: `"X.Y.Z"`
+   - Matches the Docker image version
 
 3. **README.md**:
-   - ✅ Badge zeigt Hauptversion: `version-vX.Y.Z`
-   - ✅ Release-Link zeigt Hauptversion: `tree/vX.Y.Z`
+   - Badge shows main version: `version-vX.Y.Z`
+   - Release link shows main version: `tree/vX.Y.Z`
 
-#### Beispiel einer korrekten Versionierung
+### Example of Correct Versioning
 
 ```yaml
 # config.yaml
@@ -45,46 +43,46 @@ VERSION: "1.3.1"
 [release]: https://github.com/akentner/homeassistant-addons/tree/v1.3.1
 ```
 
-#### Warum diese Struktur?
+### Why This Structure?
 
-- **Upstream-Sync**: Add-on-Version folgt Upstream mit `-0` Reset
-- **Add-on-Fixes**: Lokale Fixes können inkrementiert werden
-- **Klarheit**: Eindeutige Trennung zwischen Add-on und Binary-Version
-- **Wartbarkeit**: Bessere Versionskontrolle und Update-Management
+- **Upstream-Sync**: Add-on version follows upstream with `-0` reset
+- **Add-on-Fixes**: Local fixes can be incremented independently
+- **Clarity**: Clear separation between add-on and binary version
+- **Maintainability**: Better version control and update management
 
 ## Version Update Tool
 
-Für manuelle Versionsupdates steht ein automatisiertes Tool zur Verfügung:
+For manual version updates an automated tool is available:
 
 ```bash
-# Einfache Version aktualisierung
-make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2
+# Simple version update
+make update-version ADDON=<addon-name> VERSION=1.7.2
 
-# Mit GitHub Release Check
-make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2 CHECK_RELEASE=yes
+# With GitHub Release Check
+make update-version ADDON=<addon-name> VERSION=1.7.2 CHECK_RELEASE=yes
 
-# Dry-run modus (nur anzeigen, nicht ändern)
-./scripts/update-version.py fritz-callmonitor2mqtt 1.7.2 --dry-run
+# Dry-run mode (show only, no changes)
+./scripts/update-version.py <addon-name> 1.7.2 --dry-run
 ```
 
-Das Tool aktualisiert automatisch:
+The tool automatically updates:
 
 - `config.yaml`: `version: "1.7.2-0"`
 - `build.yaml`: `VERSION: "1.7.2"`
-- `README.md`: Badges und Release-Links
+- `README.md`: Badges and release links
 
-## Auto-Update-System
+## Auto-Update System
 
-Das Add-on verwendet `version_pattern: "sync"` in `.upstream.yaml`, wodurch:
+Add-ons using `version_pattern: "sync"` in `.upstream.yaml` benefit from:
 
-- Neue Upstream-Versionen automatisch erkannt werden
-- Die config.yaml entsprechend aktualisiert wird
-- Der Subpatch automatisch auf `-0` zurückgesetzt wird
+- Automatic detection of new upstream versions
+- Automatic update of `config.yaml`
+- Automatic reset of subpatch to `-0`
 
-## Pre-commit Validierung
+## Pre-commit Validation
 
-Ein pre-commit Hook validiert automatisch:
+A pre-commit hook automatically validates:
 
-- Korrekte Versionierung in allen Dateien
-- Konsistenz zwischen den Versionsangaben
-- Einhaltung des Subpatch-Formats
+- Correct versioning in all files
+- Consistency between version entries
+- Compliance with the subpatch format

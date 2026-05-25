@@ -13,20 +13,6 @@ pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository
 
 This repository contains the following add-ons:
 
-### [Fritz!Box Call Monitor to MQTT](./fritz-callmonitor2mqtt)
-
-![Supports amd64 Architecture][amd64-shield]
-
-_Monitors Fritz!Box call events and forwards them to MQTT broker._
-
-**Features:**
-
-- Real-time call monitoring from Fritz!Box
-- MQTT integration for Home Assistant
-- Configurable country codes and area codes
-- Automatic upstream version tracking
-- Health check endpoint
-
 ### [Phone Logger](./phone-logger)
 
 ![Supports amd64 Architecture][amd64-shield]

@@ -2,12 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Behavior Guidelines
+
+Before taking action on critical tasks (version bumps, deployment changes, add-on removals, CI/CD modifications):
+
+- **Ask first, act later.** If intent or scope is unclear, ask a clarifying question before making changes.
+- **Challenge the approach.** If the user's plan seems risky, inconsistent with conventions, or likely to cause
+  problems, say so — even if it contradicts what was asked. Honest pushback is more valuable than silent compliance.
+
+For trivial changes (docs, formatting, comments), proceed directly without asking.
+
 ## Repository Purpose
 
 Home Assistant Add-ons repository with automated upstream version monitoring. Currently contains two add-ons:
 
-- **fritz-callmonitor2mqtt**: Bridges FRITZ!Box call monitor to MQTT
 - **phone-logger**: Python-based call logging with adapter architecture
+- **meridian**: Claude Max → local Anthropic-compatible API proxy
 
 ## Development Commands
 
@@ -20,9 +30,9 @@ make check-all         # All checks combined
 make fix               # Auto-fix whitespace, EOF, line endings
 
 # Update a specific add-on version
-make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.4
+make update-version ADDON=phone-logger VERSION=1.7.4
 # Or directly:
-./scripts/update-version.py fritz-callmonitor2mqtt 1.7.4 [--check-release] [--dry-run]
+./scripts/update-version.py phone-logger 1.7.4 [--check-release] [--dry-run]
 ```
 
 ## Critical: 3-File Versioning Scheme
@@ -64,7 +74,7 @@ The `version_pattern: "sync"` in the addon section means the add-on version foll
 Home Assistant config.yaml files use custom tags (e.g., `!secret`). Always parse with `--unsafe` flag when using `yq`:
 
 ```bash
-yq eval --unsafe '.version' fritz-callmonitor2mqtt/config.yaml
+yq eval --unsafe '.version' phone-logger/config.yaml
 ```
 
 ## Linting Configuration
@@ -83,8 +93,8 @@ yq eval --unsafe '.version' fritz-callmonitor2mqtt/config.yaml
 A Home Assistant Add-ons repository providing containerized wrappers for upstream applications. The repository does not
 contain application source code — Dockerfiles download upstream release artifacts at build time. Each add-on provides a
 `config.yaml` manifest, Dockerfile, and `run.sh` entrypoint that bridges HA configuration (via bashio/options.json) to
-the application. Currently hosts `fritz-callmonitor2mqtt` (FRITZ!Box → MQTT bridge) and `phone-logger` (call logging
-with adapter architecture). A third add-on, `meridian` (Claude Max → local API proxy), is in active development.
+the application. Currently hosts `phone-logger` (call logging with adapter architecture) and `meridian` (Claude Max →
+local API proxy).
 
 **Core Value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
 tracking.
@@ -107,14 +117,12 @@ tracking.
 
 ## Languages
 
-- **Go** — `fritz-callmonitor2mqtt` upstream binary; compiled externally, downloaded as a release artifact during Docker
 - **Python 3.12** — `phone-logger` upstream source downloaded at build time; add-on provides `generate_config.py` as the
 - **Bash** — `run.sh` in both add-ons (executed via `bashio`), `scripts/validate-versions.sh`, `scripts/setup-hooks.sh`
 - **Python 3** — `scripts/update-version.py`, `scripts/fix-markdown-lines.py` (stdlib only, no external deps)
 
 ## Runtime
 
-- `fritz-callmonitor2mqtt`: Alpine 3.22 via `ghcr.io/home-assistant/amd64-base:3.22`
 - `phone-logger`: Alpine 3.20 + Python 3.12 via `ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.20`
 - `uv` — installed via `COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv`
 - Dependencies installed from upstream `uv.lock` with `uv sync --frozen --no-dev --no-install-project`
@@ -131,9 +139,7 @@ tracking.
 ## Build Tools
 
 - Both Dockerfiles use multi-stage-style `ARG BUILD_FROM` / `FROM ${BUILD_FROM}` pattern
-- `fritz-callmonitor2mqtt` Dockerfile: downloads a `.tar.gz` release from GitHub at build time via `curl`
 - `phone-logger` Dockerfile: downloads upstream source tarball from GitHub tags at build time via `curl | tar`
-- `fritz-callmonitor2mqtt`: installs `curl`, `tar`
 - `phone-logger`: installs build deps (`gcc`, `musl-dev`, `libxml2-dev`, `libxslt-dev`, `python3-dev`, `tzdata`, `curl`,
 
 ## Development Tooling
@@ -157,7 +163,6 @@ tracking.
 
 - There is no Node.js `package.json` or lockfile in this repo; Node.js is only used in CI (`markdownlint-cli2`)
 - Python source code in this repo is limited to three scripts: `scripts/update-version.py`,
-- The Go binary for `fritz-callmonitor2mqtt` is fully external; this repo only packages it into a HA add-on
 - `uv` is the single tool for both local dev setup and container dependency installation; no `pip` / `pipenv` / `poetry`
 - All container base images come from `ghcr.io/home-assistant/` — HA-specific, not generic Alpine or Python images
 - `bashio` is a critical runtime dependency but not declared anywhere in this repo; it is baked into the HA base images
@@ -193,7 +198,6 @@ tracking.
 - `SC1091` — "Not following: source" (sourcing from external paths is common in HA add-ons)
 - `SC2034` — "appears unused" (variables exported for child processes)
 - In GitHub Actions workflows additionally: `SC2086`, `SC2129`, `SC2001` (see `.actionlint.yml`)
-- `run.sh` for fritz-callmonitor2mqtt: `#!/usr/bin/with-contenv bashio` with `# shellcheck shell=bash`
 - `run.sh` for phone-logger: `#!/bin/sh` (POSIX shell, minimal)
 - Scripts in `scripts/`: `#!/bin/bash` with `set -e`
 
@@ -258,7 +262,7 @@ tracking.
 - The `fail_fast: false` setting in `.pre-commit-config.yaml` means all hooks run even when earlier ones fail
 - shellcheck is run twice: once via pre-commit (for `.sh` files) and again standalone in CI for all shell scripts
 - Hadolint for Dockerfiles is disabled (commented out in `.pre-commit-config.yaml` and absent from CI workflow)
-- The version validation hook only triggers on `fritz-callmonitor2mqtt/` file changes (the `files:` pattern in
+- The version validation hook runs on every commit (`always_run: true` in `.pre-commit-config.yaml`)
 - Python scripts use `uv tool install` for tool management — there is no `requirements.txt` for dev tools, only
 - No commit message format is enforced (commit-msg hook install is best-effort: `|| true`)
 <!-- GSD:conventions-end -->
@@ -273,10 +277,9 @@ tracking.
 
 ## Configuration Bridge
 
-- Uses `bashio::config` calls inside a `#!/usr/bin/with-contenv bashio` script
-- Maps each option directly to a namespaced environment variable (e.g., `FRITZ_CALLMONITOR_FRITZBOX_HOST`)
+- Uses `bashio::config` calls inside a `#!/usr/bin/with-contenv bashio` script (meridian/phone-logger)
+- Maps each option directly to a namespaced environment variable
 - Handles YAML arrays by iterating with index-based `bashio::config` calls and building comma-separated strings
-- `exec`s the pre-compiled Go binary at `/opt/fritz-callmonitor2mqtt/fritz-callmonitor2mqtt`
 - A thin `sh` script that runs `generate_config.py` first, then `exec`s the Python application
 - `generate_config.py` reads `/data/options.json`, performs structural transformation (HA nested-dict schema → AppConfig
 - The application reads its config from the path set in `PHONE_LOGGER_CONFIG`
@@ -290,7 +293,6 @@ tracking.
 
 ## Upstream Binary Download Pattern
 
-- **fritz-callmonitor2mqtt**: Downloads a pre-compiled Go binary tarball from GitHub Releases via `curl`; selects
 - **phone-logger**: Downloads the upstream Python source tarball from GitHub Releases via `curl | tar xz`; installs
 
 ## Auto-Update System
