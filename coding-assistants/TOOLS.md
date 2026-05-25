@@ -58,6 +58,17 @@ Persistent storage is at `/data`.
 - `fff-mcp` — fast file search MCP server (register in Claude Code / OpenCode config)
 - `node /opt/mcp2zigbee2mqtt/dist/index.js` — Zigbee2MQTT MCP server; register as a `stdio` entry in `mcp_servers`
   config with `MQTT_BROKER_URL`, `MQTT_BASE_TOPIC`, and `DB_PATH` env vars
+- `graphify` — knowledge graph for AI coding assistants; turns code + docs into a queryable graph (no embeddings, runs
+  entirely locally). Build: `graphify .` — Update: `graphify . --update` — Query: `graphify query "<question>"`
+
+  **Assistant integration (once per workspace, not at build time):**
+
+  ```sh
+  graphify claude install     # writes CLAUDE.md directive + PreToolUse hook
+  graphify opencode install   # writes AGENTS.md directive
+  ```
+
+  After that the assistant reads `graphify-out/GRAPH_REPORT.md` automatically before file searches.
 
 ## Utilities
 

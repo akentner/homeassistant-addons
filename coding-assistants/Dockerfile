@@ -143,6 +143,9 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && ln -sf /root/.local/bin/uv /usr/local/bin/uv \
     && ln -sf /root/.local/bin/uvx /usr/local/bin/uvx
 
+# graphify — knowledge graph skill for AI coding assistants
+RUN uv tool install graphifyy
+
 # opencode — musl build from sst/opencode (npm package targets wrong repo)
 RUN OPENCODE_VER=$(curl -sfL https://api.github.com/repos/sst/opencode/releases/latest \
         | jq -r '.tag_name | ltrimstr("v")') \
