@@ -77,13 +77,13 @@ repos:
         name: Validate Add-on Versioning
         entry: ./scripts/validate-versions.sh
         language: script
-        files: ^(fritz-callmonitor2mqtt|phone-logger|meridian)/(config\.yaml|build\.yaml|README\.md)$
+        always_run: true
         pass_filenames: false
       - id: validate-addon-config
         name: Validate Add-on config.yaml Schema
         entry: python3 scripts/validate-addon-config.py
         language: system
-        files: ^(fritz-callmonitor2mqtt|phone-logger|meridian)/config\.yaml$
+        always_run: true
         pass_filenames: false
 
 # Configuration
