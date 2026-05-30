@@ -8,6 +8,9 @@ FROM oven/bun:1 AS build
 ARG VERSION
 WORKDIR /build
 
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
+
 RUN curl -fsSL "https://github.com/rynfar/meridian/archive/refs/tags/meridian-v${VERSION}.tar.gz" | \
     tar xz --strip-components=1
 

@@ -12,6 +12,9 @@ Before taking action on critical tasks (version bumps, deployment changes, add-o
 
 For trivial changes (docs, formatting, comments), proceed directly without asking.
 
+- **Local build before commit.** Any Dockerfile change that modifies packages, base images, or build stages must be
+  verified with a local `docker build` before committing and pushing. Do not commit untested Dockerfile changes.
+
 ## Repository Purpose
 
 Home Assistant Add-ons repository with automated upstream version monitoring. Currently contains two add-ons:
