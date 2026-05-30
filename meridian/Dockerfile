@@ -1,16 +1,46 @@
+# Global ARG must be declared before first FROM so it is available in all stages
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.23
-FROM $BUILD_FROM
 
-# Install Node.js, npm, and nginx (nginx provides the Ingress-facing reverse proxy)
-RUN apk add --no-cache nodejs npm nginx
+# ---- Build stage ----
+# Compiles TypeScript source from GitHub release tarball using bun
+FROM oven/bun:1 AS build
 
 ARG VERSION
+WORKDIR /build
 
-# Install meridian CLI and claude-code CLI globally
-# hadolint ignore=DL3016
-RUN npm install -g @rynfar/meridian@${VERSION}
-# hadolint ignore=DL3016
-RUN npm install -g @anthropic-ai/claude-code
+RUN curl -fsSL "https://github.com/rynfar/meridian/archive/refs/tags/meridian-v${VERSION}.tar.gz" | \
+    tar xz --strip-components=1
+
+# --ignore-scripts: skip postinstall which downloads a glibc-native claude-code binary
+# (build stage is debian/glibc; runtime stage is alpine/musl — mismatched binary fails)
+RUN bun install --ignore-scripts
+
+RUN bun build bin/cli.ts src/proxy/server.ts \
+    --outdir dist \
+    --target node \
+    --splitting \
+    --external @anthropic-ai/claude-agent-sdk \
+    --external libsql \
+    --entry-naming '[name].js'
+
+# ---- Runtime stage ----
+FROM $BUILD_FROM
+
+RUN apk add --no-cache nodejs npm nginx
+
+COPY --from=build /build/dist /opt/meridian/dist
+COPY --from=build /build/node_modules /opt/meridian/node_modules
+COPY --from=build /build/package.json /opt/meridian/package.json
+
+# Re-run claude-code native binary install for alpine/musl runtime
+RUN node /opt/meridian/node_modules/@anthropic-ai/claude-code/install.cjs 2>/dev/null || true
+
+# bun build --target node does not emit a shebang — wrap with a shell launcher
+RUN printf '#!/bin/sh\nexec node /opt/meridian/dist/cli.js "$@"\n' > /usr/local/bin/meridian && \
+    chmod +x /usr/local/bin/meridian
+
+# Expose claude CLI for interactive login (docker exec ... claude)
+RUN ln -sf /opt/meridian/node_modules/@anthropic-ai/claude-code/bin/claude.exe /usr/local/bin/claude
 
 # Copy run script and nginx config
 COPY run.sh /run.sh
