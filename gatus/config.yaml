@@ -1,6 +1,6 @@
 name: "Gatus"
 description: "Automated status and uptime monitoring with a beautiful dashboard"
-version: "5.36.0-7"
+version: "5.36.0-8"
 slug: "gatus"
 init: false
 arch:
@@ -27,9 +27,11 @@ options:
   storage_type: "memory"
   metrics: false
   timezone: "Europe/Berlin"
+  enable_cron: true
 
 schema:
   log_level: "list(debug|info|warning|error)?"
   storage_type: "list(memory|sqlite)?"
   metrics: "bool?"
   timezone: "str?"
+  enable_cron: "bool?"

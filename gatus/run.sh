@@ -18,4 +18,13 @@ export GATUS_CONFIG_PATH=/tmp/gatus-config.yaml
 mkdir -p /var/run /var/lib/nginx/tmp/client_body
 nginx -g "daemon off;" -c /etc/nginx/gatus-nginx.conf &
 
+# Start cron daemon if enabled
+ENABLE_CRON=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(str(d.get('enable_cron', True)).lower())" 2>/dev/null || echo "true")
+if [ "$ENABLE_CRON" = "true" ]; then
+    if [ -f /addon_config/crontab ]; then
+        crontab /addon_config/crontab
+    fi
+    crond
+fi
+
 exec /usr/local/bin/gatus

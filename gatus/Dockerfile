@@ -12,7 +12,8 @@ FROM ${BUILD_FROM}
 ARG VERSION
 
 # CA certificates for HTTPS monitoring; nginx for ingress proxy; python3 + py3-yaml for generate_config.py
-RUN apk add --no-cache ca-certificates nginx python3 py3-yaml
+# curl + jq for external endpoint scripts; dcron for cron job support; bash for script compatibility
+RUN apk add --no-cache ca-certificates nginx python3 py3-yaml curl jq dcron bash
 
 # Copy statically-linked binary — no additional runtime dependencies needed
 COPY --from=gatus-source /gatus /usr/local/bin/gatus

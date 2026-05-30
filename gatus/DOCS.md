@@ -8,6 +8,7 @@
 | `storage_type` | `memory`        | Storage backend: `memory` (lost on restart) or `sqlite` (persistent) |
 | `metrics`      | `false`         | Expose Prometheus metrics at `/metrics`                              |
 | `timezone`     | `Europe/Berlin` | Timezone for scheduled checks and maintenance windows                |
+| `enable_cron`  | `true`          | Start the cron daemon for scheduled external endpoint scripts        |
 
 ## User Configuration File
 
@@ -101,5 +102,67 @@ ui:
     - name: "Home"
       link: "https://example.com"
 ```
+
+## Cron Jobs and External Endpoints
+
+The add-on includes a cron daemon (`dcron`) and the tools `curl`, `jq`, and `bash` for running scheduled custom
+monitoring scripts that report their status back to Gatus via the External Endpoints API.
+
+### Gatus Configuration
+
+Declare an external endpoint in `/addon_config/config.yaml`:
+
+```yaml
+endpoints:
+  - name: "Custom Check"
+    type: "external"
+    group: "Scripts"
+    enabled: true
+```
+
+The endpoint name is used as the URL path segment (URL-encoded) when posting results.
+
+### Script Template
+
+Create `/addon_config/scripts/custom_check.sh`:
+
+```bash
+#!/bin/bash
+set -e
+
+# Your custom check logic here
+if ping -c1 192.168.1.1 > /dev/null 2>&1; then
+    SUCCESS=true
+    CODE=200
+else
+    SUCCESS=false
+    CODE=500
+fi
+
+# Report result to Gatus internal API (port 8080, not the ingress port 8099)
+curl -s -X POST http://localhost:8080/api/v1/endpoints/Custom%20Check/results \
+    -H "Content-Type: application/json" \
+    -d "{\"success\": $SUCCESS, \"status_code\": $CODE}"
+```
+
+Make the script executable: `chmod +x /addon_config/scripts/custom_check.sh`
+
+### Crontab
+
+Create `/addon_config/crontab` (loaded automatically on add-on start):
+
+```crontab
+# Run custom check every 5 minutes, redirect output to Docker logs
+*/5 * * * * /addon_config/scripts/custom_check.sh >> /proc/1/fd/1 2>&1
+```
+
+The redirect `>> /proc/1/fd/1 2>&1` sends script output to the add-on's log stream, visible via `ha apps logs gatus`.
+
+### Notes
+
+- Scripts must target port `8080` (internal Gatus port), not the ingress port `8099`
+- The endpoint name in the API URL must be URL-encoded (spaces → `%20`)
+- Crontab changes require an add-on restart to take effect
+- Set `enable_cron: false` in add-on options to disable the cron daemon entirely
 
 [alerting-docs]: https://github.com/TwiN/gatus#alerting
