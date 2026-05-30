@@ -165,4 +165,74 @@ The redirect `>> /proc/1/fd/1 2>&1` sends script output to the add-on's log stre
 - Crontab changes require an add-on restart to take effect
 - Set `enable_cron: false` in add-on options to disable the cron daemon entirely
 
+## Network and Layer 2 Monitoring
+
+The add-on includes tools for monitoring beyond HTTP/ICMP/TCP:
+
+### Available Tools
+
+| Tool                | Package             | Use case                                          |
+| ------------------- | ------------------- | ------------------------------------------------- |
+| `mosquitto_pub/sub` | `mosquitto-clients` | MQTT broker reachability, publish/subscribe tests |
+| `plcstat`/`plcrate` | `open-plc-utils`    | HomePlug AV/AV2 Powerline adapter topology, rates |
+| `arping`            | `arping`            | Layer 2 ARP reachability (bypasses routing)       |
+| `ethtool`           | `ethtool`           | NIC statistics, link speed, driver info           |
+| `ip`/`bridge`       | `iproute2`          | ARP/neighbor table, VLAN, bridge inspection       |
+| `mtr`               | `mtr`               | Traceroute + ping combined                        |
+
+### MQTT Monitoring Example
+
+```bash
+#!/bin/bash
+# Check if MQTT broker responds within 3 seconds
+if mosquitto_sub -h 192.168.1.10 -p 1883 -t 'test/ping' -W 3 -C 1 > /dev/null 2>&1 ||
+   mosquitto_pub -h 192.168.1.10 -p 1883 -t 'test/ping' -m 'ok' > /dev/null 2>&1; then
+    SUCCESS=true; CODE=200
+else
+    SUCCESS=false; CODE=500
+fi
+curl -s -X POST http://localhost:8080/api/v1/endpoints/MQTT%20Broker/results \
+    -H "Content-Type: application/json" \
+    -d "{\"success\": $SUCCESS, \"status_code\": $CODE}"
+```
+
+### Powerline / HomePlug Monitoring
+
+`plcstat` and `plcrate` from `open-plc-utils` query HomePlug AV/AV2 adapters via raw Ethernet frames (EtherType
+`0x88E1`). The add-on has the `NET_RAW` and `NET_ADMIN` capabilities required for raw socket access.
+
+**Important:** To reach physical Ethernet interfaces (required for Powerline), the add-on needs host networking. Enable
+it by setting `host_network: true` in the add-on's `config.yaml` in the repository and rebuilding. Without host
+networking, raw socket tools only see the container's virtual interface.
+
+```bash
+#!/bin/bash
+# Query HomePlug adapter on eth0 and check if at least one peer is present
+PEERS=$(plcstat -t -i eth0 2>/dev/null | grep -c 'Station' || echo 0)
+if [ "$PEERS" -gt 0 ]; then
+    SUCCESS=true; CODE=200
+else
+    SUCCESS=false; CODE=500
+fi
+curl -s -X POST http://localhost:8080/api/v1/endpoints/Powerline%20Adapter/results \
+    -H "Content-Type: application/json" \
+    -d "{\"success\": $SUCCESS, \"status_code\": $CODE}"
+```
+
+### Layer 2 ARP Reachability
+
+`arping` checks if a host is reachable at MAC level, independent of IP routing:
+
+```bash
+#!/bin/bash
+if arping -I eth0 -c 2 -w 3 192.168.1.1 > /dev/null 2>&1; then
+    SUCCESS=true; CODE=200
+else
+    SUCCESS=false; CODE=500
+fi
+curl -s -X POST http://localhost:8080/api/v1/endpoints/Gateway%20L2/results \
+    -H "Content-Type: application/json" \
+    -d "{\"success\": $SUCCESS, \"status_code\": $CODE}"
+```
+
 [alerting-docs]: https://github.com/TwiN/gatus#alerting

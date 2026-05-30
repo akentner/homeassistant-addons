@@ -13,7 +13,14 @@ ARG VERSION
 
 # CA certificates for HTTPS monitoring; nginx for ingress proxy; python3 + py3-yaml for generate_config.py
 # curl + jq for external endpoint scripts; dcron for cron job support; bash for script compatibility
-RUN apk add --no-cache ca-certificates nginx python3 py3-yaml curl jq dcron bash
+# mosquitto-clients for MQTT monitoring; open-plc-utils for HomePlug/Powerline (requires NET_RAW capability)
+# ethtool + arping + iproute2 + mtr for Layer 2 / network diagnostics
+RUN apk add --no-cache \
+    ca-certificates nginx python3 py3-yaml \
+    curl jq dcron bash \
+    mosquitto-clients \
+    open-plc-utils \
+    ethtool arping iproute2 mtr
 
 # Copy statically-linked binary — no additional runtime dependencies needed
 COPY --from=gatus-source /gatus /usr/local/bin/gatus

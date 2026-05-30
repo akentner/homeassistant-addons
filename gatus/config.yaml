@@ -1,6 +1,6 @@
 name: "Gatus"
 description: "Automated status and uptime monitoring with a beautiful dashboard"
-version: "5.36.0-8"
+version: "5.36.0-9"
 slug: "gatus"
 init: false
 arch:
@@ -13,6 +13,9 @@ url: "https://github.com/akentner/homeassistant-addons"
 startup: "application"
 boot: "auto"
 host_network: false
+capabilities:
+  - NET_RAW
+  - NET_ADMIN
 ingress: true
 ingress_port: 8099
 panel_icon: "mdi:check-network"
