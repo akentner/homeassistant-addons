@@ -1,11 +1,21 @@
 # Global ARGs must be declared before first FROM so they can be used in FROM instructions
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.23
 ARG VERSION
+ARG GATUS_CLI_VERSION=1.0.0
 
 # Stage 1: Extract statically-linked Gatus binary from upstream image
 FROM ghcr.io/twin/gatus:v${VERSION} AS gatus-source
 
-# Stage 2: HA base image
+# Stage 2: Download gatus-cli
+FROM alpine:3.20 AS gatus-cli-source
+ARG GATUS_CLI_VERSION
+RUN apk add --no-cache curl unzip && \
+    curl -fsSL "https://github.com/TwiN/gatus-cli/releases/download/v${GATUS_CLI_VERSION}/gatus-cli-linux-amd64.zip" \
+        -o /tmp/gatus-cli.zip && \
+    unzip /tmp/gatus-cli.zip -d /tmp && \
+    chmod +x /tmp/gatus-cli-linux-amd64
+
+# Stage 3: HA base image
 FROM ${BUILD_FROM}
 
 # Re-declare VERSION for use in this stage
@@ -24,12 +34,13 @@ RUN apk add --no-cache \
 
 # Copy statically-linked binary — no additional runtime dependencies needed
 COPY --from=gatus-source /gatus /usr/local/bin/gatus
+COPY --from=gatus-cli-source /tmp/gatus-cli-linux-amd64 /usr/local/bin/gatus-cli
 
 # Copy add-on scripts and nginx config
 COPY run.sh generate_config.py /
 COPY nginx.conf /etc/nginx/gatus-nginx.conf
 
-RUN chmod +x /run.sh /usr/local/bin/gatus
+RUN chmod +x /run.sh /usr/local/bin/gatus /usr/local/bin/gatus-cli
 
 EXPOSE 8099
 CMD ["/run.sh"]
