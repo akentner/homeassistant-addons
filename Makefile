@@ -135,7 +135,16 @@ build-addon: ## Build an add-on image locally, replicating the HA build process 
 	$(eval VERSION   := $(shell grep 'VERSION:' $(ADDON)/build.yaml | awk '{print $$2}' | tr -d '"'))
 	$(eval BUILD_FROM := $(shell grep 'amd64:' $(ADDON)/build.yaml | awk '{print $$2}' | tr -d '"'))
 	$(eval _TIMEOUT  := $(if $(TIMEOUT),$(TIMEOUT),600))
-	@echo "🐳 Building $(ADDON) v$(VERSION) (BUILD_FROM=$(BUILD_FROM), timeout=$(_TIMEOUT)s)..."
+	@echo "🐳 Building $(ADDON) v$(VERSION)"
+	@echo "   BUILD_FROM=$(BUILD_FROM)"
+	@echo "   VERSION=$(VERSION)"
+	@echo "   BUILD_ARCH=amd64"
+	@echo "   BUILD_DATE=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)"
+	@echo "   BUILD_REF=$(shell git rev-parse --short HEAD)"
+	@echo "   BUILD_REPOSITORY=$(shell git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git||')"
+	@echo "   BUILD_VERSION=$(VERSION)"
+	@echo "   timeout=$(_TIMEOUT)s"
+	@echo ""
 	timeout $(_TIMEOUT) docker build \
 		--progress=plain \
 		--build-arg BUILD_FROM="$(BUILD_FROM)" \
