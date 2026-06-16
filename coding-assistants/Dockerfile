@@ -182,7 +182,7 @@ RUN npm install -g @anthropic-ai/claude-code @github/copilot fx
 
 # Web UI + nginx config
 RUN mkdir -p /opt/coding-assistants
-COPY index.html /opt/coding-assistants/index.html
+COPY index.html info.html /opt/coding-assistants/
 COPY nginx.conf /etc/nginx/nginx.conf
 
 # Tool context for AI assistants

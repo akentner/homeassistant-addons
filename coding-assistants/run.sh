@@ -14,6 +14,11 @@ Coding Assistants ${ADDON_VERSION}  |  claude ${CLAUDE_VERSION}  |  opencode ${O
 HA: ${MOTD_HA_URL}
 EOF
 
+# Version info for web UI
+printf '{"addon":"%s","claude":"%s","opencode":"%s"}\n' \
+    "${ADDON_VERSION}" "${CLAUDE_VERSION}" "${OPENCODE_VERSION}" \
+    > /opt/coding-assistants/versions.json
+
 # Persist /data directories for all coding assistants
 mkdir -p \
     /data/claude \

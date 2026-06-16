@@ -33,6 +33,7 @@
       font-weight: bold;
       margin-right: 10px;
       letter-spacing: 0.03em;
+      white-space: nowrap;
     }
 
     .tab-btn {
@@ -45,6 +46,7 @@
       background: transparent;
       color: #6c7086;
       transition: background 0.12s, color 0.12s, border-color 0.12s;
+      white-space: nowrap;
     }
     .tab-btn:hover {
       background: #313244;
@@ -55,6 +57,18 @@
       color: #89b4fa;
       border-color: #45475a;
     }
+
+    .spacer { flex: 1; }
+
+    #versions {
+      display: flex;
+      gap: 14px;
+      color: #45475a;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    #versions span { color: #585b70; }
+    #versions span b { color: #6c7086; font-weight: normal; }
 
     #frames {
       flex: 1;
@@ -75,14 +89,28 @@
   <div id="topbar">
     <span class="logo">Coding Assistants</span>
     <button class="tab-btn active" onclick="show('terminal', this)">Terminal</button>
+    <button class="tab-btn" onclick="show('opencode', this)">OpenCode</button>
+    <button class="tab-btn" onclick="show('info', this)">Info</button>
+    <div class="spacer"></div>
+    <div id="versions">
+      <span>addon <b id="v-addon">…</b></span>
+      <span>claude <b id="v-claude">…</b></span>
+      <span>opencode <b id="v-opencode">…</b></span>
+    </div>
   </div>
   <div id="frames">
     <iframe id="frameTerminal" src="./terminal/"></iframe>
+    <iframe id="frameOpencode" class="hidden" data-src="./opencode/"></iframe>
+    <iframe id="frameInfo"     class="hidden" data-src="./info.html"></iframe>
   </div>
 
   <script>
-    const iframes = { terminal: 'frameTerminal' };
-    const loaded  = { terminal: true };
+    const iframes = {
+      terminal: 'frameTerminal',
+      opencode: 'frameOpencode',
+      info:     'frameInfo',
+    };
+    const loaded = { terminal: true };
 
     function show(name, btn) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -95,6 +123,15 @@
         loaded[name] = true;
       }
     }
+
+    fetch('./versions.json')
+      .then(r => r.json())
+      .then(v => {
+        document.getElementById('v-addon').textContent    = v.addon    || '—';
+        document.getElementById('v-claude').textContent   = v.claude   || '—';
+        document.getElementById('v-opencode').textContent = v.opencode || '—';
+      })
+      .catch(() => {});
   </script>
 </body>
 </html>
