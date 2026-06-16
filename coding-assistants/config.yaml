@@ -15,8 +15,10 @@ ingress: true
 ingress_port: 7681
 ports:
   2222/tcp: 2222
+  4096/tcp: 4096
 ports_description:
   2222/tcp: "SSH server"
+  4096/tcp: "OpenCode server"
 map:
   - homeassistant_config:rw
   - data:rw

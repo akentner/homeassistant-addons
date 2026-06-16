@@ -372,6 +372,10 @@ esac
 FONT_SIZE=$(bashio::config 'terminal_font_size')
 FONT_FAMILY=$(bashio::config 'terminal_font_family')
 
+# Start opencode server (port 4096)
+bashio::log.info "Starting opencode server on port 4096..."
+opencode serve --port 4096 --hostname 0.0.0.0 &
+
 # Start ttyd — web terminal via HA ingress (port 7681)
 bashio::log.info "Starting web terminal on port 7681..."
 ttyd \
