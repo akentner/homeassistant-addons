@@ -2,4 +2,4 @@ build_from:
   amd64: "ghcr.io/home-assistant/amd64-base-debian:bookworm"
 
 args:
-  VERSION: "1.0.0-alpha39"
+  VERSION: "1.0.0-alpha40"

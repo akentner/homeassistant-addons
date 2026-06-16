@@ -58,6 +58,33 @@
       border-color: #45475a;
     }
 
+    /* Link-style tab — opens in new window, no active state */
+    .tab-link {
+      padding: 4px 16px;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+      background: transparent;
+      color: #6c7086;
+      transition: background 0.12s, color 0.12s;
+      white-space: nowrap;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .tab-link:hover {
+      background: #313244;
+      color: #cdd6f4;
+    }
+    .tab-link svg {
+      opacity: 0.5;
+      flex-shrink: 0;
+    }
+    .tab-link:hover svg { opacity: 0.8; }
+
     .spacer { flex: 1; }
 
     #versions {
@@ -89,7 +116,13 @@
   <div id="topbar">
     <span class="logo">Coding Assistants</span>
     <button class="tab-btn active" onclick="show('terminal', this)">Terminal</button>
-    <button class="tab-btn" onclick="show('opencode', this)">OpenCode</button>
+    <a  id="opencode-link" class="tab-link" target="_blank" title="Opens in new tab (port 4096)">
+      OpenCode
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+        <path d="M1.5 1h4V2H2.5v5.5H8V6h1v2.5a.5.5 0 0 1-.5.5h-6a.5.5 0 0 1-.5-.5v-7A.5.5 0 0 1 1.5 1z"/>
+        <path d="M5.5 1H9v3.5L7.5 3 5 5.5 4.5 5 7 2.5z"/>
+      </svg>
+    </a>
     <button class="tab-btn" onclick="show('info', this)">Info</button>
     <div class="spacer"></div>
     <div id="versions">
@@ -100,14 +133,16 @@
   </div>
   <div id="frames">
     <iframe id="frameTerminal" src="./terminal/"></iframe>
-    <iframe id="frameOpencode" class="hidden" data-src="./opencode/"></iframe>
-    <iframe id="frameInfo"     class="hidden" data-src="./info.html"></iframe>
+    <iframe id="frameInfo" class="hidden" data-src="./info.html"></iframe>
   </div>
 
   <script>
+    // Set OpenCode link to port 4096 on same host
+    document.getElementById('opencode-link').href =
+      location.protocol + '//' + location.hostname + ':4096';
+
     const iframes = {
       terminal: 'frameTerminal',
-      opencode: 'frameOpencode',
       info:     'frameInfo',
     };
     const loaded = { terminal: true };
