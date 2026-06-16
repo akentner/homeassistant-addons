@@ -45,7 +45,7 @@ env_vars:
 ```
 
 [docs]: https://github.com/akentner/homeassistant-addons/blob/main/coding-assistants/DOCS.md
-[release-shield]: https://img.shields.io/badge/version-v1.0.0--alpha36-orange.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.0.0-alpha36
+[release-shield]: https://img.shields.io/badge/version-v1.0.0--alpha37-orange.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.0.0-alpha37
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
