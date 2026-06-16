@@ -376,15 +376,20 @@ FONT_FAMILY=$(bashio::config 'terminal_font_family')
 bashio::log.info "Starting opencode server on port 4096..."
 opencode serve --port 4096 --hostname 0.0.0.0 &
 
-# Start ttyd — web terminal via HA ingress (port 7681)
-bashio::log.info "Starting web terminal on port 7681..."
+# Start ttyd — web terminal, bound to localhost (nginx proxies /terminal/)
+bashio::log.info "Starting web terminal on port 7681 (localhost)..."
 ttyd \
     --port 7681 \
-    --interface 0.0.0.0 \
+    --interface 127.0.0.1 \
+    --base-path /terminal/ \
     --writable \
     --client-option "fontSize=${FONT_SIZE}" \
     --client-option "fontFamily=${FONT_FAMILY}" \
     --client-option "theme=${THEME_JSON}" \
     tmux new-session -A -s main -c /homeassistant &
+
+# Start nginx — serves landing page + proxies sub-services (port 8099 = ingress)
+bashio::log.info "Starting nginx on port 8099..."
+nginx &
 
 wait

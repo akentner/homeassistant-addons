@@ -6,6 +6,7 @@ FROM $BUILD_FROM
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash tmux \
     openssh-server openssh-client \
+    nginx \
     curl wget git jq make \
     nodejs npm \
     ripgrep fd-find fzf bat shellcheck \
@@ -178,6 +179,11 @@ RUN OPENCODE_VER=$(curl -sfL https://api.github.com/repositories/975734319/relea
 # Coding assistants + fx JSON viewer via npm
 # hadolint ignore=DL3016
 RUN npm install -g @anthropic-ai/claude-code @github/copilot fx
+
+# Web UI + nginx config
+RUN mkdir -p /opt/coding-assistants
+COPY index.html /opt/coding-assistants/index.html
+COPY nginx.conf /etc/nginx/nginx.conf
 
 # Tool context for AI assistants
 RUN mkdir -p /etc/coding-assistants

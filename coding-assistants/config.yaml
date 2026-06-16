@@ -1,6 +1,6 @@
 name: "Coding Assistants"
 description: "Terminal with Claude Code, OpenCode, and GitHub Copilot CLI — SSH + web terminal"
-version: "1.0.0-alpha31"
+version: "1.0.0-alpha32"
 slug: "coding_assistants"
 init: false
 hassio_api: true
@@ -12,7 +12,7 @@ startup: "application"
 boot: "manual"
 host_network: false
 ingress: true
-ingress_port: 7681
+ingress_port: 8099
 ports:
   2222/tcp: 2222
   4096/tcp: 4096
