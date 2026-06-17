@@ -1,3 +1,36 @@
+## [1.44.0](https://github.com/rynfar/meridian/compare/meridian-v1.43.0...meridian-v1.44.0) (2026-06-16)
+
+### Features
+
+- **effort:** accept reasoning_effort end-to-end (OpenAI translation + validation)
+  ([#536](https://github.com/rynfar/meridian/issues/536))
+  ([bf38f2b](https://github.com/rynfar/meridian/commit/bf38f2bfdf6e2005b0367b337272151b8f531110))
+- **profiles:** add headless OAuth code flow ([#504](https://github.com/rynfar/meridian/issues/504))
+  ([28f6a01](https://github.com/rynfar/meridian/commit/28f6a01c153de03cf7c3737a26daf9ab38f1cb65))
+
+### Bug Fixes
+
+- **docker:** match meridian-v\* release tags for image builds ([#507](https://github.com/rynfar/meridian/issues/507))
+  ([186b268](https://github.com/rynfar/meridian/commit/186b2684a66711389af1fd6bdab92969f0ed1b29))
+- **logging:** gate [PROXY] operational stderr behind config.silent
+  ([#537](https://github.com/rynfar/meridian/issues/537))
+  ([e69a8db](https://github.com/rynfar/meridian/commit/e69a8db71c04c8e3b0ab8249835619df413d5d85))
+- **openai:** don't inject claude_code preset on /v1/chat/completions
+  ([#533](https://github.com/rynfar/meridian/issues/533))
+  ([1e8ddd3](https://github.com/rynfar/meridian/commit/1e8ddd3e59ea7e2ac54b837f4ed3e71cabe250e0))
+- **profiles:** refresh selected profile credentials ([#500](https://github.com/rynfar/meridian/issues/500))
+  ([c389ac1](https://github.com/rynfar/meridian/commit/c389ac1f679e475f8c7e7036bf7f74a6a874d12e))
+- **server:** install uncaughtException/unhandledRejection handlers for library consumers
+  ([#505](https://github.com/rynfar/meridian/issues/505))
+  ([8b77143](https://github.com/rynfar/meridian/commit/8b77143f8f0762d92da2c5a4adec23ee4415c11d))
+- **setup:** never overwrite opencode.json; merge non-destructively (closes
+  [#519](https://github.com/rynfar/meridian/issues/519)) ([#538](https://github.com/rynfar/meridian/issues/538))
+  ([8c5ad3e](https://github.com/rynfar/meridian/commit/8c5ad3e057c08e732cd8078f575455d6d0600cfb))
+- **tokenRefresh:** silence scheduled refresh log ([#518](https://github.com/rynfar/meridian/issues/518))
+  ([da722a3](https://github.com/rynfar/meridian/commit/da722a397ff5b39e946bf5012b924323fb199c1e))
+- Windows build + partial-overlap export dedup ([#510](https://github.com/rynfar/meridian/issues/510))
+  ([619a582](https://github.com/rynfar/meridian/commit/619a582db221fd425f16afb0fd5536e58a302a36))
+
 ## [1.43.0](https://github.com/rynfar/meridian/compare/meridian-v1.42.1...meridian-v1.43.0) (2026-05-29)
 
 ### Features
