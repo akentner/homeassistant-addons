@@ -1,3 +1,10 @@
+## [1.44.1](https://github.com/rynfar/meridian/compare/meridian-v1.44.0...meridian-v1.44.1) (2026-06-25)
+
+### Bug Fixes
+
+- implement passthrough for the pi adapter ([#544](https://github.com/rynfar/meridian/issues/544))
+  ([dc1bf2f](https://github.com/rynfar/meridian/commit/dc1bf2f2384c39fef98d63b051119b457149032f))
+
 ## [1.44.0](https://github.com/rynfar/meridian/compare/meridian-v1.43.0...meridian-v1.44.0) (2026-06-16)
 
 ### Features
