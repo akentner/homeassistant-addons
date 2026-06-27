@@ -24,8 +24,8 @@ Full details: [.planning/milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
       (completed 2026-06-27) working through HA Ingress with correct basePath and relative asset paths
 - [ ] **Phase 5: Multi-Namespace + Dynamic Config** — `generate_nginx.py` wired to HA options, multiple directories
       served as isolated SPAs, landing page at ingress root
-- [ ] **Phase 6: Git Integration** — Optional per-namespace git pull at startup and on a background interval; errors
-      non-blocking _(planned: 2 plans)_
+- [x] **Phase 6: Git Integration** — Optional per-namespace git pull at startup and on a background interval; errors
+      non-blocking (completed 2026-06-28)
 
 ## Phase Details
 
@@ -124,7 +124,7 @@ Plans:
 - [x] 06-01-PLAN.md — Implementation: extend `config.yaml` schema with `git_pull`, `git_pull_interval`, `git_url`; add
       `git` to Dockerfile apk list; create `_git_sync.py` with probe/pull/clone + periodic state; rewrite `run.sh` with
       startup pull, background loop, and signal trap (GIT-01..05)
-- [ ] 06-02-PLAN.md — Empirical verification: 5-scenario `verify-git-integration.sh` covering startup pull, graceful
+- [x] 06-02-PLAN.md — Empirical verification: 5-scenario `verify-git-integration.sh` covering startup pull, graceful
       failure, no-invocation-when-disabled, periodic sync, and first-time clone via `git_url`; capture transcript;
       document in DOCS.md `## Git Sync` section and README.md checklist items 11–13
 
@@ -137,4 +137,4 @@ Plans:
 | 3. Meridian Add-on                  | v1.0      | 3/3            | Complete | 2026-04-04 |
 | 4. Scaffold + Ingress Validation    | v1.1      | 3/3            | Complete | 2026-06-27 |
 | 5. Multi-Namespace + Dynamic Config | v1.1      | 1/1            | Complete | 2026-06-27 |
-| 6. Git Integration                  | v1.1      | 0/2            | Planned  | —          |
+| 6. Git Integration                  | v1.1      | 2/2            | Complete | 2026-06-28 |

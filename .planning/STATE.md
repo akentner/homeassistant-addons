@@ -2,14 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: markdown-renderer
-status: Ready to execute
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-06-27T22:15:48.400Z"
+status: Phase complete
+last_updated: "2026-06-27T22:55:56.931Z"
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -31,22 +30,21 @@ All 3 phases shipped. Archived to `.planning/milestones/v1.0-ROADMAP.md`.
 | 2     | Auto-Update Workflow | Complete | 2026-04-04 |
 | 3     | Meridian Add-on      | Complete | 2026-04-04 |
 
-## Milestone v1.1 — IN PROGRESS
+## Milestone v1.1 — COMPLETE
 
-Roadmap: 3 phases (4-6). Phase 5 complete.
+Roadmap: 3 phases (4-6). All phases complete.
 
-| Phase | Name                             | Status      | Completed  |
-| ----- | -------------------------------- | ----------- | ---------- |
-| 4     | Scaffold + Ingress Validation    | Complete    | 2026-06-27 |
-| 5     | Multi-Namespace + Dynamic Config | Complete    | 2026-06-27 |
-| 6     | Git Integration                  | In Progress | —          |
+| Phase | Name                             | Status   | Completed  |
+| ----- | -------------------------------- | -------- | ---------- |
+| 4     | Scaffold + Ingress Validation    | Complete | 2026-06-27 |
+| 5     | Multi-Namespace + Dynamic Config | Complete | 2026-06-27 |
+| 6     | Git Integration                  | Complete | 2026-06-28 |
 
 ## Current Position
 
-Phase: 06 (git-integration) — EXECUTING Plan: 2 of 2 **Phase**: 6 — Git Integration **Plan**: 1 complete (awaiting 06-02
-empirical verification) **Progress**: 5/6 plans complete
+Phase: 06 (git-integration) — COMPLETE **Plan**: 2 of 2 complete **Progress**: 6/6 plans complete
 
-**Progress bar**: `[████████░░] 83%`
+**Progress bar**: `[██████████] 100%`
 
 ## Accumulated Context
 
@@ -64,6 +62,10 @@ empirical verification) **Progress**: 5/6 plans complete
 | `_git_sync.py` (Phase 6)                      | Mirrors generate_nginx.py pattern; in-memory `last_pull` dict; check=False everywhere — GIT-05 non-blocking contract |
 | Single background `while true` in run.sh (P6) | One loop for all namespaces (D-08); per-namespace gating in Python; simpler signal handling than N parallel loops    |
 | POSIX `TERM INT` trap (Phase 6)               | POSIX-sh portable form; SIGTERM/SIGINT and TERM/INT are aliases in POSIX `trap`; matches CONVENTIONS.md /bin/sh rule |
+| `export HOME=/root` in run.sh (06-02)         | HA base image doesn't export `$HOME`; `git config --global` aborts with `fatal: $HOME not set` without it (GIT-02)   |
+| Dockerfile COPY `_git_sync.py` (06-02)        | Plan 01 added the helper but didn't update the Dockerfile's COPY line; new file never made it into the built image   |
+| INFO: log lines on git pull/clone success     | Pre-existing `subprocess.run(capture_output=True)` swallowed git's stdout; surfacing it lets operators verify pulls  |
+| Bumped v1.0.0 → v1.1.0 in 06-02 (not 06-01)   | Per Phase 5 pattern: empirical verification may surface issues; minor bump clearer than subpatch for new feature     |
 
 ### Research Flags (open questions for implementation)
 
@@ -82,10 +84,11 @@ empirical verification) **Progress**: 5/6 plans complete
 
 ### Todos
 
-- [ ] Bump `markdown-renderer/config.yaml` to `1.0.0-1` and run `make update-version` so the run.sh + generate_nginx.py
-      bug fixes ship in the published add-on version
+- [x] Bump `markdown-renderer/config.yaml` to `1.0.0-1` and run `make update-version` so the run.sh + generate_nginx.py
+      bug fixes ship in the published add-on version (DONE — bumped to `1.1.0-0` as part of 06-02 which included
+      git-sync + run.sh/Dockerfile/\_git_sync.py bug fixes)
 
-- [ ] Run `make validate-addons` after Phase 4 scaffold is in place (DONE — passes)
+- [x] Run `make validate-addons` after Phase 4 scaffold is in place (DONE — passes)
 - [ ] Empirically verify `window.location.pathname` basePath in actual HA Ingress during Phase 4 (deferred to user)
 
 ### Blockers
@@ -94,10 +97,10 @@ None.
 
 ## Performance Metrics
 
-| Phase        | Plan  | Duration | Tasks   | Files |
-| ------------ | ----- | -------- | ------- | ----- |
-| 06           | 01    | 19 min   | 3       | 4     |
-| Phase 06 P01 | 19min | 3 tasks  | 4 files |
+| Phase | Plan | Duration | Tasks | Files |
+| ----- | ---- | -------- | ----- | ----- |
+| 06    | 01   | 19 min   | 3     | 4     |
+| 06    | 02   | 36 min   | 3     | 9     |
 
 ## Quick Tasks Completed
 
@@ -113,7 +116,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-27T22:15:48.357Z Stopped at: Completed 06-01-PLAN.md Resume file: None
+Last session: 2026-06-27T22:55:56.910Z
 
 ---
 

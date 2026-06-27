@@ -104,33 +104,33 @@ namespaced HTML endpoints via HA Ingress, with Mermaid diagram support and optio
 
 ## Traceability
 
-| REQ-ID     | Phase                                     | Plan |
-| ---------- | ----------------------------------------- | ---- |
-| ADD-01     | Phase 4: Scaffold + Ingress Validation    | —    |
-| ADD-02     | Phase 4: Scaffold + Ingress Validation    | —    |
-| ADD-03     | Phase 4: Scaffold + Ingress Validation    | —    |
-| ADD-04     | Phase 4: Scaffold + Ingress Validation    | —    |
-| INGRESS-01 | Phase 4: Scaffold + Ingress Validation    | —    |
-| INGRESS-02 | Phase 4: Scaffold + Ingress Validation    | —    |
-| INGRESS-03 | Phase 4: Scaffold + Ingress Validation    | —    |
-| INGRESS-04 | Phase 4: Scaffold + Ingress Validation    | —    |
-| INGRESS-05 | Phase 4: Scaffold + Ingress Validation    | —    |
-| MULTI-01   | Phase 5: Multi-Namespace + Dynamic Config | —    |
-| MULTI-02   | Phase 5: Multi-Namespace + Dynamic Config | —    |
-| MULTI-03   | Phase 5: Multi-Namespace + Dynamic Config | —    |
-| MULTI-04   | Phase 5: Multi-Namespace + Dynamic Config | —    |
-| MULTI-05   | Phase 5: Multi-Namespace + Dynamic Config | —    |
-| MULTI-06   | Phase 5: Multi-Namespace + Dynamic Config | —    |
-| KROKI-01   | Phase 4: Scaffold + Ingress Validation    | —    |
-| KROKI-02   | Phase 4: Scaffold + Ingress Validation    | —    |
-| KROKI-03   | Phase 4: Scaffold + Ingress Validation    | —    |
-| KROKI-04   | Phase 4: Scaffold + Ingress Validation    | —    |
-| KROKI-05   | Phase 4: Scaffold + Ingress Validation    | —    |
-| GIT-01     | Phase 6: Git Integration                  | —    |
-| GIT-02     | Phase 6: Git Integration                  | —    |
-| GIT-03     | Phase 6: Git Integration                  | —    |
-| GIT-04     | Phase 6: Git Integration                  | —    |
-| GIT-05     | Phase 6: Git Integration                  | —    |
+| REQ-ID     | Phase                                     | Plan                                                                                                                |
+| ---------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| ADD-01     | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| ADD-02     | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| ADD-03     | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| ADD-04     | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| INGRESS-01 | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| INGRESS-02 | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| INGRESS-03 | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| INGRESS-04 | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| INGRESS-05 | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| MULTI-01   | Phase 5: Multi-Namespace + Dynamic Config | —                                                                                                                   |
+| MULTI-02   | Phase 5: Multi-Namespace + Dynamic Config | —                                                                                                                   |
+| MULTI-03   | Phase 5: Multi-Namespace + Dynamic Config | —                                                                                                                   |
+| MULTI-04   | Phase 5: Multi-Namespace + Dynamic Config | —                                                                                                                   |
+| MULTI-05   | Phase 5: Multi-Namespace + Dynamic Config | —                                                                                                                   |
+| MULTI-06   | Phase 5: Multi-Namespace + Dynamic Config | —                                                                                                                   |
+| KROKI-01   | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| KROKI-02   | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| KROKI-03   | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| KROKI-04   | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| KROKI-05   | Phase 4: Scaffold + Ingress Validation    | —                                                                                                                   |
+| GIT-01     | Phase 6: Git Integration                  | 06-02 (empirical: verify-git-integration.sh Scenario A, 18 assertions)                                              |
+| GIT-02     | Phase 6: Git Integration                  | 06-02 (empirical: verify-git-integration.sh Scenario A — `git config --global` ran at startup)                      |
+| GIT-03     | Phase 6: Git Integration                  | 06-02 (empirical: verify-git-integration.sh Scenario C — no git pull/clone in logs)                                 |
+| GIT-04     | Phase 6: Git Integration                  | 06-02 (empirical: verify-git-integration.sh Scenario D — 4 git pull invocations during 15s window)                  |
+| GIT-05     | Phase 6: Git Integration                  | 06-02 (empirical: verify-git-integration.sh Scenario B — unreachable URL, WARNING in logs, container stays running) |
 
 ---
 
