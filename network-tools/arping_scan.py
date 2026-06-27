@@ -6,6 +6,7 @@ import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 OPTIONS_FILE = Path("/data/options.json")
 OUTPUT_FILE = Path("/data/results/arping_scan.json")
@@ -125,11 +126,101 @@ def write_output(data: dict) -> None:
     log.info(f"Scan: {data['hosts_reachable']}/{data['hosts_total']} erreichbar -> {OUTPUT_FILE}")
 
 
+def _mac_to_entity_key(mac: str) -> str:
+    return mac.lower().replace(":", "")
+
+
+def _build_discovery_payload(result: dict, prefix: str, entity_key: str) -> dict:
+    state_topic = f"{prefix}/binary_sensor/arping_{entity_key}_status/state"
+    attrs_topic = f"{prefix}/binary_sensor/arping_{entity_key}_status/attributes"
+    return {
+        "name": result["label"],
+        "unique_id": f"arping_{entity_key}_status",
+        "object_id": f"arping_{entity_key}_status",
+        "state_topic": state_topic,
+        "json_attributes_topic": attrs_topic,
+        "device_class": "connectivity",
+        "payload_on": "ON",
+        "payload_off": "OFF",
+    }
+
+
+def _build_attributes(result: dict, scan_timestamp: str) -> dict:
+    attrs: dict = {
+        "ip": result["ip"],
+        "label": result["label"],
+        "scan_timestamp": scan_timestamp,
+    }
+    if result.get("mac"):
+        attrs["mac"] = result["mac"]
+    if result.get("expected_mac"):
+        attrs["expected_mac"] = result["expected_mac"]
+    if result.get("mac_match") is not None:
+        attrs["mac_match"] = result["mac_match"]
+    if result.get("rtt_ms") is not None:
+        attrs["rtt_ms"] = result["rtt_ms"]
+    return attrs
+
+
+def publish_mqtt(data: dict, options: dict) -> None:
+    if not options.get("mqtt_enabled"):
+        return
+
+    try:
+        import paho.mqtt.client as mqtt
+    except ImportError:
+        log.error("paho-mqtt nicht verfügbar — MQTT-Publishing übersprungen")
+        return
+
+    host = options.get("mqtt_host") or "core-mosquitto"
+    port = int(options.get("mqtt_port") or 1883)
+    username = options.get("mqtt_username") or None
+    password = options.get("mqtt_password") or None
+    prefix = (options.get("mqtt_discovery_prefix") or "homeassistant").rstrip("/")
+
+    # paho-mqtt 2.x requires CallbackAPIVersion; 1.x does not have it
+    if hasattr(mqtt, "CallbackAPIVersion"):
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id="network-tools-arping")
+    else:
+        client = mqtt.Client(client_id="network-tools-arping")
+    if username:
+        client.username_pw_set(username, password)
+
+    try:
+        client.connect(host, port, keepalive=10)
+    except OSError as e:
+        log.error(f"MQTT connect {host}:{port} fehlgeschlagen: {e}")
+        return
+
+    scan_timestamp = data.get("scan_timestamp", "")
+
+    for result in data.get("results", []):
+        mac = result.get("expected_mac") or result.get("mac")
+        if not mac:
+            log.debug(f"MQTT: kein MAC für {result['ip']} — übersprungen")
+            continue
+
+        entity_key = _mac_to_entity_key(mac)
+        discovery_payload = _build_discovery_payload(result, prefix, entity_key)
+        state_topic = discovery_payload["state_topic"]
+        attrs_topic = discovery_payload["json_attributes_topic"]
+        discovery_topic = f"{prefix}/binary_sensor/arping_{entity_key}_status/config"
+
+        client.publish(discovery_topic, json.dumps(discovery_payload), retain=True)
+        client.publish(state_topic, "ON" if result["reachable"] else "OFF", retain=True)
+        client.publish(attrs_topic, json.dumps(_build_attributes(result, scan_timestamp)), retain=True)
+        log.debug(f"MQTT published: {entity_key} -> {'ON' if result['reachable'] else 'OFF'}")
+
+    client.disconnect()
+    log.info(f"MQTT: {len(data.get('results', []))} Hosts publiziert an {host}:{port}")
+
+
 def main() -> None:
     options = load_options()
     setup_logging(options.get("log_level", "info"))
     data = scan(options)
     write_output(data)
+    publish_mqtt(data, options)
 
 
 if __name__ == "__main__":
