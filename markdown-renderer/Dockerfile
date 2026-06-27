@@ -11,18 +11,28 @@ ARG WORKING_DIR=/app
 # python3 + bashio are already provided by amd64-base-python:3.12-alpine3.20.
 RUN apk add --no-cache nginx curl tar
 
-# Vendored Docsify 4.13.1 (ADD-02): extract lib/docsify.min.js + themes/vue.css
-# from the GitHub release tarball. Pinned via ARG DOCSIFY_VERSION.
+# Vendored Docsify 4.13.1 (ADD-02): extract lib/docsify.min.js + themes/vue.css.
+# Note: the GitHub source tarball (docsifyjs/docsify archive refs/tags/v...) ships
+# only source files (.styl, .js source), NOT prebuilt artifacts. The npm registry
+# package (docsify-4.13.1.tgz) ships the prebuilt lib/docsify.min.js and
+# themes/vue.css. Pinned via ARG DOCSIFY_VERSION.
 WORKDIR ${WORKING_DIR}/_docsify
 RUN mkdir -p themes && \
-    curl -fsSL "https://github.com/docsifyjs/docsify/archive/refs/tags/v${DOCSIFY_VERSION}.tar.gz" \
+    curl -fsSL "https://registry.npmjs.org/docsify/-/docsify-${DOCSIFY_VERSION}.tgz" \
     | tar xz --strip-components=1 --wildcards "*/lib/docsify.min.js" "*/themes/vue.css"
 
 # Vendored Mermaid 11.15.0 UMD build (ADD-02): extract dist/mermaid.min.js.
-# Tarball URL uses the encoded "@" (mermaid@11.15.0 tag -> mermaid%4011.15.0).
-# --strip-components=2 drops both <repo>-mermaid-<version> and dist/ from the path.
-RUN curl -fsSL "https://github.com/mermaid-js/mermaid/archive/refs/tags/mermaid%40${MERMAID_VERSION}.tar.gz" \
-    | tar xz --strip-components=2 --wildcards "*/dist/mermaid.min.js"
+# The GitHub source tarball ships only TypeScript sources; the npm registry
+# package (mermaid-11.15.0.tgz) ships the prebuilt dist/mermaid.min.js.
+RUN curl -fsSL "https://registry.npmjs.org/mermaid/-/mermaid-${MERMAID_VERSION}.tgz" \
+    | tar xz --strip-components=1 --wildcards "*/dist/mermaid.min.js"
+
+# Flatten the package layouts to /app/_docsify/{docsify.min.js,mermaid.min.js,themes/vue.css}
+# so the generated index.html (../_docsify/docsify.min.js) resolves correctly.
+RUN mv lib/docsify.min.js ./docsify.min.js && \
+    mv lib/themes/vue.css themes/vue.css && \
+    mv dist/mermaid.min.js ./mermaid.min.js && \
+    rm -rf lib dist
 
 # Copy add-on-specific files (run.sh + generate_nginx.py); both must be chmod +x.
 WORKDIR ${WORKING_DIR}

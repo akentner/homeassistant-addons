@@ -3,7 +3,7 @@
 [![Release][release-shield]][release] [![License][license-shield]][license]
 
 Renders Markdown directories as Docsify SPAs via Home Assistant Ingress with Mermaid diagram support. Vendored Docsify
-and Mermaid - no CDN requests at runtime.
+and Mermaid - no CDN requests at runtime. - Verification status: see Verification section below
 
 ## Configuration
 
@@ -21,6 +21,39 @@ runtime.
 
 This add-on tracks [docsifyjs/docsify](https://github.com/docsifyjs/docsify) pinned to the `v4.*` version pattern so v5
 release-candidates are never auto-applied.
+
+## Verification
+
+The add-on has been validated by:
+
+- `make check-all` (lint + validate-addons + validate-versions + validate-dockerfiles)
+- Local Docker build via `make build-addon ADDON=markdown-renderer` produces `local/markdown-renderer:1.0.0`
+- Generator dry-run with single-namespace + multi-namespace fixtures passes `nginx -t -c /tmp/nginx.conf`
+
+### Manual HA Ingress Test Checklist
+
+Phase 4 success criteria require empirical verification in Home Assistant. To confirm:
+
+1. **Ingress panel** - Install add-on, open Settings > Devices & Services > Markdown Renderer. Panel icon
+   `mdi:text-box-multiple` is visible in HA sidebar.
+2. **Single namespace renders** - Configure `directories: [{name: docs, path: /share/docs}]` in the add-on options. Put
+   a `README.md` in `/share/docs/` on the HA host. Open the panel; the Docsify SPA loads without browser console errors;
+   README.md renders as HTML.
+3. **Mermaid diagrams** - Add a fenced ` ```mermaid ` block to a .md file. Open the page; the block renders as inline
+   SVG (not as code text).
+4. **No CDN requests** - Open browser DevTools Network tab; verify all `.js` and `.css` requests resolve to relative
+   paths under the Ingress URL (e.g., `../_docsify/docsify.min.js`). Zero requests to `cdn.jsdelivr.net`, `unpkg.com`,
+   or any other external host. Note: requests to `kroki.io` are EXPECTED for non-Mermaid diagram blocks (PlantUML,
+   GraphViz, etc.) and confirm the Kroki dispatcher is working.
+5. **Auto-update pin** - Inspect .upstream.yaml; confirm `version_pattern: "v4.*"`. Verify the next daily auto-update
+   run does not propose a Docsify v5 RC upgrade.
+6. **Kroki diagram render** - Add a fenced ` ```plantuml ` block (or `dot`, `blockdiag`, etc.) to a .md file. Open the
+   page; the block is replaced by an `<img>` tag whose `src` starts with `https://kroki.io/plantuml/svg/` (or the
+   format-appropriate path). If Kroki is unreachable, the original code block remains visible and the browser console
+   logs a `Kroki render failed` warning (KROKI-05 graceful fallback).
+7. **Kroki URL override** - Change `kroki_url` in the add-on options to a self-hosted Kroki instance URL (e.g.,
+   `http://192.168.1.100:8000`). Restart the add-on. Re-load a page with a PlantUML block; the `<img>` `src` now points
+   at the custom URL.
 
 <!-- Badge Links -->
 
