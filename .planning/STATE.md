@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: markdown-renderer
-status: Executing Phase 06
-last_updated: "2026-06-27T18:40:42.266Z"
+status: Ready to plan
+last_updated: "2026-06-27T18:58:48.762Z"
 progress:
   total_phases: 3
   completed_phases: 2
@@ -80,6 +80,7 @@ phases complete
 
 - [ ] Bump `markdown-renderer/config.yaml` to `1.0.0-1` and run `make update-version` so the run.sh + generate_nginx.py
       bug fixes ship in the published add-on version
+
 - [ ] Run `make validate-addons` after Phase 4 scaffold is in place (DONE — passes)
 - [ ] Empirically verify `window.location.pathname` basePath in actual HA Ingress during Phase 4 (deferred to user)
 
