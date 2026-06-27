@@ -13,3 +13,4 @@
 # GSD research artifacts
 .planning/research/
 scripts/__pycache__/
+markdown-renderer/__pycache__/
