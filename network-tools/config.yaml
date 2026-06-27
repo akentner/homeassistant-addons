@@ -2,7 +2,7 @@ name: "Network Tools"
 description: >-
     Network diagnostics and host detection for Home Assistant. Provides ARP-based host detection
     via arping, plus nmap, dig, ping and traceroute for manual use.
-version: "0.2.1-0"
+version: "0.2.2-0"
 slug: "network-tools"
 init: false
 arch:
@@ -17,6 +17,7 @@ options:
         - label: "example-host"
           ip: "192.168.178.1"
           mac: "AA:BB:CC:DD:EE:FF"
+          device_name: "My Router"
     interface: "eth0"
     interval: 30
     port: 18080
@@ -33,6 +34,7 @@ schema:
         - label: str
           ip: str
           mac: str?
+          device_name: str?
     interface: str
     interval: int
     port: int

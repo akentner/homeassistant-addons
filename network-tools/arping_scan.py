@@ -88,6 +88,7 @@ def scan(options: dict) -> dict:
         ip = host.get("ip", "")
         label = host.get("label", ip)
         expected_mac = (host.get("mac") or "").upper() or None
+        device_name = host.get("device_name") or None
 
         if not ip:
             continue
@@ -102,6 +103,7 @@ def scan(options: dict) -> dict:
                 "label": label,
                 "ip": ip,
                 "expected_mac": expected_mac,
+                "device_name": device_name,
                 "reachable": probe["reachable"],
                 "mac": probe["mac"],
                 "mac_match": mac_match,
@@ -131,10 +133,30 @@ def _mac_to_entity_key(mac: str) -> str:
     return mac.lower().replace(":", "")
 
 
+def _device_name_slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
 def _build_discovery_payload(result: dict, prefix: str, entity_key: str) -> dict:
     slug = f"networktools_arping_{entity_key}_status"
     state_topic = f"{prefix}/binary_sensor/{slug}/state"
     attrs_topic = f"{prefix}/binary_sensor/{slug}/attributes"
+    device_name = result.get("device_name")
+    if device_name:
+        device_id = f"networktools_arping_device_{_device_name_slug(device_name)}"
+        device_block = {
+            "identifiers": [device_id],
+            "name": device_name,
+            "model": "Network Host",
+            "manufacturer": "Network Tools",
+        }
+    else:
+        device_block = {
+            "identifiers": [f"networktools_arping_{entity_key}"],
+            "name": result["label"],
+            "model": "Network Host",
+            "manufacturer": "Network Tools",
+        }
     return {
         "name": result["label"],
         "unique_id": slug,
@@ -147,12 +169,7 @@ def _build_discovery_payload(result: dict, prefix: str, entity_key: str) -> dict
         "availability_topic": MQTT_AVAIL_TOPIC,
         "payload_available": "online",
         "payload_not_available": "offline",
-        "device": {
-            "identifiers": [f"networktools_arping_{entity_key}"],
-            "name": result["label"],
-            "model": "Network Host",
-            "manufacturer": "Network Tools",
-        },
+        "device": device_block,
     }
 
 
