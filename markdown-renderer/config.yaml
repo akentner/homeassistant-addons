@@ -1,0 +1,29 @@
+name: "Markdown Renderer"
+description: "Renders Markdown directories as Docsify SPAs via Home Assistant Ingress with Mermaid diagram support."
+version: "1.0.0-0"
+slug: "markdown-renderer"
+init: false
+arch:
+  - amd64
+url: "https://github.com/akentner/homeassistant-addons"
+startup: "application"
+boot: "auto"
+host_network: false
+ingress: true
+ingress_port: 8099
+panel_icon: "mdi:text-box-multiple"
+panel_title: "Markdown"
+map:
+  - share:rw
+  - config:rw
+  - media:rw
+options:
+  directories:
+    - name: "docs"
+      path: "/share/docs"
+  kroki_url: "https://kroki.io"
+schema:
+  directories:
+    - name: str
+      path: str
+  kroki_url: str

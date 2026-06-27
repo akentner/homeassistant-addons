@@ -1,0 +1,6 @@
+upstream:
+  repository: "docsifyjs/docsify"
+  version_pattern: "v4.*"
+  version_strip: "^v"
+addon:
+  version_pattern: "sync"
