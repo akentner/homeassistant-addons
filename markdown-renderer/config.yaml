@@ -21,9 +21,23 @@ options:
   directories:
     - name: "docs"
       path: "/share/docs"
+      git_pull: false
+      git_pull_interval: 0
+      git_url: ""
   kroki_url: "https://kroki.io"
 schema:
   directories:
     - name: str
       path: str
+      # Optional git sync — pulls remote at startup before nginx starts (GIT-01).
+      # Default false; git binary is not invoked when unset (GIT-03).
+      git_pull: bool
+      # Optional periodic git pull interval in seconds. 0 = disabled (GIT-04).
+      # When > 0, run.sh spawns one background loop that pulls each namespace
+      # whose own interval has elapsed.
+      git_pull_interval: int
+      # Optional HTTPS URL for first-time clone. Used only when the path is
+      # not yet a git repo and git_pull or git_pull_interval is set. SSH auth
+      # is out of scope (v1.2).
+      git_url: str?
   kroki_url: str

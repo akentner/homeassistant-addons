@@ -7,9 +7,13 @@ ARG MERMAID_VERSION=11.15.0
 ARG WORKING_DIR=/app
 
 # Install runtime dependencies: nginx for serving Docsify SPA,
-# curl + tar for vendoring Docsify/Mermaid from GitHub release tarballs.
+# curl + tar for vendoring Docsify/Mermaid from GitHub release tarballs,
+# git for optional namespace sync (GIT-01..05). The git binary is always
+# installed even when no namespace uses git sync (GIT-03 forbids
+# _invocation_ of git when unconfigured; installation is unconditional
+# to keep the image layer flat).
 # python3 + bashio are already provided by amd64-base-python:3.12-alpine3.20.
-RUN apk add --no-cache nginx curl tar
+RUN apk add --no-cache nginx curl tar git
 
 # Vendored Docsify 4.13.1 (ADD-02): extract lib/docsify.min.js + themes/vue.css.
 # Note: the GitHub source tarball (docsifyjs/docsify archive refs/tags/v...) ships
