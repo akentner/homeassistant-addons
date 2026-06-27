@@ -2,14 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: markdown-renderer
-status: planning
-last_updated: "2026-06-27T14:49:11.737Z"
+status: Executing Phase 06
+last_updated: "2026-06-27T18:40:42.266Z"
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 33
+  completed_plans: 4
 ---
 
 # Project State
@@ -19,7 +18,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Phase 05 — Multi-Namespace + Dynamic Config
+tracking. **Current focus:** Phase 06 — Git Integration
 
 ## Milestone v1.0 — COMPLETE
 
@@ -33,20 +32,20 @@ All 3 phases shipped. Archived to `.planning/milestones/v1.0-ROADMAP.md`.
 
 ## Milestone v1.1 — IN PROGRESS
 
-Roadmap: 3 phases (4-6). Roadmap written; planning starts at Phase 4.
+Roadmap: 3 phases (4-6). Phase 5 complete.
 
 | Phase | Name                             | Status      | Completed  |
 | ----- | -------------------------------- | ----------- | ---------- |
 | 4     | Scaffold + Ingress Validation    | Complete    | 2026-06-27 |
-| 5     | Multi-Namespace + Dynamic Config | Not started | —          |
+| 5     | Multi-Namespace + Dynamic Config | Complete    | 2026-06-27 |
 | 6     | Git Integration                  | Not started | —          |
 
 ## Current Position
 
-**Phase**: 5 — Multi-Namespace + Dynamic Config **Plan**: — (not started) **Status**: Awaiting `/gsd:plan-phase 5`
-**Progress**: 1/3 phases complete
+**Phase**: 6 — Git Integration **Plan**: — (not started) **Status**: Awaiting `/gsd:plan-phase 6`
+**Progress**: 2/3 phases complete
 
-**Progress bar**: `███░░░░░░░` 33%
+**Progress bar**: `[██████████] 100%`
 
 ## Accumulated Context
 
@@ -59,6 +58,8 @@ Roadmap: 3 phases (4-6). Roadmap written; planning starts at Phase 4.
 | `basePath: window.location.pathname`          | HA Ingress strips the token server-side but browser URL retains it; static basePath breaks XHR                     |
 | `generate_nginx.py` for config generation     | Mirrors phone-logger's `generate_config.py`; Python justified for structured JSON + template loops                 |
 | CI/Quality gate extension folded into Phase 4 | ADD-01 ("consistent with existing add-ons") implies validate-versions.sh and make validate-addons cover new add-on |
+| `run.sh` must pass `-c /tmp/nginx.conf`       | Without it nginx reads default /etc/nginx/nginx.conf (port 80) instead of generator-written config (port 8099)      |
+| `_ensure_nginx_tmp_dirs()` helper             | Minimal-fallback nginx config also needs temp dirs pre-created so master can start in non-root envs                 |
 
 ### Research Flags (open questions for implementation)
 
@@ -72,13 +73,14 @@ Roadmap: 3 phases (4-6). Roadmap written; planning starts at Phase 4.
   Browser-native `pako` library is ~45KB minified — verify whether vendoring is acceptable or if `CompressionStream` API
   (modern browsers, no library) suffices for HA's recent Chromium versions.
 
-- **share:rw vs share:ro** (Phase 5): git pull writes to `.git`; namespaces with `git_pull: true` require `rw` mounts;
-  document this constraint in DOCS.md.
+- **share:rw vs share:ro** (Phase 5): git pull writes to `.git`; namespaces with `git_pull: true` require `rw` mounts.
+  Confirmed in Phase 5: `map: share:rw config:rw media:rw` already in `config.yaml`.
 
 ### Todos
 
-- [ ] Run `make validate-addons` after Phase 4 scaffold is in place
-- [ ] Empirically verify `window.location.pathname` basePath in actual HA Ingress during Phase 4
+- [ ] Bump `markdown-renderer/config.yaml` to `1.0.0-1` and run `make update-version` so the run.sh + generate_nginx.py bug fixes ship in the published add-on version
+- [ ] Run `make validate-addons` after Phase 4 scaffold is in place (DONE — passes)
+- [ ] Empirically verify `window.location.pathname` basePath in actual HA Ingress during Phase 4 (deferred to user)
 
 ### Blockers
 

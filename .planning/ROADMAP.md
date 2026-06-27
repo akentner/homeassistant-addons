@@ -92,7 +92,7 @@ startup.
 
 Plans:
 
-- [ ] 05-01-PLAN.md — Empirical multi-namespace verification inside container + DOCS.md/README.md updates for
+- [x] 05-01-PLAN.md — Empirical multi-namespace verification inside container + DOCS.md/README.md updates for
       multi-namespace behavior + Manual HA Ingress Test Checklist expansion
 
 **UI hint**: yes
@@ -127,5 +127,5 @@ but do not block the namespace from being served; periodic background sync is av
 | 2. Auto-Update Workflow             | v1.0      | 1/1            | Complete    | 2026-04-04 |
 | 3. Meridian Add-on                  | v1.0      | 3/3            | Complete    | 2026-04-04 |
 | 4. Scaffold + Ingress Validation    | v1.1      | 3/3            | Complete    | 2026-06-27 |
-| 5. Multi-Namespace + Dynamic Config | v1.1      | 0/0            | Not started | —          |
+| 5. Multi-Namespace + Dynamic Config | v1.1      | 1/1            | Complete    | 2026-06-27 |
 | 6. Git Integration                  | v1.1      | 0/0            | Not started | —          |

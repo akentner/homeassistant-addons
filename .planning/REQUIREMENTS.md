@@ -31,17 +31,17 @@ namespaced HTML endpoints via HA Ingress, with Mermaid diagram support and optio
 
 ### MULTI — Multi-Namespace Routing
 
-- [ ] **MULTI-01**: User configures multiple directories as a list of objects in HA options; each object has `name`
+- [x] **MULTI-01**: User configures multiple directories as a list of objects in HA options; each object has `name`
       (URI-safe string) and `path` (absolute path inside the container)
-- [ ] **MULTI-02**: Each configured directory is served as an independent Docsify SPA under `/name/` via nginx;
+- [x] **MULTI-02**: Each configured directory is served as an independent Docsify SPA under `/name/` via nginx;
       namespaces are isolated (separate index.html, separate markdown root)
-- [ ] **MULTI-03**: Landing page at the Ingress root (`/`) lists all configured namespaces as clickable cards with name
+- [x] **MULTI-03**: Landing page at the Ingress root (`/`) lists all configured namespaces as clickable cards with name
       and path; generated at startup from config
-- [ ] **MULTI-04**: `generate_nginx.py` reads `/data/options.json` at startup and generates `/tmp/nginx.conf` +
+- [x] **MULTI-04**: `generate_nginx.py` reads `/data/options.json` at startup and generates `/tmp/nginx.conf` +
       per-namespace `/tmp/docroots/{name}/index.html`; run.sh invokes it before starting nginx
-- [ ] **MULTI-05**: Namespace name validation rejects names that are empty, non-URI-safe, or conflict with reserved
+- [x] **MULTI-05**: Namespace name validation rejects names that are empty, non-URI-safe, or conflict with reserved
       nginx locations (`_docsify`, `api`)
-- [ ] **MULTI-06**: Paths from `/share`, `/config`, and `/media` are supported as namespace directory sources;
+- [x] **MULTI-06**: Paths from `/share`, `/config`, and `/media` are supported as namespace directory sources;
       config.yaml `map:` includes `share:rw`, `config:rw`, `media:rw`
 
 ### KROKI — Kroki Diagram Service
