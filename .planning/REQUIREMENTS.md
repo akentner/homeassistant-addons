@@ -60,15 +60,15 @@ namespaced HTML endpoints via HA Ingress, with Mermaid diagram support and optio
 
 ### GIT — Git Integration
 
-- [ ] **GIT-01**: Each namespace entry supports an optional `git_pull: bool` flag; when true, run.sh executes
+- [x] **GIT-01**: Each namespace entry supports an optional `git_pull: bool` flag; when true, run.sh executes
       `git pull --ff-only` on the directory at startup before nginx starts
-- [ ] **GIT-02**: `git config --global --add safe.directory '*'` is executed in run.sh before any git operation to
+- [x] **GIT-02**: `git config --global --add safe.directory '*'` is executed in run.sh before any git operation to
       handle mounted volume UID mismatch (git 2.35.2+ requirement)
-- [ ] **GIT-03**: Namespaces without `git_pull: true` are served without any git operations; git integration is fully
+- [x] **GIT-03**: Namespaces without `git_pull: true` are served without any git operations; git integration is fully
       optional per namespace
-- [ ] **GIT-04**: Each namespace supports a `git_pull_interval: int` option (seconds, 0 = disabled) for periodic
+- [x] **GIT-04**: Each namespace supports a `git_pull_interval: int` option (seconds, 0 = disabled) for periodic
       background git pull; run.sh spawns a background loop when interval > 0
-- [ ] **GIT-05**: Startup is not blocked if a git directory is unreachable; git pull errors are logged but do not
+- [x] **GIT-05**: Startup is not blocked if a git directory is unreachable; git pull errors are logged but do not
       prevent the namespace from being served
 
 ---

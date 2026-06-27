@@ -121,7 +121,7 @@ but do not block the namespace from being served; periodic background sync is av
 
 Plans:
 
-- [ ] 06-01-PLAN.md — Implementation: extend `config.yaml` schema with `git_pull`, `git_pull_interval`, `git_url`; add
+- [x] 06-01-PLAN.md — Implementation: extend `config.yaml` schema with `git_pull`, `git_pull_interval`, `git_url`; add
       `git` to Dockerfile apk list; create `_git_sync.py` with probe/pull/clone + periodic state; rewrite `run.sh` with
       startup pull, background loop, and signal trap (GIT-01..05)
 - [ ] 06-02-PLAN.md — Empirical verification: 5-scenario `verify-git-integration.sh` covering startup pull, graceful
