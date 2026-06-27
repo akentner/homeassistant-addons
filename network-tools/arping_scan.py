@@ -10,6 +10,7 @@ from typing import Optional
 
 OPTIONS_FILE = Path("/data/options.json")
 OUTPUT_FILE = Path("/data/results/arping_scan.json")
+MQTT_AVAIL_TOPIC = "network-tools/arping/availability"
 
 LOG_LEVEL_MAP = {
     "debug": logging.DEBUG,
@@ -143,6 +144,9 @@ def _build_discovery_payload(result: dict, prefix: str, entity_key: str) -> dict
         "device_class": "connectivity",
         "payload_on": "ON",
         "payload_off": "OFF",
+        "availability_topic": MQTT_AVAIL_TOPIC,
+        "payload_available": "online",
+        "payload_not_available": "offline",
         "device": {
             "identifiers": [f"networktools_arping_{entity_key}"],
             "name": result["label"],

@@ -9,6 +9,7 @@ RUN apk add --no-cache \
     traceroute \
     python3 \
     py3-paho-mqtt \
+    mosquitto-client \
     nginx
 
 COPY arping_scan.py /usr/local/bin/arping_scan.py
