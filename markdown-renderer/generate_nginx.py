@@ -17,6 +17,7 @@ inline mermaid + Kroki dispatcher plugins that target fenced code blocks.
 """
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -29,13 +30,28 @@ DOCROOTS_DIR = Path("/tmp/docroots")
 LANDING_DIR = Path("/tmp/landing")
 APP_DIR = Path("/app")
 ASSETS_DIR = APP_DIR / "_docsify"  # served by nginx at /_docsify/
+# Temp dirs nginx needs to write during request handling. We point them all
+# at /tmp/nginx-tmp/ so ``nginx -t`` succeeds in non-root dev environments
+# (the default /var/lib/nginx/* paths require root + write access).
+NGINX_TMP_DIR = Path("/tmp/nginx-tmp")
+NGINX_CLIENT_BODY_TMP = NGINX_TMP_DIR / "client_body"
+NGINX_PROXY_TMP = NGINX_TMP_DIR / "proxy"
+NGINX_FASTCGI_TMP = NGINX_TMP_DIR / "fastcgi"
+NGINX_UWSGI_TMP = NGINX_TMP_DIR / "uwsgi"
+NGINX_SCGI_TMP = NGINX_TMP_DIR / "scgi"
 
-# Regex for namespace name validation (per MULTI-05 + DOCS.md documentation):
+# Namespace-name validation (per MULTI-05 + 04-RESEARCH.md section 5):
 #   - starts with lowercase letter or digit
 #   - contains lowercase letters, digits, hyphens
-#   - 1-63 chars
-NAME_RE = __import__("re").compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
-RESERVED_NAMES = {"_docsify", "api", "data", "share", "config", "media"}
+#   - 1-63 chars total (DNS-label friendly)
+VALID_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
+# Backwards-compatible alias for the regex constant.
+NAME_RE = VALID_NAME_RE
+
+# Names that conflict with nginx location paths, vendored assets, or HA
+# Supervisor's ingress / config / share / media volumes. Promoting to a
+# frozenset so it is hashable and immutable for the duration of the run.
+RESERVED_NAMES = frozenset({"_docsify", "api", "data", "share", "config", "media"})
 
 DEFAULT_KROKI_URL = "https://kroki.io"
 
@@ -196,12 +212,97 @@ NGINX_NAMESPACE_BLOCK_TEMPLATE = """
     }}"""
 
 
-def _render_nginx(namespaces: list[dict]) -> str:
-    """Render nginx.conf from the namespace list."""
-    blocks = "\n".join(
+def validate_namespace(name: str) -> None:
+    """Validate a single namespace name. Raises ValueError on any rule violation.
+
+    Rules (per MULTI-05 + 04-RESEARCH.md section 5):
+      1. Must be a non-empty string.
+      2. Must match ``VALID_NAME_RE`` (``^[a-z0-9][a-z0-9-]{0,62}$``).
+      3. Must not be in ``RESERVED_NAMES`` (conflicts with nginx paths,
+         vendored assets, or HA Supervisor volumes).
+
+    Reserved-name check runs BEFORE the regex check so that users who
+    accidentally pick a reserved name like ``_docsify`` get the more
+    actionable "reserved" error instead of a regex mismatch (which would
+    confuse them about why their name is rejected — it does start with a
+    letter after all).
+    """
+    if not isinstance(name, str):
+        raise ValueError(
+            f"namespace name must be a string, got {type(name).__name__}"
+        )
+    if not name:
+        raise ValueError("namespace name cannot be empty")
+    if name in RESERVED_NAMES:
+        raise ValueError(
+            f"namespace name {name!r} is reserved "
+            f"(conflicts with {sorted(RESERVED_NAMES)} paths)"
+        )
+    if not VALID_NAME_RE.match(name):
+        raise ValueError(
+            f"namespace name {name!r} must match {VALID_NAME_RE.pattern}"
+        )
+
+
+def validate_directories(directories: list) -> list[dict]:
+    """Validate the full ``directories`` list and return a list of validated entries.
+
+    Each entry must be a dict with string ``name`` and ``path`` fields.
+    Duplicate names are rejected. Empty list is allowed (caller handles the
+    "no namespaces configured" case separately). Prints a summary line via
+    ``flush=True`` for observability, mirroring ``phone-logger/generate_config.py``.
+    """
+    if not isinstance(directories, list):
+        raise ValueError(
+            f"'directories' must be a list, got {type(directories).__name__}"
+        )
+
+    validated: list[dict] = []
+    seen: set[str] = set()
+    for entry in directories:
+        if not isinstance(entry, dict):
+            raise ValueError(
+                f"directory entry must be a dict with 'name' and 'path', got: {entry!r}"
+            )
+        name = entry.get("name", "")
+        path = entry.get("path", "")
+        if not isinstance(name, str) or not isinstance(path, str):
+            raise ValueError(
+                f"directory entry must have string 'name' and 'path', got: {entry!r}"
+            )
+        validate_namespace(name)
+        if name in seen:
+            raise ValueError(f"duplicate directory name {name!r}")
+        seen.add(name)
+        validated.append({"name": name, "path": path})
+
+    print(
+        f"Validated {len(validated)} namespace(s): "
+        f"{', '.join(ns['name'] for ns in validated) or '(none)'}",
+        flush=True,
+    )
+    return validated
+
+
+def render_namespace_blocks(namespaces: list[dict]) -> str:
+    """Render the per-namespace nginx location blocks as a single string.
+
+    Each namespace produces EXACT 4 lines (trailing-slash redirect + alias
+    block with ``try_files`` SPA fallback). The output is later interpolated
+    into ``NGINX_TEMPLATE`` via ``str.format(namespace_blocks=...)``.
+
+    Exposed as a public helper so unit tests (and the manual fixture check in
+    the plan's verify block) can assert on per-ns block shape directly.
+    """
+    return "\n".join(
         NGINX_NAMESPACE_BLOCK_TEMPLATE.format(name=ns["name"], docroots=DOCROOTS_DIR)
         for ns in namespaces
     )
+
+
+def _render_nginx(namespaces: list[dict]) -> str:
+    """Render the full nginx.conf from the namespace list."""
+    blocks = render_namespace_blocks(namespaces)
     return f"""worker_processes 1;
 error_log /dev/stderr warn;
 pid /tmp/nginx.pid;
@@ -214,6 +315,15 @@ http {{
   access_log /dev/stdout combined;
   client_max_body_size 32m;
   absolute_redirect off;
+
+  # Relocate all nginx temp directories under /tmp so ``nginx -t`` works in
+  # non-root dev environments (avoids the default /var/lib/nginx/* paths
+  # that require write access for nginx's own mkdir()).
+  client_body_temp_path {NGINX_CLIENT_BODY_TMP};
+  proxy_temp_path       {NGINX_PROXY_TMP};
+  fastcgi_temp_path     {NGINX_FASTCGI_TMP};
+  uwsgi_temp_path       {NGINX_UWSGI_TMP};
+  scgi_temp_path        {NGINX_SCGI_TMP};
 
   server {{
     listen 8099;
@@ -239,13 +349,17 @@ http {{
 """
 
 
-def _render_landing(namespaces: list[dict]) -> str:
+def render_landing_html(namespaces: list[dict]) -> str:
     """Render the landing-page index.html with one card per namespace."""
     cards = "\n".join(
         LANDING_CARD_TEMPLATE.format(name=ns["name"], path=ns["path"])
         for ns in namespaces
     )
     return LANDING_HTML_TEMPLATE.format(cards=cards)
+
+
+# Backwards-compatible alias for callers that imported the private name.
+_render_landing = render_landing_html
 
 
 def _render_namespace_index(namespace: dict, kroki_url: str) -> str:
@@ -264,41 +378,19 @@ def _render_namespace_index(namespace: dict, kroki_url: str) -> str:
 
 
 def _validate_namespaces(directories: list) -> list[dict]:
-    """Validate each namespace entry; raises SystemExit on any error."""
-    valid: list[dict] = []
-    for entry in directories:
-        name = entry.get("name", "")
-        path = entry.get("path", "")
-        if not isinstance(name, str) or not isinstance(path, str):
-            print(
-                f"ERROR: directory entry must have string 'name' and 'path', got: {entry}",
-                flush=True,
-            )
-            sys.exit(1)
-        if not name:
-            print(f"ERROR: directory name cannot be empty (path={path!r})", flush=True)
-            sys.exit(1)
-        if not NAME_RE.match(name):
-            print(
-                f"ERROR: directory name {name!r} must match {NAME_RE.pattern}",
-                flush=True,
-            )
-            sys.exit(1)
-        if name in RESERVED_NAMES:
-            print(
-                f"ERROR: directory name {name!r} is reserved (one of {sorted(RESERVED_NAMES)})",
-                flush=True,
-            )
-            sys.exit(1)
-        valid.append({"name": name, "path": path})
-    # Check duplicate names
-    seen: set[str] = set()
-    for ns in valid:
-        if ns["name"] in seen:
-            print(f"ERROR: duplicate directory name {ns['name']!r}", flush=True)
-            sys.exit(1)
-        seen.add(ns["name"])
-    return valid
+    """Internal wrapper that translates ``ValueError`` into ``SystemExit(1)``.
+
+    Kept as a thin shell around ``validate_directories`` so existing callers
+    (and the plan-01 verification path) continue to see ``SystemExit`` on
+    validation failure. The public ``validate_directories`` raises
+    ``ValueError``; ``main()`` catches it and returns ``1`` for clean error
+    propagation through run.sh.
+    """
+    try:
+        return validate_directories(directories)
+    except ValueError as err:
+        print(f"ERROR: {err}", flush=True)
+        sys.exit(1)
 
 
 def _write_minimal_nginx(reason: str) -> None:
@@ -312,6 +404,11 @@ events {{ worker_connections 512; }}
 http {{
   access_log /dev/stdout combined;
   absolute_redirect off;
+  client_body_temp_path {NGINX_CLIENT_BODY_TMP};
+  proxy_temp_path       {NGINX_PROXY_TMP};
+  fastcgi_temp_path     {NGINX_FASTCGI_TMP};
+  uwsgi_temp_path       {NGINX_UWSGI_TMP};
+  scgi_temp_path        {NGINX_SCGI_TMP};
   server {{
     listen 8099;
     server_name localhost;
@@ -339,19 +436,24 @@ def main() -> int:
     directories = options.get("directories", [])
     kroki_url = options.get("kroki_url", DEFAULT_KROKI_URL).rstrip("/") or DEFAULT_KROKI_URL
 
-    if not isinstance(directories, list):
-        print(f"ERROR: 'directories' must be a list, got {type(directories).__name__}", flush=True)
+    # ``validate_directories`` raises ``ValueError`` for any structural or
+    # semantic problem (non-list, empty name, regex mismatch, reserved name,
+    # duplicate name, missing fields). Translate into a clean return-1 so
+    # run.sh (and HA Supervisor) see a non-zero exit code without an
+    # uncaught traceback.
+    try:
+        namespaces = validate_directories(directories)
+    except ValueError as err:
+        print(f"ERROR: {err}", flush=True)
         return 1
 
-    if not directories:
+    if not namespaces:
         print(
             "WARNING: no directories configured, writing minimal /tmp/nginx.conf",
             flush=True,
         )
         _write_minimal_nginx("no directories configured")
         return 0
-
-    namespaces = _validate_namespaces(directories)
 
     # Fresh output dirs each run — eliminates stale entries after config changes.
     for d in (DOCROOTS_DIR, LANDING_DIR):
@@ -366,10 +468,23 @@ def main() -> int:
         (ns_dir / "index.html").write_text(_render_namespace_index(ns, kroki_url))
 
     # Landing page
-    (LANDING_DIR / "index.html").write_text(_render_landing(namespaces))
+    (LANDING_DIR / "index.html").write_text(render_landing_html(namespaces))
 
     # nginx.conf
     NGINX_CONF_PATH.write_text(_render_nginx(namespaces))
+
+    # Pre-create nginx temp directories so ``nginx -t`` succeeds in non-root
+    # environments (avoids the default /var/lib/nginx/* mkdir failure). The
+    # add-on container runs as root and would work without this, but creating
+    # the dirs up-front keeps both the runtime and the local verify path green.
+    for tmp_dir in (
+        NGINX_CLIENT_BODY_TMP,
+        NGINX_PROXY_TMP,
+        NGINX_FASTCGI_TMP,
+        NGINX_UWSGI_TMP,
+        NGINX_SCGI_TMP,
+    ):
+        tmp_dir.mkdir(parents=True, exist_ok=True)
 
     # Validate the generated config with nginx -t (best-effort: skip if nginx
     # binary is unavailable, e.g. during local dry-run without the add-on image).
