@@ -393,9 +393,31 @@ def _validate_namespaces(directories: list) -> list[dict]:
         sys.exit(1)
 
 
+def _ensure_nginx_tmp_dirs() -> None:
+    """Create nginx temp dirs so the master process can start in non-root envs.
+
+    Without this, ``nginx -c /tmp/nginx.conf`` aborts with
+    ``nginx: [emerg] mkdir() "/tmp/nginx-tmp/client_body" failed`` because the
+    master process tries to create its temp directories as a non-root user.
+    Idempotent: existing dirs are left alone.
+    """
+    for tmp_dir in (
+        NGINX_CLIENT_BODY_TMP,
+        NGINX_PROXY_TMP,
+        NGINX_FASTCGI_TMP,
+        NGINX_UWSGI_TMP,
+        NGINX_SCGI_TMP,
+    ):
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+
+
 def _write_minimal_nginx(reason: str) -> None:
     """Write a fallback nginx.conf that only serves /_docsify/ and a 503."""
     NGINX_CONF_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # Create nginx temp directories (same as the happy-path branch does) so the
+    # master process can start without ``nginx: [emerg] mkdir()`` errors when
+    # no namespaces are configured or no options.json was mounted.
+    _ensure_nginx_tmp_dirs()
     NGINX_CONF_PATH.write_text(
         f"""worker_processes 1;
 error_log /dev/stderr warn;
@@ -477,14 +499,7 @@ def main() -> int:
     # environments (avoids the default /var/lib/nginx/* mkdir failure). The
     # add-on container runs as root and would work without this, but creating
     # the dirs up-front keeps both the runtime and the local verify path green.
-    for tmp_dir in (
-        NGINX_CLIENT_BODY_TMP,
-        NGINX_PROXY_TMP,
-        NGINX_FASTCGI_TMP,
-        NGINX_UWSGI_TMP,
-        NGINX_SCGI_TMP,
-    ):
-        tmp_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_nginx_tmp_dirs()
 
     # Validate the generated config with nginx -t (best-effort: skip if nginx
     # binary is unavailable, e.g. during local dry-run without the add-on image).
