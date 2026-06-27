@@ -4,6 +4,7 @@ description: >-
     via arping, plus nmap, dig, ping and traceroute for manual use.
 version: "0.2.2-0"
 slug: "network-tools"
+image: "ghcr.io/akentner/homeassistant-addons/{arch}-network_tools"
 init: false
 arch:
     - amd64
