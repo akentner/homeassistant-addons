@@ -37,7 +37,8 @@ diagrams render, and the Docsify basePath resolves correctly for all `.md` file 
 
 **Depends on**: Nothing (first phase of milestone)
 
-**Requirements**: ADD-01, ADD-02, ADD-03, ADD-04, INGRESS-01, INGRESS-02, INGRESS-03, INGRESS-04, INGRESS-05
+**Requirements**: ADD-01, ADD-02, ADD-03, ADD-04, INGRESS-01, INGRESS-02, INGRESS-03, INGRESS-04, INGRESS-05, MULTI-01,
+MULTI-02, MULTI-03, MULTI-04, MULTI-05, MULTI-06
 
 **Success Criteria** (what must be TRUE):
 
@@ -49,7 +50,16 @@ diagrams render, and the Docsify basePath resolves correctly for all `.md` file 
    under the Ingress URL
 5. Auto-update does not propose or apply a Docsify v5 RC upgrade; `.upstream.yaml` keeps the add-on on `v4.*`
 
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
+
+Plans:
+
+- [ ] 04-01-PLAN.md — Scaffold add-on skeleton (config.yaml, build.yaml, Dockerfile, run.sh, README, DOCS,
+      .upstream.yaml, single-namespace generate_nginx.py skeleton)
+- [ ] 04-02-PLAN.md — Full multi-namespace generate_nginx.py: iterate directories, name validation, per-namespace
+      index.html, landing page, nginx -t validation
+- [ ] 04-03-PLAN.md — make check-all + local docker build + README Verification section with 5-point HA Ingress
+      checklist
 
 **UI hint**: yes
 
