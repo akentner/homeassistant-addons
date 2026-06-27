@@ -21,6 +21,7 @@ options:
           mac: "AA:BB:CC:DD:EE:FF"
     interface: "eth0"
     interval: 30
+    port: 8080
     log_level: "info"
 
 schema:
@@ -30,4 +31,5 @@ schema:
           mac: str?
     interface: str
     interval: int
+    port: int
     log_level: list(debug|info|warning|error)

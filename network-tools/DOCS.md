@@ -22,6 +22,12 @@ Mit `host_network: true` sieht der Container alle Host-Interfaces. Mögliche Wer
 
 Scan-Intervall in Sekunden. Standard: `30`. Minimum empfohlen: `10`.
 
+### `port`
+
+TCP-Port auf dem nginx die REST API bereitstellt. Standard: `8080`. Ändern wenn ein anderer Add-on oder Dienst Port 8080
+belegt (z.B. auf `8082`). Der `ingress_port` in config.yaml muss mit diesem Wert übereinstimmen — bei Änderung beide
+anpassen.
+
 ### `log_level`
 
 Log-Verbosity: `debug` | `info` | `warning` | `error`. Standard: `info`.

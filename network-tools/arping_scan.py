@@ -40,6 +40,7 @@ def arping_host(ip: str, interface: str) -> dict:
     """Sends 2 ARP requests to ip via arping (Thomas Habets, Alpine default).
 
     Uses -i for interface (Thomas Habets convention, not iputils -I).
+    Checks stdout + stderr combined — arping version/platform determines which stream is used.
     """
     cmd = ["arping", "-c", "2", "-w", "3", "-i", interface, ip]
     log.debug(f"arping: {' '.join(cmd)}")
@@ -49,19 +50,25 @@ def arping_host(ip: str, interface: str) -> dict:
         log.error(f"arping {ip} Fehler: {e}")
         return {"reachable": False, "mac": None, "rtt_ms": None}
 
+    output = result.stdout + result.stderr
+    log.debug(f"arping {ip} stdout: {result.stdout!r}")
+    log.debug(f"arping {ip} stderr: {result.stderr!r}")
+
     reachable = result.returncode == 0
     mac = None
     rtt_ms = None
 
     if reachable:
-        mac_match = re.search(r"\[([0-9A-Fa-f:]{17})\]", result.stdout)
-        rtt_match = re.search(r"(\d+(?:\.\d+)?)\s*ms", result.stdout)
+        mac_match = re.search(r"\[([0-9A-Fa-f:]{17})\]", output)
+        rtt_match = re.search(r"(\d+(?:\.\d+)?)\s*ms", output)
         if mac_match:
             mac = mac_match.group(1).upper()
         if rtt_match:
             rtt_ms = float(rtt_match.group(1))
 
     log.info(f"arping {ip}: {'OK' if reachable else 'FAIL'} mac={mac} rtt={rtt_ms}ms")
+    if reachable and mac is None:
+        log.warning(f"arping {ip}: MAC nicht parsebar aus Output: {output!r}")
     return {"reachable": reachable, "mac": mac, "rtt_ms": rtt_ms}
 
 
