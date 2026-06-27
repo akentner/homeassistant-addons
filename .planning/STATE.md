@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: markdown-renderer
 status: planning
-last_updated: "2026-06-27T10:34:37.762Z"
+last_updated: "2026-06-27T12:42:41.127Z"
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
   percent: 0
 ---
