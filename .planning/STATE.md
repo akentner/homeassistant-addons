@@ -42,8 +42,8 @@ Roadmap: 3 phases (4-6). Phase 5 complete.
 
 ## Current Position
 
-**Phase**: 6 — Git Integration **Plan**: — (not started) **Status**: Awaiting `/gsd:plan-phase 6`
-**Progress**: 2/3 phases complete
+**Phase**: 6 — Git Integration **Plan**: — (not started) **Status**: Awaiting `/gsd:plan-phase 6` **Progress**: 2/3
+phases complete
 
 **Progress bar**: `[██████████] 100%`
 
@@ -58,8 +58,8 @@ Roadmap: 3 phases (4-6). Phase 5 complete.
 | `basePath: window.location.pathname`          | HA Ingress strips the token server-side but browser URL retains it; static basePath breaks XHR                     |
 | `generate_nginx.py` for config generation     | Mirrors phone-logger's `generate_config.py`; Python justified for structured JSON + template loops                 |
 | CI/Quality gate extension folded into Phase 4 | ADD-01 ("consistent with existing add-ons") implies validate-versions.sh and make validate-addons cover new add-on |
-| `run.sh` must pass `-c /tmp/nginx.conf`       | Without it nginx reads default /etc/nginx/nginx.conf (port 80) instead of generator-written config (port 8099)      |
-| `_ensure_nginx_tmp_dirs()` helper             | Minimal-fallback nginx config also needs temp dirs pre-created so master can start in non-root envs                 |
+| `run.sh` must pass `-c /tmp/nginx.conf`       | Without it nginx reads default /etc/nginx/nginx.conf (port 80) instead of generator-written config (port 8099)     |
+| `_ensure_nginx_tmp_dirs()` helper             | Minimal-fallback nginx config also needs temp dirs pre-created so master can start in non-root envs                |
 
 ### Research Flags (open questions for implementation)
 
@@ -78,7 +78,8 @@ Roadmap: 3 phases (4-6). Phase 5 complete.
 
 ### Todos
 
-- [ ] Bump `markdown-renderer/config.yaml` to `1.0.0-1` and run `make update-version` so the run.sh + generate_nginx.py bug fixes ship in the published add-on version
+- [ ] Bump `markdown-renderer/config.yaml` to `1.0.0-1` and run `make update-version` so the run.sh + generate_nginx.py
+      bug fixes ship in the published add-on version
 - [ ] Run `make validate-addons` after Phase 4 scaffold is in place (DONE — passes)
 - [ ] Empirically verify `window.location.pathname` basePath in actual HA Ingress during Phase 4 (deferred to user)
 
