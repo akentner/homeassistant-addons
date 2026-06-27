@@ -25,7 +25,7 @@ Full details: [.planning/milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - [ ] **Phase 5: Multi-Namespace + Dynamic Config** — `generate_nginx.py` wired to HA options, multiple directories
       served as isolated SPAs, landing page at ingress root
 - [ ] **Phase 6: Git Integration** — Optional per-namespace git pull at startup and on a background interval; errors
-      non-blocking
+      non-blocking _(planned: 2 plans)_
 
 ## Phase Details
 
@@ -117,15 +117,24 @@ but do not block the namespace from being served; periodic background sync is av
 4. When a git remote is unreachable at startup, the namespace starts and serves its locally cached Markdown; a warning
    appears in HA logs but the add-on does not crash
 
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
+
+Plans:
+
+- [ ] 06-01-PLAN.md — Implementation: extend `config.yaml` schema with `git_pull`, `git_pull_interval`, `git_url`; add
+      `git` to Dockerfile apk list; create `_git_sync.py` with probe/pull/clone + periodic state; rewrite `run.sh` with
+      startup pull, background loop, and signal trap (GIT-01..05)
+- [ ] 06-02-PLAN.md — Empirical verification: 5-scenario `verify-git-integration.sh` covering startup pull, graceful
+      failure, no-invocation-when-disabled, periodic sync, and first-time clone via `git_url`; capture transcript;
+      document in DOCS.md `## Git Sync` section and README.md checklist items 11–13
 
 ## Progress
 
-| Phase                               | Milestone | Plans Complete | Status      | Completed  |
-| ----------------------------------- | --------- | -------------- | ----------- | ---------- |
-| 1. Quality Fixes                    | v1.0      | 2/2            | Complete    | 2026-04-03 |
-| 2. Auto-Update Workflow             | v1.0      | 1/1            | Complete    | 2026-04-04 |
-| 3. Meridian Add-on                  | v1.0      | 3/3            | Complete    | 2026-04-04 |
-| 4. Scaffold + Ingress Validation    | v1.1      | 3/3            | Complete    | 2026-06-27 |
-| 5. Multi-Namespace + Dynamic Config | v1.1      | 1/1            | Complete    | 2026-06-27 |
-| 6. Git Integration                  | v1.1      | 0/0            | Not started | —          |
+| Phase                               | Milestone | Plans Complete | Status   | Completed  |
+| ----------------------------------- | --------- | -------------- | -------- | ---------- |
+| 1. Quality Fixes                    | v1.0      | 2/2            | Complete | 2026-04-03 |
+| 2. Auto-Update Workflow             | v1.0      | 1/1            | Complete | 2026-04-04 |
+| 3. Meridian Add-on                  | v1.0      | 3/3            | Complete | 2026-04-04 |
+| 4. Scaffold + Ingress Validation    | v1.1      | 3/3            | Complete | 2026-06-27 |
+| 5. Multi-Namespace + Dynamic Config | v1.1      | 1/1            | Complete | 2026-06-27 |
+| 6. Git Integration                  | v1.1      | 0/2            | Planned  | —          |
