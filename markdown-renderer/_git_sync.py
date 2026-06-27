@@ -70,7 +70,8 @@ def _git_pull(path: Path) -> bool:
     Uses ``--ff-only`` so a non-fast-forward local state (e.g. a manual edit
     the user made on the host) never gets silently overwritten. Failures
     emit a ``WARNING:`` log line with the captured stderr but never raise
-    (D-07, GIT-05).
+    (D-07, GIT-05). Success emits an ``INFO:`` line so the periodic loop's
+    pull invocations are visible in HA Supervisor logs.
     """
     result = subprocess.run(
         ["git", "-C", str(path), "pull", "--ff-only"],
@@ -85,6 +86,13 @@ def _git_pull(path: Path) -> bool:
             flush=True,
         )
         return False
+    # Surface git's own output so the operator can see whether the pull
+    # was a no-op ("Already up to date.") or fetched new commits
+    # ("Fast-forward", "Updating <sha>..<sha>"). This is the same text
+    # the user would see if they ran `git pull` manually.
+    git_stdout = (result.stdout or "").strip()
+    if git_stdout:
+        print(f"INFO: git pull for {path}: {git_stdout}", flush=True)
     return True
 
 
@@ -110,6 +118,11 @@ def _git_clone(git_url: str, path: Path) -> bool:
             flush=True,
         )
         return False
+    # Surface git's clone progress (e.g. "Cloning into '<path>'...")
+    # so the operator can see the clone actually happened.
+    git_stdout = (result.stdout or "").strip()
+    if git_stdout:
+        print(f"INFO: git clone {git_url} -> {path}: {git_stdout}", flush=True)
     return True
 
 
