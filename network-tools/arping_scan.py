@@ -131,17 +131,24 @@ def _mac_to_entity_key(mac: str) -> str:
 
 
 def _build_discovery_payload(result: dict, prefix: str, entity_key: str) -> dict:
-    state_topic = f"{prefix}/binary_sensor/arping_{entity_key}_status/state"
-    attrs_topic = f"{prefix}/binary_sensor/arping_{entity_key}_status/attributes"
+    slug = f"networktools_arping_{entity_key}_status"
+    state_topic = f"{prefix}/binary_sensor/{slug}/state"
+    attrs_topic = f"{prefix}/binary_sensor/{slug}/attributes"
     return {
         "name": result["label"],
-        "unique_id": f"arping_{entity_key}_status",
-        "object_id": f"arping_{entity_key}_status",
+        "unique_id": slug,
+        "default_entity_id": f"binary_sensor.{slug}",
         "state_topic": state_topic,
         "json_attributes_topic": attrs_topic,
         "device_class": "connectivity",
         "payload_on": "ON",
         "payload_off": "OFF",
+        "device": {
+            "identifiers": [f"networktools_arping_{entity_key}"],
+            "name": result["label"],
+            "model": "Network Host",
+            "manufacturer": "Network Tools",
+        },
     }
 
 
@@ -204,7 +211,7 @@ def publish_mqtt(data: dict, options: dict) -> None:
         discovery_payload = _build_discovery_payload(result, prefix, entity_key)
         state_topic = discovery_payload["state_topic"]
         attrs_topic = discovery_payload["json_attributes_topic"]
-        discovery_topic = f"{prefix}/binary_sensor/arping_{entity_key}_status/config"
+        discovery_topic = f"{prefix}/binary_sensor/networktools_arping_{entity_key}_status/config"
 
         client.publish(discovery_topic, json.dumps(discovery_payload), retain=True)
         client.publish(state_topic, "ON" if result["reachable"] else "OFF", retain=True)
