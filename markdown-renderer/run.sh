@@ -1,6 +1,13 @@
 #!/bin/sh
 set -e
 
+# HOME must be set for `git config --global` (GIT-02). The HA base image
+# does not export HOME by default, and `git config --global` aborts with
+# `fatal: $HOME not set` if HOME is unset, which would prevent the add-on
+# from starting. /root is the conventional home for the container's root
+# user; git writes its global config to $HOME/.gitconfig.
+export HOME=/root
+
 # Allow git to operate on repos owned by a different UID (GIT-02).
 # Required for git 2.35.2+ when /share, /config, or /media mounts
 # have different ownership than the container's root user.
