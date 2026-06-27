@@ -20,8 +20,8 @@ Full details: [.planning/milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 
 ### 📋 v1.1 markdown-renderer (Phases 4-6)
 
-- [ ] **Phase 4: Scaffold + Ingress Validation** — Add-on structure, vendored assets, single-namespace Docsify SPA
-      working through HA Ingress with correct basePath and relative asset paths
+- [x] **Phase 4: Scaffold + Ingress Validation** — Add-on structure, vendored assets, single-namespace Docsify SPA
+      (completed 2026-06-27) working through HA Ingress with correct basePath and relative asset paths
 - [ ] **Phase 5: Multi-Namespace + Dynamic Config** — `generate_nginx.py` wired to HA options, multiple directories
       served as isolated SPAs, landing page at ingress root
 - [ ] **Phase 6: Git Integration** — Optional per-namespace git pull at startup and on a background interval; errors
@@ -58,11 +58,11 @@ MULTI-02, MULTI-03, MULTI-04, MULTI-05, MULTI-06, KROKI-01, KROKI-02, KROKI-03, 
 
 Plans:
 
-- [ ] 04-01-PLAN.md — Scaffold add-on skeleton (config.yaml, build.yaml, Dockerfile, run.sh, README, DOCS,
+- [x] 04-01-PLAN.md — Scaffold add-on skeleton (config.yaml, build.yaml, Dockerfile, run.sh, README, DOCS,
       .upstream.yaml, single-namespace generate_nginx.py skeleton)
-- [ ] 04-02-PLAN.md — Full multi-namespace generate_nginx.py: iterate directories, name validation, per-namespace
+- [x] 04-02-PLAN.md — Full multi-namespace generate_nginx.py: iterate directories, name validation, per-namespace
       index.html, landing page, nginx -t validation
-- [ ] 04-03-PLAN.md — make check-all + local docker build + README Verification section with 5-point HA Ingress
+- [x] 04-03-PLAN.md — make check-all + local docker build + README Verification section with 5-point HA Ingress
       checklist
 
 **UI hint**: yes
@@ -121,6 +121,6 @@ but do not block the namespace from being served; periodic background sync is av
 | 1. Quality Fixes                    | v1.0      | 2/2            | Complete    | 2026-04-03 |
 | 2. Auto-Update Workflow             | v1.0      | 1/1            | Complete    | 2026-04-04 |
 | 3. Meridian Add-on                  | v1.0      | 3/3            | Complete    | 2026-04-04 |
-| 4. Scaffold + Ingress Validation    | v1.1      | 0/0            | Not started | —          |
+| 4. Scaffold + Ingress Validation    | v1.1      | 3/3            | Complete    | 2026-06-27 |
 | 5. Multi-Namespace + Dynamic Config | v1.1      | 0/0            | Not started | —          |
 | 6. Git Integration                  | v1.1      | 0/0            | Not started | —          |
