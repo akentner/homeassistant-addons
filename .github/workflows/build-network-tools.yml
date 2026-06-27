@@ -31,7 +31,7 @@ jobs:
             - name: Extract version and metadata
               id: meta
               run: |
-                  VERSION=$(yq eval '.args.VERSION' network-tools/build.yaml)
+                  VERSION=$(yq eval '.version' network-tools/config.yaml)
                   BUILD_FROM=$(yq eval '.build_from.amd64' network-tools/build.yaml)
                   BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
                   {
