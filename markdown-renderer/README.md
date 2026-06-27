@@ -3,7 +3,8 @@
 [![Release][release-shield]][release] [![License][license-shield]][license]
 
 Renders Markdown directories as Docsify SPAs via Home Assistant Ingress with Mermaid diagram support. Vendored Docsify
-and Mermaid - no CDN requests at runtime. - Verification status: see Verification section below
+and Mermaid - no CDN requests at runtime. Multiple namespaces can be configured and are served as isolated Docsify SPAs
+under separate URLs. - Verification status: see Verification section below
 
 ## Configuration
 
@@ -54,6 +55,16 @@ Phase 4 success criteria require empirical verification in Home Assistant. To co
 7. **Kroki URL override** - Change `kroki_url` in the add-on options to a self-hosted Kroki instance URL (e.g.,
    `http://192.168.1.100:8000`). Restart the add-on. Re-load a page with a PlantUML block; the `<img>` `src` now points
    at the custom URL.
+8. **Multi-namespace landing page** - Configure two or more directories in the add-on options (e.g. docs and runbooks).
+   Open the Markdown Renderer panel; the landing page at the Ingress root shows two clickable cards. Click each card and
+   confirm the corresponding Docsify SPA loads. Restart the add-on with a different `directories:` list; the landing
+   page regenerates with the new set of cards (no caching).
+9. **Invalid namespace name rejected** - Configure a `directories:` entry with a name like `bad/name` (contains `/`) or
+   `Docs` (uppercase) or `_docsify` (reserved). Restart the add-on. The HA Supervisor log shows the clear error
+   `ERROR: namespace name '...' ...` and the add-on does not start. Fix the name and the add-on starts normally.
+10. **Volume mounts serve files** - Place a `README.md` file in each of `/share/docs/`, `/config/runbooks/`, and
+    `/media/photos/` on the HA host. Configure three corresponding namespaces. Confirm each namespace renders its
+    respective `README.md` content (Docsify reads `.md` files from the configured path via the mounted volume).
 
 <!-- Badge Links -->
 
