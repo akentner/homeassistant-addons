@@ -59,12 +59,17 @@ def arping_host(ip: str, interface: str) -> dict:
     rtt_ms = None
 
     if reachable:
-        mac_match = re.search(r"\[([0-9A-Fa-f:]{17})\]", output)
-        rtt_match = re.search(r"(\d+(?:\.\d+)?)\s*ms", output)
+        # Format: "60 bytes from 44:4e:6d:22:40:48 (192.168.178.1): index=0 time=904.918 usec"
+        mac_match = re.search(r"from ([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})", output)
+        # Prefer avg RTT from stats line; fall back to first packet usec value
+        rtt_avg = re.search(r"rtt min/avg/max/std-dev = [\d.]+/([\d.]+)/", output)
+        rtt_usec = re.search(r"time=([\d.]+)\s*usec", output)
         if mac_match:
             mac = mac_match.group(1).upper()
-        if rtt_match:
-            rtt_ms = float(rtt_match.group(1))
+        if rtt_avg:
+            rtt_ms = float(rtt_avg.group(1))
+        elif rtt_usec:
+            rtt_ms = float(rtt_usec.group(1)) / 1000
 
     log.info(f"arping {ip}: {'OK' if reachable else 'FAIL'} mac={mac} rtt={rtt_ms}ms")
     if reachable and mac is None:
