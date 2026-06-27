@@ -1,7 +1,6 @@
-# Network Tools Add-on
+# Home Assistant Add-on: Network Tools
 
-[![Version](https://img.shields.io/badge/version-v0.1.0-blue)](https://github.com/akentner/homeassistant-addons)
-[![Architecture](https://img.shields.io/badge/arch-amd64-lightgrey)](https://github.com/akentner/homeassistant-addons)
+[![Release][release-shield]][release] [![License][license-shield]][license]
 
 Network diagnostics and ARP-based host detection for Home Assistant.
 
@@ -29,3 +28,10 @@ GET /arping_scan.json
 ```
 
 See [DOCS.md](DOCS.md) for full configuration reference and HA integration examples.
+
+<!-- Badge Links -->
+
+[release-shield]: https://img.shields.io/badge/version-v0.1.1-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v0.1.1
+[license-shield]: https://img.shields.io/badge/license-MIT-green.svg
+[license]: https://github.com/akentner/homeassistant-addons/blob/main/LICENSE
