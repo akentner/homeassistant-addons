@@ -1,12 +1,14 @@
 name: "Coding Assistants"
 description: "Terminal with Claude Code, OpenCode, and GitHub Copilot CLI — SSH + web terminal"
-version: "1.0.0-alpha41"
+version: "1.0.0-alpha42"
 slug: "coding_assistants"
 init: false
 hassio_api: true
 hassio_role: manager
 arch:
   - amd64
+  - aarch64
+image: "ghcr.io/akentner/homeassistant-addons/{arch}-coding_assistants"
 url: "https://github.com/akentner/homeassistant-addons"
 startup: "application"
 boot: "manual"
