@@ -38,10 +38,10 @@ RUN mv lib/docsify.min.js ./docsify.min.js && \
     mv dist/mermaid.min.js ./mermaid.min.js && \
     rm -rf lib dist
 
-# Copy add-on-specific files (run.sh + generate_nginx.py); both must be chmod +x.
+# Copy add-on-specific files (run.sh + generate_nginx.py + _git_sync.py); all must be chmod +x.
 WORKDIR ${WORKING_DIR}
-COPY run.sh generate_nginx.py ./
-RUN chmod a+x run.sh generate_nginx.py
+COPY run.sh generate_nginx.py _git_sync.py ./
+RUN chmod a+x run.sh generate_nginx.py _git_sync.py
 
 ENV WORKING_DIR=${WORKING_DIR}
 EXPOSE 8099
