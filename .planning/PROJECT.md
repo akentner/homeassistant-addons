@@ -45,6 +45,8 @@ Ingress, with extensible diagram rendering and optional Git sync.
 - ✓ `meridian` add-on: Claude Max subscription → local Anthropic-compatible API proxy (port 3456), two-stage Dockerfile
   (bun + HA base), `claude login` via HA terminal, OAuth token persisted in `/data/.claude` — Validated in Phase 03:
   meridian-add-on
+- ✓ `markdown-renderer` Grundgerüst + multi-namespace routing empirically verified (35 assertions pass, MULTI-01..06) —
+  Validated in Phase 05: multi-namespace-dynamic-config
 
 ### Active
 
@@ -121,4 +123,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-06-27 — Milestone v1.1 markdown-renderer started_
+_Last updated: 2026-06-27 — Phase 05 complete (multi-namespace empirically verified + documented)_
