@@ -12,6 +12,19 @@ adapter architecture), and `meridian` (Claude Max → local Anthropic-compatible
 
 Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version tracking.
 
+## Current Milestone: v1.1 markdown-renderer
+
+**Goal:** New `markdown-renderer` add-on that serves multiple Markdown directories as namespaced HTML endpoints via HA
+Ingress, with extensible diagram rendering and optional Git sync.
+
+**Target features:**
+
+- Add-on Grundgerüst nach bestehendem 4-File-Pattern (config.yaml, build.yaml, Dockerfile, run.sh, .upstream.yaml)
+- Multi-Directory Routing: je konfiguriertes Verzeichnis ein eigener `/namespace/` unter Ingress
+- Client-seitiges Markdown-Rendering (Docsify oder äquivalentes Tool nach Research)
+- Mermaid + erweiterbare Diagram-Renderer eingebunden
+- Optionale Git-Integration: pull beim Start / periodisch, falls Verzeichnis ein Git-Repo ist
+
 ## Requirements
 
 ### Validated
@@ -37,13 +50,19 @@ Any upstream release is automatically reflected in the add-on within 24 hours �
 
 <!-- Current scope. Building toward these. -->
 
-_Nothing active — v1.0 shipped. Run `/gsd:new-milestone` to define v1.1 scope._
+- `markdown-renderer` add-on Grundgerüst (config.yaml, build.yaml, Dockerfile, run.sh, .upstream.yaml)
+- Multi-Directory Routing unter Ingress (ein Namespace pro konfiguriertem Verzeichnis)
+- Client-seitiges Markdown-Rendering mit Mermaid/Diagramm-Support
+- Optionale Git-Integration (pull beim Start / periodisch)
 
 ### Out of Scope
 
 <!-- Explicit boundaries. Includes reasoning to prevent re-adding. -->
 
 - Multi-arch builds (arm64, armv7) — added complexity without clear need; both hosts are x86_64 (op3050, LXC)
+- HA Camera Entity Integration in markdown-renderer — deferred to v1.2; image hash refresh requires HA API proxying
+- Web-Editor / In-Browser-Editing für markdown-renderer — out of scope v1.1; read-only viewer first
+- PDF Export für markdown-renderer — out of scope v1.1; HTML-Rendering priorisiert
 - Unit tests for `generate_config.py` / `update-version.py` — low risk, infrequent changes, no framework chosen
 - Binary integrity verification (SHA checksums) — trusted GitHub Releases source, personal/private deployment
 
@@ -102,4 +121,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-04-04 after v1.0 milestone_
+_Last updated: 2026-06-27 — Milestone v1.1 markdown-renderer started_

@@ -1,14 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: MVP
-status: Archived — planning next milestone
-last_updated: "2026-04-04T12:00:00.000Z"
+milestone: v1.1
+milestone_name: markdown-renderer
+status: planning
+last_updated: "2026-06-27T09:36:19.288Z"
+last_activity: 2026-06-27
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -50,3 +52,8 @@ Run `/gsd:new-milestone` to define v1.1 scope.
 
 _State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_ _Last activity: 2026-05-07 - Completed quick task
 260507-w85: coding-assistants dedizierter zigbee2mqtt Config-Block mit auto-MCP-Registrierung_
+
+## Current Position
+
+Phase: Not started (defining requirements) Plan: — Status: Defining requirements Last activity: 2026-06-27 — Milestone
+v1.1 started
