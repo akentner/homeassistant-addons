@@ -47,6 +47,8 @@ Ingress, with extensible diagram rendering and optional Git sync.
   meridian-add-on
 - ✓ `markdown-renderer` Grundgerüst + multi-namespace routing empirically verified (35 assertions pass, MULTI-01..06) —
   Validated in Phase 05: multi-namespace-dynamic-config
+- ✓ `markdown-renderer` optional per-namespace git sync empirically verified (18 assertions pass, GIT-01..05) —
+  Validated in Phase 06: git-integration
 
 ### Active
 
@@ -55,7 +57,6 @@ Ingress, with extensible diagram rendering and optional Git sync.
 - `markdown-renderer` add-on Grundgerüst (config.yaml, build.yaml, Dockerfile, run.sh, .upstream.yaml)
 - Multi-Directory Routing unter Ingress (ein Namespace pro konfiguriertem Verzeichnis)
 - Client-seitiges Markdown-Rendering mit Mermaid/Diagramm-Support
-- Optionale Git-Integration (pull beim Start / periodisch)
 
 ### Out of Scope
 
@@ -123,4 +124,5 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-06-27 — Phase 05 complete (multi-namespace empirically verified + documented)_
+_Last updated: 2026-06-28 — Phase 06 complete (git-integration empirically verified + documented; v1.1 milestone
+complete)_
