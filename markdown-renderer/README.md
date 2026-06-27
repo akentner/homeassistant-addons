@@ -68,7 +68,7 @@ Phase 4 success criteria require empirical verification in Home Assistant. To co
 
 <!-- Badge Links -->
 
-[release-shield]: https://img.shields.io/badge/version-v1.0.0-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.0.0
+[release-shield]: https://img.shields.io/badge/version-v1.1.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.1.0
 [license-shield]: https://img.shields.io/badge/license-MIT-green.svg
 [license]: https://github.com/akentner/homeassistant-addons/blob/main/LICENSE

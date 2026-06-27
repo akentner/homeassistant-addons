@@ -72,23 +72,30 @@ echo -e "${CYAN}Image found: local/markdown-renderer:1.1.0${NC}"
 
 # ─── Cleanup trap (always runs on exit) ────────────────────────────────────
 cleanup() {
-    local exit_code=$?
+    local last_status=$?
     $RUNTIME rm -f mr-git-test >/dev/null 2>&1 || true
     if [[ -d /tmp/mr-git-fixtures ]]; then
         rm -rf /tmp/mr-git-fixtures
     fi
-    if [[ $exit_code -eq 0 ]]; then
+    # The trap runs on EXIT regardless of cause. A non-zero ``last_status``
+    # indicates either an ``exit 1`` from a failing scenario OR a fatal
+    # ``exit 2`` from preflight; both cases should be reported as failed.
+    # The PASS/FAIL summary is driven by FAIL_COUNT (independent of the
+    # shell's last exit code) so the message reflects test outcomes even
+    # when the script reaches the end naturally with no explicit exit.
+    if [[ $FAIL_COUNT -eq 0 && $last_status -eq 0 ]]; then
         echo ""
         echo -e "${GREEN}══════════════════════════════════════════════════════${NC}"
         echo -e "${GREEN}  ALL VERIFICATIONS PASSED  (${PASS_COUNT} assertions)${NC}"
         echo -e "${GREEN}══════════════════════════════════════════════════════${NC}"
+        exit 0
     else
         echo ""
         echo -e "${RED}══════════════════════════════════════════════════════${NC}"
         echo -e "${RED}  VERIFICATION FAILED  (${FAIL_COUNT} failures / ${PASS_COUNT} passed)${NC}"
         echo -e "${RED}══════════════════════════════════════════════════════${NC}"
+        exit 1
     fi
-    exit "$exit_code"
 }
 trap cleanup EXIT
 
@@ -137,16 +144,31 @@ capture_logs() {
 # bind mount path. The /data volume holds options.json; the namespace volume
 # (typically /tmp/mr-git-fixtures/<scenario>/test-repo or not-a-repo) is
 # mounted into the container at the same path the options.json references.
+# Optional third argument is an additional bind mount in the form
+# "<host_path>:<container_path>" — used by scenarios that need a source
+# repo to be reachable from inside the container (the local "remote" for
+# `git pull` must be at a path the container can see).
 run_container() {
     local options_file=$1
     local namespace_path=$2
+    local extra_mount=${3:-}
     $RUNTIME rm -f mr-git-test >/dev/null 2>&1 || true
-    $RUNTIME run -d \
-        --name mr-git-test \
-        -p 8099:8099 \
-        -v "${options_file}:/data/options.json:ro" \
-        -v "${namespace_path}:${namespace_path}" \
-        localhost/local/markdown-renderer:1.1.0 >/dev/null
+    if [[ -n "$extra_mount" ]]; then
+        $RUNTIME run -d \
+            --name mr-git-test \
+            -p 8099:8099 \
+            -v "${options_file}:/data/options.json:ro" \
+            -v "${namespace_path}:${namespace_path}" \
+            -v "${extra_mount}" \
+            localhost/local/markdown-renderer:1.1.0 >/dev/null
+    else
+        $RUNTIME run -d \
+            --name mr-git-test \
+            -p 8099:8099 \
+            -v "${options_file}:/data/options.json:ro" \
+            -v "${namespace_path}:${namespace_path}" \
+            localhost/local/markdown-renderer:1.1.0 >/dev/null
+    fi
 }
 
 stop_container() {
@@ -218,7 +240,11 @@ cat > "$SCEN_DIR_A/options.json" <<EOF
 {"directories":[{"name":"test-repo","path":"$SCEN_DIR_A/test-repo","git_pull":true,"git_pull_interval":0,"git_url":""}],"kroki_url":"https://kroki.io"}
 EOF
 
+# Bind-mount the source repo too: test-repo's `origin` remote points at
+# the host path (set by `git clone` above), and the container needs to be
+# able to read that path for `git pull` to fetch the new commit.
 if run_container "$SCEN_DIR_A/options.json" "$SCEN_DIR_A/test-repo" \
+    "$SCEN_DIR_A/source-repo:$SCEN_DIR_A/source-repo" \
     && wait_for_nginx; then
     pass "container started and nginx is serving (Scenario A fixture)"
 else
@@ -238,14 +264,31 @@ else
     fail "GIT-02: safe.directory '*' not configured (got: '${safe_dir_output}')"
 fi
 
-# GIT-01: new file pulled from source-repo is now served at /test-repo/
-newfile_body=$(curl -sf "http://127.0.0.1:8099/test-repo/newfile-A.md" 2>/dev/null || true)
+# GIT-01: new file pulled from source-repo is now present at the
+# mounted path. We verify file content directly inside the container via
+# `podman exec` (the SPA loads .md files via JS at runtime; raw curl
+# against /test-repo/<file>.md returns the SPA index.html due to nginx's
+# try_files fallback — see Phase 5 verifier's pattern of testing only the
+# SPA index, not individual .md files).
+set +e
+newfile_body=$($RUNTIME exec mr-git-test sh -c "cat '$SCEN_DIR_A/test-repo/newfile-A.md' 2>/dev/null" 2>/dev/null || true)
+set -e
 if echo "$newfile_body" | grep -qF 'scenario-A-newfile-content'; then
-    pass "GIT-01: /test-repo/newfile-A.md serves the pulled content"
+    pass "GIT-01: pulled file content present on disk inside container"
 else
-    fail "GIT-01: /test-repo/newfile-A.md did not return expected content"
-    echo -e "    ${YELLOW}DEBUG body:${NC}"
-    echo "$newfile_body" | sed 's/^/      /' | head -5
+    fail "GIT-01: pulled file content NOT present on disk inside container"
+    echo -e "    ${YELLOW}DEBUG body (raw):${NC}"
+    echo "$newfile_body" | sed 's/^/      /' | head -3
+fi
+
+# GIT-01: nginx also serves the file (HTTP 200 on the .md path)
+set +e
+http_status=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8099/test-repo/newfile-A.md" 2>/dev/null || echo "000")
+set -e
+if [[ "$http_status" == "200" ]]; then
+    pass "GIT-01: GET /test-repo/newfile-A.md returns HTTP 200"
+else
+    fail "GIT-01: GET /test-repo/newfile-A.md returned HTTP ${http_status}"
 fi
 
 # GIT-01: pull log line present in container logs (proves git ran)
@@ -377,7 +420,10 @@ cat > "$SCEN_DIR_D/options.json" <<EOF
 {"directories":[{"name":"test-repo","path":"$SCEN_DIR_D/test-repo","git_pull":false,"git_pull_interval":5,"git_url":""}],"kroki_url":"https://kroki.io"}
 EOF
 
+# Bind-mount source-repo too so the periodic `git pull` can fetch the
+# new commit we push during the test (same rationale as Scenario A).
 if run_container "$SCEN_DIR_D/options.json" "$SCEN_DIR_D/test-repo" \
+    "$SCEN_DIR_D/source-repo:$SCEN_DIR_D/source-repo" \
     && wait_for_nginx; then
     pass "container started with git_pull_interval=5 (no startup pull)"
 else
@@ -399,14 +445,28 @@ git -C "$SCEN_DIR_D/test-repo" fetch -q "$SCEN_DIR_D/source-repo" main
 # Wait another 8s for the periodic loop (interval=5 + buffer) to pull
 sleep 8
 
-# GIT-04: pulled new content is served
-newfile_body=$(curl -sf "http://127.0.0.1:8099/test-repo/newfile-D.md" 2>/dev/null || true)
+# GIT-04: pulled new content is present on disk inside container
+# (same nginx try_files fallback rationale as Scenario A — Docsify loads
+# .md files via JS, raw curl returns the SPA index.html).
+set +e
+newfile_body=$($RUNTIME exec mr-git-test sh -c "cat '$SCEN_DIR_D/test-repo/newfile-D.md' 2>/dev/null" 2>/dev/null || true)
+set -e
 if echo "$newfile_body" | grep -qF 'scenario-D-newfile-content'; then
-    pass "GIT-04: /test-repo/newfile-D.md serves the periodically-pulled content"
+    pass "GIT-04: periodically-pulled file content present on disk inside container"
 else
-    fail "GIT-04: /test-repo/newfile-D.md did not return expected content"
-    echo -e "    ${YELLOW}DEBUG body:${NC}"
-    echo "$newfile_body" | sed 's/^/      /' | head -5
+    fail "GIT-04: periodically-pulled file content NOT present on disk"
+    echo -e "    ${YELLOW}DEBUG body (raw):${NC}"
+    echo "$newfile_body" | sed 's/^/      /' | head -3
+fi
+
+# GIT-04: nginx serves the periodically-pulled file
+set +e
+http_status=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8099/test-repo/newfile-D.md" 2>/dev/null || echo "000")
+set -e
+if [[ "$http_status" == "200" ]]; then
+    pass "GIT-04: GET /test-repo/newfile-D.md returns HTTP 200"
+else
+    fail "GIT-04: GET /test-repo/newfile-D.md returned HTTP ${http_status}"
 fi
 
 # GIT-04: periodic loop ran at least once (look for second invocation)
@@ -435,10 +495,16 @@ SCEN_DIR_E=/tmp/mr-git-fixtures/scenario-e
 mkdir -p "$SCEN_DIR_E"
 
 # Source repo with content; clone target is an EMPTY directory so the
-# probe in _git_sync.py fails and falls through to git_url cloning
+# probe in _git_sync.py fails and falls through to git_url cloning.
+# Note: `git clone <url> <path>` refuses to clone into a non-empty
+# directory (per git's standard behavior), so the test fixture MUST be
+# empty. A real-world user pre-populating the directory with content
+# should treat that content as their own and either clear it before
+# enabling git_pull, or set up the clone manually and switch to a
+# git_pull-only config after the initial clone.
 init_git_repo "$SCEN_DIR_E/source-repo" "README.md" "# Scenario E source"
 mkdir -p "$SCEN_DIR_E/not-a-repo"
-# Verify not-a-repo is actually not a git repo
+# Verify not-a-repo is actually not a git repo (and empty)
 set +e
 is_repo=$(git -C "$SCEN_DIR_E/not-a-repo" rev-parse --git-dir 2>&1 || true)
 set -e
@@ -447,7 +513,10 @@ cat > "$SCEN_DIR_E/options.json" <<EOF
 {"directories":[{"name":"not-a-repo","path":"$SCEN_DIR_E/not-a-repo","git_pull":true,"git_pull_interval":0,"git_url":"file://$SCEN_DIR_E/source-repo"}],"kroki_url":"https://kroki.io"}
 EOF
 
+# Bind-mount source-repo too: the file:// git_url references a host
+# path that the container must be able to read for `git clone` to work.
 if run_container "$SCEN_DIR_E/options.json" "$SCEN_DIR_E/not-a-repo" \
+    "$SCEN_DIR_E/source-repo:$SCEN_DIR_E/source-repo" \
     && wait_for_nginx; then
     pass "container started with empty (non-repo) namespace path"
 else
