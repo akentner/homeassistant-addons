@@ -3,8 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: markdown-renderer
 status: planning
-last_updated: "2026-06-27T09:36:19.288Z"
-last_activity: 2026-06-27
+last_updated: "2026-06-27T10:34:37.762Z"
 progress:
   total_phases: 3
   completed_phases: 0
@@ -65,8 +64,10 @@ Roadmap: 3 phases (4-6). Roadmap written; planning starts at Phase 4.
 
 - **CSP / unsafe-eval** (Phase 6): Does HA Supervisor override `Content-Security-Policy` headers set in nginx? Verify
   empirically against meridian in production before committing to CSP approach for Mermaid.
+
 - **Mermaid inline hook vs plugin** (Phase 4): Validate `mermaid.run()` in `doneEach` lifecycle hook targets fenced code
   blocks correctly; fallback: `Leward/mermaid-docsify` v2.0.1.
+
 - **share:rw vs share:ro** (Phase 5): git pull writes to `.git`; namespaces with `git_pull: true` require `rw` mounts;
   document this constraint in DOCS.md.
 
