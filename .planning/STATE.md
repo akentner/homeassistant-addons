@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-06-27T09:36:19.288Z"
 last_activity: 2026-06-27
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,10 +17,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-04)
+See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Planning next milestone
+tracking. **Current focus:** v1.1 markdown-renderer — Phase 4 next
 
 ## Milestone v1.0 — COMPLETE
 
@@ -32,11 +32,54 @@ All 3 phases shipped. Archived to `.planning/milestones/v1.0-ROADMAP.md`.
 | 2     | Auto-Update Workflow | Complete | 2026-04-04 |
 | 3     | Meridian Add-on      | Complete | 2026-04-04 |
 
-## Next Step
+## Milestone v1.1 — IN PROGRESS
 
-Run `/gsd:new-milestone` to define v1.1 scope.
+Roadmap: 3 phases (4-6). Roadmap written; planning starts at Phase 4.
 
-### Quick Tasks Completed
+| Phase | Name                             | Status      | Completed |
+| ----- | -------------------------------- | ----------- | --------- |
+| 4     | Scaffold + Ingress Validation    | Not started | —         |
+| 5     | Multi-Namespace + Dynamic Config | Not started | —         |
+| 6     | Git Integration                  | Not started | —         |
+
+## Current Position
+
+**Phase**: 4 — Scaffold + Ingress Validation **Plan**: — (not started) **Status**: Awaiting `/gsd:plan-phase 4`
+**Progress**: 0/3 phases complete
+
+**Progress bar**: `░░░░░░░░░░` 0%
+
+## Accumulated Context
+
+### Key Decisions (v1.1)
+
+| Decision                                      | Rationale                                                                                                          |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Docsify 4.13.1 over MkDocs                    | No build step; "edit file → refresh" works directly; MkDocs requires rebuild on every change                       |
+| Mermaid UMD build (not ESM)                   | Self-contained; ESM bundle breaks when vendored due to dynamic import chains                                       |
+| `basePath: window.location.pathname`          | HA Ingress strips the token server-side but browser URL retains it; static basePath breaks XHR                     |
+| `generate_nginx.py` for config generation     | Mirrors phone-logger's `generate_config.py`; Python justified for structured JSON + template loops                 |
+| CI/Quality gate extension folded into Phase 4 | ADD-01 ("consistent with existing add-ons") implies validate-versions.sh and make validate-addons cover new add-on |
+
+### Research Flags (open questions for implementation)
+
+- **CSP / unsafe-eval** (Phase 6): Does HA Supervisor override `Content-Security-Policy` headers set in nginx? Verify
+  empirically against meridian in production before committing to CSP approach for Mermaid.
+- **Mermaid inline hook vs plugin** (Phase 4): Validate `mermaid.run()` in `doneEach` lifecycle hook targets fenced code
+  blocks correctly; fallback: `Leward/mermaid-docsify` v2.0.1.
+- **share:rw vs share:ro** (Phase 5): git pull writes to `.git`; namespaces with `git_pull: true` require `rw` mounts;
+  document this constraint in DOCS.md.
+
+### Todos
+
+- [ ] Run `make validate-addons` after Phase 4 scaffold is in place
+- [ ] Empirically verify `window.location.pathname` basePath in actual HA Ingress during Phase 4
+
+### Blockers
+
+None.
+
+## Quick Tasks Completed
 
 | #          | Description                                                                        | Date       | Commit  | Directory                                                                                                           |
 | ---------- | ---------------------------------------------------------------------------------- | ---------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -50,10 +93,5 @@ Run `/gsd:new-milestone` to define v1.1 scope.
 
 ---
 
-_State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_ _Last activity: 2026-05-07 - Completed quick task
-260507-w85: coding-assistants dedizierter zigbee2mqtt Config-Block mit auto-MCP-Registrierung_
-
-## Current Position
-
-Phase: Not started (defining requirements) Plan: — Status: Defining requirements Last activity: 2026-06-27 — Milestone
-v1.1 started
+_State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_ _Milestone v1.1 roadmap written: 2026-06-27_ _Last
+activity: 2026-06-27 — v1.1 roadmap defined (3 phases, 20 requirements)_

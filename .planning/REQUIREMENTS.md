@@ -90,15 +90,29 @@ namespaced HTML endpoints via HA Ingress, with Mermaid diagram support and optio
 
 ## Traceability
 
-<!-- Filled by roadmapper -->
-
-| REQ-ID                  | Phase | Plan |
-| ----------------------- | ----- | ---- |
-| ADD-01 — ADD-04         | —     | —    |
-| INGRESS-01 — INGRESS-05 | —     | —    |
-| MULTI-01 — MULTI-06     | —     | —    |
-| GIT-01 — GIT-05         | —     | —    |
+| REQ-ID     | Phase                                     | Plan |
+| ---------- | ----------------------------------------- | ---- |
+| ADD-01     | Phase 4: Scaffold + Ingress Validation    | —    |
+| ADD-02     | Phase 4: Scaffold + Ingress Validation    | —    |
+| ADD-03     | Phase 4: Scaffold + Ingress Validation    | —    |
+| ADD-04     | Phase 4: Scaffold + Ingress Validation    | —    |
+| INGRESS-01 | Phase 4: Scaffold + Ingress Validation    | —    |
+| INGRESS-02 | Phase 4: Scaffold + Ingress Validation    | —    |
+| INGRESS-03 | Phase 4: Scaffold + Ingress Validation    | —    |
+| INGRESS-04 | Phase 4: Scaffold + Ingress Validation    | —    |
+| INGRESS-05 | Phase 4: Scaffold + Ingress Validation    | —    |
+| MULTI-01   | Phase 5: Multi-Namespace + Dynamic Config | —    |
+| MULTI-02   | Phase 5: Multi-Namespace + Dynamic Config | —    |
+| MULTI-03   | Phase 5: Multi-Namespace + Dynamic Config | —    |
+| MULTI-04   | Phase 5: Multi-Namespace + Dynamic Config | —    |
+| MULTI-05   | Phase 5: Multi-Namespace + Dynamic Config | —    |
+| MULTI-06   | Phase 5: Multi-Namespace + Dynamic Config | —    |
+| GIT-01     | Phase 6: Git Integration                  | —    |
+| GIT-02     | Phase 6: Git Integration                  | —    |
+| GIT-03     | Phase 6: Git Integration                  | —    |
+| GIT-04     | Phase 6: Git Integration                  | —    |
+| GIT-05     | Phase 6: Git Integration                  | —    |
 
 ---
 
-_Last updated: 2026-06-27 — v1.1 requirements defined_
+_Last updated: 2026-06-27 — v1.1 roadmap written; traceability complete_
