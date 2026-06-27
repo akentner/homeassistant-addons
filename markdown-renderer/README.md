@@ -4,7 +4,8 @@
 
 Renders Markdown directories as Docsify SPAs via Home Assistant Ingress with Mermaid diagram support. Vendored Docsify
 and Mermaid - no CDN requests at runtime. Multiple namespaces can be configured and are served as isolated Docsify SPAs
-under separate URLs. - Verification status: see Verification section below
+under separate URLs. Optional per-namespace git sync keeps Markdown sources fresh from a remote repo. - Verification
+status: see Verification section below
 
 ## Configuration
 
@@ -65,6 +66,19 @@ Phase 4 success criteria require empirical verification in Home Assistant. To co
 10. **Volume mounts serve files** - Place a `README.md` file in each of `/share/docs/`, `/config/runbooks/`, and
     `/media/photos/` on the HA host. Configure three corresponding namespaces. Confirm each namespace renders its
     respective `README.md` content (Docsify reads `.md` files from the configured path via the mounted volume).
+11. **Startup git pull** - Configure a namespace whose `path` points at an existing git clone and set `git_pull: true`.
+    Commit a new file to the source repo, then restart the add-on. Confirm the new file appears at
+    `http://ha-host:8099/<namespace>/<newfile>.md` and the HA Supervisor log shows an `INFO: git pull for <path>: ...`
+    line. Verify the add-on still serves its locally cached content even when the git remote is unreachable (set
+    `git_url` to a bad URL — the container should stay running and log `WARNING: git pull failed for ...`).
+12. **Periodic git pull** - Configure a namespace with `git_pull_interval: 30`. After the add-on is running, commit a
+    new file to the source repo. Wait at least 35 seconds, then refresh `http://ha-host:8099/<namespace>/<newfile>.md`
+    in the browser — the new file should be visible (the periodic loop in `run.sh` pulls every 5 seconds; each
+    namespace's own `git_pull_interval` gates the actual pull).
+13. **No-op git config** - Configure a namespace with all three `git_*` fields at defaults (`git_pull: false`,
+    `git_pull_interval: 0`, `git_url: ""`). Inspect the HA Supervisor log — there should be no `git pull` or `git clone`
+    lines, and `podman exec <ctr> sh -c 'pgrep -af git'` should return empty (the git binary is not invoked when no
+    namespace opts into git sync).
 
 <!-- Badge Links -->
 

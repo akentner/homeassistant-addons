@@ -7,10 +7,15 @@
 Each entry configures one namespace served as an isolated Docsify SPA under `/<name>/`. Names must match
 `^[a-z0-9][a-z0-9-]{0,62}$` and may not collide with reserved paths.
 
-| Field | Type   | Description                                           |
-| ----- | ------ | ----------------------------------------------------- |
-| name  | string | URL namespace (lowercase letters, digits, hyphens)    |
-| path  | string | Absolute path to the directory containing `.md` files |
+| Field             | Type    | Description                                                               |
+| ----------------- | ------- | ------------------------------------------------------------------------- |
+| name              | string  | URL namespace (lowercase letters, digits, hyphens)                        |
+| path              | string  | Absolute path to the directory containing `.md` files                     |
+| git_pull          | bool    | Run `git pull --ff-only` at startup before nginx starts (default `false`) |
+| git_pull_interval | int     | Periodic pull interval in seconds; `0` = disabled (default `0`)           |
+| git_url           | string? | Optional HTTPS or `file://` URL for first-time clone of an empty path     |
+
+See the [Git Sync](#git-sync) section below for details on the three git fields.
 
 ### `kroki_url` (optional, string)
 
@@ -74,16 +79,78 @@ the add-on.
 
 ## Validation Status
 
-All 6 multi-namespace requirements (MULTI-01..06) have been verified end-to-end by the script
-`.planning/phases/05-multi-namespace-dynamic-config/verify-multi-namespace.sh`. To re-run the empirical verification
-locally:
+All 6 multi-namespace requirements (MULTI-01..06) and all 5 git-sync requirements (GIT-01..05) have been verified
+end-to-end inside a running container by the scripts:
+
+- `.planning/phases/05-multi-namespace-dynamic-config/verify-multi-namespace.sh` (35 assertions, MULTI-01..06)
+- `.planning/phases/06-git-integration/verify-git-integration.sh` (18 assertions, GIT-01..05)
+
+To re-run the empirical verification locally:
 
 ```bash
-make build-addon ADDON=markdown-renderer    # build local/markdown-renderer:1.0.0 (if not already built)
+make build-addon ADDON=markdown-renderer    # build local/markdown-renderer:1.1.0 (if not already built)
 bash .planning/phases/05-multi-namespace-dynamic-config/verify-multi-namespace.sh
+bash .planning/phases/06-git-integration/verify-git-integration.sh
 ```
 
-The script exits 0 with `ALL VERIFICATIONS PASSED` on success.
+Both scripts exit 0 with `ALL VERIFICATIONS PASSED` on success.
+
+## Git Sync
+
+Each `directories[]` entry can optionally pull its content from a git repository. Git sync is non-blocking: any git
+failure is logged as a warning but the locally cached Markdown is still served (GIT-05 contract).
+
+### Schema fields
+
+| Field               | Type    | Default | Description                                                           |
+| ------------------- | ------- | ------- | --------------------------------------------------------------------- |
+| `git_pull`          | bool    | `false` | Run `git pull --ff-only` at startup before nginx starts (GIT-01)      |
+| `git_pull_interval` | int     | `0`     | Periodic pull interval in seconds; `0` = disabled (GIT-04)            |
+| `git_url`           | string? | `""`    | Optional HTTPS or `file://` URL for first-time clone of an empty path |
+
+### Startup pull
+
+When `git_pull: true` and the configured `path` is already a git repository, the add-on runs `git pull --ff-only` at
+startup before nginx starts (GIT-01). The pulled content is immediately visible in the browser on first load.
+
+### Periodic sync
+
+When `git_pull_interval > 0`, one background loop in `run.sh` (started after the startup pull) runs
+`python3 /app/_git_sync.py --periodic` every 5 seconds; the script iterates each namespace whose own `git_pull_interval`
+has elapsed since its last successful pull (GIT-04, D-08). State is in-memory only — the first periodic iteration after
+a restart pulls every configured namespace once (D-09).
+
+### First-time clone
+
+When the configured `path` is not yet a git repository AND `git_url` is set AND either `git_pull` or `git_pull_interval`
+is enabled, the add-on runs `git clone <git_url> <path>` once at startup (D-02). Single attempt only — clones that fail
+(auth error, typo, unreachable host) log a `WARNING:` and the add-on continues. Note: `git clone` requires the
+destination directory to be empty; if you pre-populated the path with your own content, clear it before enabling
+`git_pull`.
+
+### Failure handling
+
+All git errors are non-blocking (GIT-05):
+
+- `git pull` failures log `WARNING: git pull failed for <path>: <git stderr>` and continue.
+- `git clone` failures log `WARNING: git clone failed for <git_url> -> <path>: <git stderr>` and continue.
+- The add-on serves whatever locally cached Markdown exists, even if every git remote is unreachable.
+
+Git 2.35.2+ refuses to operate on repos owned by a different UID by default; the add-on runs
+`git config --global --add safe.directory '*'` before any git invocation to bypass this (GIT-02).
+
+### Verifier
+
+The script `.planning/phases/06-git-integration/verify-git-integration.sh` empirically verifies all five GIT-01..05
+requirements end-to-end inside a running `local/markdown-renderer:1.1.0` container with no live Home Assistant required.
+It uses local `file://` URLs and bind-mounted source repos to exercise startup pull, periodic pull, the
+no-invocation-when-disabled case, the graceful-failure case, and the first-time clone case in 5 scenarios (18 assertions
+total).
+
+### Scope notes
+
+SSH key authentication for private repositories is planned for v1.2; v1.1 supports HTTPS public repositories and local
+`file://` URLs only.
 
 ## Example Configuration
 
