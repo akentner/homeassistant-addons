@@ -1,0 +1,33 @@
+name: "Network Tools"
+description: >-
+    Network diagnostics and host detection for Home Assistant. Provides ARP-based host detection
+    via arping, plus nmap, dig, ping and traceroute for manual use.
+version: "0.1.0-0"
+slug: "network-tools"
+init: false
+arch:
+    - amd64
+url: "https://github.com/akentner/homeassistant-addons"
+startup: "application"
+boot: "auto"
+host_network: true
+ingress: true
+ingress_port: 8080
+
+options:
+    arping_hosts:
+        - label: "example-host"
+          ip: "192.168.178.1"
+          mac: "AA:BB:CC:DD:EE:FF"
+    interface: "eth0"
+    interval: 30
+    log_level: "info"
+
+schema:
+    arping_hosts:
+        - label: str
+          ip: str
+          mac: str?
+    interface: str
+    interval: int
+    log_level: list(debug|info|warning|error)
