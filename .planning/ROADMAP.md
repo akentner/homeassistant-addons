@@ -88,7 +88,12 @@ startup.
 4. Directories mounted from `/share`, `/config`, or `/media` are served without permission errors or volume
    configuration changes beyond setting `map: share:rw config:rw media:rw` in config.yaml
 
-**Plans**: TBD
+**Plans**: 1 plan in 1 wave
+
+Plans:
+
+- [ ] 05-01-PLAN.md — Empirical multi-namespace verification inside container + DOCS.md/README.md updates for
+      multi-namespace behavior + Manual HA Ingress Test Checklist expansion
 
 **UI hint**: yes
 
