@@ -44,6 +44,20 @@ namespaced HTML endpoints via HA Ingress, with Mermaid diagram support and optio
 - [ ] **MULTI-06**: Paths from `/share`, `/config`, and `/media` are supported as namespace directory sources;
       config.yaml `map:` includes `share:rw`, `config:rw`, `media:rw`
 
+### KROKI — Kroki Diagram Service
+
+- [ ] **KROKI-01**: Add-on supports any diagram format that Kroki supports (PlantUML, Mermaid, GraphViz, etc.) via
+      fenced code blocks (` ```plantuml `, ` ```dot `, ` ```blockdiag `, etc.) in addition to inline Mermaid
+- [ ] **KROKI-02**: HA options schema exposes a `kroki_url` string option with default `"https://kroki.io"` (the public
+      Kroki web service); users can override to point at a self-hosted Kroki instance or compatible service
+- [ ] **KROKI-03**: A fenced code block whose language identifier is not `mermaid` is rendered as an `<img>` tag whose
+      `src` points at `{kroki_url}/{format}/{output_format}/<base64-encoded diagram source>` (Kroki's URL scheme);
+      default output_format is `svg`
+- [ ] **KROKI-04**: Diagram rendering happens at page-load time via Docsify `doneEach` lifecycle hook; the rendered
+      `<img>` tags replace the raw `<pre><code>` blocks in the DOM after Docsify has rendered the markdown
+- [ ] **KROKI-05**: If the Kroki service is unreachable for a specific diagram, the original code block remains visible
+      (graceful degradation); errors are logged to the browser console but do not break the Docsify SPA
+
 ### GIT — Git Integration
 
 - [ ] **GIT-01**: Each namespace entry supports an optional `git_pull: bool` flag; when true, run.sh executes
@@ -107,6 +121,11 @@ namespaced HTML endpoints via HA Ingress, with Mermaid diagram support and optio
 | MULTI-04   | Phase 5: Multi-Namespace + Dynamic Config | —    |
 | MULTI-05   | Phase 5: Multi-Namespace + Dynamic Config | —    |
 | MULTI-06   | Phase 5: Multi-Namespace + Dynamic Config | —    |
+| KROKI-01   | Phase 4: Scaffold + Ingress Validation    | —    |
+| KROKI-02   | Phase 4: Scaffold + Ingress Validation    | —    |
+| KROKI-03   | Phase 4: Scaffold + Ingress Validation    | —    |
+| KROKI-04   | Phase 4: Scaffold + Ingress Validation    | —    |
+| KROKI-05   | Phase 4: Scaffold + Ingress Validation    | —    |
 | GIT-01     | Phase 6: Git Integration                  | —    |
 | GIT-02     | Phase 6: Git Integration                  | —    |
 | GIT-03     | Phase 6: Git Integration                  | —    |

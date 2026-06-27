@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: markdown-renderer
 status: planning
-last_updated: "2026-06-27T12:42:41.127Z"
+last_updated: "2026-06-27T12:53:36.643Z"
 progress:
   total_phases: 3
   completed_phases: 0
@@ -67,6 +67,10 @@ Roadmap: 3 phases (4-6). Roadmap written; planning starts at Phase 4.
 
 - **Mermaid inline hook vs plugin** (Phase 4): Validate `mermaid.run()` in `doneEach` lifecycle hook targets fenced code
   blocks correctly; fallback: `Leward/mermaid-docsify` v2.0.1.
+
+- **Kroki base64+deflate encoding** (Phase 4): The Kroki HTTP API requires zlib-compressed + base64-encoded source.
+  Browser-native `pako` library is ~45KB minified — verify whether vendoring is acceptable or if `CompressionStream` API
+  (modern browsers, no library) suffices for HA's recent Chromium versions.
 
 - **share:rw vs share:ro** (Phase 5): git pull writes to `.git`; namespaces with `git_pull: true` require `rw` mounts;
   document this constraint in DOCS.md.

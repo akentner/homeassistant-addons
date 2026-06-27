@@ -52,9 +52,28 @@ end-to-end multi-namespace validation in HA + volume mounting verification (shar
   `markdown-renderer` alongside existing add-ons. CI extension is part of Phase 4 (per ADD-01 "consistent with existing
   add-ons" implies validation tooling covers the new add-on).
 
+### Kroki Integration
+
+- **D-09:** Kroki support is added in Phase 4 via a single Docsify `doneEach` plugin that dispatches on the fenced code
+  block's language identifier. Mermaid (`mermaid`) continues to render client-side via `mermaid.run()` (per D-06); all
+  other formats are sent to the Kroki URL as `<img>` tags. This keeps Mermaid offline-capable while extending coverage
+  to the full Kroki format set (PlantUML, GraphViz, BlockDiag, D2, Excalidraw, etc.).
+- **D-10:** The Kroki URL is a single string option `kroki_url` in the HA options schema, default `"https://kroki.io"`.
+  No per-namespace override, no URL allowlist, no authentication header support in Phase 4 (deferred). Users running a
+  self-hosted Kroki (e.g., as another HA add-on) point `kroki_url` at it.
+- **D-11:** The Kroki URL scheme is `{kroki_url}/{format}/{output_format}/<base64-encoded diagram source>`. Phase 4
+  hardcodes `output_format = "svg"` (per KROKI-03). Format identifier is taken directly from the fenced code block's
+  language tag (e.g., ` ```plantuml ` → format `plantuml`). Encoding is `deflate + base64` per the Kroki HTTP API spec
+  (zlib-compressed source, then standard base64).
+- **D-12:** Kroki requests use the standard `fetch()` API with no caching. If a request fails (network error, 4xx, 5xx)
+  the original `<pre><code>` block is preserved (KROKI-05). No retry logic, no offline cache, no pre-rendering — those
+  are future enhancements. This matches the existing Phase 4 philosophy of "minimal viable + documented fallback".
+
 ### Claude's Discretion
 
 - Exact nginx.conf template structure (server block details beyond what INGRESS-04 specifies)
+- Which specific fenced code-block languages to support beyond Mermaid (the default is "anything that isn't `mermaid`
+  goes to Kroki"; explicit list deferred to research)
 - `_docsify/` vendored asset directory naming and placement within nginx root
 - `build.yaml` base image version tag (use current latest `alpine3.20` variant)
 - `DOCS.md` structure and configuration option descriptions

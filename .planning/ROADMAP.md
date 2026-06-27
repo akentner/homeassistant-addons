@@ -38,17 +38,21 @@ diagrams render, and the Docsify basePath resolves correctly for all `.md` file 
 **Depends on**: Nothing (first phase of milestone)
 
 **Requirements**: ADD-01, ADD-02, ADD-03, ADD-04, INGRESS-01, INGRESS-02, INGRESS-03, INGRESS-04, INGRESS-05, MULTI-01,
-MULTI-02, MULTI-03, MULTI-04, MULTI-05, MULTI-06
+MULTI-02, MULTI-03, MULTI-04, MULTI-05, MULTI-06, KROKI-01, KROKI-02, KROKI-03, KROKI-04, KROKI-05
 
 **Success Criteria** (what must be TRUE):
 
 1. The add-on appears in the HA sidebar via Ingress with the configured panel icon; opening it loads the Docsify SPA
    without browser errors
 2. Docsify fetches and renders `.md` files from the mounted directory through HA Ingress; no requests go to a CDN
+   (Docsify, Mermaid)
 3. Mermaid diagrams in fenced ` ```mermaid ` code blocks render as SVG inside Docsify without JavaScript errors
 4. All static assets (Docsify JS, Mermaid JS, CSS) load via relative paths; no absolute `/`-prefixed path causes a 404
    under the Ingress URL
 5. Auto-update does not propose or apply a Docsify v5 RC upgrade; `.upstream.yaml` keeps the add-on on `v4.*`
+6. PlantUML (or any non-Mermaid Kroki format) in fenced ` ```plantuml ` code blocks renders as `<img>` tags whose `src`
+   points at the configured `kroki_url` (default `https://kroki.io`); if Kroki is unreachable the original code block
+   remains visible
 
 **Plans**: 3 plans in 2 waves
 
