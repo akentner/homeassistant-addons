@@ -23,7 +23,7 @@ Network diagnostics and ARP-based host detection for Home Assistant.
 
 Scan results available at the ingress endpoint:
 
-```
+```http
 GET /arping_scan.json
 ```
 
