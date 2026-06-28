@@ -5,9 +5,8 @@ globs:
   - "**/*.md"
 
 ignores:
-  - node_modules
-  - .git
-  - .planning
-  - "**/.planning"
-  - .claude
-  - .agents
+  - "node_modules/**"
+  - ".git/**"
+  - "**/.planning/**"
+  - "**/.claude/**"
+  - "**/.agents/**"
