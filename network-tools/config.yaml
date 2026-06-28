@@ -21,6 +21,7 @@ options:
           device_name: "My Router"
     interface: "eth0"
     interval: 30
+    disconnect_threshold: 3
     port: 18080
     log_level: "info"
     mqtt_enabled: false
@@ -38,6 +39,7 @@ schema:
           device_name: str?
     interface: str
     interval: int
+    disconnect_threshold: int
     port: int
     log_level: list(debug|info|warning|error)
     mqtt_enabled: bool

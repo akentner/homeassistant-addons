@@ -10,6 +10,7 @@ from typing import Optional
 
 OPTIONS_FILE = Path("/data/options.json")
 OUTPUT_FILE = Path("/data/results/arping_scan.json")
+STATE_FILE = Path("/data/state/arping_state.json")
 MQTT_AVAIL_TOPIC = "network-tools/arping/availability"
 
 LOG_LEVEL_MAP = {
@@ -36,6 +37,20 @@ def load_options() -> dict:
     except (OSError, json.JSONDecodeError) as e:
         log.error(f"Options nicht lesbar: {e}")
         return {}
+
+
+def load_state() -> dict:
+    try:
+        return json.loads(STATE_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_state(state: dict) -> None:
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = STATE_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(state, indent=2, sort_keys=True))
+    tmp.rename(STATE_FILE)
 
 
 def arping_host(ip: str, interface: str) -> dict:
@@ -79,9 +94,10 @@ def arping_host(ip: str, interface: str) -> dict:
     return {"reachable": reachable, "mac": mac, "rtt_ms": rtt_ms}
 
 
-def scan(options: dict) -> dict:
+def scan(options: dict, state: dict) -> dict:
     hosts = options.get("arping_hosts", [])
     interface = options.get("interface", "eth0")
+    threshold = int(options.get("disconnect_threshold", 3))
     results = []
 
     for host in hosts:
@@ -98,6 +114,18 @@ def scan(options: dict) -> dict:
         if expected_mac and probe["mac"]:
             mac_match = probe["mac"] == expected_mac
 
+        # Flap detection: update per-host state
+        host_state = state.get(ip, {"consecutive_failures": 0, "effective_reachable": True})
+        if probe["reachable"]:
+            host_state["consecutive_failures"] = 0
+            host_state["effective_reachable"] = True
+        else:
+            host_state["consecutive_failures"] = host_state.get("consecutive_failures", 0) + 1
+            if host_state["consecutive_failures"] >= threshold:
+                host_state["effective_reachable"] = False
+        host_state["last_raw_reachable"] = probe["reachable"]
+        state[ip] = host_state
+
         results.append(
             {
                 "label": label,
@@ -105,6 +133,8 @@ def scan(options: dict) -> dict:
                 "expected_mac": expected_mac,
                 "device_name": device_name,
                 "reachable": probe["reachable"],
+                "effective_reachable": host_state["effective_reachable"],
+                "consecutive_failures": host_state["consecutive_failures"],
                 "mac": probe["mac"],
                 "mac_match": mac_match,
                 "rtt_ms": probe["rtt_ms"],
@@ -115,8 +145,9 @@ def scan(options: dict) -> dict:
         "scan_timestamp": datetime.now(timezone.utc).isoformat(),
         "scan_ok": True,
         "interface": interface,
+        "disconnect_threshold": threshold,
         "hosts_total": len(hosts),
-        "hosts_reachable": sum(1 for r in results if r["reachable"]),
+        "hosts_reachable": sum(1 for r in results if r["effective_reachable"]),
         "results": results,
     }
 
@@ -173,11 +204,14 @@ def _build_discovery_payload(result: dict, prefix: str, entity_key: str) -> dict
     }
 
 
-def _build_attributes(result: dict, scan_timestamp: str) -> dict:
+def _build_attributes(result: dict, scan_timestamp: str, disconnect_threshold: int) -> dict:
     attrs: dict = {
         "ip": result["ip"],
         "label": result["label"],
         "scan_timestamp": scan_timestamp,
+        "last_raw_reachable": result["reachable"],
+        "consecutive_failures": result["consecutive_failures"],
+        "disconnect_threshold": disconnect_threshold,
     }
     if result.get("mac"):
         attrs["mac"] = result["mac"]
@@ -221,6 +255,7 @@ def publish_mqtt(data: dict, options: dict) -> None:
         return
 
     scan_timestamp = data.get("scan_timestamp", "")
+    disconnect_threshold = data.get("disconnect_threshold", 3)
 
     for result in data.get("results", []):
         mac = result.get("expected_mac") or result.get("mac")
@@ -233,11 +268,16 @@ def publish_mqtt(data: dict, options: dict) -> None:
         state_topic = discovery_payload["state_topic"]
         attrs_topic = discovery_payload["json_attributes_topic"]
         discovery_topic = f"{prefix}/binary_sensor/networktools_arping_{entity_key}_status/config"
+        effective = result.get("effective_reachable", result["reachable"])
 
         client.publish(discovery_topic, json.dumps(discovery_payload), retain=True)
-        client.publish(state_topic, "ON" if result["reachable"] else "OFF", retain=True)
-        client.publish(attrs_topic, json.dumps(_build_attributes(result, scan_timestamp)), retain=True)
-        log.debug(f"MQTT published: {entity_key} -> {'ON' if result['reachable'] else 'OFF'}")
+        client.publish(state_topic, "ON" if effective else "OFF", retain=True)
+        client.publish(
+            attrs_topic,
+            json.dumps(_build_attributes(result, scan_timestamp, disconnect_threshold)),
+            retain=True,
+        )
+        log.debug(f"MQTT published: {entity_key} -> {'ON' if effective else 'OFF'} (raw={'ON' if result['reachable'] else 'OFF'}, fails={result['consecutive_failures']})")
 
     client.disconnect()
     log.info(f"MQTT: {len(data.get('results', []))} Hosts publiziert an {host}:{port}")
@@ -246,7 +286,9 @@ def publish_mqtt(data: dict, options: dict) -> None:
 def main() -> None:
     options = load_options()
     setup_logging(options.get("log_level", "info"))
-    data = scan(options)
+    state = load_state()
+    data = scan(options, state)
+    save_state(state)
     write_output(data)
     publish_mqtt(data, options)
 
