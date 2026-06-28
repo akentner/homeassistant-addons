@@ -27,10 +27,18 @@ philosophy of keeping state out of ``/data``.
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+# Ensure HOME is set before any git invocation. Some HA Supervisor container
+# environments do not export HOME by default; `git config --global` and other
+# git operations abort with `fatal: $HOME not set` if HOME is unset. Mirrors
+# run.sh:9 but defends against environments where run.sh's export is not
+# inherited (e.g. when this script is invoked from a context that clears env).
+os.environ.setdefault("HOME", "/root")
 
 # Path to the canonical HA options source. Mirrors generate_nginx.py so the
 # two scripts agree on input shape (D-04: each script reads options.json

@@ -44,6 +44,12 @@ COPY run.sh generate_nginx.py _git_sync.py ./
 RUN chmod a+x run.sh generate_nginx.py _git_sync.py
 
 ENV WORKING_DIR=${WORKING_DIR}
+# Ensure HOME is set for every process in the container. Required because
+# `git config --global` aborts with `fatal: $HOME not set` when HOME is unset,
+# and some HA Supervisor container environments do not export it by default.
+# Mirrors the run.sh:9 export but applies to _all_ entry points (e.g. when
+# this script is invoked directly via docker exec with a cleared env).
+ENV HOME=/root
 EXPOSE 8099
 CMD ["/app/run.sh"]
 
