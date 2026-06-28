@@ -165,6 +165,11 @@ INDEX_HTML_TEMPLATE = """<!DOCTYPE html>
 
 # Landing page template — one card per namespace.
 # {cards} is filled in with one <a class="card">...</a> per namespace entry.
+# Card hrefs are rewritten at runtime from window.location.pathname so they
+# resolve correctly under HA Ingress (which prefixes every request with
+# /app/<slug>/<token>/). A literal "/{name}/" would 404 because HA strips
+# the prefix before forwarding to the container — same reason Docsify sets
+# basePath from window.location.pathname (INGRESS-02 in 04-CONTEXT.md).
 LANDING_HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -185,6 +190,23 @@ LANDING_HTML_TEMPLATE = """<!DOCTYPE html>
     .card h2 {{ margin: 0 0 0.5rem; font-size: 1.25rem; color: #2c3e50; }}
     .card p {{ margin: 0; color: #7f8c8d; font-family: monospace; font-size: 0.875rem; }}
   </style>
+  <script>
+    // Rewrite every card href to include the current request path prefix
+    // (HA Ingress serves this add-on at /app/<slug>/<token>/ — the prefix
+    // is stripped server-side, so the container sees "/" but the browser
+    // URL still contains the prefix). Without this, clicking a card
+    // navigates to https://<ha-host>/<name>/ instead of the correct
+    // /app/<slug>/<token>/<name>/.
+    document.addEventListener('DOMContentLoaded', function () {{
+      var prefix = window.location.pathname.replace(/\/?$/, '/');
+      document.querySelectorAll('a.card').forEach(function (a) {{
+        var href = a.getAttribute('href');
+        if (href && href.charAt(0) === '/') {{
+          a.setAttribute('href', prefix + href.replace(/^\/+/, ''));
+        }}
+      }});
+    }});
+  </script>
 </head>
 <body>
   <h1>Markdown Renderer</h1>
