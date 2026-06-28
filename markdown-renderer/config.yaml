@@ -44,18 +44,19 @@ schema:
       # Per-namespace custom CSS. ``css`` is inlined into a <style> tag in
       # the generated index.html; ``css_url`` is loaded via <link>. Both
       # options stack - the inlined CSS overrides the linked stylesheet
-      # (later in document order wins).
+      # (later in document order wins). Both fields are optional
+      # (``str?``) so existing user options that pre-date these fields
+      # keep working without re-saving them in the HA UI.
       css: str?
       css_url: str?
-      # Per-namespace Docsify plugins. Each entry either defines inline
-      # ``code`` (a function literal or expression that pushes into
-      # ``$docsify.plugins``) or an external ``url`` (script src loaded
-      # before docsify). Exactly ONE of code/url must be set per entry -
-      # the add-on refuses to start with both set, because the resulting
-      # registration order would be ambiguous.
-      plugins:
-        - name: str
-          url: str?
-          code: str?
+      # Per-namespace Docsify plugins. NOT declared in the HA schema
+      # on purpose - HA's Schema parser rejects optional lists-of-dicts
+      # with mixed optional/required fields, so adding the field at the
+      # schema level would break startup for users with pre-existing
+      # options.json that lacks the ``plugins`` key. The list is
+      # accepted by ``generate_nginx.py`` at runtime and fully validated
+      # (type checks, https-only URLs, code XOR url, 100KB warn / 500KB
+      # hard size limit, JS-syntax heuristic) in Python. See DOCS.md
+      # ``Plugins`` section for the accepted shape.
   kroki_url: str
   debug: bool
