@@ -18,15 +18,40 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Notify HA — build started
+              if: env.HA_BASE_URL != ''
+              env:
+                HA_BASE_URL: ${{ secrets.HA_BASE_URL }}
+                HA_WEBHOOK_ID: ${{ secrets.HA_WEBHOOK_ID }}
+                NOTIFY_DELIVERY_ID: ${{ github.run_id }}-${{ github.run_number }}
+                NOTIFY_EVENT: started
+                NOTIFY_PAYLOAD: >-
+                  {
+                    "event": "started",
+                    "workflow": "${{ github.workflow }}",
+                    "run_id": "${{ github.run_id }}",
+                    "run_number": "${{ github.run_number }}",
+                    "actor": "${{ github.actor }}",
+                    "ref": "${{ github.ref }}",
+                    "sha": "${{ github.sha }}",
+                    "repository": "${{ github.repository }}",
+                    "trigger": "${{ github.event_name }}",
+                    "addon": "network-tools",
+                    "version": "$(yq eval '.version' network-tools/config.yaml)",
+                    "arch": "amd64",
+                    "started_at": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+                  }
+              run: ./.github/scripts/notify-ha.sh
+
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v3
 
             - name: Log in to GHCR
               uses: docker/login-action@v3
               with:
-                  registry: ghcr.io
-                  username: ${{ github.actor }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
+                registry: ghcr.io
+                username: ${{ github.actor }}
+                password: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Extract version and metadata
               id: meta
@@ -43,19 +68,46 @@ jobs:
             - name: Build and push network-tools
               uses: docker/build-push-action@v6
               with:
-                  context: ./network-tools
-                  platforms: linux/amd64
-                  push: true
-                  build-args: |
-                      BUILD_FROM=${{ steps.meta.outputs.BUILD_FROM }}
-                      VERSION=${{ steps.meta.outputs.VERSION }}
-                      BUILD_ARCH=amd64
-                      BUILD_DATE=${{ steps.meta.outputs.BUILD_DATE }}
-                      BUILD_NAME=Network Tools
-                      BUILD_DESCRIPTION=Network diagnostics and host detection for Home Assistant
-                      BUILD_REF=${{ github.sha }}
-                      BUILD_REPOSITORY=${{ github.repository }}
-                      BUILD_VERSION=${{ steps.meta.outputs.VERSION }}
-                  tags: |
-                      ghcr.io/akentner/homeassistant-addons/amd64-network_tools:${{ steps.meta.outputs.VERSION }}
-                      ghcr.io/akentner/homeassistant-addons/amd64-network_tools:latest
+                context: ./network-tools
+                platforms: linux/amd64
+                push: true
+                build-args: |
+                    BUILD_FROM=${{ steps.meta.outputs.BUILD_FROM }}
+                    VERSION=${{ steps.meta.outputs.VERSION }}
+                    BUILD_ARCH=amd64
+                    BUILD_DATE=${{ steps.meta.outputs.BUILD_DATE }}
+                    BUILD_NAME=Network Tools
+                    BUILD_DESCRIPTION=Network diagnostics and host detection for Home Assistant
+                    BUILD_REF=${{ github.sha }}
+                    BUILD_REPOSITORY=${{ github.repository }}
+                    BUILD_VERSION=${{ steps.meta.outputs.VERSION }}
+                tags: |
+                    ghcr.io/akentner/homeassistant-addons/amd64-network_tools:${{ steps.meta.outputs.VERSION }}
+                    ghcr.io/akentner/homeassistant-addons/amd64-network_tools:latest
+
+            - name: Notify HA — build finished
+              if: always() && env.HA_BASE_URL != ''
+              env:
+                HA_BASE_URL: ${{ secrets.HA_BASE_URL }}
+                HA_WEBHOOK_ID: ${{ secrets.HA_WEBHOOK_ID }}
+                NOTIFY_DELIVERY_ID: ${{ github.run_id }}-${{ github.run_number }}
+                NOTIFY_EVENT: finished
+                NOTIFY_PAYLOAD: >-
+                  {
+                    "event": "finished",
+                    "workflow": "${{ github.workflow }}",
+                    "run_id": "${{ github.run_id }}",
+                    "run_number": "${{ github.run_number }}",
+                    "actor": "${{ github.actor }}",
+                    "ref": "${{ github.ref }}",
+                    "sha": "${{ github.sha }}",
+                    "repository": "${{ github.repository }}",
+                    "trigger": "${{ github.event_name }}",
+                    "addon": "network-tools",
+                    "version": "${{ steps.meta.outputs.VERSION }}",
+                    "arch": "amd64",
+                    "conclusion": "${{ job.status }}",
+                    "image_tag": "ghcr.io/akentner/homeassistant-addons/amd64-network_tools:${{ steps.meta.outputs.VERSION }}",
+                    "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+              run: ./.github/scripts/notify-ha.sh

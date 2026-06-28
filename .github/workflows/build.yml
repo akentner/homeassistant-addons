@@ -22,6 +22,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Notify HA — build started
+        if: env.HA_BASE_URL != ''
+        env:
+          HA_BASE_URL: ${{ secrets.HA_BASE_URL }}
+          HA_WEBHOOK_ID: ${{ secrets.HA_WEBHOOK_ID }}
+          NOTIFY_DELIVERY_ID: ${{ github.run_id }}-${{ github.run_number }}
+          NOTIFY_EVENT: started
+          NOTIFY_PAYLOAD: >-
+            {
+              "event": "started",
+              "workflow": "${{ github.workflow }}",
+              "run_id": "${{ github.run_id }}",
+              "run_number": "${{ github.run_number }}",
+              "actor": "${{ github.actor }}",
+              "ref": "${{ github.ref }}",
+              "sha": "${{ github.sha }}",
+              "repository": "${{ github.repository }}",
+              "trigger": "${{ github.event_name }}",
+              "addon": "coding-assistants",
+              "version": "${GITHUB_REF_NAME#v}",
+              "arch": "${{ matrix.arch }}",
+              "started_at": "${{ github.event.head_commit.timestamp }}"
+            }
+        run: ./.github/scripts/notify-ha.sh
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -68,6 +93,33 @@ jobs:
           tags: |
             ghcr.io/akentner/homeassistant-addons/${{ matrix.arch }}-coding_assistants:${{ steps.version.outputs.VERSION }}
             ghcr.io/akentner/homeassistant-addons/${{ matrix.arch }}-coding_assistants:latest
+
+      - name: Notify HA — build finished
+        if: always() && env.HA_BASE_URL != ''
+        env:
+          HA_BASE_URL: ${{ secrets.HA_BASE_URL }}
+          HA_WEBHOOK_ID: ${{ secrets.HA_WEBHOOK_ID }}
+          NOTIFY_DELIVERY_ID: ${{ github.run_id }}-${{ github.run_number }}
+          NOTIFY_EVENT: finished
+          NOTIFY_PAYLOAD: >-
+            {
+              "event": "finished",
+              "workflow": "${{ github.workflow }}",
+              "run_id": "${{ github.run_id }}",
+              "run_number": "${{ github.run_number }}",
+              "actor": "${{ github.actor }}",
+              "ref": "${{ github.ref }}",
+              "sha": "${{ github.sha }}",
+              "repository": "${{ github.repository }}",
+              "trigger": "${{ github.event_name }}",
+              "addon": "coding-assistants",
+              "version": "${{ steps.version.outputs.VERSION }}",
+              "arch": "${{ matrix.arch }}",
+              "conclusion": "${{ job.status }}",
+              "image_tag": "ghcr.io/akentner/homeassistant-addons/${{ matrix.arch }}-coding_assistants:${{ steps.version.outputs.VERSION }}",
+              "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+        run: ./.github/scripts/notify-ha.sh
 
   release:
     runs-on: ubuntu-latest
