@@ -237,20 +237,27 @@ LANDING_CARD_TEMPLATE = """    <a href="/{name}/" class="card">
 # the location that serves the configured Markdown directory (mounted from
 # /config, /share or /media on the HA host) with a fallback to the generated
 # Docsify SPA bootstrapper for SPA-style route refreshes. try_files order:
-#   1. $uri  - serve the requested file from the configured path verbatim
-#              (e.g. /docs/README.md -> /config/docs/README.md, real .md file)
-#   2. $uri/ - try as directory (serves a real index file from disk if any)
+#   1. $uri       - serve the requested file from the configured path
+#                   verbatim (e.g. /docs/README.md -> /config/docs/README.md).
+#   2. =404       - explicit 404 short-circuit when the requested file does
+#                   not exist. ``=404`` tells nginx: do NOT try directory
+#                   index (which would 403 because autoindex is off); just
+#                   treat this as 'not found' and fall through to arm 3.
 #   3. {docroots}/<name>/index.html - generated Docsify SPA bootstrapper,
-#              used when Docsify's client-side router navigates to a route
-#              that has no physical file (e.g. /docs/#/guide)
-# Without serving the configured path FIRST, ALL Markdown files would fall
-# through to the generated HTML and the real content would never reach the
-# browser (Docsify would always see the same bootstrapper for every URL).
+#                   used both for ``GET /docs/`` (namespace landing) and for
+#                   client-side router refreshes like ``GET /docs/#/guide``.
+# Why ``=404`` instead of ``$uri/``? When nginx receives ``GET /docs/``,
+# ``$uri/`` triggers directory processing. With autoindex off and no
+# physical index.html in the alias path, nginx returns ``403 Forbidden``
+# DIRECTLY to the client instead of falling through try_files (a known
+# quirk - 4xx from internal try_files arms are returned to the client
+# rather than treated as "not found"). ``=404`` instead signals "not found"
+# cleanly and the SPA bootstrapper takes over.
 NGINX_NAMESPACE_BLOCK_TEMPLATE = """
     location = /{name} {{ return 301 /{name}/; }}
     location /{name}/ {{
       alias {source_path}/;
-      try_files $uri $uri/ {docroots}/{name}/index.html;
+      try_files $uri =404 {docroots}/{name}/index.html;
     }}"""
 
 
