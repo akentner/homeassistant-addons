@@ -71,12 +71,44 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
   <meta charset="UTF-8">
   <title>{name_display}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <link rel="stylesheet" href="../_docsify/themes/vue.css">
   <script>
-    // Docsify global config. basePath derived from window.location.pathname
-    // so .md fetches resolve correctly under HA Ingress prefix.
-    window.$docsify = window.$docsify || {{}};
-    window.$docsify.basePath = window.location.pathname.replace(/\/?$/, '/');
+    // Derive the namespace base path from window.location.pathname by
+    // stripping the last URL segment. This handles ALL ingress nesting
+    // depths cleanly:
+    //   /api/hassio_ingress/<token>/docs/          -> /api/hassio_ingress/<token>/docs/
+    //   /api/hassio_ingress/<token>/docs/README.md -> /api/hassio_ingress/<token>/docs/
+    //   /api/hassio_ingress/<token>/docs/docs/     -> /api/hassio_ingress/<token>/docs/
+    // Stripping just the trailing segment always yields the namespace root,
+    // regardless of how the browser got there. Plain ``../_docsify/...``
+    // relative paths would otherwise resolve against the deep URL and miss
+    // the vendored assets (causing the long-standing "Loading docs..."
+    // stall when HA Dashboard iframe pre-loads a doubled URL).
+    //
+    // Regex note: ``[^\/]+`` (one or more) not ``[^\/]*`` (zero or more).
+    // A ``*`` quantifier lets the engine match an EMPTY trailing segment
+    // before the optional trailing slash, which means on input
+    // ``/api/.../<token>/`` the regex eats the ``<token>`` segment
+    // instead of stopping after it. ``+`` forces at least one character
+    // so the match always targets the last non-empty path segment.
+    var __MR_BASE__ = window.location.pathname.replace(/\/[^\/]+\/?$/, '/');
+  </script>
+  <script>
+    // Inject a <base> tag BEFORE any <link> or <script src> so that all
+    // relative asset references resolve against the namespace root rather
+    // than the deep URL. The base href is set to origin + namespace base
+    // path computed above. Without this, Docsify's docsify.min.js and the
+    // vendored CSS would 404 when the browser is at any nested URL.
+    (function () {{
+      var base = document.createElement('base');
+      base.href = window.location.origin + __MR_BASE__;
+      document.head.appendChild(base);
+      // Expose basePath to Docsify for its .md fetches.
+      window.$docsify = window.$docsify || {{}};
+      window.$docsify.basePath = __MR_BASE__;
+    }})();
+  </script>
+  <link rel="stylesheet" href="_docsify/themes/vue.css">
+  <script>
     window.$docsify.name = {name_json};
     window.$docsify.homepage = 'README.md';
     // Mermaid renderer plugin: rewrites fenced ```mermaid blocks and triggers
@@ -102,8 +134,8 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
 </head>
 <body>
   <div id="app">Loading {name_display}...</div>
-  <script src="../_docsify/docsify.min.js"></script>
-  <script src="../_docsify/mermaid.min.js"></script>
+  <script src="_docsify/docsify.min.js"></script>
+  <script src="_docsify/mermaid.min.js"></script>
   <script>
     if (window.mermaid) {{
       window.mermaid.initialize({{ startOnLoad: false, securityLevel: 'loose' }});
