@@ -44,7 +44,6 @@ repos:
     rev: v0.18.1
     hooks:
       - id: markdownlint-cli2
-        args: ["**/*.md", "#node_modules", "#.git", "#.planning", "#**/.planning", "#.claude", "#.agents"]
 
   # GitHub Actions workflow linting (disabled - repository not available)
   - repo: https://github.com/rhysd/actionlint

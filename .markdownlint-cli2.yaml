@@ -1,0 +1,13 @@
+config:
+  extends: ./.markdownlint.json
+
+globs:
+  - "**/*.md"
+
+ignores:
+  - node_modules
+  - .git
+  - .planning
+  - "**/.planning"
+  - .claude
+  - .agents
