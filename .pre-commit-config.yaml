@@ -58,6 +58,8 @@ repos:
       - id: hadolint
         args:
           - --ignore
+          - DL3008  # apt packages are not version-pinned in HA add-on Dockerfiles
+          - --ignore
           - DL3018  # apk packages are not version-pinned in HA add-on Dockerfiles
           - --ignore
           - DL3059  # Multiple consecutive RUN instructions are intentional for clarity

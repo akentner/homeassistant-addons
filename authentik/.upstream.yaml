@@ -1,0 +1,17 @@
+# Upstream configuration for authentik add-on
+# This file configures the automatic update system
+
+upstream:
+  # GitHub repository of the upstream project
+  repository: "goauthentik/authentik"
+
+  # Pattern for version tags — authentik uses "version/YYYY.M.patch"
+  version_pattern: "version/*"
+
+  # Regex to remove prefixes from version tags (e.g. "version/2026.5.3" -> "2026.5.3")
+  version_strip: "^version/"
+
+addon:
+  # How should the add-on version be updated?
+  # - "sync": Use the same version as upstream
+  version_pattern: "sync"

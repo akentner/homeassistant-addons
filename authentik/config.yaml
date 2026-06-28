@@ -1,0 +1,42 @@
+name: "Authentik"
+description: "Open-source Identity Provider — SSO, OAuth2, LDAP and more"
+version: "2026.5.3-0"
+slug: "authentik"
+init: false
+arch:
+  - amd64
+  # - aarch64
+url: "https://github.com/akentner/homeassistant-addons"
+startup: "application"
+boot: "manual"
+host_network: false
+ports:
+  9000/tcp: 9000
+ports_description:
+  9000/tcp: "Authentik web interface (HTTP)"
+map:
+  - type: addon_config
+    read_only: false
+    path: /addon_config
+
+options:
+  log_level: "info"
+  timezone: "Europe/Berlin"
+  disable_startup_wizard: false
+  email_host: ""
+  email_port: 587
+  email_from: ""
+  email_username: ""
+  email_password: ""
+  email_use_tls: true
+
+schema:
+  log_level: "list(debug|info|warning|error)?"
+  timezone: "str?"
+  disable_startup_wizard: "bool?"
+  email_host: "str?"
+  email_port: "int?"
+  email_from: "str?"
+  email_username: "str?"
+  email_password: "str?"
+  email_use_tls: "bool?"

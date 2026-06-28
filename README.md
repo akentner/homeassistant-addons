@@ -97,6 +97,27 @@ daily and bumps the add-on version when a new release ships.
 - Configurable alert destinations (Slack, Discord, email, …)
 - Themeable status page served as a Docsify-like SPA
 
+### [Authentik](./authentik)
+
+![Supports amd64 Architecture][amd64-shield]
+
+_Open-source Identity Provider — SSO, OAuth2/OIDC, LDAP, SAML, and more._
+
+Self-hosted identity provider with a built-in user management UI, flow engine for MFA/enrollment/recovery, and support
+for every major authentication standard. Ships with bundled PostgreSQL and Valkey (Redis-compatible) — no external
+database add-ons required.
+
+**Features:**
+
+- SSO via OAuth2 / OIDC / SAML / LDAP / SCIM
+- Built-in user management and group policies
+- Flow engine for custom authentication logic (MFA, enrollment, recovery)
+- Bundled PostgreSQL and Valkey — no external dependencies
+- Automatic migrations on startup
+
+**Note:** Authentik is not served via HA Ingress. Access via `http://<ha-ip>:9000` and configure a reverse proxy with
+TLS for production use.
+
 ### [Coding Assistants](./coding-assistants)
 
 ![Supports amd64 and aarch64 Architectures][amd64-shield] ![Supports amd64 and aarch64 Architectures][aarch64-shield]
