@@ -118,9 +118,15 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
     window.$docsify.name = {name_json};
     window.$docsify.homepage = 'README.md';
     // Mermaid renderer plugin. Three phases:
-    //   1. afterEach: rewrite Docsify's ``<pre><code class="language-mermaid">``
-    //      (or the older ``<p><code>`` variant) into ``<pre class="mermaid">``
-    //      so mermaid picks them up on its next .run() call.
+    //   1. afterEach: rewrite Docsify's ``<pre v-pre data-lang="mermaid"><code
+    //      class="lang-mermaid">`` into ``<pre class="mermaid">`` so mermaid
+    //      picks them up on its next .run() call. Docsify 4.x renders fenced
+    //      code blocks with the ``lang-`` prefix (``<code class="lang-foo">``)
+    //      - NOT ``language-foo`` as marked.js' default `langPrefix` would
+    //      produce. The previous ``language-mermaid`` selector matched zero
+    //      blocks under Docsify 4.x and the resulting silence (no error, no
+    //      log, no rendered SVG) was nearly impossible to diagnose from the
+    //      Browser DevTools console alone.
     //   2. doneEach: defer one animation frame so Docsify has committed the
     //      DOM, then call mermaid.run with the explicit node list
     //      (Mermaid 11+ returns a Promise; older versions take no args
@@ -135,15 +141,27 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
     window.$docsify.plugins = (window.$docsify.plugins || []).concat([
       function mermaidHook(hook) {{
         hook.afterEach(function (html) {{
-          var beforeCount = (html.match(/language-mermaid/g) || []).length;
+          var beforeCount = (html.match(/class="lang-mermaid"/g) || []).length;
           var replaced = html.replace(
-            /<(?:p|pre)[^>]*>\s*<code class="language-mermaid">([\s\S]*?)<\/code>\s*<\/(?:p|pre)>/g,
+            /<pre[^>]*>\s*<code class="lang-mermaid">([\s\S]*?)<\/code>\s*<\/pre>/g,
             '<pre class="mermaid">$1</pre>'
           );
           var afterCount = (replaced.match(/<pre class="mermaid">/g) || []).length;
           if (beforeCount > 0) {{
             console.log('[markdown-renderer] mermaid: found', beforeCount,
-              'language-mermaid block(s), replaced', afterCount);
+              'lang-mermaid block(s), replaced', afterCount);
+          }} else if (/```mermaid/i.test(html) || /mermaid/i.test(html)) {{
+            // Defensive log: the HTML mentions ``mermaid`` but our lang-
+            // prefix regex did not match. Without this log, a future
+            // Docsify upgrade that changes the class prefix would silently
+            // break rendering and the only console evidence would be the
+            // missing "found N block(s)" line. Log the first 200 chars of
+            // any <code> tag we can find so the operator can confirm the
+            // mismatch at a glance instead of re-running with debug flags.
+            var codeSample = (html.match(/<code[^>]*>/) || ['<none>'])[0];
+            console.warn('[markdown-renderer] mermaid: HTML mentions ' +
+              '"mermaid" but no lang-mermaid block was matched - the ' +
+              'first <code> tag we see is:', codeSample);
           }}
           return replaced;
         }});
@@ -221,8 +239,26 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
       mermaidInit.startOnLoad = false;
       mermaidInit.securityLevel = 'loose';
       window.mermaid.initialize(mermaidInit);
-      console.log('[markdown-renderer] mermaid.initialize: done, version',
-        (window.mermaid.mermaidAPI && window.mermaid.mermaidAPI.version) || 'unknown');
+      // Mermaid 11.x does NOT expose a version field on ``mermaidAPI`` -
+      // we previously logged ``version: unknown`` here which made the log
+      // line look like an error to operators. Log the configuration that
+      // we actually applied (startOnLoad + securityLevel read back from
+      // ``getConfig()``) so the console entry stays informative without
+      // implying broken-ness.
+      //
+      // Build a small ``readConfigField()`` helper instead of inlining the
+      // ``&&`` chain, because the chain's falsy short-circuit (e.g.
+      // ``startOnLoad === false`` is falsy) would silently rewrite a real
+      // ``false`` value into the ``(unreadable)`` fallback - so operators
+      // would see ``(unreadable)`` even when the value was read fine.
+      var mermaidCfg = (window.mermaid && window.mermaid.mermaidAPI &&
+        window.mermaid.mermaidAPI.getConfig &&
+        typeof window.mermaid.mermaidAPI.getConfig === 'function'
+        ? window.mermaid.mermaidAPI.getConfig() : null);
+      console.log('[markdown-renderer] mermaid.initialize: done (startOnLoad=',
+        (mermaidCfg && 'startOnLoad' in mermaidCfg) ? String(mermaidCfg.startOnLoad) : '(unreadable)',
+        ', securityLevel=',
+        (mermaidCfg && 'securityLevel' in mermaidCfg) ? mermaidCfg.securityLevel : '(unreadable)', ')');
     }} else {{
       console.error('[markdown-renderer] mermaid.min.js loaded but window.mermaid is undefined');
     }}
@@ -258,9 +294,12 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
       }}
       function plugin(hook) {{
         hook.doneEach(function () {{
-          var blocks = document.querySelectorAll('pre>code[class^="language-"]:not(.language-mermaid)');
+          // Docsify 4.x emits ``<code class="lang-foo">`` (NOT ``language-foo`` -
+          // see mermaid plugin above). Match the ``lang-`` prefix and exclude
+          // mermaid (handled by the mermaid plugin, not by Kroki).
+          var blocks = document.querySelectorAll('pre>code[class^="lang-"]:not(.lang-mermaid)');
           blocks.forEach(function (code) {{
-            var lang = (code.className.match(/language-([\w-]+)/) || [])[1];
+            var lang = (code.className.match(/lang-([\w-]+)/) || [])[1];
             if (!lang) {{ return; }}
             var src = code.textContent;
             toFlateBase64(src).then(function (b64) {{
