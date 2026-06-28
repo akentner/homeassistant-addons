@@ -71,44 +71,18 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
   <meta charset="UTF-8">
   <title>{name_display}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <base href="./">
   <script>
-    // Derive the namespace base path from window.location.pathname.
-    //
-    // Docsify uses the base path for two things:
-    //   1. Resolving relative asset URLs (via the injected ``<base>``
-    //      tag). Must be the namespace root so ``_docsify/themes/vue.css``
-    //      always resolves to ``/.../<token>/docs/_docsify/themes/vue.css``.
-    //   2. Building .md fetch URLs (``basePath + 'README.md'``). Must end
-    //      with ``/docs/`` so the URL is ``/.../<token>/docs/README.md``
-    //      (a real file under the configured path).
-    //
-    // Algorithm: find the FIRST occurrence of ``/<ns>/`` in pathname and
-    // keep everything up to and including it. Everything after is
-    // discarded. This handles all the weird ingress nesting levels we have
-    // observed in practice:
-    //   /api/hassio_ingress/<token>/docs/         -> /api/.../<token>/docs/
-    //   /api/hassio_ingress/<token>/docs/README.md -> /api/.../<token>/docs/
-    //   /api/hassio_ingress/<token>/docs/docs/    -> /api/.../<token>/docs/
-    //   /api/hassio_ingress/<token>/docs/docs/docs/ -> /api/.../<token>/docs/
-    // We also normalise the no-trailing-slash case (``/docs`` -> ``/docs/``)
-    // and fall back to the raw pathname when the namespace is not present
-    // (the landing page, which uses a separate template and never reaches
-    // this code).
-    //
-    // Why ``document.write`` here (not ``appendChild``)? When a browser
-    // parses the document head, each ``<link rel="stylesheet">`` and
-    // ``<script src>`` triggers an immediate network fetch as soon as the
-    // tag is encountered. An ``appendChild`` call inside a synchronous
-    // script runs AFTER the parser has already passed those tags, so the
-    // fetch is already in flight with the wrong base URL. ``document.write``
-    // injects the markup into the parser stream so the ``<base>`` is
-    // present BEFORE the next tag, and all subsequent relative URLs
-    // resolve correctly.
+    // Expose basePath to Docsify so its .md fetches resolve against the
+    // namespace root rather than the deep URL. Computed from
+    // ``window.location.pathname`` by stripping any doubled namespace
+    // segments (HA Dashboard iframe preloads can produce paths like
+    // ``/.../docs/docs/``).
     var __MR_PATH__ = window.location.pathname;
     var __MR_NS__ = {name_json};
     var __MR_TAG__ = '/' + __MR_NS__ + '/';
-    var __MR_BASE__;
     var __MR_IDX__ = __MR_PATH__.indexOf(__MR_TAG__);
+    var __MR_BASE__;
     if (__MR_IDX__ >= 0) {{
       __MR_BASE__ = __MR_PATH__.substring(0, __MR_IDX__ + __MR_TAG__.length);
     }} else if (__MR_PATH__.length >= __MR_NS__.length &&
@@ -119,13 +93,6 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
     }} else {{
       __MR_BASE__ = __MR_PATH__;
     }}
-    document.write('<base href="' + window.location.origin + __MR_BASE__ + '">');
-  </script>
-  <script>
-    // Expose basePath to Docsify so its .md fetches resolve against the
-    // namespace root rather than the deep URL. The <base> tag above
-    // already redirects relative asset URLs; this is the matching
-    // setting for Docsify's own XHR path.
     window.$docsify = window.$docsify || {{}};
     window.$docsify.basePath = __MR_BASE__;
   </script>
