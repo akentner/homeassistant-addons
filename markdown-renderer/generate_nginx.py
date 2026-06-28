@@ -120,8 +120,15 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
     window.$docsify.plugins = (window.$docsify.plugins || []).concat([
       function mermaidHook(hook) {{
         hook.afterEach(function (html) {{
+          // Match any element wrapping a <code class="language-mermaid">.
+          // Docsify 4.x renders fenced code blocks as
+          // ``<pre><code class="language-xxx">...</code></pre>`` (not
+          // ``<p><code>...</code></p>`` like the older markdown-it output).
+          // The earlier pattern only matched the latter and silently left
+          // every mermaid block un-rendered. The wrapper pattern below
+          // matches both shapes.
           return html.replace(
-            /<p><code class="language-mermaid">([\s\S]*?)<\/code><\/p>/g,
+            /<(?:p|pre)[^>]*>\s*<code class="language-mermaid">([\s\S]*?)<\/code>\s*<\/(?:p|pre)>/g,
             '<pre class="mermaid">$1</pre>'
           );
         }});
