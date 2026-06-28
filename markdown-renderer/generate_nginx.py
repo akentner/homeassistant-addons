@@ -112,6 +112,8 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
     window.$docsify.basePath = __MR_BASE__;
   </script>
   <link rel="stylesheet" href="_static/themes/vue.css">
+{css_url_html}
+{css_inline_html}
   <script>
     window.$docsify.name = {name_json};
     window.$docsify.homepage = 'README.md';
@@ -205,6 +207,7 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
     window.MARKDOWN_RENDERER = {{}};
     window.MARKDOWN_RENDERER.krokiUrl = {kroki_url_json};
   </script>
+{plugin_scripts_html}
 </head>
 <body>
   <div id="app">Loading {name_display}...</div>
@@ -279,6 +282,7 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
       window.$docsify.plugins = (window.$docsify.plugins || []).concat([plugin]);
     }})();
   </script>
+{plugin_registration_html}
 </body>
 </html>
 """
@@ -434,13 +438,194 @@ def validate_namespace(name: str) -> None:
         )
 
 
+# Size limits for inline user content (CSS and plugin code). Inline
+# content goes through generate_nginx.py, is substituted into the
+# generated index.html via Python str.format(), and is shipped on every
+# page load - so very large blobs hurt both add-on startup time and
+# every browser visit. We warn at 100KB to surface accidental
+# copy-paste of huge CSS frameworks and hard-cap at 500KB to prevent
+# abuse (the cap is generous: the entire Docsify source tree is
+# under 100KB, so a 500KB inline payload is almost certainly a
+# mistake).
+INLINE_WARN_BYTES = 100 * 1024
+INLINE_HARD_LIMIT_BYTES = 500 * 1024
+
+
+def _validate_https_url(value: str, *, field: str, namespace: str) -> None:
+    """Reject any URL whose scheme is not ``https://``.
+
+    Self-hosted add-ons run inside the user's home network and we have
+    no use-case for plain http (no credentials in the URL, no
+    localhost-only dev server - both are uncommon and easy to
+    misconfigure). https-only keeps the attack surface narrow and
+    matches what Home Assistant's own front-end enforces for
+    user-supplied URLs.
+    """
+    if not value.startswith("https://"):
+        raise ValueError(
+            f"{field} for namespace {namespace!r} must start with 'https://', "
+            f"got: {value!r}"
+        )
+
+
+def _check_size(value: str, *, field: str, namespace: str) -> None:
+    """Warn at 100KB inline, hard-reject at 500KB inline."""
+    n = len(value.encode("utf-8"))
+    if n > INLINE_HARD_LIMIT_BYTES:
+        raise ValueError(
+            f"{field} for namespace {namespace!r} is {n} bytes, exceeds the "
+            f"{INLINE_HARD_LIMIT_BYTES}-byte hard limit. Split into multiple "
+            f"namespaces or move the content to an external file/url."
+        )
+    if n > INLINE_WARN_BYTES:
+        print(
+            f"WARNING: {field} for namespace {namespace!r} is {n} bytes "
+            f"(>{INLINE_WARN_BYTES} soft limit); consider moving to a "
+            f"css_url / external file for faster page loads",
+            flush=True,
+        )
+
+
+def _validate_user_plugins(raw_plugins, *, namespace: str) -> list[dict]:
+    """Validate the per-namespace ``plugins`` list.
+
+    Rules:
+      - Must be a list of dicts.
+      - Each entry has a required ``name`` (str) and exactly ONE of
+        ``code`` (str) or ``url`` (str) - both set is a configuration
+        error (ambiguous registration order). Exactly one missing is
+        also an error (nothing to register).
+      - ``code`` is rough syntax-checked with Python's compile() so we
+        catch obvious typos (missing brace, bad indent). JS-only
+        features (arrow functions, async/await, const/let) are skipped
+        because the Python parser cannot read them - those errors
+        surface at runtime in the Browser console.
+      - ``url`` must start with ``https://``.
+      - Per-plugin size limit mirrors the CSS limit (100KB warn /
+        500KB hard).
+    """
+    if raw_plugins is None:
+        return []
+    if not isinstance(raw_plugins, list):
+        raise ValueError(
+            f"'plugins' for namespace {namespace!r} must be a list, "
+            f"got {type(raw_plugins).__name__}"
+        )
+
+    validated: list[dict] = []
+    for idx, entry in enumerate(raw_plugins):
+        if not isinstance(entry, dict):
+            raise ValueError(
+                f"plugins[{idx}] for namespace {namespace!r} must be a dict, "
+                f"got: {entry!r}"
+            )
+        name = entry.get("name", "")
+        url = entry.get("url")
+        code = entry.get("code")
+
+        if not isinstance(name, str) or not name:
+            raise ValueError(
+                f"plugins[{idx}] for namespace {namespace!r} must have a "
+                f"non-empty string 'name'"
+            )
+        if url is not None and not isinstance(url, str):
+            raise ValueError(
+                f"plugins[{idx}] '{name}' for namespace {namespace!r}: "
+                f"'url' must be a string when set"
+            )
+        if code is not None and not isinstance(code, str):
+            raise ValueError(
+                f"plugins[{idx}] '{name}' for namespace {namespace!r}: "
+                f"'code' must be a string when set"
+            )
+
+        has_url = url is not None and url != ""
+        has_code = code is not None and code != ""
+
+        if has_url and has_code:
+            raise ValueError(
+                f"plugin {name!r} for namespace {namespace!r}: specify exactly "
+                f"one of 'url' or 'code' (not both - the registration order "
+                f"would be ambiguous)"
+            )
+        if not has_url and not has_code:
+            raise ValueError(
+                f"plugin {name!r} for namespace {namespace!r}: must specify "
+                f"one of 'url' or 'code'"
+            )
+
+        if has_url:
+            _validate_https_url(url, field=f"plugin '{name}' url", namespace=namespace)
+        if has_code:
+            _check_size(code, field=f"plugin '{name}' code", namespace=namespace)
+            # Heuristic JS-syntax check. Python's compile() can parse a
+            # subset of JS but rejects ``function(hook) { ... }`` (the
+            # ``function`` keyword and brace block are not Python syntax)
+            # and arrow functions, ``async``/``await``, ``const``/``let``,
+            # spread operators, generator functions. We skip the check
+            # when ANY of those JS-only constructs are detected - the
+            # Browser console will surface real syntax errors at load
+            # time, so a permissive server-side check is acceptable.
+            js_only = re.search(
+                r"\b(async|await|const|let|=>|function\b|function\s*\*|\.\.\.)",
+                code,
+            )
+            if not js_only:
+                try:
+                    compile(code, f"<plugin {name}>", "exec")
+                except SyntaxError as e:
+                    raise ValueError(
+                        f"plugin {name!r} for namespace {namespace!r} has a "
+                        f"syntax error at line {e.lineno}: {e.msg}"
+                    ) from e
+
+        validated.append({"name": name, "url": url, "code": code})
+
+    return validated
+
+
+def _validate_user_css(raw_css, *, namespace: str) -> str | None:
+    """Validate inline CSS. Empty/None is fine. Size limits apply."""
+    if raw_css is None:
+        return None
+    if not isinstance(raw_css, str):
+        raise ValueError(
+            f"'css' for namespace {namespace!r} must be a string, "
+            f"got {type(raw_css).__name__}"
+        )
+    if raw_css == "":
+        return None
+    _check_size(raw_css, field="css", namespace=namespace)
+    return raw_css
+
+
+def _validate_user_css_url(raw_url, *, namespace: str) -> str | None:
+    """Validate an external CSS URL. Empty/None is fine. Must be https."""
+    if raw_url is None:
+        return None
+    if not isinstance(raw_url, str):
+        raise ValueError(
+            f"'css_url' for namespace {namespace!r} must be a string, "
+            f"got {type(raw_url).__name__}"
+        )
+    if raw_url == "":
+        return None
+    _validate_https_url(raw_url, field="css_url", namespace=namespace)
+    return raw_url
+
+
 def validate_directories(directories: list) -> list[dict]:
     """Validate the full ``directories`` list and return a list of validated entries.
 
     Each entry must be a dict with string ``name`` and ``path`` fields.
-    Duplicate names are rejected. Empty list is allowed (caller handles the
-    "no namespaces configured" case separately). Prints a summary line via
-    ``flush=True`` for observability, mirroring ``phone-logger/generate_config.py``.
+    Optional ``css``/``css_url`` add per-namespace styling; optional
+    ``plugins`` extends Docsify with custom hooks (Mermaid rendering is
+    one such plugin, but users can add their own).
+
+    Duplicate names are rejected. Empty list is allowed (caller handles
+    the "no namespaces configured" case separately). Prints a summary
+    line via ``flush=True`` for observability, mirroring
+    ``phone-logger/generate_config.py``.
     """
     if not isinstance(directories, list):
         raise ValueError(
@@ -464,7 +649,22 @@ def validate_directories(directories: list) -> list[dict]:
         if name in seen:
             raise ValueError(f"duplicate directory name {name!r}")
         seen.add(name)
-        validated.append({"name": name, "path": path})
+
+        # Per-namespace user content. Each validator raises ValueError on
+        # any rule violation (bad type, bad URL scheme, code XOR url,
+        # size limits) with a message that names the namespace so the
+        # operator can find the offending entry in their YAML.
+        css = _validate_user_css(entry.get("css"), namespace=name)
+        css_url = _validate_user_css_url(entry.get("css_url"), namespace=name)
+        plugins = _validate_user_plugins(entry.get("plugins"), namespace=name)
+
+        validated.append({
+            "name": name,
+            "path": path,
+            "css": css,
+            "css_url": css_url,
+            "plugins": plugins,
+        })
 
     print(
         f"Validated {len(validated)} namespace(s): "
@@ -595,18 +795,115 @@ def render_landing_html(namespaces: list[dict]) -> str:
 _render_landing = render_landing_html
 
 
+def _render_namespace_css_link(css_url: str | None) -> str:
+    """Render a <link rel='stylesheet'> for an external CSS URL, or empty."""
+    if not css_url:
+        return ""
+    return f'  <link rel="stylesheet" href="{css_url}">'
+
+
+def _render_namespace_css_inline(css: str | None) -> str:
+    """Render an inline <style> block for per-namespace CSS, or empty.
+
+    The CSS is wrapped in a uniquely-id'd <style> element so future
+    per-namespace CSS plugins can target it without colliding with the
+    Vue theme or other add-on stylesheets.
+    """
+    if not css:
+        return ""
+    return f'  <style id="mr-namespace-css">\n{css}\n  </style>'
+
+
+def _render_namespace_plugin_scripts(plugins: list[dict]) -> str:
+    """Render <script> tags for the per-namespace plugins.
+
+    Inline-code plugins get a ``<script>{code}</script>`` block (the
+    code itself defines a function and calls
+    ``$docsify.plugins.push(...)`` or similar). URL plugins get a
+    ``<script src="{url}"></script>`` and must register themselves
+    once loaded - the user is responsible for that contract.
+
+    Both forms are emitted in declaration order so URL plugins load
+    first (a network roundtrip) before any inline code runs.
+    """
+    parts = []
+    for p in plugins:
+        if p["url"]:
+            parts.append(f'  <script src="{p["url"]}"></script>')
+        elif p["code"]:
+            # Strip a trailing semicolon so the inline <script> tag is
+            # a clean function expression even if the user wrote a
+            # trailing ";" by reflex.
+            code = p["code"]
+            if code.rstrip().endswith(";"):
+                code = code.rstrip()[:-1]
+            parts.append(f"  <script>\n{code}\n  </script>")
+    return "\n".join(parts)
+
+
+def _render_namespace_plugin_registration(plugins: list[dict]) -> str:
+    """Render the per-namespace $docsify.plugins.concat([...]) block.
+
+    Only inline-code plugins are registered here - URL plugins push
+    themselves once their script has loaded. We accumulate a comma-
+    separated list of user-supplied function literals. The wrapping
+    block is omitted entirely when there are no inline plugins so the
+    generated index.html stays minimal.
+    """
+    inline = [p["code"] for p in plugins if p["code"]]
+    if not inline:
+        return ""
+    # Strip trailing ";" per entry so the concat list parses cleanly.
+    cleaned = []
+    for code in inline:
+        code = code.rstrip()
+        if code.endswith(";"):
+            code = code[:-1]
+        cleaned.append(code)
+    entries = ",\n    ".join(cleaned)
+    return (
+        "  <script>\n"
+        "    // Per-namespace inline plugins (from add-on config)\n"
+        "    window.$docsify = window.$docsify || {};\n"
+        "    window.$docsify.plugins = (window.$docsify.plugins || []).concat([\n"
+        f"    {entries},\n"
+        "    ]);\n"
+        "  </script>"
+    )
+
+
 def _render_namespace_index(namespace: dict, kroki_url: str) -> str:
-    """Render the Docsify index.html for a single namespace."""
+    """Render the Docsify index.html for a single namespace.
+
+    Injects the validated per-namespace ``css``, ``css_url`` and
+    ``plugins`` (if any) into the template. Validators in
+    ``validate_directories()`` guarantee that ``css`` is a string or
+    None, ``css_url`` starts with https:// or is None, and every
+    plugin entry has exactly one of ``code``/``url`` set.
+    """
     name = namespace["name"]
-    # JSON-encode name + kroki_url so they survive inside an inline <script>.
+    plugins = namespace.get("plugins") or []
+    css_url_html = _render_namespace_css_link(namespace.get("css_url"))
+    css_inline_html = _render_namespace_css_inline(namespace.get("css"))
+    plugin_scripts_html = _render_namespace_plugin_scripts(plugins)
+    plugin_registration_html = _render_namespace_plugin_registration(plugins)
+    # JSON-encode name + kroki_url so they survive inside an inline
+    # <script> (backslash, double-quote and unicode characters must be
+    # escaped).
     name_json = json.dumps(name)
     kroki_url_json = json.dumps(kroki_url)
+    plugins_json = json.dumps(plugins)
     return INDEX_HTML_TEMPLATE.format(
         name=name,
         name_display=name,
         name_json=name_json,
         kroki_url_json=kroki_url_json,
         default_kroki_url=DEFAULT_KROKI_URL,
+        css_url_html=css_url_html,
+        css_inline_html=css_inline_html,
+        plugin_scripts_html=plugin_scripts_html,
+        plugin_registration_html=plugin_registration_html,
+        plugins_json=plugins_json,
     )
 
 

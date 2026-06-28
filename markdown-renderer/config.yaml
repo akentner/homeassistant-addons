@@ -1,6 +1,6 @@
 name: "Markdown Renderer"
 description: "Renders Markdown directories as Docsify SPAs via Home Assistant Ingress with Mermaid diagram support."
-version: "1.1.0-19"
+version: "1.1.0-20"
 slug: "markdown-renderer"
 init: false
 arch:
@@ -41,10 +41,21 @@ schema:
       # not yet a git repo and git_pull or git_pull_interval is set. SSH auth
       # is out of scope (v1.2).
       git_url: str?
+      # Per-namespace custom CSS. ``css`` is inlined into a <style> tag in
+      # the generated index.html; ``css_url`` is loaded via <link>. Both
+      # options stack - the inlined CSS overrides the linked stylesheet
+      # (later in document order wins).
+      css: str?
+      css_url: str?
+      # Per-namespace Docsify plugins. Each entry either defines inline
+      # ``code`` (a function literal or expression that pushes into
+      # ``$docsify.plugins``) or an external ``url`` (script src loaded
+      # before docsify). Exactly ONE of code/url must be set per entry -
+      # the add-on refuses to start with both set, because the resulting
+      # registration order would be ambiguous.
+      plugins:
+        - name: str
+          url: str?
+          code: str?
   kroki_url: str
-  # When true, dump the generated nginx.conf, every generated index.html,
-  # the vendored _docsify/ asset list (path + size + sha256) and `nginx -V`
-  # to the container log. Tag every line with `[debug]` so it is easy to
-  # filter or mute. Off by default because the dump can be large and may
-  # contain Markdown titles / Kroki URLs you do not want in shared logs.
   debug: bool

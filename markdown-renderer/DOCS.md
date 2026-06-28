@@ -14,6 +14,9 @@ Each entry configures one namespace served as an isolated Docsify SPA under `/<n
 | git_pull          | bool    | Run `git pull --ff-only` at startup before nginx starts (default `false`) |
 | git_pull_interval | int     | Periodic pull interval in seconds; `0` = disabled (default `0`)           |
 | git_url           | string? | Optional HTTPS or `file://` URL for first-time clone of an empty path     |
+| css               | string? | Optional inline CSS injected into the namespace SPA                       |
+| css_url           | string? | Optional `https://` URL to an external stylesheet                         |
+| plugins           | list?   | Optional Docsify plugin extensions (see [Plugins](#plugins))              |
 
 See the [Git Sync](#git-sync) section below for details on the three git fields.
 
@@ -89,6 +92,68 @@ kroki_url: https://kroki.io
 
 No additional setup is required — just put `.md` files in the configured paths on the HA host and they will appear in
 the add-on.
+
+## Per-Namespace CSS
+
+Each namespace can override or extend the Docsify Vue theme with two optional fields:
+
+```yaml
+directories:
+  - name: docs
+    path: /config/docs
+    css: |
+      /* Inline CSS - injected as <style id="mr-namespace-css"> after the Vue theme */
+      .markdown-section { background: #fafafa; }
+      h1 { border-bottom: 2px solid #42b983; }
+    css_url: https://fonts.googleapis.com/css2?family=Inter&display=swap
+```
+
+- `css` is inlined into the generated `index.html` as `<style id="mr-namespace-css">`. Empty / omitted means no
+  inline style block.
+- `css_url` must be `https://...` (plain `http://` is rejected). Empty / omitted means no `<link>` tag.
+
+Both can be combined; the inlined CSS overrides the linked stylesheet because it appears later in document order.
+
+Size limit: 100KB inline triggers a startup warning (the generated `index.html` is shipped on every page load);
+500KB is a hard limit that aborts startup with a clear error.
+
+## Plugins
+
+Docsify plugins hook into Docsify's render lifecycle. The add-on ships Mermaid rendering out of the box; the
+`plugins` field lets you add your own (or replace Mermaid behavior). Each entry is one of:
+
+```yaml
+directories:
+  - name: docs
+    path: /config/docs
+    plugins:
+      # Inline plugin - a function literal that pushes into $docsify.plugins.
+      - name: word-count
+        code: |
+          function(hook) {
+            hook.afterEach(function(html) {
+              console.log('[word-count]', html.split(/\s+/).length, 'words');
+              return html;
+            });
+          }
+      # External plugin - loaded as <script src="..."> before Docsify. The plugin
+      # is responsible for calling ``window.$docsify.plugins.push(...)`` itself.
+      - name: external-plugin
+        url: https://example.com/my-docsify-plugin.js
+```
+
+Each entry has a `name` (used for log messages) and exactly ONE of:
+
+- `code` - inline JavaScript. The value is inserted verbatim into a `<script>` block before `docsify.min.js` AND
+  appended to a `$docsify.plugins.concat([...])` call after Mermaid setup, so the function is auto-registered.
+- `url` - external `https://` URL. Loaded via `<script src=...>`; the script must register itself.
+
+Setting both or neither is rejected at startup. URLs must use `https://`. The 100KB warn / 500KB hard
+size limits from the CSS section also apply to inline plugin code.
+
+Heuristic syntax check: `generate_nginx.py` runs the user's `code` through Python's `compile()` to catch obvious
+typos. JS-only features (arrow functions, `async`/`await`, `const`/`let`, spread, generator functions, plain
+`function` keyword) are detected and the check is skipped - real syntax errors surface in the Browser console.
 
 ## Validation Status
 
