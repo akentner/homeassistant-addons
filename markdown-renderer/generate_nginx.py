@@ -30,7 +30,7 @@ NGINX_CONF_PATH = Path("/tmp/nginx.conf")
 DOCROOTS_DIR = Path("/tmp/docroots")
 LANDING_DIR = Path("/tmp/landing")
 APP_DIR = Path("/app")
-ASSETS_DIR = APP_DIR / "_docsify"  # served by nginx at /_docsify/
+ASSETS_DIR = APP_DIR / "_static"  # served by nginx at /_static/ and /<ns>/_static/
 # Temp dirs nginx needs to write during request handling. We point them all
 # at /tmp/nginx-tmp/ so ``nginx -t`` succeeds in non-root dev environments
 # (the default /var/lib/nginx/* paths require root + write access).
@@ -52,15 +52,30 @@ NAME_RE = VALID_NAME_RE
 # Names that conflict with nginx location paths, vendored assets, or HA
 # Supervisor's ingress / config / share / media volumes. Promoting to a
 # frozenset so it is hashable and immutable for the duration of the run.
-RESERVED_NAMES = frozenset({"_docsify", "api", "data", "share", "config", "media"})
+# Names that conflict with nginx location paths, vendored assets, or HA
+# Supervisor's ingress / config / share / media volumes. Promoting to a
+# frozenset so it is hashable and immutable for the duration of the run.
+# ``_static`` is reserved because nginx exposes both ``/_static/`` (global)
+# and ``/<ns>/_static/`` (per-namespace) location blocks that serve the
+# vendored Docsify + Mermaid assets. A user namespace named ``static`` or
+# ``_static`` would have its Markdown shadowed by vendored files (and any
+# nested directory under it would have its first segment remapped to the
+# vendored asset path).
+RESERVED_NAMES = frozenset({"_static", "api", "data", "share", "config", "media"})
 
 DEFAULT_KROKI_URL = "https://kroki.io"
 
 # Per-namespace Docsify index.html template.
 # {name} / {name_display} / {kroki_url} are filled in at render time via .format().
 # The mermaid + Kroki plugins are inlined so the page works without any extra
-# vendored plugin file. Script tags reference ../_docsify/ (relative path)
-# because each index.html lives one level below the nginx web root.
+# vendored plugin file. Script tags reference ``_static/`` (relative path)
+# because nginx exposes the vendored assets under both ``/_static/`` (global)
+# and ``/<ns>/_static/`` (per-namespace). When the browser is at
+# ``/api/hassio_ingress/<token>/<ns>/``, a relative ``_static/foo`` resolves
+# to ``/api/hassio_ingress/<token>/<ns>/_static/foo`` which is exactly the
+# nginx per-namespace static location. This sidesteps the SPA-fallback trap
+# where requests like ``/docs/_docsify/docsify.min.js`` matched the broader
+# ``location /docs/`` and returned the HTML bootstrapper instead of the JS.
 # Declared as a raw string so JS regex backslashes (``\s``, ``\/``, ``\w``)
 # round-trip unchanged and Python 3.14+ does not emit a SyntaxWarning for
 # the old ``\\/`` escape. ``{{`` / ``}}`` are still doubled so ``.format()``
@@ -96,7 +111,7 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
     window.$docsify = window.$docsify || {{}};
     window.$docsify.basePath = __MR_BASE__;
   </script>
-  <link rel="stylesheet" href="_docsify/themes/vue.css">
+  <link rel="stylesheet" href="_static/themes/vue.css">
   <script>
     window.$docsify.name = {name_json};
     window.$docsify.homepage = 'README.md';
@@ -123,8 +138,8 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
 </head>
 <body>
   <div id="app">Loading {name_display}...</div>
-  <script src="_docsify/docsify.min.js"></script>
-  <script src="_docsify/mermaid.min.js"></script>
+  <script src="_static/docsify.min.js"></script>
+  <script src="_static/mermaid.min.js"></script>
   <script>
     if (window.mermaid) {{
       window.mermaid.initialize({{ startOnLoad: false, securityLevel: 'loose' }});
@@ -270,20 +285,32 @@ LANDING_CARD_TEMPLATE = """    <a href="/{name}/" class="card">
 #                   autoindex is off by default) and does NOT redirect into
 #                   the wrong ``location /`` block when the fallback arm is
 #                   a bare URI starting with ``/``.
-#   2. /__docsify__/<name>/ - named-location redirect to the generated SPA
-#                   bootstrapper. Using a real URI prefix (not a filesystem
-#                   path) keeps nginx inside the namespace location and
+#   2. @docsify_{name} - named-location redirect to the generated SPA
+#                   bootstrapper. Using a named location instead of a bare
+#                   URI fallback keeps nginx inside the namespace and
 #                   avoids the cross-location redirect bug that served the
 #                   landing page for every namespace URL.
 # Why a named location instead of the bootstrapper file path? Nginx's
 # ``try_files`` interprets the final arm as an internal URI, not a
-# filesystem path. ``/tmp/docroots/<name>/index.html`` starts with ``/``
-# so nginx re-enters location matching - and the bare ``location /``
+# filesystem path. A bare ``/tmp/.../index.html`` starts with ``/`` so
+# nginx re-enters location matching - and the bare ``location /``
 # (landing page) won, serving the wrong page for any non-existent
 # namespace path (e.g. /docs/missing.md). The named location ``@docsify``
 # below is configured to serve the bootstrapper with no further matching.
+#
+# Three locations per namespace, ordered by prefix specificity:
+#   1. ``/<ns>/_static/`` - vendored Docsify + Mermaid assets (longest
+#      prefix, must match FIRST so requests like
+#      /docs/_static/docsify.min.js resolve to /app/_static/docsify.min.js
+#      and never fall into the broader ``/<ns>/`` block's SPA fallback).
+#   2. ``/<ns>/``        - user Markdown files + SPA bootstrapper.
+#   3. ``@docsify_<ns>`` - named-location SPA fallback (see above).
 NGINX_NAMESPACE_BLOCK_TEMPLATE = """
     location = /{name} {{ return 301 /{name}/; }}
+    location /{name}/_static/ {{
+      alias {assets_dir}/;
+      add_header Cache-Control "no-store" always;
+    }}
     location /{name}/ {{
       alias {source_path}/;
       try_files $uri @docsify_{name};
@@ -306,7 +333,7 @@ def validate_namespace(name: str) -> None:
          vendored assets, or HA Supervisor volumes).
 
     Reserved-name check runs BEFORE the regex check so that users who
-    accidentally pick a reserved name like ``_docsify`` get the more
+    accidentally pick a reserved name like ``_static`` get the more
     actionable "reserved" error instead of a regex mismatch (which would
     confuse them about why their name is rejected — it does start with a
     letter after all).
@@ -371,8 +398,9 @@ def validate_directories(directories: list) -> list[dict]:
 def render_namespace_blocks(namespaces: list[dict]) -> str:
     """Render the per-namespace nginx location blocks as a single string.
 
-    Each namespace produces EXACT 4 lines (trailing-slash redirect + alias
-    block with ``try_files`` SPA fallback). The output is later interpolated
+    Each namespace produces EXACT 6 lines (trailing-slash redirect +
+    per-namespace static block + Markdown block with ``try_files`` SPA
+    fallback + named-location fallback). The output is later interpolated
     into ``NGINX_TEMPLATE`` via ``str.format(namespace_blocks=...)``.
 
     Exposed as a public helper so unit tests (and the manual fixture check in
@@ -380,14 +408,18 @@ def render_namespace_blocks(namespaces: list[dict]) -> str:
 
     The ``source_path`` kwarg points nginx at the actual Markdown directory
     (mounted from /config, /share, /media on the HA host) so it can serve
-    the real .md files directly. The ``try_files`` chain falls back to the
-    generated Docsify bootstrapper only when no physical file matches.
+    the real .md files directly. ``assets_dir`` is the vendored Docsify +
+    Mermaid path (``/app/_static/``) - exposed under both ``/_static/`` and
+    ``/<ns>/_static/`` so the same files can be served from either URL
+    shape (the per-namespace form matches the relative ``_static/...`` href
+    the generated index.html emits).
     """
     return "\n".join(
         NGINX_NAMESPACE_BLOCK_TEMPLATE.format(
             name=ns["name"],
             docroots=DOCROOTS_DIR,
             source_path=ns["path"],
+            assets_dir=ASSETS_DIR,
         )
         for ns in namespaces
     )
@@ -434,13 +466,18 @@ http {{
     listen 8099;
     server_name localhost;
 
-    # Vendored Docsify + Mermaid assets (relative path from any namespace root)
+    # Vendored Docsify + Mermaid assets. Exposed at /_static/ for any URL
+    # that resolves to the global static location (e.g. the landing page
+    # or any future path outside a configured namespace). Each namespace
+    # ALSO has its own /<ns>/_static/ location above (rendered by
+    # NGINX_NAMESPACE_BLOCK_TEMPLATE), so relative ``_static/...`` hrefs
+    # in the generated index.html always resolve to a vendored asset.
     # ``Cache-Control: no-store`` prevents HA's service worker
     # (``sw-modern.js``) from caching the SPA bootstrapper HTML under the
     # same key as the vendored assets - that mix-up causes the Browser to
     # serve HTML when requesting ``docsify.min.js`` and Docsify stalls at
     # 'Loading...' forever.
-    location /_docsify/ {{
+    location /_static/ {{
       alias {ASSETS_DIR}/;
       add_header Cache-Control "no-store" always;
     }}
@@ -448,7 +485,7 @@ http {{
     # Landing page at Ingress root (lists all configured namespaces)
     # Cache-Control: no-store so HA's service worker cannot poison the
     # browser cache by serving the SPA HTML in response to vendored
-    # asset requests (e.g. /_docsify/docsify.min.js). See b395eae for
+    # asset requests (e.g. /_static/docsify.min.js). See b395eae for
     # the full trace.
     location = / {{
       root {LANDING_DIR};
@@ -529,7 +566,7 @@ def _ensure_nginx_tmp_dirs() -> None:
 
 
 def _write_minimal_nginx(reason: str) -> None:
-    """Write a fallback nginx.conf that only serves /_docsify/ and a 503."""
+    """Write a fallback nginx.conf that only serves /_static/ and a 503."""
     NGINX_CONF_PATH.parent.mkdir(parents=True, exist_ok=True)
     # Create nginx temp directories (same as the happy-path branch does) so the
     # master process can start without ``nginx: [emerg] mkdir()`` errors when
@@ -554,7 +591,7 @@ http {{
   server {{
     listen 8099;
     server_name localhost;
-    location /_docsify/ {{ alias {ASSETS_DIR}/; add_header Cache-Control "no-store" always; }}
+    location /_static/ {{ alias {ASSETS_DIR}/; add_header Cache-Control "no-store" always; }}
     location / {{ return 503 'Markdown Renderer: {reason}\\n'; add_header Cache-Control "no-store" always; }}
   }}
 }}
@@ -664,7 +701,7 @@ def _dump_debug(namespaces: list[dict], kroki_url: str) -> None:
       1. Effective options (sanitized — never includes ``/data`` or env vars).
       2. Generated ``/tmp/nginx.conf`` (resolved template).
       3. Each generated ``index.html`` (Landing + one per namespace).
-      4. Vendored ``_docsify/`` asset list (relative path, byte size, sha256
+      4. Vendored ``_static/`` asset list (relative path, byte size, sha256
          prefix). Useful when the browser reports a MIME / 404 error on a
          specific asset — the dump makes it obvious whether the file shipped
          at all and whether its content matches a known sha.

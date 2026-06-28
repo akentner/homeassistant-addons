@@ -20,7 +20,7 @@ RUN apk add --no-cache nginx curl tar git
 # only source files (.styl, .js source), NOT prebuilt artifacts. The npm registry
 # package (docsify-4.13.1.tgz) ships the prebuilt lib/docsify.min.js and
 # themes/vue.css. Pinned via ARG DOCSIFY_VERSION.
-WORKDIR ${WORKING_DIR}/_docsify
+WORKDIR ${WORKING_DIR}/_static
 RUN mkdir -p themes && \
     curl -fsSL "https://registry.npmjs.org/docsify/-/docsify-${DOCSIFY_VERSION}.tgz" \
     | tar xz --strip-components=1 --wildcards "*/lib/docsify.min.js" "*/themes/vue.css"
@@ -31,8 +31,11 @@ RUN mkdir -p themes && \
 RUN curl -fsSL "https://registry.npmjs.org/mermaid/-/mermaid-${MERMAID_VERSION}.tgz" \
     | tar xz --strip-components=1 --wildcards "*/dist/mermaid.min.js"
 
-# Flatten the package layouts to /app/_docsify/{docsify.min.js,mermaid.min.js,themes/vue.css}
-# so the generated index.html (../_docsify/docsify.min.js) resolves correctly.
+# Flatten the package layouts to /app/_static/{docsify.min.js,mermaid.min.js,themes/vue.css}.
+# The _static/ directory is intentionally distinct from /app/_docsify/
+# (the old name) - nginx exposes both /<ns>/_static/ (per-namespace) and
+# /_static/ (top-level fallback) and they must NOT collide with any
+# user Markdown directory. See validate_namespace()'s RESERVED_NAMES.
 RUN mv lib/docsify.min.js ./docsify.min.js && \
     mv lib/themes/vue.css themes/vue.css && \
     mv dist/mermaid.min.js ./mermaid.min.js && \
