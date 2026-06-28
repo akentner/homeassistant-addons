@@ -433,8 +433,14 @@ http {{
     server_name localhost;
 
     # Vendored Docsify + Mermaid assets (relative path from any namespace root)
+    # ``Cache-Control: no-store`` prevents HA's service worker
+    # (``sw-modern.js``) from caching the SPA bootstrapper HTML under the
+    # same key as the vendored assets - that mix-up causes the Browser to
+    # serve HTML when requesting ``docsify.min.js`` and Docsify stalls at
+    # 'Loading...' forever.
     location /_docsify/ {{
       alias {ASSETS_DIR}/;
+      add_header Cache-Control "no-store" always;
     }}
 
     # Landing page at Ingress root (lists all configured namespaces)
