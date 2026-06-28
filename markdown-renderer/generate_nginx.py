@@ -244,25 +244,32 @@ LANDING_CARD_TEMPLATE = """    <a href="/{name}/" class="card">
 # Docsify SPA bootstrapper for SPA-style route refreshes. try_files order:
 #   1. $uri       - serve the requested file from the configured path
 #                   verbatim (e.g. /docs/README.md -> /config/docs/README.md).
-#   2. =404       - explicit 404 short-circuit when the requested file does
-#                   not exist. ``=404`` tells nginx: do NOT try directory
-#                   index (which would 403 because autoindex is off); just
-#                   treat this as 'not found' and fall through to arm 3.
-#   3. {docroots}/<name>/index.html - generated Docsify SPA bootstrapper,
-#                   used both for ``GET /docs/`` (namespace landing) and for
-#                   client-side router refreshes like ``GET /docs/#/guide``.
-# Why ``=404`` instead of ``$uri/``? When nginx receives ``GET /docs/``,
-# ``$uri/`` triggers directory processing. With autoindex off and no
-# physical index.html in the alias path, nginx returns ``403 Forbidden``
-# DIRECTLY to the client instead of falling through try_files (a known
-# quirk - 4xx from internal try_files arms are returned to the client
-# rather than treated as "not found"). ``=404`` instead signals "not found"
-# cleanly and the SPA bootstrapper takes over.
+#                   A missing file short-circuits to ``=404`` so nginx does
+#                   NOT try directory autoindex (which would 403 because
+#                   autoindex is off by default) and does NOT redirect into
+#                   the wrong ``location /`` block when the fallback arm is
+#                   a bare URI starting with ``/``.
+#   2. /__docsify__/<name>/ - named-location redirect to the generated SPA
+#                   bootstrapper. Using a real URI prefix (not a filesystem
+#                   path) keeps nginx inside the namespace location and
+#                   avoids the cross-location redirect bug that served the
+#                   landing page for every namespace URL.
+# Why a named location instead of the bootstrapper file path? Nginx's
+# ``try_files`` interprets the final arm as an internal URI, not a
+# filesystem path. ``/tmp/docroots/<name>/index.html`` starts with ``/``
+# so nginx re-enters location matching - and the bare ``location /``
+# (landing page) won, serving the wrong page for any non-existent
+# namespace path (e.g. /docs/missing.md). The named location ``@docsify``
+# below is configured to serve the bootstrapper with no further matching.
 NGINX_NAMESPACE_BLOCK_TEMPLATE = """
     location = /{name} {{ return 301 /{name}/; }}
     location /{name}/ {{
       alias {source_path}/;
-      try_files $uri =404 {docroots}/{name}/index.html;
+      try_files $uri @docsify_{name};
+    }}
+    location @docsify_{name} {{
+      root {docroots}/{name};
+      try_files /index.html =404;
     }}"""
 
 
