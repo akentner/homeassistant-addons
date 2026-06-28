@@ -115,32 +115,95 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
   <script>
     window.$docsify.name = {name_json};
     window.$docsify.homepage = 'README.md';
-    // Mermaid renderer plugin: rewrites fenced ```mermaid blocks and triggers
-    // mermaid.run() after each Docsify page render (INGRESS-05).
+    // Mermaid renderer plugin. Three phases:
+    //   1. afterEach: rewrite Docsify's ``<pre><code class="language-mermaid">``
+    //      (or the older ``<p><code>`` variant) into ``<pre class="mermaid">``
+    //      so mermaid picks them up on its next .run() call.
+    //   2. doneEach: defer one animation frame so Docsify has committed the
+    //      DOM, then call mermaid.run with the explicit node list
+    //      (Mermaid 11+ returns a Promise; older versions take no args
+    //      and ignore the option).
+    //   3. After a successful render, mark nodes with ``data-processed`` so
+    //      subsequent doneEach calls do not re-render the same diagrams.
+    //
+    // All three phases log to ``console`` with the ``[markdown-renderer]``
+    // prefix so the Browser DevTools console makes it obvious which logs
+    // came from this plugin (helpful when the rendered diagram itself
+    // looks wrong and you need to know what input mermaid got).
     window.$docsify.plugins = (window.$docsify.plugins || []).concat([
       function mermaidHook(hook) {{
         hook.afterEach(function (html) {{
-          // Match any element wrapping a <code class="language-mermaid">.
-          // Docsify 4.x renders fenced code blocks as
-          // ``<pre><code class="language-xxx">...</code></pre>`` (not
-          // ``<p><code>...</code></p>`` like the older markdown-it output).
-          // The earlier pattern only matched the latter and silently left
-          // every mermaid block un-rendered. The wrapper pattern below
-          // matches both shapes.
-          return html.replace(
+          var beforeCount = (html.match(/language-mermaid/g) || []).length;
+          var replaced = html.replace(
             /<(?:p|pre)[^>]*>\s*<code class="language-mermaid">([\s\S]*?)<\/code>\s*<\/(?:p|pre)>/g,
             '<pre class="mermaid">$1</pre>'
           );
+          var afterCount = (replaced.match(/<pre class="mermaid">/g) || []).length;
+          if (beforeCount > 0) {{
+            console.log('[markdown-renderer] mermaid: found', beforeCount,
+              'language-mermaid block(s), replaced', afterCount);
+          }}
+          return replaced;
         }});
         hook.doneEach(function () {{
-          if (window.mermaid) {{
-            window.mermaid.run();
-          }}
+          requestAnimationFrame(function () {{
+            var nodes = document.querySelectorAll(
+              'pre.mermaid:not([data-processed])'
+            );
+            if (nodes.length === 0) return;
+            if (!window.mermaid) {{
+              console.error('[markdown-renderer] mermaid.run() called but ' +
+                'window.mermaid is undefined - did the script load fail?');
+              return;
+            }}
+            console.log('[markdown-renderer] mermaid.run() scanning, found',
+              nodes.length, 'unprocessed node(s)');
+            try {{
+              // Build the Mermaid run-options object step-by-step so the
+              // template can be safely fed through Python's str.format().
+              // A literal JS object literal here would be parsed by
+              // str.format as a format field and raise KeyError - so we
+              // assign each key separately.
+              var mermaidOpts = {{}};
+              mermaidOpts.nodes = Array.prototype.slice.call(nodes);
+              var result = window.mermaid.run(mermaidOpts);
+              // Mermaid 11+ returns a Promise; older versions return void.
+              // We swallow either into a unified handler.
+              if (result && typeof result.then === 'function') {{
+                result.then(function () {{
+                  nodes.forEach(function (n) {{
+                    n.setAttribute('data-processed', 'true');
+                  }});
+                  console.log('[markdown-renderer] mermaid: rendered',
+                    nodes.length, 'diagram(s)');
+                }}).catch(function (err) {{
+                  console.error('[markdown-renderer] mermaid error:', err);
+                }});
+              }} else {{
+                // No Promise - assume synchronous success. Mark processed
+                // optimistically (mermaid also sets data-processed internally,
+                // so our :not([data-processed]) filter is doubly safe).
+                nodes.forEach(function (n) {{
+                  n.setAttribute('data-processed', 'true');
+                }});
+                console.log('[markdown-renderer] mermaid: dispatched',
+                  nodes.length, 'diagram(s) (sync API)');
+              }}
+            }} catch (e) {{
+              console.error(
+                '[markdown-renderer] mermaid.run() threw synchronously:', e);
+            }}
+          }});
         }});
       }}
     ]);
     // Inject Kroki URL so the Kroki dispatcher plugin below can read it.
-    window.MARKDOWN_RENDERER = {{ krokiUrl: {kroki_url_json} }};
+    // We assign the key separately to keep the template str.format()-safe
+    // (a literal JS object literal here would be mis-parsed as a format
+    // field by Python; see the mermaid.run() block below for the same
+    // workaround).
+    window.MARKDOWN_RENDERER = {{}};
+    window.MARKDOWN_RENDERER.krokiUrl = {kroki_url_json};
   </script>
 </head>
 <body>
@@ -149,7 +212,16 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
   <script src="_static/mermaid.min.js"></script>
   <script>
     if (window.mermaid) {{
-      window.mermaid.initialize({{ startOnLoad: false, securityLevel: 'loose' }});
+      // Assign the init options one key at a time so str.format() does
+      // not try to parse the object literal as a format field.
+      var mermaidInit = {{}};
+      mermaidInit.startOnLoad = false;
+      mermaidInit.securityLevel = 'loose';
+      window.mermaid.initialize(mermaidInit);
+      console.log('[markdown-renderer] mermaid.initialize: done, version',
+        (window.mermaid.mermaidAPI && window.mermaid.mermaidAPI.version) || 'unknown');
+    }} else {{
+      console.error('[markdown-renderer] mermaid.min.js loaded but window.mermaid is undefined');
     }}
     // Kroki dispatcher plugin: convert non-mermaid fenced code blocks to <img>
     // tags pointing at <kroki_url>/<format>/svg/<base64-deflate source>.
