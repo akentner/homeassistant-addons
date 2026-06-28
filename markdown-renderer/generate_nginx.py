@@ -287,10 +287,12 @@ NGINX_NAMESPACE_BLOCK_TEMPLATE = """
     location /{name}/ {{
       alias {source_path}/;
       try_files $uri @docsify_{name};
+      add_header Cache-Control "no-store" always;
     }}
     location @docsify_{name} {{
       root {docroots}/{name};
       try_files /index.html =404;
+      add_header Cache-Control "no-store" always;
     }}"""
 
 
@@ -444,13 +446,19 @@ http {{
     }}
 
     # Landing page at Ingress root (lists all configured namespaces)
+    # Cache-Control: no-store so HA's service worker cannot poison the
+    # browser cache by serving the SPA HTML in response to vendored
+    # asset requests (e.g. /_docsify/docsify.min.js). See b395eae for
+    # the full trace.
     location = / {{
       root {LANDING_DIR};
       try_files /index.html =404;
+      add_header Cache-Control "no-store" always;
     }}
     location / {{
       root {LANDING_DIR};
       try_files /index.html =404;
+      add_header Cache-Control "no-store" always;
     }}
 {blocks}
   }}
@@ -546,8 +554,8 @@ http {{
   server {{
     listen 8099;
     server_name localhost;
-    location /_docsify/ {{ alias {ASSETS_DIR}/; }}
-    location / {{ return 503 'Markdown Renderer: {reason}\\n'; }}
+    location /_docsify/ {{ alias {ASSETS_DIR}/; add_header Cache-Control "no-store" always; }}
+    location / {{ return 503 'Markdown Renderer: {reason}\\n'; add_header Cache-Control "no-store" always; }}
   }}
 }}
 """
