@@ -108,19 +108,19 @@ directories:
     css_url: https://fonts.googleapis.com/css2?family=Inter&display=swap
 ```
 
-- `css` is inlined into the generated `index.html` as `<style id="mr-namespace-css">`. Empty / omitted means no
-  inline style block.
+- `css` is inlined into the generated `index.html` as `<style id="mr-namespace-css">`. Empty / omitted means no inline
+  style block.
 - `css_url` must be `https://...` (plain `http://` is rejected). Empty / omitted means no `<link>` tag.
 
 Both can be combined; the inlined CSS overrides the linked stylesheet because it appears later in document order.
 
-Size limit: 100KB inline triggers a startup warning (the generated `index.html` is shipped on every page load);
-500KB is a hard limit that aborts startup with a clear error.
+Size limit: 100KB inline triggers a startup warning (the generated `index.html` is shipped on every page load); 500KB is
+a hard limit that aborts startup with a clear error.
 
 ## Plugins
 
-Docsify plugins hook into Docsify's render lifecycle. The add-on ships Mermaid rendering out of the box; the
-`plugins` field lets you add your own (or replace Mermaid behavior). Each entry is one of:
+Docsify plugins hook into Docsify's render lifecycle. The add-on ships Mermaid rendering out of the box; the `plugins`
+field lets you add your own (or replace Mermaid behavior). Each entry is one of:
 
 ```yaml
 directories:
@@ -148,12 +148,12 @@ Each entry has a `name` (used for log messages) and exactly ONE of:
   appended to a `$docsify.plugins.concat([...])` call after Mermaid setup, so the function is auto-registered.
 - `url` - external `https://` URL. Loaded via `<script src=...>`; the script must register itself.
 
-Setting both or neither is rejected at startup. URLs must use `https://`. The 100KB warn / 500KB hard
-size limits from the CSS section also apply to inline plugin code.
+Setting both or neither is rejected at startup. URLs must use `https://`. The 100KB warn / 500KB hard size limits from
+the CSS section also apply to inline plugin code.
 
-Heuristic syntax check: `generate_nginx.py` runs the user's `code` through Python's `compile()` to catch obvious
-typos. JS-only features (arrow functions, `async`/`await`, `const`/`let`, spread, generator functions, plain
-`function` keyword) are detected and the check is skipped - real syntax errors surface in the Browser console.
+Heuristic syntax check: `generate_nginx.py` runs the user's `code` through Python's `compile()` to catch obvious typos.
+JS-only features (arrow functions, `async`/`await`, `const`/`let`, spread, generator functions, plain `function`
+keyword) are detected and the check is skipped - real syntax errors surface in the Browser console.
 
 ## Validation Status
 
