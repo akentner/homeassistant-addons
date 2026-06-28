@@ -72,25 +72,43 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
   <title>{name_display}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <script>
-    // Derive the namespace base path from window.location.pathname by
-    // stripping the last URL segment. This handles ALL ingress nesting
-    // depths cleanly:
-    //   /api/hassio_ingress/<token>/docs/          -> /api/hassio_ingress/<token>/docs/
-    //   /api/hassio_ingress/<token>/docs/README.md -> /api/hassio_ingress/<token>/docs/
-    //   /api/hassio_ingress/<token>/docs/docs/     -> /api/hassio_ingress/<token>/docs/
-    // Stripping just the trailing segment always yields the namespace root,
-    // regardless of how the browser got there. Plain ``../_docsify/...``
-    // relative paths would otherwise resolve against the deep URL and miss
-    // the vendored assets (causing the long-standing "Loading docs..."
-    // stall when HA Dashboard iframe pre-loads a doubled URL).
+    // Derive the namespace base path from window.location.pathname.
     //
-    // Regex note: ``[^\/]+`` (one or more) not ``[^\/]*`` (zero or more).
-    // A ``*`` quantifier lets the engine match an EMPTY trailing segment
-    // before the optional trailing slash, which means on input
-    // ``/api/.../<token>/`` the regex eats the ``<token>`` segment
-    // instead of stopping after it. ``+`` forces at least one character
-    // so the match always targets the last non-empty path segment.
-    var __MR_BASE__ = window.location.pathname.replace(/\/[^\/]+\/?$/, '/');
+    // Docsify uses the base path for two things:
+    //   1. Resolving relative asset URLs (via the injected ``<base>``
+    //      tag). Must be the namespace root so ``_docsify/themes/vue.css``
+    //      always resolves to ``/.../<token>/docs/_docsify/themes/vue.css``.
+    //   2. Building .md fetch URLs (``basePath + 'README.md'``). Must end
+    //      with ``/docs/`` so the URL is ``/.../<token>/docs/README.md``
+    //      (a real file under the configured path).
+    //
+    // Algorithm: find the FIRST occurrence of ``/<ns>/`` in pathname and
+    // keep everything up to and including it. Everything after is
+    // discarded. This handles all the weird ingress nesting levels we have
+    // observed in practice:
+    //   /api/hassio_ingress/<token>/docs/         -> /api/.../<token>/docs/
+    //   /api/hassio_ingress/<token>/docs/README.md -> /api/.../<token>/docs/
+    //   /api/hassio_ingress/<token>/docs/docs/    -> /api/.../<token>/docs/
+    //   /api/hassio_ingress/<token>/docs/docs/docs/ -> /api/.../<token>/docs/
+    // We also normalise the no-trailing-slash case (``/docs`` -> ``/docs/``)
+    // and fall back to the raw pathname when the namespace is not present
+    // (the landing page, which uses a separate template and never reaches
+    // this code).
+    var __MR_PATH__ = window.location.pathname;
+    var __MR_NS__ = {name_json};
+    var __MR_TAG__ = '/' + __MR_NS__ + '/';
+    var __MR_BASE__;
+    var __MR_IDX__ = __MR_PATH__.indexOf(__MR_TAG__);
+    if (__MR_IDX__ >= 0) {{
+      __MR_BASE__ = __MR_PATH__.substring(0, __MR_IDX__ + __MR_TAG__.length);
+    }} else if (__MR_PATH__.length >= __MR_NS__.length &&
+               __MR_PATH__.substring(__MR_PATH__.length - __MR_NS__.length) === __MR_NS__) {{
+      __MR_BASE__ = __MR_PATH__ + '/';
+    }} else if (/\.[^\/]+$/.test(__MR_PATH__)) {{
+      __MR_BASE__ = __MR_PATH__.replace(/\/[^\/]+$/, '/');
+    }} else {{
+      __MR_BASE__ = __MR_PATH__;
+    }}
   </script>
   <script>
     // Inject a <base> tag BEFORE any <link> or <script src> so that all
