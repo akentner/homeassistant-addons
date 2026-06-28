@@ -61,7 +61,11 @@ DEFAULT_KROKI_URL = "https://kroki.io"
 # The mermaid + Kroki plugins are inlined so the page works without any extra
 # vendored plugin file. Script tags reference ../_docsify/ (relative path)
 # because each index.html lives one level below the nginx web root.
-INDEX_HTML_TEMPLATE = """<!DOCTYPE html>
+# Declared as a raw string so JS regex backslashes (``\s``, ``\/``, ``\w``)
+# round-trip unchanged and Python 3.14+ does not emit a SyntaxWarning for
+# the old ``\\/`` escape. ``{{`` / ``}}`` are still doubled so ``.format()``
+# emits the literal braces the generated HTML needs.
+INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -72,7 +76,7 @@ INDEX_HTML_TEMPLATE = """<!DOCTYPE html>
     // Docsify global config. basePath derived from window.location.pathname
     // so .md fetches resolve correctly under HA Ingress prefix.
     window.$docsify = window.$docsify || {{}};
-    window.$docsify.basePath = window.location.pathname.replace(/\\/?$/, '/');
+    window.$docsify.basePath = window.location.pathname.replace(/\/?$/, '/');
     window.$docsify.name = {name_json};
     window.$docsify.homepage = 'README.md';
     // Mermaid renderer plugin: rewrites fenced ```mermaid blocks and triggers
@@ -81,7 +85,7 @@ INDEX_HTML_TEMPLATE = """<!DOCTYPE html>
       function mermaidHook(hook) {{
         hook.afterEach(function (html) {{
           return html.replace(
-            /<p><code class="language-mermaid">([\\s\\S]*?)<\\/code><\\/p>/g,
+            /<p><code class="language-mermaid">([\s\S]*?)<\/code><\/p>/g,
             '<pre class="mermaid">$1</pre>'
           );
         }});
@@ -138,7 +142,7 @@ INDEX_HTML_TEMPLATE = """<!DOCTYPE html>
         hook.doneEach(function () {{
           var blocks = document.querySelectorAll('pre>code[class^="language-"]:not(.language-mermaid)');
           blocks.forEach(function (code) {{
-            var lang = (code.className.match(/language-([\\w-]+)/) || [])[1];
+            var lang = (code.className.match(/language-([\w-]+)/) || [])[1];
             if (!lang) {{ return; }}
             var src = code.textContent;
             toFlateBase64(src).then(function (b64) {{
@@ -171,7 +175,12 @@ INDEX_HTML_TEMPLATE = """<!DOCTYPE html>
 # /app/<slug>/<token>/). A literal "/{name}/" would 404 because HA strips
 # the prefix before forwarding to the container — same reason Docsify sets
 # basePath from window.location.pathname (INGRESS-02 in 04-CONTEXT.md).
-LANDING_HTML_TEMPLATE = """<!DOCTYPE html>
+# Declared as a raw string so JS regex backslashes like ``\/`` are not
+# interpreted as Python escapes (would emit a SyntaxWarning on Python 3.14+
+# under -W error::SyntaxWarning). Raw strings still let ``{{`` / ``}}``
+# through unchanged; ``.format()`` converts them to the literal braces the
+# generated HTML needs.
+LANDING_HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -345,8 +354,10 @@ http {{
   # exist because we run with `-c /tmp/nginx.conf` — and falls back
   # to text/plain, which browsers reject under strict MIME checking
   # (scripts/styles fail to load, Docsify stalls at "Loading...").
-  include /etc/nginx/mime.types;
+  # ``types_hash_bucket_size`` MUST come before ``include mime.types`` —
+  # nginx hashes the type map at config-load time.
   types_hash_bucket_size 1024;
+  include /etc/nginx/mime.types;
   default_type application/octet-stream;
 
   # Relocate all nginx temp directories under /tmp so ``nginx -t`` works in
@@ -459,8 +470,8 @@ events {{ worker_connections 512; }}
 http {{
   access_log /dev/stdout combined;
   absolute_redirect off;
-  include /etc/nginx/mime.types;
   types_hash_bucket_size 1024;
+  include /etc/nginx/mime.types;
   default_type application/octet-stream;
   client_body_temp_path {NGINX_CLIENT_BODY_TMP};
   proxy_temp_path       {NGINX_PROXY_TMP};
