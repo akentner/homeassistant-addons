@@ -55,7 +55,7 @@ while (( ATTEMPT < MAX_ATTEMPTS )); do
         exit 0
     fi
 
-    LAST_ERR="attempt ${ATTEMPT} returned HTTP ${HTTP_CODE}: $(cat /tmp/ha_notify_err.txt 2>/dev/null | head -c 200)"
+    LAST_ERR="attempt ${ATTEMPT} returned HTTP ${HTTP_CODE}: $(head -c 200 /tmp/ha_notify_err.txt 2>/dev/null)"
     echo "::warning::HA notification ${LAST_ERR}"
 
     if (( ATTEMPT < MAX_ATTEMPTS )); then
