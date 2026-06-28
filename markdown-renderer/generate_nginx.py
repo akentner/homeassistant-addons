@@ -94,6 +94,16 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
     // and fall back to the raw pathname when the namespace is not present
     // (the landing page, which uses a separate template and never reaches
     // this code).
+    //
+    // Why ``document.write`` here (not ``appendChild``)? When a browser
+    // parses the document head, each ``<link rel="stylesheet">`` and
+    // ``<script src>`` triggers an immediate network fetch as soon as the
+    // tag is encountered. An ``appendChild`` call inside a synchronous
+    // script runs AFTER the parser has already passed those tags, so the
+    // fetch is already in flight with the wrong base URL. ``document.write``
+    // injects the markup into the parser stream so the ``<base>`` is
+    // present BEFORE the next tag, and all subsequent relative URLs
+    // resolve correctly.
     var __MR_PATH__ = window.location.pathname;
     var __MR_NS__ = {name_json};
     var __MR_TAG__ = '/' + __MR_NS__ + '/';
@@ -109,21 +119,15 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
     }} else {{
       __MR_BASE__ = __MR_PATH__;
     }}
+    document.write('<base href="' + window.location.origin + __MR_BASE__ + '">');
   </script>
   <script>
-    // Inject a <base> tag BEFORE any <link> or <script src> so that all
-    // relative asset references resolve against the namespace root rather
-    // than the deep URL. The base href is set to origin + namespace base
-    // path computed above. Without this, Docsify's docsify.min.js and the
-    // vendored CSS would 404 when the browser is at any nested URL.
-    (function () {{
-      var base = document.createElement('base');
-      base.href = window.location.origin + __MR_BASE__;
-      document.head.appendChild(base);
-      // Expose basePath to Docsify for its .md fetches.
-      window.$docsify = window.$docsify || {{}};
-      window.$docsify.basePath = __MR_BASE__;
-    }})();
+    // Expose basePath to Docsify so its .md fetches resolve against the
+    // namespace root rather than the deep URL. The <base> tag above
+    // already redirects relative asset URLs; this is the matching
+    // setting for Docsify's own XHR path.
+    window.$docsify = window.$docsify || {{}};
+    window.$docsify.basePath = __MR_BASE__;
   </script>
   <link rel="stylesheet" href="_docsify/themes/vue.css">
   <script>
