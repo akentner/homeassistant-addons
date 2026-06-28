@@ -7,4 +7,4 @@
 - genIndex error for search ([#1933](https://github.com/docsifyjs/docsify/issues/1933))
   ([68d8735](https://github.com/docsifyjs/docsify/commit/68d873587c29d694ece466177984aa5fd739dd4b))
 
-**Full Changelog**: https://github.com/docsifyjs/docsify/compare/v4.13.0...v4.13.1
+**Full Changelog**: <https://github.com/docsifyjs/docsify/compare/v4.13.0...v4.13.1>

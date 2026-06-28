@@ -36,6 +36,16 @@ repos:
       - id: prettier
         types: [markdown]
 
+  # Markdown linting — mirrors the GH Action lint.yml so CHANGELOG.md and
+  # other auto-generated files are caught locally before push. Prettier
+  # handles formatting; markdownlint enforces structural rules like
+  # MD034 (no-bare-urls) that prettier does not.
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.18.1
+    hooks:
+      - id: markdownlint-cli2
+        args: ["**/*.md", "#node_modules", "#.git", "#.planning", "#**/.planning", "#.claude", "#.agents"]
+
   # GitHub Actions workflow linting (disabled - repository not available)
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.3
