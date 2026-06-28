@@ -172,7 +172,7 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
 # {cards} is filled in with one <a class="card">...</a> per namespace entry.
 # Card hrefs are rewritten at runtime from window.location.pathname so they
 # resolve correctly under HA Ingress (which prefixes every request with
-# /app/<slug>/<token>/). A literal "/{name}/" would 404 because HA strips
+# /api/hassio_ingress/<token>/). A literal "/{name}/" would 404 because HA strips
 # the prefix before forwarding to the container — same reason Docsify sets
 # basePath from window.location.pathname (INGRESS-02 in 04-CONTEXT.md).
 # Declared as a raw string so JS regex backslashes like ``\/`` are not
@@ -202,11 +202,16 @@ LANDING_HTML_TEMPLATE = r"""<!DOCTYPE html>
   </style>
   <script>
     // Rewrite every card href to include the current request path prefix
-    // (HA Ingress serves this add-on at /app/<slug>/<token>/ — the prefix
-    // is stripped server-side, so the container sees "/" but the browser
-    // URL still contains the prefix). Without this, clicking a card
-    // navigates to https://<ha-host>/<name>/ instead of the correct
-    // /app/<slug>/<token>/<name>/.
+    // (HA Ingress serves this add-on at /api/hassio_ingress/<token>/ — the
+    // prefix is stripped server-side, so the container sees "/" but the
+    // browser URL still contains the prefix). Without this, clicking a
+    // card navigates to https://<ha-host>/<name>/ instead of the correct
+    // /api/hassio_ingress/<token>/<name>/.
+    //
+    // The landing page is always served at the ingress root ("/"), so
+    // ``window.location.pathname`` is the full ingress prefix. We just
+    // normalise trailing slashes and prepend it to each relative card
+    // href (``/docs/`` -> ``/api/hassio_ingress/<token>/docs/``).
     document.addEventListener('DOMContentLoaded', function () {{
       var prefix = window.location.pathname.replace(/\/?$/, '/');
       document.querySelectorAll('a.card').forEach(function (a) {{
