@@ -234,13 +234,23 @@ LANDING_CARD_TEMPLATE = """    <a href="/{name}/" class="card">
 
 # Per-namespace nginx location block (one entry per namespace).
 # Renders the trailing-slash redirect (per INGRESS-04 + nginx semantics) plus
-# the alias serving /tmp/docroots/<name>/. try_files falls back to index.html
-# so SPA route refreshes work.
+# the location that serves the configured Markdown directory (mounted from
+# /config, /share or /media on the HA host) with a fallback to the generated
+# Docsify SPA bootstrapper for SPA-style route refreshes. try_files order:
+#   1. $uri  - serve the requested file from the configured path verbatim
+#              (e.g. /docs/README.md -> /config/docs/README.md, real .md file)
+#   2. $uri/ - try as directory (serves a real index file from disk if any)
+#   3. {docroots}/<name>/index.html - generated Docsify SPA bootstrapper,
+#              used when Docsify's client-side router navigates to a route
+#              that has no physical file (e.g. /docs/#/guide)
+# Without serving the configured path FIRST, ALL Markdown files would fall
+# through to the generated HTML and the real content would never reach the
+# browser (Docsify would always see the same bootstrapper for every URL).
 NGINX_NAMESPACE_BLOCK_TEMPLATE = """
     location = /{name} {{ return 301 /{name}/; }}
     location /{name}/ {{
-      alias {docroots}/{name}/;
-      try_files $uri $uri/ /index.html;
+      alias {source_path}/;
+      try_files $uri $uri/ {docroots}/{name}/index.html;
     }}"""
 
 
@@ -325,9 +335,18 @@ def render_namespace_blocks(namespaces: list[dict]) -> str:
 
     Exposed as a public helper so unit tests (and the manual fixture check in
     the plan's verify block) can assert on per-ns block shape directly.
+
+    The ``source_path`` kwarg points nginx at the actual Markdown directory
+    (mounted from /config, /share, /media on the HA host) so it can serve
+    the real .md files directly. The ``try_files`` chain falls back to the
+    generated Docsify bootstrapper only when no physical file matches.
     """
     return "\n".join(
-        NGINX_NAMESPACE_BLOCK_TEMPLATE.format(name=ns["name"], docroots=DOCROOTS_DIR)
+        NGINX_NAMESPACE_BLOCK_TEMPLATE.format(
+            name=ns["name"],
+            docroots=DOCROOTS_DIR,
+            source_path=ns["path"],
+        )
         for ns in namespaces
     )
 
