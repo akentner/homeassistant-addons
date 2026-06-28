@@ -16,6 +16,7 @@ at page-load time (so .md XHRs resolve correctly under HA Ingress) and ships
 inline mermaid + Kroki dispatcher plugins that target fenced code blocks.
 """
 
+import hashlib
 import json
 import re
 import shutil
@@ -338,6 +339,16 @@ http {{
   client_max_body_size 32m;
   absolute_redirect off;
 
+  # Pull in the distro-shipped MIME map so .css -> text/css and
+  # .js -> application/javascript. Without this, nginx searches for
+  # mime.types next to the main config (/tmp/mime.types) — does not
+  # exist because we run with `-c /tmp/nginx.conf` — and falls back
+  # to text/plain, which browsers reject under strict MIME checking
+  # (scripts/styles fail to load, Docsify stalls at "Loading...").
+  include /etc/nginx/mime.types;
+  types_hash_bucket_size 1024;
+  default_type application/octet-stream;
+
   # Relocate all nginx temp directories under /tmp so ``nginx -t`` works in
   # non-root dev environments (avoids the default /var/lib/nginx/* paths
   # that require write access for nginx's own mkdir()).
@@ -448,6 +459,9 @@ events {{ worker_connections 512; }}
 http {{
   access_log /dev/stdout combined;
   absolute_redirect off;
+  include /etc/nginx/mime.types;
+  types_hash_bucket_size 1024;
+  default_type application/octet-stream;
   client_body_temp_path {NGINX_CLIENT_BODY_TMP};
   proxy_temp_path       {NGINX_PROXY_TMP};
   fastcgi_temp_path     {NGINX_FASTCGI_TMP};
@@ -479,6 +493,7 @@ def main() -> int:
 
     directories = options.get("directories", [])
     kroki_url = options.get("kroki_url", DEFAULT_KROKI_URL).rstrip("/") or DEFAULT_KROKI_URL
+    debug = bool(options.get("debug", False))
 
     # ``validate_directories`` raises ``ValueError`` for any structural or
     # semantic problem (non-list, empty name, regex mismatch, reserved name,
@@ -545,7 +560,79 @@ def main() -> int:
         f"{NGINX_CONF_PATH} (kroki_url={kroki_url})",
         flush=True,
     )
+
+    if debug:
+        _dump_debug(namespaces, kroki_url)
+
     return 0
+
+
+def _dump_debug(namespaces: list[dict], kroki_url: str) -> None:
+    """Log effective options, generated files, vendored assets and nginx build.
+
+    Activated by the ``debug: true`` add-on option. Every line is prefixed with
+    ``[debug]`` so the HA Supervisor log can be filtered easily. Intentionally
+    opt-in: the dump is verbose and may include Markdown titles / Kroki URLs
+    that some operators do not want in shared logs.
+
+    Logs:
+
+      1. Effective options (sanitized — never includes ``/data`` or env vars).
+      2. Generated ``/tmp/nginx.conf`` (resolved template).
+      3. Each generated ``index.html`` (Landing + one per namespace).
+      4. Vendored ``_docsify/`` asset list (relative path, byte size, sha256
+         prefix). Useful when the browser reports a MIME / 404 error on a
+         specific asset — the dump makes it obvious whether the file shipped
+         at all and whether its content matches a known sha.
+      5. ``nginx -V`` (binary path, version, compiled modules).
+    """
+
+    def debug(msg: str) -> None:
+        """Print a ``[debug]``-prefixed line. Local helper so the prefix is
+        applied consistently and the lambda does not shadow anything."""
+        print(f"[debug] {msg}", flush=True)
+
+    debug(f"effective options: namespaces={[ns['name'] for ns in namespaces]} "
+          f"kroki_url={kroki_url}")
+
+    if NGINX_CONF_PATH.exists():
+        debug(f"--- BEGIN {NGINX_CONF_PATH} ---")
+        debug(NGINX_CONF_PATH.read_text().rstrip())
+        debug(f"--- END {NGINX_CONF_PATH} ---")
+
+    landing = LANDING_DIR / "index.html"
+    if landing.exists():
+        debug(f"--- BEGIN {landing} ---")
+        debug(landing.read_text().rstrip())
+        debug(f"--- END {landing} ---")
+
+    for ns in namespaces:
+        idx = DOCROOTS_DIR / ns["name"] / "index.html"
+        if idx.exists():
+            debug(f"--- BEGIN {idx} ---")
+            debug(idx.read_text().rstrip())
+            debug(f"--- END {idx} ---")
+
+    if ASSETS_DIR.exists():
+        debug(f"--- vendored assets in {ASSETS_DIR}/ ---")
+        for asset in sorted(ASSETS_DIR.rglob("*")):
+            if asset.is_file():
+                rel = asset.relative_to(ASSETS_DIR)
+                size = asset.stat().st_size
+                digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
+                debug(f"  {rel}  {size} bytes  sha256:{digest}…")
+    else:
+        debug(f"WARNING: vendored asset dir {ASSETS_DIR} does not exist")
+
+    try:
+        result = subprocess.run(
+            ["nginx", "-V"], capture_output=True, text=True
+        )
+        debug(f"--- nginx -V ---\n{result.stdout.rstrip()}\n{result.stderr.rstrip()}")
+    except FileNotFoundError:
+        debug("nginx binary not found, skipping `nginx -V`")
+
+    debug("dump complete")
 
 
 if __name__ == "__main__":

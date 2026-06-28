@@ -23,6 +23,19 @@ URL of the Kroki service used to render non-Mermaid diagram formats (PlantUML, G
 etc.). Defaults to `https://kroki.io`. Use a self-hosted instance URL (e.g. `http://local-kroki:8000`) for fully-offline
 rendering.
 
+### `debug` (optional, bool)
+
+When `true`, the add-on dumps the effective configuration to the container log at startup:
+
+- The generated `nginx.conf` (with the resolved `mime.types` include)
+- Every generated `index.html` (per-namespace + landing page)
+- The vendored `_docsify/` asset list (path, byte size, short sha256) — useful when the browser blocks a script/style
+  with a MIME-type or 404 error
+- `nginx -V` output (binary path, version, compiled modules)
+
+Every line is prefixed with `[debug]` so it is easy to grep or mute in the HA Supervisor log. Defaults to `false` — turn
+it on temporarily when filing a bug report, then turn it off again so the log stays quiet.
+
 ## Volumes
 
 The add-on mounts three writable volumes so configured namespaces can read Markdown content from anywhere on the HA host

@@ -1,6 +1,6 @@
 name: "Markdown Renderer"
 description: "Renders Markdown directories as Docsify SPAs via Home Assistant Ingress with Mermaid diagram support."
-version: "1.1.0-3"
+version: "1.1.0-4"
 slug: "markdown-renderer"
 init: false
 arch:
@@ -25,6 +25,7 @@ options:
       git_pull_interval: 0
       git_url: ""
   kroki_url: "https://kroki.io"
+  debug: false
 schema:
   directories:
     - name: str
@@ -41,3 +42,9 @@ schema:
       # is out of scope (v1.2).
       git_url: str?
   kroki_url: str
+  # When true, dump the generated nginx.conf, every generated index.html,
+  # the vendored _docsify/ asset list (path + size + sha256) and `nginx -V`
+  # to the container log. Tag every line with `[debug]` so it is easy to
+  # filter or mute. Off by default because the dump can be large and may
+  # contain Markdown titles / Kroki URLs you do not want in shared logs.
+  debug: bool
