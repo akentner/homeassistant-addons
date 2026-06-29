@@ -294,12 +294,53 @@ INDEX_HTML_TEMPLATE = r"""<!DOCTYPE html>
       }}
       function plugin(hook) {{
         hook.doneEach(function () {{
-          // Docsify 4.x emits ``<code class="lang-foo">`` (NOT ``language-foo`` -
-          // see mermaid plugin above). Match the ``lang-`` prefix and exclude
-          // mermaid (handled by the mermaid plugin, not by Kroki).
-          var blocks = document.querySelectorAll('pre>code[class^="lang-"]:not(.lang-mermaid)');
+          // Whitelist of languages the Kroki dispatcher forwards. Every
+          // other fenced code block (``js``, ``bash``, ``json``, ``yaml``,
+          // ``python``, ``css``, ...) is left untouched so Prism syntax
+          // highlighting and copy/paste still work as expected.
+          //
+          // We use an EXPLICIT whitelist instead of "match anything but
+          // mermaid" for two reasons:
+          //   1. Docsify 4.x emits ``<code class="lang-foo">`` for every
+          //      fenced block. A broad ``[class^="lang-"]`` selector would
+          //      intercept source code too and try to send it to Kroki,
+          //      which only renders diagrams. Non-diagram languages get a
+          //      4xx response or a useless image of an error message.
+          //   2. Keeping an explicit list lets DOCS.md stay
+          //      authoritative: changing this set is a deliberate code
+          //      change reviewed alongside the docs.
+          //
+          // The list mirrors Kroki's documented diagram formats at
+          // https://kroki.io/#diagrams (subset that supports ``.svg``
+          // output and ``deflate + base64`` source). Mermaid is on the
+          // list but explicitly excluded via the second selector - the
+          // mermaid plugin handles mermaid and runs first.
+          var KROKI_LANGS = [
+            'plantuml', 'c4plantuml', 'salt', 'wireviz', 'pikchr',
+            'svgbob', 'd2', 'graphviz', 'dot',
+            'blockdiag', 'seqdiag', 'actdiag', 'nwdiag',
+            'packetdiag', 'rackdiag',
+            'ditaa', 'erd', 'excalidraw', 'nomnoml',
+            'vega', 'vega-lite', 'wavedrom', 'bpmn', 'structurizr',
+          ];
+          // Build the selector from the whitelist so adding a new
+          // language only requires editing the array above. The
+          // ``.lang-mermaid`` exclusion remains so the mermaid plugin
+          // stays the single owner of mermaid rendering even if a future
+          // operator adds ``mermaid`` to KROKI_LANGS by mistake.
+          var krokiSelector = 'pre>code.lang-' +
+            KROKI_LANGS.join(', pre>code.lang-') +
+            ':not(.lang-mermaid)';
+          var blocks = document.querySelectorAll(krokiSelector);
           blocks.forEach(function (code) {{
-            var lang = (code.className.match(/lang-([\w-]+)/) || [])[1];
+            var classes = code.className.split(/\s+/);
+            var lang = null;
+            for (var i = 0; i < classes.length; i++) {{
+              if (classes[i].indexOf('lang-') === 0) {{
+                lang = classes[i].substring(5);
+                break;
+              }}
+            }}
             if (!lang) {{ return; }}
             var src = code.textContent;
             toFlateBase64(src).then(function (b64) {{
