@@ -49,9 +49,10 @@ jobs:
               continue
             }
 
-            # Strip version prefix using version_strip as a sed regex (e.g. "^v" -> sed 's/^v//')
+            # Strip version prefix using version_strip as a sed regex (e.g. "^v" -> sed 's|^v||')
+            # Use "|" as delimiter so that slashes in version_strip (e.g. "^version/") don't break sed
             # shellcheck disable=SC2001
-            latest_version=$(echo "$latest_tag" | sed "s/${version_strip}//")
+            latest_version=$(echo "$latest_tag" | sed "s|${version_strip}||")
 
             # Read current version from build.yaml (plain X.Y.Z, no subpatch)
             current_version=$(yq eval '.args.VERSION' "$addon_dir/build.yaml")
