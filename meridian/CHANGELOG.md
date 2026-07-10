@@ -1,3 +1,13 @@
+## [1.45.2](https://github.com/rynfar/meridian/compare/meridian-v1.45.1...meridian-v1.45.2) (2026-07-10)
+
+### Bug Fixes
+
+- forward token usage on OpenAI-format streaming responses
+  ([6c9f04a](https://github.com/rynfar/meridian/commit/6c9f04acbe221a554bb32e8e64ebe3eeb3831f58))
+- **passthrough:** truthful deny reasons for dropped tool calls ([#580](https://github.com/rynfar/meridian/issues/580))
+  ([661276d](https://github.com/rynfar/meridian/commit/661276d75d8181f5a7da9e2588c28c8058b011db)), closes
+  [#552](https://github.com/rynfar/meridian/issues/552)
+
 ## [1.44.1](https://github.com/rynfar/meridian/compare/meridian-v1.44.0...meridian-v1.44.1) (2026-06-25)
 
 ### Bug Fixes
