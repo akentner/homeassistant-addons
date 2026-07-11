@@ -1,3 +1,22 @@
+## [1.45.3](https://github.com/rynfar/meridian/compare/meridian-v1.45.2...meridian-v1.45.3) (2026-07-10)
+
+### Bug Fixes
+
+- apply opencode transforms to the openai adapter ([#587](https://github.com/rynfar/meridian/issues/587))
+  ([465cd2d](https://github.com/rynfar/meridian/commit/465cd2d32e285581e0823e68b8793683a1013950))
+- clamp token-refresh timer delay to the 32-bit max (Node 26 overflow loop)
+  ([#583](https://github.com/rynfar/meridian/issues/583))
+  ([7ea7c6f](https://github.com/rynfar/meridian/commit/7ea7c6feacda44bc6029033807100e2e9394a47c))
+- populate capabilities on /v1/models so clients allow image input
+  ([#585](https://github.com/rynfar/meridian/issues/585))
+  ([31b6042](https://github.com/rynfar/meridian/commit/31b604271666d9a8f39dc211563c1919f1519c6b))
+- require a meaningful baseline before flagging a context spike ([#586](https://github.com/rynfar/meridian/issues/586))
+  ([b469aeb](https://github.com/rynfar/meridian/commit/b469aeb88f5758918ad3c581d81de961690dc7df))
+- stop bash redirect heuristic emitting non-path false positives ([#581](https://github.com/rynfar/meridian/issues/581))
+  ([b3706b6](https://github.com/rynfar/meridian/commit/b3706b6cb921c73132b420a2b2a2a801e8995d40))
+- strip SDK-only context_management from forwarded stream events ([#584](https://github.com/rynfar/meridian/issues/584))
+  ([76086ca](https://github.com/rynfar/meridian/commit/76086ca4d94b7df26605d5eebad08e9050e42e84))
+
 ## [1.45.2](https://github.com/rynfar/meridian/compare/meridian-v1.45.1...meridian-v1.45.2) (2026-07-10)
 
 ### Bug Fixes
