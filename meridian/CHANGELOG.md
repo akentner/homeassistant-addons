@@ -1,3 +1,18 @@
+## [1.46.0](https://github.com/rynfar/meridian/compare/meridian-v1.45.4...meridian-v1.46.0) (2026-07-13)
+
+### Features
+
+- **models:** route Claude Mythos 5 (claude-mythos-\*) through the fable tier
+  ([a42a5cf](https://github.com/rynfar/meridian/commit/a42a5cfcc672e01bbb4e28d7f6042ce4d3f4e156))
+- **models:** route Claude Mythos 5 (claude-mythos-\*) through the fable tier
+  ([c218527](https://github.com/rynfar/meridian/commit/c218527e4a91e4b65a3cfc12e813f1f51ffcd205))
+
+### Bug Fixes
+
+- give deferred passthrough sessions a turn for ToolSearch discovery
+  ([#598](https://github.com/rynfar/meridian/issues/598))
+  ([b1e4681](https://github.com/rynfar/meridian/commit/b1e4681adbab4c93e875bb655fba7991a7881c9a))
+
 ## [1.45.3](https://github.com/rynfar/meridian/compare/meridian-v1.45.2...meridian-v1.45.3) (2026-07-10)
 
 ### Bug Fixes
