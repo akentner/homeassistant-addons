@@ -1,3 +1,24 @@
+## [1.49.0](https://github.com/rynfar/meridian/compare/meridian-v1.48.1...meridian-v1.49.0) (2026-07-13)
+
+### Features
+
+- **adapters:** named adapter instances with per-instance config ([#616](https://github.com/rynfar/meridian/issues/616))
+  ([fcc1d3e](https://github.com/rynfar/meridian/commit/fcc1d3ebb54d12f64c880956e4e3ee1692cc730e)), closes
+  [#476](https://github.com/rynfar/meridian/issues/476)
+- **profiles:** sticky session-to-profile routing via rendezvous hashing
+  ([#615](https://github.com/rynfar/meridian/issues/615))
+  ([873a53b](https://github.com/rynfar/meridian/commit/873a53b5d96cff5db9ed7bded3971fc71417ba57)), closes
+  [#383](https://github.com/rynfar/meridian/issues/383)
+
+### Bug Fixes
+
+- **nix:** patch vendored ELF binaries so claude.exe runs on NixOS
+  ([#612](https://github.com/rynfar/meridian/issues/612))
+  ([ef899f4](https://github.com/rynfar/meridian/commit/ef899f44461f50166e81b2b4bb73c9d17949c931))
+- **replay:** stop rendering Human:/Assistant: transcript lines in prompts
+  ([#618](https://github.com/rynfar/meridian/issues/618))
+  ([1e1228c](https://github.com/rynfar/meridian/commit/1e1228c46f55129a89b1fc3a32a152ae12d143e9))
+
 ## [1.46.0](https://github.com/rynfar/meridian/compare/meridian-v1.45.4...meridian-v1.46.0) (2026-07-13)
 
 ### Features
