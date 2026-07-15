@@ -1,3 +1,14 @@
+## [1.49.1](https://github.com/rynfar/meridian/compare/meridian-v1.49.0...meridian-v1.49.1) (2026-07-14)
+
+### Bug Fixes
+
+- **passthrough:** capture parallel same-tool calls instead of dropping them
+  ([#620](https://github.com/rynfar/meridian/issues/620))
+  ([f732658](https://github.com/rynfar/meridian/commit/f7326582a3ecf5c79ca9cdcc509bd39c3d88b406))
+- **passthrough:** strip hook-dropped tool calls from the client response
+  ([#622](https://github.com/rynfar/meridian/issues/622))
+  ([141bee0](https://github.com/rynfar/meridian/commit/141bee01270d07e09667aea0c3b7a0770b849aff))
+
 ## [1.49.0](https://github.com/rynfar/meridian/compare/meridian-v1.48.1...meridian-v1.49.0) (2026-07-13)
 
 ### Features
