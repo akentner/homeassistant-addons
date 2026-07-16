@@ -1,6 +1,6 @@
 name: "Authentik"
 description: "Open-source Identity Provider — SSO, OAuth2, LDAP and more"
-version: "2026.5.4-0"
+version: "2026.5.5-0"
 slug: "authentik"
 init: false
 arch:
