@@ -35,7 +35,7 @@ Once running, the proxy is available at `http://<ha-host>:3456`.
 Compatible with any Anthropic API client — set the base URL to `http://<ha-host>:3456/v1`.
 
 [meridian]: https://github.com/rynfar/meridian
-[release-shield]: https://img.shields.io/badge/version-v1.49.1-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.49.1
+[release-shield]: https://img.shields.io/badge/version-v1.50.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.50.0
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-production-green.svg

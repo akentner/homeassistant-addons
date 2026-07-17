@@ -1,3 +1,20 @@
+## [1.50.0](https://github.com/rynfar/meridian/compare/meridian-v1.49.1...meridian-v1.50.0) (2026-07-16)
+
+### Features
+
+- **telemetry:** envelope-integrity tripwires for wire-contract violations
+  ([#632](https://github.com/rynfar/meridian/issues/632))
+  ([4f8db58](https://github.com/rynfar/meridian/commit/4f8db589e1be65e0c83476e6c9926bebbf84c135))
+
+### Bug Fixes
+
+- **passthrough:** hold denies until generation completes ([#552](https://github.com/rynfar/meridian/issues/552)
+  streaming red reads) ([#625](https://github.com/rynfar/meridian/issues/625))
+  ([df48e3b](https://github.com/rynfar/meridian/commit/df48e3b9f0a374ee4e30665ee10add17da77e98e))
+- **passthrough:** suppress the SDK subprocess's scratchpad advertisement
+  ([#627](https://github.com/rynfar/meridian/issues/627)) ([#628](https://github.com/rynfar/meridian/issues/628))
+  ([18d6b24](https://github.com/rynfar/meridian/commit/18d6b24da8c12a649df852027427d679fcc89fcb))
+
 ## [1.49.1](https://github.com/rynfar/meridian/compare/meridian-v1.49.0...meridian-v1.49.1) (2026-07-14)
 
 ### Bug Fixes
