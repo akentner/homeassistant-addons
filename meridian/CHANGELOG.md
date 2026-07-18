@@ -1,3 +1,35 @@
+## [1.52.0](https://github.com/rynfar/meridian/compare/meridian-v1.51.0...meridian-v1.52.0) (2026-07-17)
+
+### Features
+
+- add Sonnet 5 to the model list, make it the canonical sonnet ([#631](https://github.com/rynfar/meridian/issues/631))
+  ([#644](https://github.com/rynfar/meridian/issues/644))
+  ([b1cde57](https://github.com/rynfar/meridian/commit/b1cde574e78b39de7118f356d302da974c99e7ae))
+- **cli:** read MERIDIAN_PLUGIN_DIR and MERIDIAN_PLUGIN_CONFIG env vars
+  ([59743bd](https://github.com/rynfar/meridian/commit/59743bdf586ede60e08642df1e505f2bf157fcbf))
+- env-configurable plugin loading + home-manager plugin settings ([#623](https://github.com/rynfar/meridian/issues/623)
+  by [@connor-grady](https://github.com/connor-grady))
+  ([b40bfba](https://github.com/rynfar/meridian/commit/b40bfba577b8a5a777f30e1b5f33cde554e05e1b))
+- **nix:** add pluginConfig and pluginDir home-manager settings
+  ([5cb1821](https://github.com/rynfar/meridian/commit/5cb18211634acd32d1efef38c24d1813791966e1))
+
+### Bug Fixes
+
+- decouple SDK settings from settingSources so memory:false works with claudeMd off
+  ([#634](https://github.com/rynfar/meridian/issues/634)) ([#645](https://github.com/rynfar/meridian/issues/645))
+  ([379bd6b](https://github.com/rynfar/meridian/commit/379bd6bfa62f96ce1a6f02416aa15f6de421fbd8))
+- frame fresh-session replays in a context-only envelope ([#619](https://github.com/rynfar/meridian/issues/619))
+  ([#646](https://github.com/rynfar/meridian/issues/646))
+  ([ce1f954](https://github.com/rynfar/meridian/commit/ce1f9543a94222c08fbfc548c2889f737ebf6b94))
+- hold non-stream denies until turn end — parallel calls survive both modes
+  ([#592](https://github.com/rynfar/meridian/issues/592)) ([#647](https://github.com/rynfar/meridian/issues/647))
+  ([0d50467](https://github.com/rynfar/meridian/commit/0d50467e4c05e9b127b0f6ba8883f3d01625b2b9))
+- **nix:** only export MERIDIAN_PLUGIN_CONFIG when plugins are configured
+  ([f241032](https://github.com/rynfar/meridian/commit/f241032fa25929b899ac4d1819302bbd5c297062))
+- retry busy-session resume refusals instead of failing deterministically
+  ([#630](https://github.com/rynfar/meridian/issues/630)) ([#643](https://github.com/rynfar/meridian/issues/643))
+  ([81b589c](https://github.com/rynfar/meridian/commit/81b589c654d7f640e308a079ab45aececf7ae884))
+
 ## [1.50.0](https://github.com/rynfar/meridian/compare/meridian-v1.49.1...meridian-v1.50.0) (2026-07-16)
 
 ### Features
