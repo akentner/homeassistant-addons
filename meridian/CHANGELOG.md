@@ -1,3 +1,18 @@
+## [1.54.0](https://github.com/rynfar/meridian/compare/meridian-v1.53.0...meridian-v1.54.0) (2026-07-19)
+
+### Features
+
+- Claude Design MCP proxy (/v1/design/\*) with dedicated OAuth flow
+  ([e1547c3](https://github.com/rynfar/meridian/commit/e1547c3625b486bfcd1864c848babc3098719f28))
+- Claude Design MCP proxy (/v1/design/\*) with dedicated OAuth flow
+  ([#543](https://github.com/rynfar/meridian/issues/543))
+  ([1963c94](https://github.com/rynfar/meridian/commit/1963c94669eaa7821d7f449b195b638c653dfd67))
+
+### Bug Fixes
+
+- **mcp:** stop shell-interpolating grep tool input, treat exit 1 as no matches
+  ([05513c4](https://github.com/rynfar/meridian/commit/05513c451725ce75865dfeae4f1dc1b756e17119))
+
 ## [1.52.0](https://github.com/rynfar/meridian/compare/meridian-v1.51.0...meridian-v1.52.0) (2026-07-17)
 
 ### Features
