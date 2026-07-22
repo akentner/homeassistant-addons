@@ -1,5 +1,5 @@
 # Global ARGs must be declared before first FROM so they can be used in FROM instructions
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.23
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.24
 ARG VERSION
 ARG GATUS_CLI_VERSION=1.0.0
 

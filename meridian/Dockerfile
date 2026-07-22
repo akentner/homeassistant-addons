@@ -1,5 +1,5 @@
 # Global ARG must be declared before first FROM so it is available in all stages
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.23
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.24
 
 # ---- Build stage ----
 # Compiles TypeScript source from GitHub release tarball using bun
