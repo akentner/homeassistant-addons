@@ -7,7 +7,7 @@ ARG GATUS_CLI_VERSION=1.0.0
 FROM ghcr.io/twin/gatus:v${VERSION} AS gatus-source
 
 # Stage 2: Download gatus-cli
-FROM alpine:3.20 AS gatus-cli-source
+FROM alpine:3.24 AS gatus-cli-source
 ARG GATUS_CLI_VERSION
 RUN apk add --no-cache curl unzip && \
     curl -fsSL "https://github.com/TwiN/gatus-cli/releases/download/v${GATUS_CLI_VERSION}/gatus-cli-linux-amd64.zip" \
