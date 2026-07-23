@@ -1,3 +1,12 @@
+## [1.55.1](https://github.com/rynfar/meridian/compare/meridian-v1.55.0...meridian-v1.55.1) (2026-07-23)
+
+### Bug Fixes
+
+- never rename a subagent_type that is already a registered agent
+  ([#672](https://github.com/rynfar/meridian/issues/672))
+  ([c72f91f](https://github.com/rynfar/meridian/commit/c72f91f723c50b0bd7a90e1351f72558f3b3a6a2)), closes
+  [#671](https://github.com/rynfar/meridian/issues/671)
+
 ## [1.55.0](https://github.com/rynfar/meridian/compare/meridian-v1.54.0...meridian-v1.55.0) (2026-07-21)
 
 ### Features
