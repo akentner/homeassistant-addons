@@ -1,3 +1,44 @@
+See https://docs.goauthentik.io/docs/releases/2026.5#fixed-in-202656
+
+## What's Changed
+
+- web/flow: revert locale-driven flow re-request from FlowExecutor (cherry-pick #24050 to version-2026.5) by
+  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24068
+- lifecycle/container: drop curl and runit (cherry-pick #24008 to version-2026.5) by @authentik-cherry-pick[bot] in
+  https://github.com/goauthentik/authentik/pull/24114
+- enterprise/endpoints/connectors/fleet: pass populate_policies (cherry-pick #24108 to version-2026.5) by
+  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24112
+- packages/django-dramatiq-postgres/broker: use positive state filter for pending messages (cherry-pick #24074 to
+  version-2026.5) by @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24166
+- endpoints/connectors/agent: fix auth schema for device endpoints (cherry-pick #24164 to version-2026.5) by
+  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24167
+- policies: filter policy engine (cherry-pick #24025 to version-2026.5) by @authentik-cherry-pick[bot] in
+  https://github.com/goauthentik/authentik/pull/24168
+- website/docs: cleanup 07-12: refresh contributor guidance (cherry-pick #23969 to version-2026.5) by
+  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24157
+- internal/config: make storage file paths overwritable via env vars (cherry-pick #24177 to version-2026.5) by
+  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24220
+- stages/captcha: fix hcaptcha height (#20901) by @gergosimonyi in https://github.com/goauthentik/authentik/pull/24216
+- providers/scim: exclude read-only id from group PATCH payload and fix null-members add check (cherry-pick #23950 to
+  version-2026.5) by @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24227
+- providers/scim: fix enum warning when de-serializing (cherry-pick #23553 to version-2026.5) by
+  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24231
+- providers/scim: fix non-schema compliant group member removal (cherry-pick #23800 to version-2026.5) by
+  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24229
+- root: fix make gen-diff command (cherry-pick #22548 to version-2026.5) by @authentik-cherry-pick[bot] in
+  https://github.com/goauthentik/authentik/pull/24121
+- core: bump pyjwt from 2.11.0 to 2.13.0 (cherry-pick #22562 to version-2026.5) by @authentik-automation[bot] in
+  https://github.com/goauthentik/authentik/pull/22570
+- core: Form friendly error on uniqueness constraint. (cherry-pick #23864 to version-2026.5) by
+  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23881
+- web/admin: fix app view failing when no events permissions (cherry-pick #24131 to version-2026.5) by
+  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24252
+- root: fix make gen-changelog (cherry-pick #24122 to version-2026.5) by @authentik-cherry-pick[bot] in
+  https://github.com/goauthentik/authentik/pull/24260
+- root: in-process per-IP rate throttle (#23015) by @gergosimonyi in https://github.com/goauthentik/authentik/pull/24217
+
+**Full Changelog**: https://github.com/goauthentik/authentik/compare/version/2026.5.5...version/2026.5.6
+
 See https://docs.goauthentik.io/docs/releases/2026.5#fixed-in-202655
 
 ## What's Changed
