@@ -1,3 +1,10 @@
+## [1.56.1](https://github.com/rynfar/meridian/compare/meridian-v1.56.0...meridian-v1.56.1) (2026-07-23)
+
+### Bug Fixes
+
+- **ui:** restore the visual pace bar on account cards ([#681](https://github.com/rynfar/meridian/issues/681))
+  ([e7117de](https://github.com/rynfar/meridian/commit/e7117de55263d156f8c4f36c1ca182fb0b552ab4))
+
 ## [1.55.1](https://github.com/rynfar/meridian/compare/meridian-v1.55.0...meridian-v1.55.1) (2026-07-23)
 
 ### Bug Fixes
