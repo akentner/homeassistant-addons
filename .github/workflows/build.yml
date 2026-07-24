@@ -84,7 +84,7 @@ jobs:
 
       - name: Build and push coding-assistants
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./coding-assistants
           platforms: ${{ steps.meta.outputs.PLATFORM }}
