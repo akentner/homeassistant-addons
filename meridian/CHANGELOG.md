@@ -1,3 +1,16 @@
+## [1.57.0](https://github.com/rynfar/meridian/compare/meridian-v1.56.1...meridian-v1.57.0) (2026-07-24)
+
+### Features
+
+- add Claude Opus 5 to the model list, make it the canonical opus
+  ([f0c885c](https://github.com/rynfar/meridian/commit/f0c885c53ec027eafb8f70bf5d68889971f464c7))
+- add Claude Opus 5 to the model list, make it the canonical opus
+  ([87cfcda](https://github.com/rynfar/meridian/commit/87cfcdadf24c0e64ef08e2ee81fc5d8debc2bfea))
+- image input and incomplete status for Responses API (/v1/responses)
+  ([37fb773](https://github.com/rynfar/meridian/commit/37fb773744196d72d0c153f0cf693461572617ce))
+- support image input and incomplete status in Responses API
+  ([92745e0](https://github.com/rynfar/meridian/commit/92745e0cee278bfc70f5bc698e2aa5d50fdae85d))
+
 ## [1.56.1](https://github.com/rynfar/meridian/compare/meridian-v1.56.0...meridian-v1.56.1) (2026-07-23)
 
 ### Bug Fixes
