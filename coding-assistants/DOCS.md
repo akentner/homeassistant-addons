@@ -150,6 +150,19 @@ tmux new-session -A -s main -c /homeassistant
 | `tmux`         | Terminal multiplexer   |
 | `curl`, `wget` | HTTP utilities         |
 
+## Upgrading `claude` and `opencode`
+
+Both coding assistants can be upgraded inside a running container — no add-on rebuild required.
+
+```bash
+opencode upgrade        # downloads the latest release to ~/.opencode/bin
+claude update           # reruns npm install -g @anthropic-ai/claude-code@latest
+```
+
+The opencode binary lives under `/root/.opencode/bin`, which the add-on symlinks into the persistent `/data` volume.
+Upgrades therefore survive container restarts and rebuilds. The bundled version in the image is only used as the seed on
+the very first start of an empty `/data` volume; delete `/data/opencode/bin/opencode` to fall back to it.
+
 ## tmux
 
 The web terminal opens in a persistent tmux session (`main`). Reconnecting (SSH or web) reattaches to the same session.

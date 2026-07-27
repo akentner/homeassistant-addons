@@ -25,6 +25,19 @@ mkdir -p \
     /data/.config/opencode \
     /data/.local/share/opencode
 
+# Opencode binary persistence — first start copies the bundled binary into /data,
+# then symlinks /root/.opencode/bin → /data/opencode/bin. The official installer writes
+# upgrades to $HOME/.opencode/bin, so routing that path through /data keeps user-initiated
+# `opencode upgrade` invocations across container rebuilds.
+mkdir -p /data/opencode/bin
+if [[ ! -e /data/opencode/bin/opencode ]]; then
+    cp /opt/opencode-initial/opencode /data/opencode/bin/opencode
+    chmod +x /data/opencode/bin/opencode
+    bashio::log.info "Initialized opencode binary in persistent storage"
+fi
+rm -rf /root/.opencode/bin
+ln -s /data/opencode/bin /root/.opencode/bin
+
 # Fish config persistence — copy defaults on first run, then symlink
 if [[ ! -d /data/.config/fish ]]; then
     cp -a /root/.config/fish /data/.config/fish
@@ -230,7 +243,7 @@ export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 export XDG_CONFIG_HOME="/data/.config"
 export XDG_DATA_HOME="/data/.local/share"
-export PATH="/root/.local/bin:/usr/local/bin:$PATH"
+export PATH="/root/.opencode/bin:/root/.local/bin:/usr/local/bin:$PATH"
 EOF
     printf 'export HA_URL=%q\n' "${HA_URL}"
     printf 'export HA_TOKEN=%q\n' "${HA_TOKEN}"
@@ -253,6 +266,7 @@ if jq -e '.bash_aliases | length > 0' /data/options.json > /dev/null 2>&1; then
 fi
 
 # Export for current process so ttyd/sshd children inherit them
+export PATH="/root/.opencode/bin:/root/.local/bin:/usr/local/bin:$PATH"
 export XDG_CONFIG_HOME="/data/.config"
 export XDG_DATA_HOME="/data/.local/share"
 export HA_URL
@@ -280,7 +294,7 @@ set -x LC_ALL en_US.UTF-8
 set -x XDG_CONFIG_HOME /data/.config
 set -x XDG_DATA_HOME /data/.local/share
 set -U fish_user_paths (string match -rv '^/homeassistant/(bin|scripts/bin)' $fish_user_paths)
-fish_add_path /root/.local/bin /usr/local/bin
+fish_add_path /root/.opencode/bin /root/.local/bin /usr/local/bin
 
 # Tool integrations
 zoxide init fish | source

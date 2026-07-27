@@ -168,13 +168,15 @@ RUN curl -fsSL https://bun.sh/install | bash \
 # graphify — knowledge graph skill for AI coding assistants
 RUN uv tool install graphifyy
 
-# opencode — glibc build from sst/opencode (resolves getcontext/musl TUI issue)
-RUN OPENCODE_VER=$(curl -sfL https://api.github.com/repositories/975734319/releases/latest \
-        | jq -r '.tag_name | ltrimstr("v")') \
-    && curl -fsSL \
-        "https://github.com/sst/opencode/releases/download/v${OPENCODE_VER}/opencode-linux-x64.tar.gz" \
-        | tar xz -C /usr/local/bin \
-    && chmod +x /usr/local/bin/opencode
+# opencode — installed via the official installer so `opencode upgrade` works at runtime.
+# The installer hardcodes $HOME/.opencode/bin as its target path, which matches opencode's
+# own method-detection heuristic in packages/opencode/src/installation/index.ts. A copy is
+# stashed at /opt/opencode-initial/ so run.sh can bootstrap the binary into the persistent
+# /data volume on first start; subsequent upgrades persist across container rebuilds.
+# --no-modify-path: we manage PATH ourselves in /etc/profile.d/00-coding-assistants.sh.
+RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
+    && mkdir -p /opt/opencode-initial \
+    && cp /root/.opencode/bin/opencode /opt/opencode-initial/opencode
 
 # Coding assistants + fx JSON viewer via npm
 # hadolint ignore=DL3016
