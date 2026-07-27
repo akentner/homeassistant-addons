@@ -196,6 +196,30 @@ make validate-addons        # Validates add-on configs
 5. **Auto-update parallel execution:** Updates run independently (`fail-fast: false`). One failing add-on doesn't block
    others, but issues are created per add-on.
 
+## 🔌 Home Assistant Instanz-Zugriff
+
+Aktive Live-Verbindung: `ha-nextgen` (`https://ha-nextgen.akentner.de`), 4112 Entities, Long-Lived-Token in
+`~/.config/ha-cli.env`, geladen via Fish+Bitwarden. Werkzeuge: REST-API, WebSocket-API, `ha`-Supervisor-CLI, Skills
+`~/.opencode/skills/home-assistant/` und `~/.opencode/skills/integrations/`.
+
+**Details, offene Punkte, Konventionen:** siehe `.agents/memory/ha-access.md`.
+
+**Vor `ha supervisor`/`ha core update`/Backup-Operationen:** prüfen, welche Instanz der Supervisor-Endpoint der `ha`-CLI
+tatsächlich erreicht (`ha info` zeigt nur Host-Daten, kein Endpoint-Flag gesetzt).
+
+## 🧰 Installierte Skills
+
+Detaillierte Inventur mit Zweck und Mechanik: siehe `.agents/memory/installed-skills.md`.
+
+Kurzfassung:
+
+- `wrangler` (Cloudflare offiziell, Projekt-Skill) — Cloudflare Workers/Tunnel-CLI, KV/R2/D1/DO/Containers/Queues
+- `home-assistant-best-practices` (Projekt-Skill) — HA-Automation/Dashboard-Hilfe
+- `home-assistant`, `integrations` (global in `~/.opencode/skills/`) — HA-Verbindungsaufbau + Integrations-Diagnose
+
+Verwaltung via `npx skills` (`find`/`add`/`list`/`update`/`remove`). **Im Skill nachschauen, statt aus Erinnerung** —
+viele Skills erzwingen aktuelle Doku statt vortrainiertem Wissen.
+
 ## 📚 Key Files to Understand First
 
 - **`README.md`** - Project overview and add-on list
