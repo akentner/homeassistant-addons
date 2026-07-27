@@ -1,213 +1,215 @@
-See https://docs.goauthentik.io/docs/releases/2026.5#fixed-in-202656
+See <https://docs.goauthentik.io/docs/releases/2026.5#fixed-in-202656>
 
 ## What's Changed
 
 - web/flow: revert locale-driven flow re-request from FlowExecutor (cherry-pick #24050 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24068
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24068>
 - lifecycle/container: drop curl and runit (cherry-pick #24008 to version-2026.5) by @authentik-cherry-pick[bot] in
-  https://github.com/goauthentik/authentik/pull/24114
+  <https://github.com/goauthentik/authentik/pull/24114>
 - enterprise/endpoints/connectors/fleet: pass populate_policies (cherry-pick #24108 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24112
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24112>
 - packages/django-dramatiq-postgres/broker: use positive state filter for pending messages (cherry-pick #24074 to
-  version-2026.5) by @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24166
+  version-2026.5) by @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24166>
 - endpoints/connectors/agent: fix auth schema for device endpoints (cherry-pick #24164 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24167
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24167>
 - policies: filter policy engine (cherry-pick #24025 to version-2026.5) by @authentik-cherry-pick[bot] in
-  https://github.com/goauthentik/authentik/pull/24168
+  <https://github.com/goauthentik/authentik/pull/24168>
 - website/docs: cleanup 07-12: refresh contributor guidance (cherry-pick #23969 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24157
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24157>
 - internal/config: make storage file paths overwritable via env vars (cherry-pick #24177 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24220
-- stages/captcha: fix hcaptcha height (#20901) by @gergosimonyi in https://github.com/goauthentik/authentik/pull/24216
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24220>
+- stages/captcha: fix hcaptcha height (#20901) by @gergosimonyi in <https://github.com/goauthentik/authentik/pull/24216>
 - providers/scim: exclude read-only id from group PATCH payload and fix null-members add check (cherry-pick #23950 to
-  version-2026.5) by @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24227
+  version-2026.5) by @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24227>
 - providers/scim: fix enum warning when de-serializing (cherry-pick #23553 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24231
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24231>
 - providers/scim: fix non-schema compliant group member removal (cherry-pick #23800 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24229
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24229>
 - root: fix make gen-diff command (cherry-pick #22548 to version-2026.5) by @authentik-cherry-pick[bot] in
-  https://github.com/goauthentik/authentik/pull/24121
+  <https://github.com/goauthentik/authentik/pull/24121>
 - core: bump pyjwt from 2.11.0 to 2.13.0 (cherry-pick #22562 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/22570
+  <https://github.com/goauthentik/authentik/pull/22570>
 - core: Form friendly error on uniqueness constraint. (cherry-pick #23864 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23881
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/23881>
 - web/admin: fix app view failing when no events permissions (cherry-pick #24131 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24252
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24252>
 - root: fix make gen-changelog (cherry-pick #24122 to version-2026.5) by @authentik-cherry-pick[bot] in
-  https://github.com/goauthentik/authentik/pull/24260
-- root: in-process per-IP rate throttle (#23015) by @gergosimonyi in https://github.com/goauthentik/authentik/pull/24217
+  <https://github.com/goauthentik/authentik/pull/24260>
+- root: in-process per-IP rate throttle (#23015) by @gergosimonyi in
+  <https://github.com/goauthentik/authentik/pull/24217>
 
-**Full Changelog**: https://github.com/goauthentik/authentik/compare/version/2026.5.5...version/2026.5.6
+**Full Changelog**: <https://github.com/goauthentik/authentik/compare/version/2026.5.5...version/2026.5.6>
 
-See https://docs.goauthentik.io/docs/releases/2026.5#fixed-in-202655
+See <https://docs.goauthentik.io/docs/releases/2026.5#fixed-in-202655>
 
 ## What's Changed
 
 - tests/openid_conformance: migrate to upstream images (cherry-pick #23828 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23834
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/23834>
 - endpoints: handle exception in connector controller sync setup (cherry-pick #23852 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23854
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/23854>
 - web/flows: fix race condition in continuous login and support source stages in authentication flows (cherry-pick
-  #23049 to version-2026.5) by @GirlBossRush in https://github.com/goauthentik/authentik/pull/23558
+  #23049 to version-2026.5) by @GirlBossRush in <https://github.com/goauthentik/authentik/pull/23558>
 - web: fix table refresh button not refreshing table data (cherry-pick #23780 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23878
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/23878>
 - web/admin: licensing: add usage totals (cherry-pick #23665 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23668
+  <https://github.com/goauthentik/authentik/pull/23668>
 - web: Fix Log Viewer Intersection Observer. (cherry-pick #23861 to version-2026.5) by @authentik-cherry-pick[bot] in
-  https://github.com/goauthentik/authentik/pull/23949
+  <https://github.com/goauthentik/authentik/pull/23949>
 - stages/email: fix ungrammatical expiry time in password reset templates (cherry-pick #22758 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23952
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/23952>
 - website/docs: cleanup 07-12: update integration routes (cherry-pick #23960 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23975
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/23975>
 - website/docs: cleanup 07-12: update documentation URLs (cherry-pick #23961 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23976
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/23976>
 - website/docs: cleanup 07-12: fix Admin interface tab label (cherry-pick #23965 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23982
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/23982>
 - providers/scim: improve error display when error doesn't conform to scim schema (cherry-pick #23955 to version-2026.5)
-  by @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23957
+  by @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/23957>
 - lib/sync/outgoing: fix discover running for each page (cherry-pick #24016 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24019
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24019>
 - website/docs: 2026.5: remove preview tag from mtls stage doc by @dominic-r in
-  https://github.com/goauthentik/authentik/pull/23981
+  <https://github.com/goauthentik/authentik/pull/23981>
 - api/search: add number and boolean support in AKQL queries on JSON fields (#23418) (cherry-pick #24028 to
-  version-2026.5) by @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24033
+  version-2026.5) by @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24033>
 - sources/oauth: improve id_token validation for apple source (cherry-pick #24017 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24020
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24020>
 - packages/django-dramatiq-postgres/broker: close unusable PostgreSQL connections (cherry-pick #24023 to version-2026.5)
-  by @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/24035
+  by @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/24035>
 - security: automated internal backport of patch 1822.sec.patch to authentik-2026.5 by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/24059
+  <https://github.com/goauthentik/authentik/pull/24059>
 - security: automated internal backport of patch 1817.sec.patch to authentik-2026.5 by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/24058
+  <https://github.com/goauthentik/authentik/pull/24058>
 - security: automated internal backport of patch 1887.sec.patch to authentik-2026.5 by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/24060
+  <https://github.com/goauthentik/authentik/pull/24060>
 - security: automated internal backport of patch 1919.sec.patch to authentik-2026.5 by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/24061
+  <https://github.com/goauthentik/authentik/pull/24061>
 - security: automated internal backport of patch 1934.sec.patch to authentik-2026.5 by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/24062
+  <https://github.com/goauthentik/authentik/pull/24062>
 - website/docs: release notes for 2026.2.6 (cherry-pick #24069 to version-2026.5) by @authentik-cherry-pick[bot] in
-  https://github.com/goauthentik/authentik/pull/24071
+  <https://github.com/goauthentik/authentik/pull/24071>
 - website/docs: release notes for 2026.5.5 (cherry-pick #24070 to version-2026.5) by @authentik-cherry-pick[bot] in
-  https://github.com/goauthentik/authentik/pull/24073
+  <https://github.com/goauthentik/authentik/pull/24073>
 
-**Full Changelog**: https://github.com/goauthentik/authentik/compare/version/2026.5.4...version/2026.5.5
+**Full Changelog**: <https://github.com/goauthentik/authentik/compare/version/2026.5.4...version/2026.5.5>
 
-See https://docs.goauthentik.io/docs/releases/2026.5#fixed-in-202654
+See <https://docs.goauthentik.io/docs/releases/2026.5#fixed-in-202654>
 
 ## What's Changed
 
 - website/integrations: dokuwiki: add post logout and logout urls (cherry-pick #22984 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/22985
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/22985>
 - website/docs: additional scim provider docs (cherry-pick #22135 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23003
+  <https://github.com/goauthentik/authentik/pull/23003>
 - root: bump pyo3 (cherry-pick #23036 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23038
+  <https://github.com/goauthentik/authentik/pull/23038>
 - website/docs: document SCIM source trust model and security implications (cherry-pick #22535 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23125
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23125>
 - web: Fix user list default paths. (cherry-pick #23062 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23127
+  <https://github.com/goauthentik/authentik/pull/23127>
 - web/i18n: Fix stale flow locale, unsynchronized locale selector options (cherry-pick #23007 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23148
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23148>
 - web: Fix stale clipboard tokens, untranslated labels (cherry-pick #23063 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23143
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23143>
 - website/docs: add Splunk event forwarding docs (cherry-pick #22938 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23163
+  <https://github.com/goauthentik/authentik/pull/23163>
 - core: fix Invitation Emails Ignoring Selected Template (cherry-pick #23122 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23133
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23133>
 - packages/django-dramatiq-postgres/broker: purge at start of loop to ensure it runs (cherry-pick #23185 to
-  version-2026.5) by @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23188
+  version-2026.5) by @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23188>
 - web/stages/identification: Fix passkey autofill dropdown not showing on the identification stage (cherry-pick #23187
-  to version-2026.5) by @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23189
+  to version-2026.5) by @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23189>
 - website/docs: fix broken custom email template example (cherry-pick #23191 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23192
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23192>
 - packages/django-postgres-cache: remove custom get_or_set implementation (cherry-pick #23182 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23213
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23213>
 - website: migrate brand assets to pkg (cherry-pick #22336 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23222
+  <https://github.com/goauthentik/authentik/pull/23222>
 - packages/django-postgres-cache: fix naive datetime warning (cherry-pick #23033 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23235
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23235>
 - packages/django-dramatiq-postgres/broker: fix race condition in broker causing completed tasks to be repeated
   (cherry-pick #23218 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23257
+  <https://github.com/goauthentik/authentik/pull/23257>
 - website/docs: improve email authenticator docs (cherry-pick #23226 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23263
+  <https://github.com/goauthentik/authentik/pull/23263>
 - website/docs: remove colons from release notes (cherry-pick #23311 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23312
+  <https://github.com/goauthentik/authentik/pull/23312>
 - website/docs: clarify user and group filtering on scim provider (cherry-pick #22502 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23358
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23358>
 - root: Fix SECURITY.md versions (cherry-pick #23370 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23372
+  <https://github.com/goauthentik/authentik/pull/23372>
 - website/docs: sources: remove support_level labels from docs (cherry-pick #23389 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23391
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23391>
 - core: bump goauthentik/fips-debian and fips-python in /lifecycle/container (cherry-pick #23362 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23384
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23384>
 - website/docs: fix 2026.5 release notes mentioning docker-compose.yml (cherry-pick #23385 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23400
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23400>
 - providers/scim: allow failures during discovery (cherry-pick #23357 to version-2026.5) by @authentik-automation[bot]
-  in https://github.com/goauthentik/authentik/pull/23365
+  in <https://github.com/goauthentik/authentik/pull/23365>
 - website/docs: Add improved akql docs (cherry-pick #22693 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23497
+  <https://github.com/goauthentik/authentik/pull/23497>
 - providers/scim: account for users with no email during discovery (cherry-pick #23417 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23485
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23485>
 - web/admin: fix spacing issues in wizard (cherry-pick #23484 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23488
+  <https://github.com/goauthentik/authentik/pull/23488>
 - policies: skip cache invalidation on User last_login update (cherry-pick #23159 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23421
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23421>
 - tasks: avoid useless query on monitoring_set (cherry-pick #23161 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23424
+  <https://github.com/goauthentik/authentik/pull/23424>
 - packages/django-postgres-cache: avoid regex queries when listing keys if possible (cherry-pick #23160 to
-  version-2026.5) by @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23423
+  version-2026.5) by @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23423>
 - brands: select_related models accessed in the hot path (cherry-pick #23162 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23524
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23524>
 - sources/ldap: avoid re-creating connections to LDAP server (cherry-pick #23520 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23525
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23525>
 - tasks/schedules: fix paused schedules getting unpaused on startup (cherry-pick #23521 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23527
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23527>
 - core: preserve encoded avatar URLs (cherry-pick #23225 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23394
+  <https://github.com/goauthentik/authentik/pull/23394>
 - providers/\*: fix missing declaration for can_discover for outgoing sync providers (cherry-pick #23035 to
-  version-2026.5) by @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23233
+  version-2026.5) by @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23233>
 - website/docs: improve service account docs (cherry-pick #22145 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/22885
-- website: upgrade postman dep to fix pipeline by @PeshekDotDev in https://github.com/goauthentik/authentik/pull/23571
+  <https://github.com/goauthentik/authentik/pull/22885>
+- website: upgrade postman dep to fix pipeline by @PeshekDotDev in <https://github.com/goauthentik/authentik/pull/23571>
 - core: bump pydantic from 2.13.3 to 2.13.4 (cherry-pick #22207 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23570
+  <https://github.com/goauthentik/authentik/pull/23570>
 - providers/oauth: Properly return error via post and for request objects (cherry-pick #23037 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23529
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23529>
 - docs: Americanize and minor fixes (cherry-pick #22600 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/22604
+  <https://github.com/goauthentik/authentik/pull/22604>
 - website/docs: clean up source docs (cherry-pick #23374 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23397
+  <https://github.com/goauthentik/authentik/pull/23397>
 - website/docs: add expression policy example for welcome emails on user creation (cherry-pick #23486 to version-2026.5)
-  by @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23579
+  by @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23579>
 - website/docs: update release notes for 2026.5.4 (cherry-pick #23576 to version-2026.5) by @authentik-automation[bot]
-  in https://github.com/goauthentik/authentik/pull/23586
+  in <https://github.com/goauthentik/authentik/pull/23586>
 - tasks: add pre_delete for TasksModel to avoid OOM when deleting object with many tasks linked (cherry-pick #23664 to
-  version-2026.5) by @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23666
+  version-2026.5) by @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23666>
 - packages/ak-common/config: coerce file:// and env:// values to their native type (cherry-pick #23758 to
-  version-2026.5) by @rissson in https://github.com/goauthentik/authentik/pull/23759
+  version-2026.5) by @rissson in <https://github.com/goauthentik/authentik/pull/23759>
 - core: handle missing tenant in setup migration (cherry-pick #23034 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23762
+  <https://github.com/goauthentik/authentik/pull/23762>
 - sources/ldap: optimize the connection endpoints (cherry-pick #23761 to version-2026.5) by @authentik-automation[bot]
-  in https://github.com/goauthentik/authentik/pull/23765
+  in <https://github.com/goauthentik/authentik/pull/23765>
 - providers/ldap: remove incorrect validation for code authenticator extraction (cherry-pick #23006 to version-2026.5)
-  by @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23767
+  by @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23767>
 - root: update crossbeam-epoch (cherry-pick #23794 to version-2026.5) by @authentik-automation[bot] in
-  https://github.com/goauthentik/authentik/pull/23795
+  <https://github.com/goauthentik/authentik/pull/23795>
 - ci: remove GHA-based cherry-pick (cherry-pick #23801 to version-2026.5) by @authentik-cherry-pick[bot] in
-  https://github.com/goauthentik/authentik/pull/23803
+  <https://github.com/goauthentik/authentik/pull/23803>
 - website/docs: add release notes for `2026.2.5` (cherry-pick #23816 to version-2026.5) by @authentik-cherry-pick[bot]
-  in https://github.com/goauthentik/authentik/pull/23820
-- website: upgrade postman again to fix pipeline by @PeshekDotDev in https://github.com/goauthentik/authentik/pull/23824
+  in <https://github.com/goauthentik/authentik/pull/23820>
+- website: upgrade postman again to fix pipeline by @PeshekDotDev in
+  <https://github.com/goauthentik/authentik/pull/23824>
 - web: Fix outline selector, lack of outline on focused checkboxes. (cherry-pick #23260 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23825
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/23825>
 - stages/authenticator_webauthn: disable prevent_duplicate_devices by default (cherry-pick #23823 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23826
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/23826>
 - web, core: Fix server-side message race condition, type mismatch. (cherry-pick #23151 to version-2026.5) by
-  @authentik-automation[bot] in https://github.com/goauthentik/authentik/pull/23584
+  @authentik-automation[bot] in <https://github.com/goauthentik/authentik/pull/23584>
 - web: Invitation Wizard Clean Up, Form Validation Fixes (cherry-pick #23316 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23811
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/23811>
 - website/docs: update release notes for 2026.5.4 again (cherry-pick #23836 to version-2026.5) by
-  @authentik-cherry-pick[bot] in https://github.com/goauthentik/authentik/pull/23838
+  @authentik-cherry-pick[bot] in <https://github.com/goauthentik/authentik/pull/23838>
 
-**Full Changelog**: https://github.com/goauthentik/authentik/compare/version/2026.5.3...version/2026.5.4
+**Full Changelog**: <https://github.com/goauthentik/authentik/compare/version/2026.5.3...version/2026.5.4>
