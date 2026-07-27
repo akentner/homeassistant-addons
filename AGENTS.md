@@ -85,12 +85,24 @@ make update-version ADDON=<addon-name> VERSION=1.7.2
 # With GitHub release verification
 make update-version ADDON=<addon-name> VERSION=1.7.2 CHECK_RELEASE=yes
 
+# Skip tag creation (e.g. for emergency patches; tag must be created separately)
+make update-version ADDON=<addon-name> VERSION=1.7.2 NO_TAG=yes
+
 # Dry-run (shows what would change without modifying files)
 ./scripts/update-version.py <addon-name> 1.7.2 --dry-run
 ```
 
-**What this does:** Python script (`scripts/update-version.py`) automatically updates all three version files and
-badges. Always run this for version bumps—never manually edit versions.
+**What this does:** Python script (`scripts/update-version.py`) updates `config.yaml`, `build.yaml`, and the README
+badge, then **creates and pushes the `v<version>` git tag** by default. The tag is required because
+`.github/workflows/build.yml` only builds Docker images on `git push` of a `v*` tag. Without the tag, the HA supervisor
+sees the new version in the store but the image at `ghcr.io` does not exist → 404 → "Unknown error, see supervisor
+logs".
+
+A pre-push hook (`scripts/check-version-tags.sh`, installed by `make init`) verifies that any addon whose
+`config.yaml`/`build.yaml` is being pushed has a matching `v<version>` tag locally or on origin. Bypass with
+`git push --no-verify` only in emergencies.
+
+Always run this for version bumps — never manually edit versions.
 
 ### Code Quality & Validation
 

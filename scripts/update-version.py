@@ -196,6 +196,67 @@ def check_github_release(version: str, addon_name: str) -> bool:
         return False
 
 
+def create_and_push_tag(version: str, addon_name: str, push: bool = True, dry_run: bool = False) -> bool:
+    """Create an annotated git tag for the new version and push it to origin.
+
+    The tag is required because .github/workflows/build.yml only builds Docker images
+    on `git tag push` (refs/tags/v*). Without a matching tag, the HA supervisor sees
+    the new version in config.yaml but cannot pull the image → 404 → "Unknown error".
+
+    Returns True on success.
+    """
+    import subprocess
+
+    tag = f"v{version}"
+    message = f"{addon_name}: {version}"
+
+    if dry_run:
+        print(f"🏷️  [DRY RUN] Would create tag: {tag}")
+        if push:
+            print(f"   [DRY RUN] Would push: git push origin {tag}")
+        return True
+
+    existing = subprocess.run(
+        ["git", "rev-parse", "--verify", f"refs/tags/{tag}"],
+        capture_output=True, text=True
+    )
+    if existing.returncode == 0:
+        print(f"⚠️  Tag {tag} already exists locally — skipping create (will push if --tag)")
+        if push:
+            push_result = subprocess.run(
+                ["git", "push", "origin", tag],
+                capture_output=True, text=True
+            )
+            if push_result.returncode != 0:
+                print(f"❌ Failed to push existing tag: {push_result.stderr.strip()}")
+                return False
+            print(f"🚀 Pushed existing tag: {tag}")
+        return True
+
+    create_result = subprocess.run(
+        ["git", "tag", "-a", tag, "-m", message],
+        capture_output=True, text=True
+    )
+    if create_result.returncode != 0:
+        print(f"❌ Failed to create tag {tag}: {create_result.stderr.strip()}")
+        return False
+    print(f"🏷️  Created tag: {tag} ({message})")
+
+    if not push:
+        return True
+
+    push_result = subprocess.run(
+        ["git", "push", "origin", tag],
+        capture_output=True, text=True
+    )
+    if push_result.returncode != 0:
+        print(f"❌ Failed to push tag {tag}: {push_result.stderr.strip()}")
+        print(f"   Tag exists locally — push manually with: git push origin {tag}")
+        return False
+    print(f"🚀 Pushed tag: {tag} → build workflow will trigger")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Update add-on version across all files',
@@ -205,12 +266,17 @@ Examples:
   %(prog)s fritz-callmonitor2mqtt 1.7.2
   %(prog)s fritz-callmonitor2mqtt 1.7.2 --check-release
   %(prog)s fritz-callmonitor2mqtt 1.7.2 --dry-run
+  %(prog)s fritz-callmonitor2mqtt 1.7.2 --no-tag   # update files only, no tag
         """
     )
     parser.add_argument('addon_name', help='Name of the add-on directory (e.g., fritz-callmonitor2mqtt)')
     parser.add_argument('new_version', help='New version number (e.g., 1.7.2)')
     parser.add_argument('--check-release', action='store_true', help='Check if GitHub release exists')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be changed without making changes')
+    parser.add_argument('--no-tag', dest='no_tag', action='store_true',
+                        help='Skip creating and pushing the v<version> tag (default: tag is created and pushed)')
+    parser.add_argument('--no-push', dest='no_push', action='store_true',
+                        help='Create the tag locally but do not push it to origin')
 
     args = parser.parse_args()
 
@@ -254,7 +320,6 @@ Examples:
     success_count = 0
     total_files = 3
 
-    # Update all files
     success, old_v, new_v = update_config_yaml(addon_dir, args.new_version, args.dry_run)
     if success:
         success_count += 1
@@ -272,11 +337,32 @@ Examples:
 
     if success_count == total_files:
         print("🎉 All files updated successfully!" if not args.dry_run else "🎉 All files would be updated!")
-        if not args.dry_run:
-            print(f"\n💡 Next steps:")
-            print(f"   • Run 'make validate-versions' to verify")
-            print(f"   • Run 'make check-all' for full validation")
-            print(f"   • Commit: git add {args.addon_name} && git commit -m 'chore: update {args.addon_name} to v{args.new_version}'")
+
+        if args.dry_run:
+            if not args.no_tag:
+                print(f"\n🏷️  Would also create and push tag v{new_v}")
+            return 0
+
+        if not args.no_tag:
+            print()
+            print("🏷️  Creating and pushing git tag...")
+            tag_ok = create_and_push_tag(
+                new_v,
+                args.addon_name,
+                push=not args.no_push,
+                dry_run=False,
+            )
+            if not tag_ok:
+                print()
+                print("⚠️  Files updated but tag push failed — push manually:")
+                print(f"   git push origin v{new_v}")
+                return 1
+
+        print(f"\n💡 Next steps:")
+        print(f"   • Run 'make validate-versions' to verify")
+        print(f"   • Run 'make check-all' for full validation")
+        print(f"   • Commit: git add {args.addon_name} && git commit -m 'chore: update {args.addon_name} to v{args.new_version}'")
+        print(f"   • Push:  git push origin main v{new_v}")
         return 0
     elif success_count == 0:
         print("⚠️  No files needed updating (already at target version?)")

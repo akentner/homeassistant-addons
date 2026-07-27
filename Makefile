@@ -174,14 +174,15 @@ update-version: ## Update add-on version (usage: make update-version ADDON=fritz
 		echo "❌ Missing required parameters"; \
 		echo "Usage: make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2"; \
 		echo "       make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2 CHECK_RELEASE=yes"; \
+		echo "       make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2 NO_TAG=yes  # skip tag creation"; \
 		exit 1; \
 	fi
 	@echo "🔄 Updating $(ADDON) to version $(VERSION)..."
-	@if [ "$(CHECK_RELEASE)" = "yes" ]; then \
-		./scripts/update-version.py $(ADDON) $(VERSION) --check-release; \
-	else \
-		./scripts/update-version.py $(ADDON) $(VERSION); \
-	fi
+	@ARGS=""; \
+	if [ "$(CHECK_RELEASE)" = "yes" ]; then ARGS="--check-release"; fi; \
+	if [ "$(NO_TAG)" = "yes" ]; then ARGS="$$ARGS --no-tag"; fi; \
+	if [ "$(NO_PUSH)" = "yes" ]; then ARGS="$$ARGS --no-push"; fi; \
+	./scripts/update-version.py $(ADDON) $(VERSION) $$ARGS
 	@echo "🔍 Running validation..."
 	@make validate-versions
 
