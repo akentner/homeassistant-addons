@@ -10,6 +10,18 @@
 !.claude/hooks/
 !.claude/commands/
 
+# AI agent state (skill installations, agent memory, run-continuation)
+.agents/
+.omo/
+skills-lock.json
+
+# GSD planning artifacts (research, quick, etc.)
+.planning/
+network-tools/.planning/
+
+# Python bytecode caches
+**/__pycache__/
+
 # GSD research artifacts
 .planning/research/
 scripts/__pycache__/
