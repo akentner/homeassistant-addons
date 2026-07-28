@@ -176,7 +176,8 @@ RUN uv tool install graphifyy
 # --no-modify-path: we manage PATH ourselves in /etc/profile.d/00-coding-assistants.sh.
 RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
     && mkdir -p /opt/opencode-initial \
-    && cp /root/.opencode/bin/opencode /opt/opencode-initial/opencode
+    && cp /root/.opencode/bin/opencode /opt/opencode-initial/opencode \
+    && ln -sf /root/.opencode/bin/opencode /usr/local/bin/opencode
 
 # Coding assistants + fx JSON viewer via npm
 # hadolint ignore=DL3016
