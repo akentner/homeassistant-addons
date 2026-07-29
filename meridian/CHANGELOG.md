@@ -1,3 +1,35 @@
+## [1.57.1](https://github.com/rynfar/meridian/compare/meridian-v1.57.0...meridian-v1.57.1) (2026-07-28)
+
+### Bug Fixes
+
+- give keyless conversations priority-pool affinity ([#704](https://github.com/rynfar/meridian/issues/704))
+  ([fcec079](https://github.com/rynfar/meridian/commit/fcec079e2f519de7dd65f553941835a765cf3aac))
+- make postinstall script Windows-portable
+  ([ac8244b](https://github.com/rynfar/meridian/commit/ac8244bdf642618070917511363cd659bdc2a6f0))
+- make postinstall script Windows-portable
+  ([379e0c9](https://github.com/rynfar/meridian/commit/379e0c9d118c063452715f805a0d65e8c641b3e5))
+- replay stale session histories safely + lineage safety harness ([#705](https://github.com/rynfar/meridian/issues/705))
+  ([9aa8aff](https://github.com/rynfar/meridian/commit/9aa8affb07ce5c4e051a496efc5379eb9be0b456))
+- **responses:** harden typeless-item handling against malformed input
+  ([3c94acd](https://github.com/rynfar/meridian/commit/3c94acd40a6b82e4d68010da4ee892e2b145184b))
+- **responses:** treat input items without a type as messages
+  ([013f85d](https://github.com/rynfar/meridian/commit/013f85d48a30a5b396601eba24c9dc87a04739ca))
+- **responses:** treat input items without a type as messages
+  ([c8a37d0](https://github.com/rynfar/meridian/commit/c8a37d01437679bc66e433801fcd5d7785b57782))
+- scope rate-limit store per profile so priority cooldowns use the right account's reset
+  ([#697](https://github.com/rynfar/meridian/issues/697))
+  ([1cd557c](https://github.com/rynfar/meridian/commit/1cd557c442025cf7ac003c0c79f05d0797dd47a6))
+- **session:** bound modified-continuation resume so stale lineage replays fresh
+  ([6b61e66](https://github.com/rynfar/meridian/commit/6b61e66ac2bce14364b435d5d9bc80e9bcaf88f5))
+- **session:** bound modified-continuation resume so stale lineage replays fresh
+  ([141eab5](https://github.com/rynfar/meridian/commit/141eab58009dbedb9a41ae904d61eec9e960c5d0)), closes
+  [#689](https://github.com/rynfar/meridian/issues/689)
+- **settings:** isolate tests from the developer's real settings file
+  ([#703](https://github.com/rynfar/meridian/issues/703))
+  ([2a30a8c](https://github.com/rynfar/meridian/commit/2a30a8c3d6b1eb4b854c85785d2c46d1d73b9bd4))
+- surface claude-code postinstall output instead of silencing it
+  ([301cc5c](https://github.com/rynfar/meridian/commit/301cc5ca91dec9efd95049a7b830cd950f6f0289))
+
 ## [1.57.0](https://github.com/rynfar/meridian/compare/meridian-v1.56.1...meridian-v1.57.0) (2026-07-24)
 
 ### Features
