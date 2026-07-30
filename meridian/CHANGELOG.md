@@ -1,3 +1,14 @@
+## [1.58.1](https://github.com/rynfar/meridian/compare/meridian-v1.58.0...meridian-v1.58.1) (2026-07-29)
+
+### Bug Fixes
+
+- **query:** correct the preset's false gitStatus provenance claim
+  ([#726](https://github.com/rynfar/meridian/issues/726))
+  ([8ce601b](https://github.com/rynfar/meridian/commit/8ce601babef481a4d168367cb14cb6586f3d4824)), closes
+  [#694](https://github.com/rynfar/meridian/issues/694)
+- **sanitize:** make &lt;thinking&gt; stripping opt-in ([#721](https://github.com/rynfar/meridian/issues/721))
+  ([15f6eb5](https://github.com/rynfar/meridian/commit/15f6eb5c10689d28e136be8e947b86decd3797ff))
+
 ## [1.57.1](https://github.com/rynfar/meridian/compare/meridian-v1.57.0...meridian-v1.57.1) (2026-07-28)
 
 ### Bug Fixes
