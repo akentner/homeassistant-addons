@@ -1,3 +1,26 @@
+## [1.58.2](https://github.com/rynfar/meridian/compare/meridian-v1.58.1...meridian-v1.58.2) (2026-07-30)
+
+### Bug Fixes
+
+- **adapters:** stop x-session-affinity misrouting Crush to the OpenCode adapter
+  ([#733](https://github.com/rynfar/meridian/issues/733))
+  ([1878ef8](https://github.com/rynfar/meridian/commit/1878ef86aedac17b88b6d342b4dffa1cc112e2cd))
+- **errors:** target the extended-context hint at the tier that failed
+  ([#730](https://github.com/rynfar/meridian/issues/730))
+  ([a453f66](https://github.com/rynfar/meridian/commit/a453f669aabfb260c6f666fcc9975dd0be653b26)), closes
+  [#716](https://github.com/rynfar/meridian/issues/716)
+- **routing:** normalize SDK reset timestamps to epoch milliseconds
+  ([#727](https://github.com/rynfar/meridian/issues/727))
+  ([0660815](https://github.com/rynfar/meridian/commit/06608151e99cb9198cb14fadca359e7b9835d63c)), closes
+  [#708](https://github.com/rynfar/meridian/issues/708)
+- **routing:** skip OAuth usage refinement for non-claude-max profiles
+  ([#729](https://github.com/rynfar/meridian/issues/729))
+  ([8610d20](https://github.com/rynfar/meridian/commit/8610d20865d18749e9a8ddec9ef03fa047100004)), closes
+  [#699](https://github.com/rynfar/meridian/issues/699)
+- **session:** ignore thinking blocks in the lineage hash ([#731](https://github.com/rynfar/meridian/issues/731))
+  ([5c419bd](https://github.com/rynfar/meridian/commit/5c419bd19c20187f865dec9c26105f7a52d1f32d)), closes
+  [#710](https://github.com/rynfar/meridian/issues/710)
+
 ## [1.58.1](https://github.com/rynfar/meridian/compare/meridian-v1.58.0...meridian-v1.58.1) (2026-07-29)
 
 ### Bug Fixes
