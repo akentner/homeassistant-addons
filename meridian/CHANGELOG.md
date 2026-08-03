@@ -1,3 +1,30 @@
+## [1.58.3](https://github.com/rynfar/meridian/compare/meridian-v1.58.2...meridian-v1.58.3) (2026-08-03)
+
+### Bug Fixes
+
+- **cwd:** use the client's directory as the SDK cwd when it exists locally
+  ([#746](https://github.com/rynfar/meridian/issues/746))
+  ([f16e2a6](https://github.com/rynfar/meridian/commit/f16e2a6846be834cdddceb1756713ccc27f91d35)), closes
+  [#744](https://github.com/rynfar/meridian/issues/744)
+- **passthrough:** defer early stop while a tool_use block is still streaming
+  ([#745](https://github.com/rynfar/meridian/issues/745))
+  ([46e55dc](https://github.com/rynfar/meridian/commit/46e55dce5234e858710459c94462c4add371f87d)), closes
+  [#742](https://github.com/rynfar/meridian/issues/742)
+- **pi:** read the session identity OMP carries in metadata.user_id
+  ([#747](https://github.com/rynfar/meridian/issues/747))
+  ([e41019b](https://github.com/rynfar/meridian/commit/e41019bd4c5a16625cd5d2105529c68915395f57)), closes
+  [#734](https://github.com/rynfar/meridian/issues/734)
+- register claude-code transforms so tool calls pass through ([#743](https://github.com/rynfar/meridian/issues/743))
+  ([94ba52f](https://github.com/rynfar/meridian/commit/94ba52fb388728b7f36250ece0391e00a7316493))
+- **sanitize:** stop a self-closing tag swallowing text up to the next paired tag
+  ([#736](https://github.com/rynfar/meridian/issues/736))
+  ([0f20bfd](https://github.com/rynfar/meridian/commit/0f20bfdfc0075546fd9933250b46cb525acb4f1a)), closes
+  [#722](https://github.com/rynfar/meridian/issues/722)
+- **sanitize:** strip Meridian's own markers from assistant content on replay
+  ([#738](https://github.com/rynfar/meridian/issues/738))
+  ([f19cf48](https://github.com/rynfar/meridian/commit/f19cf4834e9252cc27e0487dbce9dbc0a8ad754c)), closes
+  [#724](https://github.com/rynfar/meridian/issues/724)
+
 ## [1.58.2](https://github.com/rynfar/meridian/compare/meridian-v1.58.1...meridian-v1.58.2) (2026-07-30)
 
 ### Bug Fixes
