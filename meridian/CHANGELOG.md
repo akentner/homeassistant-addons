@@ -1,3 +1,13 @@
+## [1.59.0](https://github.com/rynfar/meridian/compare/meridian-v1.58.3...meridian-v1.59.0) (2026-08-04)
+
+### Features
+
+- add webFetchPreflight toggle, scoped to the adapter it affects ([#752](https://github.com/rynfar/meridian/issues/752))
+  ([e2aa19f](https://github.com/rynfar/meridian/commit/e2aa19ff77f7695dffaf959e4fc7da3da1b73a9b)), closes
+  [#748](https://github.com/rynfar/meridian/issues/748)
+- quiet the subprocess's non-essential outbound traffic ([#757](https://github.com/rynfar/meridian/issues/757))
+  ([63a5301](https://github.com/rynfar/meridian/commit/63a530151da0909dba061ff6d6c61c13b53e2d90))
+
 ## [1.58.3](https://github.com/rynfar/meridian/compare/meridian-v1.58.2...meridian-v1.58.3) (2026-08-03)
 
 ### Bug Fixes
