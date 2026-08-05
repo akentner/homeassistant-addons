@@ -1,3 +1,27 @@
+> ### ⚠️ Behaviour change: claude.ai connectors are now off by default
+>
+> If your claude.ai account has connectors attached (Drive, Gmail, Calendar), they previously loaded for any adapter
+> **not** in passthrough mode. As of 1.60.0 they require an explicit opt-in at `/settings` → **claude.ai Connectors**.
+>
+> **Affected:** `cherry`, `droid`, and any deployment running `MERIDIAN_PASSTHROUGH=0`. **Not affected:** `opencode` and
+> other passthrough-default adapters — connectors were already disabled for them.
+>
+> Nothing errors when this bites. The model simply no longer has the tool and answers as though the data were
+> unavailable, so a lost capability is easy to misread as the model being unhelpful. See
+> [claude.ai connectors](https://github.com/rynfar/meridian/blob/main/docs/configuration.md#claudeai-connectors).
+
+## [1.60.0](https://github.com/rynfar/meridian/compare/meridian-v1.59.0...meridian-v1.60.0) (2026-08-04)
+
+### Features
+
+- gate claude.ai connectors behind an opt-in flag ([#759](https://github.com/rynfar/meridian/issues/759))
+  ([370c286](https://github.com/rynfar/meridian/commit/370c286cbfbaa2e31dafa2a8222bd344944a4766))
+
+### Bug Fixes
+
+- don't treat transport metadata as a system instruction ([#758](https://github.com/rynfar/meridian/issues/758))
+  ([59931d0](https://github.com/rynfar/meridian/commit/59931d0e09e2c1f51a33064bfa433cc2db785583))
+
 ## [1.59.0](https://github.com/rynfar/meridian/compare/meridian-v1.58.3...meridian-v1.59.0) (2026-08-04)
 
 ### Features
