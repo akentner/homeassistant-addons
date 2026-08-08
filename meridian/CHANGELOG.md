@@ -1,3 +1,130 @@
+> ### ⚠️ Behaviour change: claude.ai connectors are now off by default
+>
+> If your claude.ai account has connectors attached (Drive, Gmail, Calendar), they previously loaded for any adapter
+> **not** in passthrough mode. As of 1.60.0 they require an explicit opt-in at `/settings` → **claude.ai Connectors**.
+>
+> **Affected:** `cherry`, `droid`, and any deployment running `MERIDIAN_PASSTHROUGH=0`. **Not affected:** `opencode` and
+> other passthrough-default adapters — connectors were already disabled for them.
+>
+> Nothing errors when this bites. The model simply no longer has the tool and answers as though the data were
+> unavailable, so a lost capability is easy to misread as the model being unhelpful. See
+> [claude.ai connectors](https://github.com/rynfar/meridian/blob/main/docs/configuration.md#claudeai-connectors).
+
+## [1.60.0](https://github.com/rynfar/meridian/compare/meridian-v1.59.0...meridian-v1.60.0) (2026-08-04)
+
+### Features
+
+- gate claude.ai connectors behind an opt-in flag ([#759](https://github.com/rynfar/meridian/issues/759))
+  ([370c286](https://github.com/rynfar/meridian/commit/370c286cbfbaa2e31dafa2a8222bd344944a4766))
+
+### Bug Fixes
+
+- don't treat transport metadata as a system instruction ([#758](https://github.com/rynfar/meridian/issues/758))
+  ([59931d0](https://github.com/rynfar/meridian/commit/59931d0e09e2c1f51a33064bfa433cc2db785583))
+
+## [1.59.0](https://github.com/rynfar/meridian/compare/meridian-v1.58.3...meridian-v1.59.0) (2026-08-04)
+
+### Features
+
+- add webFetchPreflight toggle, scoped to the adapter it affects ([#752](https://github.com/rynfar/meridian/issues/752))
+  ([e2aa19f](https://github.com/rynfar/meridian/commit/e2aa19ff77f7695dffaf959e4fc7da3da1b73a9b)), closes
+  [#748](https://github.com/rynfar/meridian/issues/748)
+- quiet the subprocess's non-essential outbound traffic ([#757](https://github.com/rynfar/meridian/issues/757))
+  ([63a5301](https://github.com/rynfar/meridian/commit/63a530151da0909dba061ff6d6c61c13b53e2d90))
+
+## [1.58.3](https://github.com/rynfar/meridian/compare/meridian-v1.58.2...meridian-v1.58.3) (2026-08-03)
+
+### Bug Fixes
+
+- **cwd:** use the client's directory as the SDK cwd when it exists locally
+  ([#746](https://github.com/rynfar/meridian/issues/746))
+  ([f16e2a6](https://github.com/rynfar/meridian/commit/f16e2a6846be834cdddceb1756713ccc27f91d35)), closes
+  [#744](https://github.com/rynfar/meridian/issues/744)
+- **passthrough:** defer early stop while a tool_use block is still streaming
+  ([#745](https://github.com/rynfar/meridian/issues/745))
+  ([46e55dc](https://github.com/rynfar/meridian/commit/46e55dce5234e858710459c94462c4add371f87d)), closes
+  [#742](https://github.com/rynfar/meridian/issues/742)
+- **pi:** read the session identity OMP carries in metadata.user_id
+  ([#747](https://github.com/rynfar/meridian/issues/747))
+  ([e41019b](https://github.com/rynfar/meridian/commit/e41019bd4c5a16625cd5d2105529c68915395f57)), closes
+  [#734](https://github.com/rynfar/meridian/issues/734)
+- register claude-code transforms so tool calls pass through ([#743](https://github.com/rynfar/meridian/issues/743))
+  ([94ba52f](https://github.com/rynfar/meridian/commit/94ba52fb388728b7f36250ece0391e00a7316493))
+- **sanitize:** stop a self-closing tag swallowing text up to the next paired tag
+  ([#736](https://github.com/rynfar/meridian/issues/736))
+  ([0f20bfd](https://github.com/rynfar/meridian/commit/0f20bfdfc0075546fd9933250b46cb525acb4f1a)), closes
+  [#722](https://github.com/rynfar/meridian/issues/722)
+- **sanitize:** strip Meridian's own markers from assistant content on replay
+  ([#738](https://github.com/rynfar/meridian/issues/738))
+  ([f19cf48](https://github.com/rynfar/meridian/commit/f19cf4834e9252cc27e0487dbce9dbc0a8ad754c)), closes
+  [#724](https://github.com/rynfar/meridian/issues/724)
+
+## [1.58.2](https://github.com/rynfar/meridian/compare/meridian-v1.58.1...meridian-v1.58.2) (2026-07-30)
+
+### Bug Fixes
+
+- **adapters:** stop x-session-affinity misrouting Crush to the OpenCode adapter
+  ([#733](https://github.com/rynfar/meridian/issues/733))
+  ([1878ef8](https://github.com/rynfar/meridian/commit/1878ef86aedac17b88b6d342b4dffa1cc112e2cd))
+- **errors:** target the extended-context hint at the tier that failed
+  ([#730](https://github.com/rynfar/meridian/issues/730))
+  ([a453f66](https://github.com/rynfar/meridian/commit/a453f669aabfb260c6f666fcc9975dd0be653b26)), closes
+  [#716](https://github.com/rynfar/meridian/issues/716)
+- **routing:** normalize SDK reset timestamps to epoch milliseconds
+  ([#727](https://github.com/rynfar/meridian/issues/727))
+  ([0660815](https://github.com/rynfar/meridian/commit/06608151e99cb9198cb14fadca359e7b9835d63c)), closes
+  [#708](https://github.com/rynfar/meridian/issues/708)
+- **routing:** skip OAuth usage refinement for non-claude-max profiles
+  ([#729](https://github.com/rynfar/meridian/issues/729))
+  ([8610d20](https://github.com/rynfar/meridian/commit/8610d20865d18749e9a8ddec9ef03fa047100004)), closes
+  [#699](https://github.com/rynfar/meridian/issues/699)
+- **session:** ignore thinking blocks in the lineage hash ([#731](https://github.com/rynfar/meridian/issues/731))
+  ([5c419bd](https://github.com/rynfar/meridian/commit/5c419bd19c20187f865dec9c26105f7a52d1f32d)), closes
+  [#710](https://github.com/rynfar/meridian/issues/710)
+
+## [1.58.1](https://github.com/rynfar/meridian/compare/meridian-v1.58.0...meridian-v1.58.1) (2026-07-29)
+
+### Bug Fixes
+
+- **query:** correct the preset's false gitStatus provenance claim
+  ([#726](https://github.com/rynfar/meridian/issues/726))
+  ([8ce601b](https://github.com/rynfar/meridian/commit/8ce601babef481a4d168367cb14cb6586f3d4824)), closes
+  [#694](https://github.com/rynfar/meridian/issues/694)
+- **sanitize:** make &lt;thinking&gt; stripping opt-in ([#721](https://github.com/rynfar/meridian/issues/721))
+  ([15f6eb5](https://github.com/rynfar/meridian/commit/15f6eb5c10689d28e136be8e947b86decd3797ff))
+
+## [1.57.1](https://github.com/rynfar/meridian/compare/meridian-v1.57.0...meridian-v1.57.1) (2026-07-28)
+
+### Bug Fixes
+
+- give keyless conversations priority-pool affinity ([#704](https://github.com/rynfar/meridian/issues/704))
+  ([fcec079](https://github.com/rynfar/meridian/commit/fcec079e2f519de7dd65f553941835a765cf3aac))
+- make postinstall script Windows-portable
+  ([ac8244b](https://github.com/rynfar/meridian/commit/ac8244bdf642618070917511363cd659bdc2a6f0))
+- make postinstall script Windows-portable
+  ([379e0c9](https://github.com/rynfar/meridian/commit/379e0c9d118c063452715f805a0d65e8c641b3e5))
+- replay stale session histories safely + lineage safety harness ([#705](https://github.com/rynfar/meridian/issues/705))
+  ([9aa8aff](https://github.com/rynfar/meridian/commit/9aa8affb07ce5c4e051a496efc5379eb9be0b456))
+- **responses:** harden typeless-item handling against malformed input
+  ([3c94acd](https://github.com/rynfar/meridian/commit/3c94acd40a6b82e4d68010da4ee892e2b145184b))
+- **responses:** treat input items without a type as messages
+  ([013f85d](https://github.com/rynfar/meridian/commit/013f85d48a30a5b396601eba24c9dc87a04739ca))
+- **responses:** treat input items without a type as messages
+  ([c8a37d0](https://github.com/rynfar/meridian/commit/c8a37d01437679bc66e433801fcd5d7785b57782))
+- scope rate-limit store per profile so priority cooldowns use the right account's reset
+  ([#697](https://github.com/rynfar/meridian/issues/697))
+  ([1cd557c](https://github.com/rynfar/meridian/commit/1cd557c442025cf7ac003c0c79f05d0797dd47a6))
+- **session:** bound modified-continuation resume so stale lineage replays fresh
+  ([6b61e66](https://github.com/rynfar/meridian/commit/6b61e66ac2bce14364b435d5d9bc80e9bcaf88f5))
+- **session:** bound modified-continuation resume so stale lineage replays fresh
+  ([141eab5](https://github.com/rynfar/meridian/commit/141eab58009dbedb9a41ae904d61eec9e960c5d0)), closes
+  [#689](https://github.com/rynfar/meridian/issues/689)
+- **settings:** isolate tests from the developer's real settings file
+  ([#703](https://github.com/rynfar/meridian/issues/703))
+  ([2a30a8c](https://github.com/rynfar/meridian/commit/2a30a8c3d6b1eb4b854c85785d2c46d1d73b9bd4))
+- surface claude-code postinstall output instead of silencing it
+  ([301cc5c](https://github.com/rynfar/meridian/commit/301cc5ca91dec9efd95049a7b830cd950f6f0289))
+
 ## [1.57.0](https://github.com/rynfar/meridian/compare/meridian-v1.56.1...meridian-v1.57.0) (2026-07-24)
 
 ### Features
