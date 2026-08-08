@@ -257,6 +257,12 @@ def publish_mqtt(data: dict, options: dict) -> None:
     scan_timestamp = data.get("scan_timestamp", "")
     disconnect_threshold = data.get("disconnect_threshold", 3)
 
+    # Re-assert birth message — run.sh publishes it once at startup, but the
+    # retained flag can be lost (e.g. broker restart). Without this, HA marks
+    # all entities unavailable until the next add-on restart.
+    client.publish(MQTT_AVAIL_TOPIC, "online", retain=True)
+    log.debug(f"MQTT birth message republished: {MQTT_AVAIL_TOPIC} = online (retain=True)")
+
     for result in data.get("results", []):
         mac = result.get("expected_mac") or result.get("mac")
         if not mac:
