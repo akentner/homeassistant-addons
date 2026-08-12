@@ -1,3 +1,28 @@
+## [1.61.0](https://github.com/rynfar/meridian/compare/meridian-v1.60.0...meridian-v1.61.0) (2026-08-11)
+
+### Features
+
+- Hermes Agent integration example plugin + docs ([#762](https://github.com/rynfar/meridian/issues/762))
+  ([8b789e4](https://github.com/rynfar/meridian/commit/8b789e4e491c31ec79737cb18dd9c79666496f20))
+
+### Bug Fixes
+
+- **errors:** recognize the CLI's other limit wordings ([#788](https://github.com/rynfar/meridian/issues/788))
+  ([697a618](https://github.com/rynfar/meridian/commit/697a61881dc85bffc237be57f0d2cd5c08ac5a98))
+- keep Jcode chat sessions cache-affine ([#784](https://github.com/rynfar/meridian/issues/784))
+  ([3bdc7d0](https://github.com/rynfar/meridian/commit/3bdc7d0f973610246771b683b9960ab44a662641))
+- **passthrough:** never leave a passthrough continuation unanswered
+  ([#793](https://github.com/rynfar/meridian/issues/793))
+  ([2852159](https://github.com/rynfar/meridian/commit/28521591060c368a0fc1ce48f7ecd90da675a5f3))
+- **quota:** back off OAuth usage rate limits ([#785](https://github.com/rynfar/meridian/issues/785))
+  ([128d87d](https://github.com/rynfar/meridian/commit/128d87df0502ffca947a85b114d022638e7db764))
+- **quota:** distinguish a rate-limited usage fetch from a missing token
+  ([#786](https://github.com/rynfar/meridian/issues/786))
+  ([d82da9f](https://github.com/rynfar/meridian/commit/d82da9fbf9ec008278f3b257d33496f8df0ca679))
+- **usage:** report why a usage fetch failed instead of calling every failure no_token
+  ([#789](https://github.com/rynfar/meridian/issues/789))
+  ([7c8d2b4](https://github.com/rynfar/meridian/commit/7c8d2b414edf46b670f99f08c341b4c2b889e580))
+
 > ### ⚠️ Behaviour change: claude.ai connectors are now off by default
 >
 > If your claude.ai account has connectors attached (Drive, Gmail, Calendar), they previously loaded for any adapter
