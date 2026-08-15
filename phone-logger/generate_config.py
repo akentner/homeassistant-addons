@@ -53,6 +53,8 @@ def transform(options: dict) -> dict:
     }
     if "reconnect_delay" in fritz_raw:
         fritz_config["reconnect_delay"] = fritz_raw["reconnect_delay"]
+    if "readline_timeout" in fritz_raw:
+        fritz_config["readline_timeout"] = fritz_raw["readline_timeout"]
     config["input_adapters"] = [
         {
             "type": "fritz_callmonitor",

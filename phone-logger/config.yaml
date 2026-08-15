@@ -21,6 +21,7 @@ options:
       enabled: false
       host: "192.168.178.1"
       port: 1012
+      readline_timeout: 1800
   resolver_adapters:
     tellows:
       enabled: false
@@ -59,6 +60,7 @@ schema:
       enabled: bool?
       host: str?
       port: int?
+      readline_timeout: int?
   resolver_adapters:
     tellows:
       enabled: bool?
