@@ -27,7 +27,7 @@ Dieses Add-on basiert auf: <https://github.com/akentner/phone-logger>
 
 <!-- Badge Links -->
 
-[release-shield]: https://img.shields.io/badge/version-v1.0.7-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.0.7
+[release-shield]: https://img.shields.io/badge/version-v1.0.8-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.0.8
 [license-shield]: https://img.shields.io/badge/license-MIT-green.svg
 [license]: https://github.com/akentner/homeassistant-addons/blob/main/LICENSE
