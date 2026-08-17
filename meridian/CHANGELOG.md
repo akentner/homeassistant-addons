@@ -1,3 +1,10 @@
+## [1.62.3](https://github.com/rynfar/meridian/compare/meridian-v1.62.2...meridian-v1.62.3) (2026-08-17)
+
+### Bug Fixes
+
+- **concurrency:** follow env changes for the shared SDK semaphore budget
+  ([e40ff28](https://github.com/rynfar/meridian/commit/e40ff2853732b2853bfc28bbf85064fda0f9959f))
+
 ## [1.62.1](https://github.com/rynfar/meridian/compare/meridian-v1.62.0...meridian-v1.62.1) (2026-08-15)
 
 ### Bug Fixes
