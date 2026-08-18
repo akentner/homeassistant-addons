@@ -1,3 +1,10 @@
+## [1.62.5](https://github.com/rynfar/meridian/compare/meridian-v1.62.4...meridian-v1.62.5) (2026-08-17)
+
+### Bug Fixes
+
+- route native subagents to base model tiers ([#839](https://github.com/rynfar/meridian/issues/839))
+  ([91aeaf5](https://github.com/rynfar/meridian/commit/91aeaf56d6d220a4cd01fc0bfebe5dfd486e7b90))
+
 ## [1.62.3](https://github.com/rynfar/meridian/compare/meridian-v1.62.2...meridian-v1.62.3) (2026-08-17)
 
 ### Bug Fixes
