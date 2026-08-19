@@ -3,4 +3,4 @@ build_from:
   # aarch64: "ghcr.io/home-assistant/aarch64-base-debian:trixie"
 
 args:
-  VERSION: "2026.5.6"
+  VERSION: "2026.8.0"
