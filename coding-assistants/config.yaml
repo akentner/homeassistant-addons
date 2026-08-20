@@ -1,6 +1,6 @@
 name: "Coding Assistants"
 description: "Terminal with Claude Code, OpenCode, and GitHub Copilot CLI — SSH + web terminal"
-version: "1.0.0-alpha44"
+version: "1.0.0-alpha45"
 slug: "coding_assistants"
 init: false
 hassio_api: true
@@ -26,6 +26,7 @@ map:
   - data:rw
   - share:rw
   - media:rw
+  - addons:rw
   - all_addon_configs:rw
 
 backup_exclude:
