@@ -1,3 +1,22 @@
+## [1.62.7](https://github.com/rynfar/meridian/compare/meridian-v1.62.6...meridian-v1.62.7) (2026-08-20)
+
+### Bug Fixes
+
+- bench [1m] per profile after a rate limit instead of flapping back
+  ([#863](https://github.com/rynfar/meridian/issues/863))
+  ([0daa380](https://github.com/rynfar/meridian/commit/0daa3803fdca90488c2ae2fa4e0b0a0625d882fe))
+- bound the per-session passthrough tool caches ([#864](https://github.com/rynfar/meridian/issues/864))
+  ([96bda14](https://github.com/rynfar/meridian/commit/96bda147294971349a5378b53635f618d347ec19))
+- preserve the passthrough checkpoint when the SDK stops at its turn cap
+  ([#853](https://github.com/rynfar/meridian/issues/853))
+  ([e599aaf](https://github.com/rynfar/meridian/commit/e599aafc348047e29dbf88dd87c5d504e9ccab4a))
+
+### Performance
+
+- stop billing the passthrough digest turn by capping maxTurns at 1
+  ([#860](https://github.com/rynfar/meridian/issues/860))
+  ([2c5b577](https://github.com/rynfar/meridian/commit/2c5b5776bdfe5e68530f9bb1f747393559d75967))
+
 ## [1.62.6](https://github.com/rynfar/meridian/compare/meridian-v1.62.5...meridian-v1.62.6) (2026-08-19)
 
 ### Bug Fixes
