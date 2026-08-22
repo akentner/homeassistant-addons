@@ -23,10 +23,10 @@ Mit `host_network: true` sieht der Container alle Host-Interfaces. Mögliche Wer
 Scan-Intervall in Sekunden. Standard: `30`. Minimum empfohlen: `10`.
 
 ### `port`
-TCP-Port, auf dem nginx die REST API bereitstellt. Standard: `8080`. Ändern wenn ein anderer Add-on
-oder Dienst Port 8080 belegt (z.B. auf `8082`). Der `ingress_port` in config.yaml muss mit diesem Wert
-übereinstimmen — bei Änderung beide
-anpassen.
+
+TCP-Port, auf dem nginx die REST API bereitstellt. Standard: `8080`. Ändern wenn ein anderer Add-on oder Dienst Port
+8080 belegt (z.B. auf `8082`). Der `ingress_port` in config.yaml muss mit diesem Wert übereinstimmen — bei Änderung
+beide anpassen.
 
 ### `log_level`
 
@@ -74,24 +74,22 @@ Letztes Scan-Ergebnis als JSON:
 
 **Felder pro Host-Result:**
 
-| Feld                                          | Typ    | Wann gesetzt?                    | Beschreibung                                  |
-| --------------------------------------------- | ------ | -------------------------------- | --------------------------------------------- |
-| `label`                                       | string | immer                            | Anzeige-Label                                 |
-| `ip`                                          | string | immer                            | Ziel-IP-Adresse                               |
-| `expected_mac`                                | string | wenn konfiguriert                | Erwartete MAC (aus `arping_hosts`)            |
-| `reachable`                                   | bool   | immer                            | Roher arping-Returncode-Erfolg                |
-| `effective_reachable`                         | bool   | immer                            | Nach Flap-Detection (Sensor-Payload)          |
-| `consecutive_failures`                        | int    | immer                            | Zähler aufeinanderfolgender Fehler            |
-| `disconnect_threshold`                        | int    | immer                            | Aus Config (`disconnect_threshold`)           |
-| `mac`                                         | string | wenn erreichbar                  | Tatsächliche MAC aus arping-Antwort           |
-| `mac_match`                                   | bool   | wenn beide vorhanden             | `true` wenn MAC == erwartet                   |
-| `rtt_ms`                                      | float  | wenn erreichbar                  | Mittlere RTT in ms (aus Stats-Zeile)          |
-| `rtt_min_ms` / `rtt_max_ms` / `rtt_stddev_ms` | float  | wenn erreichbar                  | Min/Max/Stddev aus Stats                      |
-| `packets_sent` / `packets_received`           | int    | wenn erreichbar                  | Aus arping-Stats-Zeile                        |
-| `packet_loss_pct`                             | float  | wenn erreichbar                  | Prozent verlorener Pakete                     |
-| `hostname`                                    | string | wenn `getent hosts` etwas findet | Reverse-DNS-Lookup (1s Timeout)               |
-| `duration_ms`                                 | int    | immer                            | Dauer des arping-Aufrufs                      |
-| `error`                                       | string | wenn nicht erreichbar            | Grund (Timeout, stderr-Snippet), sonst `null` |
+- `label` (string): Anzeige-Label — immer gesetzt
+- `ip` (string): Ziel-IP-Adresse — immer gesetzt
+- `expected_mac` (string): Erwartete MAC aus `arping_hosts` — nur wenn konfiguriert
+- `reachable` (bool): Roher arping-Returncode-Erfolg — immer
+- `effective_reachable` (bool): Nach Flap-Detection (Sensor-Payload) — immer
+- `consecutive_failures` (int): Zähler aufeinanderfolgender Fehler — immer
+- `disconnect_threshold` (int): Aus Config — immer
+- `mac` (string): Tatsächliche MAC aus arping-Antwort — nur wenn erreichbar
+- `mac_match` (bool): `true` wenn MAC == erwartet — nur wenn beide vorhanden
+- `rtt_ms` (float): Mittlere RTT in ms — nur wenn erreichbar
+- `rtt_min_ms` / `rtt_max_ms` / `rtt_stddev_ms` (float): Min/Max/Stddev aus Stats — nur wenn erreichbar
+- `packets_sent` / `packets_received` (int): Aus arping-Stats — nur wenn erreichbar
+- `packet_loss_pct` (float): Prozent verlorener Pakete — nur wenn erreichbar
+- `hostname` (string): Reverse-DNS-Lookup (1s Timeout) — wenn `getent hosts` etwas findet
+- `duration_ms` (int): Dauer des arping-Aufrufs — immer
+- `error` (string): Grund des Fehlschlags (Timeout, stderr-Snippet) — nur wenn nicht erreichbar
 
 DieFelder `last_check` (ISO-Timestamp), `duration_ms`, `error`, `hostname`, RTT-Stats und Paket-Counter werden in der
 HA-MQTT-Discovery-Binary-Sensor-Entity als JSON-Attribute veröffentlicht (siehe `_build_attributes()` in
@@ -137,9 +135,9 @@ Folgende Tools sind im Container verfügbar (via `docker exec` oder HA Terminal)
 ## mDNS-Monitor
 
 Zusätzlich zum ARPing-Scan kann der Add-on beliebige mDNS-/DNS-SD-Dienste im LAN überwachen — z.B. einen
-CUPS-AirPrint-Drucker (Klassiker „CUPS läuft, iOS findet ihn nicht"), AirPlay-Empfänger,
-Chromecast, SMB-Shares, HTTP-Dienste. Der Check funktioniert ausschließlich über echtes mDNS (via `avahi-browse`); ein
-bloßer TCP-Portcheck auf 631 ist explizit nicht ausreichend.
+CUPS-AirPrint-Drucker (Klassiker „CUPS läuft, iOS findet ihn nicht"), AirPlay-Empfänger, Chromecast, SMB-Shares,
+HTTP-Dienste. Der Check funktioniert ausschließlich über echtes mDNS (via `avahi-browse`);
+ein bloßer TCP-Portcheck auf 631 ist explizit nicht ausreichend.
 
 ### `mdns_monitors`
 
@@ -147,16 +145,16 @@ Liste von Monitoren. Jeder Monitor läuft unabhängig als eigener Hintergrund-Lo
 State-Topic, Details-Topic und Last-Check-Topic sowie HA-Discovery-Entities (Binary Sensor + 2 Sensoren). Eine Liste
 erlaubt es, mehrere Drucker / Dienste parallel zu überwachen, ohne mehrere Container zu betreiben.
 
-| Feld            | Typ          | Pflicht | Beschreibung                                                             |
-| --------------- | ------------ | ------- | ------------------------------------------------------------------------ |
-| `name`          | string       | ja      | Eindeutiger Bezeichner — wird Teil der Entity-IDs und MQTT-Topics        |
-| `enabled`       | bool         | ja      | Monitor ein-/ausschalten (deaktivierte Monitore werden übersprungen)     |
-| `service_types` | list[string] | ja      | Zu überwachende DNS-SD-Service-Typen (siehe Tabelle unten)               |
-| `filter`        | list[string] | nein    | Case-insensitive Substring-Filter (Name/Host/IP, any-match, leer = alle) |
-| `interval`      | int          | ja      | Prüfintervall in Sekunden (10–3600, Default 60)                          |
-| `timeout`       | int          | ja      | Timeout für `avahi-browse` / `avahi-resolve` in Sekunden (Default 10)    |
-| `topic_prefix`  | string       | nein    | MQTT-Topic-Präfix (Default: `…/networktools_mdns_<slug>`)                |
-| `device_name`   | string       | nein    | Anzeigename im HA-Device-Block (Default: `name`)                         |
+| Feld            | Typ          | Pflicht | Beschreibung                                                  |
+| --------------- | ------------ | ------- | ------------------------------------------------------------- |
+| `name`          | string       | ja      | Eindeutiger Bezeichner (Teil der Entity-IDs und MQTT-Topics)  |
+| `enabled`       | bool         | ja      | Monitor ein-/ausschalten (deaktivierte werden übersprungen)   |
+| `service_types` | list[string] | ja      | Zu überwachende DNS-SD-Service-Typen (siehe Tabelle unten)    |
+| `filter`        | list[string] | nein    | Case-insensitive Substring-Filter (Name/Host/IP, leer = alle) |
+| `interval`      | int          | ja      | Prüfintervall in Sekunden (10-3600, Default 60)               |
+| `timeout`       | int          | ja      | Timeout für `avahi-browse` / `avahi-resolve` (Default 10s)    |
+| `topic_prefix`  | string       | nein    | MQTT-Topic-Präfix (Default: `…/networktools_mdns_<slug>`)     |
+| `device_name`   | string       | nein    | Anzeigename im HA-Device-Block (Default: `name`)              |
 
 #### Unterstützte Service-Typen (Auswahl)
 
@@ -213,14 +211,14 @@ mdns_monitors:
 | `network-tools/arping/availability`      | `online` / `offline` (geteilt mit ARPing) | ja     | 0   |
 
 `<prefix>` ist standardmäßig `homeassistant/monitor/networktools_mdns_<slug>`. `network-tools/arping/availability` ist
-ein geteiltes Last-Will-Topic — der gesamte Container hat **eine** LWT-Subscription, die ARPing- und
-mDNS-Loop abdeckt.
+ein geteiltes Last-Will-Topic — der gesamte Container hat **eine** LWT-Subscription, die
+ARPing- und mDNS-Loop abdeckt.
 
 **Ab Version 0.4.0** wird pro Monitor **nur noch eine** HA-Entity emittiert (`binary_sensor.networktools_mdns_<slug>`).
-Vorher gab es zusätzlich `sensor.networktools_mdns_<slug>_state` und `sensor.networktools_mdns_<slug>_last_check`.
-Diese beiden Entitäten sind weg — ihre Inhalte leben jetzt im JSON-Attribute-Topic `<prefix>/details`. Das
-`state`-Feld dort
-enthält weiterhin den ausgeschriebenen Text (`online | offline | unknown`), `last_check` den ISO-Timestamp.
+Vorher gab es `sensor.networktools_mdns_<slug>_state` und `sensor.networktools_mdns_<slug>_last_check`. Diese beiden
+Entitäten sind weg — ihre Inhalte leben jetzt im JSON-Attribute-Topic `<prefix>/details`. Das
+`state`-Feld dort enthält
+weiterhin den ausgeschriebenen Text (`online | offline | unknown`), `last_check` den ISO-Timestamp.
 
 ### MQTT-Auto-Discovery
 
@@ -273,15 +271,13 @@ Der Check funktioniert nur, wenn Multicast-Pakete zwischen Container und LAN fli
 
 - UDP 5353 (mDNS) ist nicht durch eine Firewall zwischen Container-Host und LAN blockiert.
 - Die Multicast-Adresse `224.0.0.251` ist erreichbar (IPv4-mDNS) bzw. `ff02::fb` (IPv6).
-- WLAN-APs / Switches mit „AP Isolation" oder „Client Isolation" blockieren Multicast zwischen Clients.
-  In diesem Fall funktioniert AirPrint auch für iOS-Geräte nicht — der Check wird korrekt `not_found`
-  melden, was genau das gewünschte Frühsignal ist.
-  Frühsignal ist.
+- WLAN-APs / Switches mit „AP Isolation" oder „Client Isolation" blockieren Multicast zwischen
+  Clients. In diesem Fall funktioniert AirPrint auch für iOS-Geräte nicht — der Check meldet korrekt
+  `not_found`, was das gewünschte Frühsignal
+  ist. Frühsignal ist. Frühsignal ist.
 - Der Host hat mindestens ein Interface im Ziel-LAN (nicht `lo`, nicht das Container-Bridge-Device).
 
-Es ist **kein** Portmapping für UDP 5353 erforderlich — `host_network: true` greift die Pakete am
-LAN-Interface ab.
-ab.
+Es ist **kein** Portmapping für UDP 5353 erforderlich — `host_network: true` greift die Pakete am LAN-Interface ab.
 
 ### Manuelle Tests
 
@@ -299,15 +295,12 @@ mosquitto_sub -h core-mosquitto -t 'homeassistant/binary_sensor/networktools_mdn
 
 ### Typische Fehlerbilder
 
-| Symptom                                         | Ursache / Lösung                                                  |
-| ----------------------------------------------- | ----------------------------------------------------------------- |
-|                                                 |
-| `state: not_found` obwohl iOS druckt            | Multicast vom Container geblockt — Firewall / AP Isolation prüfen |
-| `state: announced_unresolved` dauerhaft         | `avahi-resolve` fehlt — `.local`-DNS-Auflösung prüfen             |
-| `state: error` mit `error: avahi-browse failed` | Binary fehlt im Container — `avahi-tools` muss installiert sein   |
-| HA zeigt Entities als `unavailable`             | `mqtt_enabled` im Add-on fehlt oder Broker nicht erreichbar       |
-| Discovery-Configs erscheinen nicht in HA        | `mqtt_discovery_prefix` falsch — Default ist `homeassistant`      |
-| Filter greift nicht                             | Filter ist Substring-Match — exakten Hostnamen oder IP prüfen     |
+- `state: not_found` obwohl iOS druckt — Multicast vom Container geblockt (Firewall / AP Isolation prüfen)
+- `state: announced_unresolved` dauerhaft — `avahi-resolve` fehlt (`.local`-DNS-Auflösung prüfen)
+- `state: error` mit `error: avahi-browse failed` — Binary fehlt im Container (`avahi-tools` installieren)
+- HA zeigt Entities als `unavailable` — `mqtt_enabled` im Add-on fehlt oder Broker nicht erreichbar
+- Discovery-Configs erscheinen nicht in HA — `mqtt_discovery_prefix` falsch (Default ist `homeassistant`)
+- Filter greift nicht — Filter ist Substring-Match, exakten Hostnamen oder IP prüfen
 
 ### Breaking Change: 0.3.0 → 0.4.0
 
@@ -317,7 +310,8 @@ Vor 0.4.0 wurden pro Monitor **drei** HA-Entities emittiert (`binary_sensor._ava
   (ISO-Timestamp) leben in den JSON-Attributen.
 
 **Migration:** Bestehende-Dashboards, die auf `sensor.networktools_mdns_<slug>_state` oder `sensor.server._last_check`
-referenzieren, müssen umgestellt werden auf `state_attr('binary_sensor.networktools_mdns_<slug>', 'state')`
-bzw. `state_attr('binary_sensor.networktools_mdns_<slug>', 'timestamp')`. Die alten Entities werden von HA
-nach einem Geräte-Reset nicht mehr automatisch neu angelegt — am einfachsten das Gerät in
-Einstellungen → Geräte & Dienste → MQTT löschen und neu hinzufügen.
+referenzieren, müssen umgestellt werden auf `state_attr('binary_sensor.networktools_mdns_<slug>', 'state')` bzw.
+`state_attr('binary_sensor.networktools_mdns_<slug>', 'timestamp')`. Die alten Entities werden von HA nach einem
+Geräte-Reset nicht mehr automatisch neu angelegt — am einfachsten das Gerät in
+Einstellungen → Geräte & Dienste → MQTT
+löschen und neu hinzufügen.
