@@ -138,6 +138,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
     echo "Dry run — no changes. Use --apply-local (or --apply-origin) to execute."
     echo ""
     echo "Sanity check: legacy tag -> commit -> new tag (would-be) targets:"
+    refused=0
     for row in "${MAPPING[@]}"; do
         legacy="${row%|*}"
         new="${row#*|}"
@@ -156,15 +157,22 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
             if [[ "$existing_sha" == "$sha" ]]; then
                 printf '  %s  %s  (new tag %s already points here — skip)\n' "$legacy" "$sha" "$new"
             else
-                printf '  ❌ %s  %s  but new tag %s already exists pointing at %s — REFUSE\n' \
-                    "$legacy" "$sha" "$new" "$existing_sha"
-                exit 1
+                # Race-condition-tag: legacy points at a different commit than the
+                # already-existing new tag. Cannot auto-resolve — surface and continue.
+                printf '  ⚠️  %s -> %s: legacy %s points at %s, new tag %s points at %s\n' \
+                    "$legacy" "$new" "$legacy" "$sha" "$new" "$existing_sha"
+                printf '      KEEP %s if you trust it, DELETE %s if not. Will skip both in apply.\n' "$new" "$legacy"
+                refused=$((refused + 1))
             fi
         else
             subject=$(git log -1 --format='%s' "$legacy")
             printf '  %s  %s  %s  [would retag -> %s]\n' "$legacy" "$sha" "$subject" "$new"
         fi
     done
+    if [[ "$refused" -gt 0 ]]; then
+        echo ""
+        echo "  ($refused race-condition tag(s) would be skipped in apply — resolve manually if needed)"
+    fi
     exit 0
 fi
 
@@ -198,11 +206,11 @@ git tag -l | sort
 
 if [[ "$APPLY_ORIGIN" -eq 1 ]]; then
     echo ""
-    echo "Pushing new tags and deleting legacy tags on origin..."
-    echo "  (pushes go to refs/tags/<name>; deletions are git push origin :refs/tags/<name>)"
+    echo "Pushing new tags and deleting legacy tags on origin (one ref at a time so a"
+    echo "single pre-existing tag does not abort the whole batch)..."
     echo ""
 
-    # Collect new tags (all tags except phantom deletions)
+    # Build the lists of tags we want to push / delete
     new_tags=()
     delete_tags=()
     for row in "${MAPPING[@]}"; do
@@ -215,14 +223,59 @@ if [[ "$APPLY_ORIGIN" -eq 1 ]]; then
         fi
     done
 
-    if [[ ${#new_tags[@]} -gt 0 ]]; then
-        echo "  push: ${new_tags[*]}"
-        git push origin "${new_tags[@]}"
+    # Filter: only push tags that don't already exist on origin (idempotent).
+    push_ok=()
+    push_skip=()
+    for tag in "${new_tags[@]}"; do
+        if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            push_skip+=("$tag")
+        else
+            push_ok+=("$tag")
+        fi
+    done
+
+    if [[ ${#push_ok[@]} -gt 0 ]]; then
+        echo "  push (${#push_ok[@]}): ${push_ok[*]}"
+        for tag in "${push_ok[@]}"; do
+            if git push origin "refs/tags/$tag"; then
+                echo "    ✓ $tag"
+            else
+                echo "    ❌ $tag (push failed - check permissions or network)"
+            fi
+        done
     fi
-    if [[ ${#delete_tags[@]} -gt 0 ]]; then
-        echo "  delete: ${delete_tags[*]}"
-        git push origin "${delete_tags[@]/#/:refs/tags/}"
+    if [[ ${#push_skip[@]} -gt 0 ]]; then
+        echo "  skip (already on origin): ${push_skip[*]}"
     fi
+
+    # Filter: only delete tags that exist on origin (avoid spurious errors).
+    delete_ok=()
+    delete_skip=()
+    for tag in "${delete_tags[@]}"; do
+        if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            delete_ok+=("$tag")
+        else
+            delete_skip+=("$tag")
+        fi
+    done
+
+    if [[ ${#delete_ok[@]} -gt 0 ]]; then
+        echo "  delete (${#delete_ok[@]}): ${delete_ok[*]}"
+        for tag in "${delete_ok[@]}"; do
+            if git push origin ":refs/tags/$tag"; then
+                echo "    ✓ $tag"
+            else
+                echo "    ❌ $tag (delete failed - repo settings may block tag deletion;"
+                echo "        enable 'Allow deleting tags' in repo Settings > General >"
+                echo "        'Tag protection rules' or run 'git push origin --delete <tag>'"
+                echo "        manually as a maintainer)"
+            fi
+        done
+    fi
+    if [[ ${#delete_skip[@]} -gt 0 ]]; then
+        echo "  skip (not on origin): ${delete_skip[*]}"
+    fi
+
     echo ""
     echo "✅ Migration complete on origin."
 else
