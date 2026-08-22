@@ -4,7 +4,7 @@
 # tag must exist locally or on origin for every config.yaml/build.yaml change that
 # lands in main. Without a matching tag the HA supervisor refresh sees the new version
 # in the store but the image at ghcr.io does not exist -> 404 -> "Unknown error".
-# Install via ./scripts/setup-hooks.sh.
+# Install via ./internal/setup-hooks.sh.
 
 set -e
 

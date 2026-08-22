@@ -62,7 +62,7 @@ make update-version ADDON=<addon-name> VERSION=1.7.2
 make update-version ADDON=<addon-name> VERSION=1.7.2 CHECK_RELEASE=yes
 
 # Dry-run mode (show only, no changes)
-./scripts/update-version.py <addon-name> 1.7.2 --dry-run
+./internal/update-version.py <addon-name> 1.7.2 --dry-run
 ```
 
 The tool automatically updates:

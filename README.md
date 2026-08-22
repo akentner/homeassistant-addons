@@ -4,7 +4,7 @@ Home Assistant Add-ons with automated upstream monitoring and version bumping vi
 
 This repository hosts production add-ons for [Home Assistant Supervisor][ha-supervisor]. Each add-on ships with:
 
-- A strict `config.yaml` schema validated by `scripts/validate-addon-config.py`
+- A strict `config.yaml` schema validated by `internal/validate-addon-config.py`
 - A `build.yaml` that pins the Docker base image and the add-on version
 - A `.upstream.yaml` (where applicable) that points the auto-update workflow at the upstream project
 - A Dockerfile that vendors runtime assets where possible (no CDN dependency at runtime)
@@ -189,7 +189,7 @@ This repository uses automated linting enforced by pre-commit hooks and GitHub A
 - **Markdown** — [markdownlint-cli2][markdownlint-cli2] for `*.md` files
 - **GitHub Actions** — [actionlint][actionlint] for `.github/workflows/*.yml`
 - **Dockerfiles** — [hadolint][hadolint] for `Dockerfile` best practices
-- **Versioning** — `scripts/validate-versions.sh` enforces the three-file scheme
+- **Versioning** — `internal/validate-versions.sh` enforces the three-file scheme
 
 ## Documentation
 

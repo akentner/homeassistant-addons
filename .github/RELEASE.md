@@ -43,7 +43,7 @@ so each release is built exactly once, regardless of whether it was triggered by
    make release ADDON=authentik VERSION=2026.8.0
    ```
 
-   Internally this invokes `scripts/update-version.py`, which:
+   Internally this invokes `internal/update-version.py`, which:
 
    - edits `authentik/config.yaml` → `version: "2026.8.0-0"`
    - edits `authentik/build.yaml` → `args.VERSION: "2026.8.0"`
@@ -62,7 +62,7 @@ so each release is built exactly once, regardless of whether it was triggered by
    git push origin main
    ```
 
-   The `scripts/check-version-tags.sh` pre-push hook verifies the `<addon>/v<version>` tag already exists locally or on
+   The `internal/check-version-tags.sh` pre-push hook verifies the `<addon>/v<version>` tag already exists locally or on
    origin before letting the branch push through.
 
 3. **Optional: GitHub Release page.** If you have the `gh` CLI and want the release notes rendered on the GitHub
@@ -86,8 +86,8 @@ git tag authentik/v2026.8.0-1
 git push origin authentik/v2026.8.0-1
 ```
 
-This bypasses `update-version.py` but still satisfies the pre-push hook (`scripts/check-version-tags.sh`) as long as the
-subpatch in `config.yaml` matches the tag suffix.
+This bypasses `update-version.py` but still satisfies the pre-push hook (`internal/check-version-tags.sh`) as long as
+the subpatch in `config.yaml` matches the tag suffix.
 
 ## Manual repair
 
@@ -108,6 +108,6 @@ If the tag and the 3-file set ever drift, the canonical fix order is:
 
 ## Auto-update path
 
-The daily `auto-update.yml` workflow calls the same `scripts/update-version.py` for every add-on with a
+The daily `auto-update.yml` workflow calls the same `internal/update-version.py` for every add-on with a
 `.upstream.yaml`. From the perspective of this document, that path is identical to a manual `make release` — only the
 trigger differs.

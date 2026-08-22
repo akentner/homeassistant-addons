@@ -35,13 +35,13 @@ make fix               # Auto-fix whitespace, EOF, line endings
 # Update a specific add-on version
 make update-version ADDON=phone-logger VERSION=1.7.4
 # Or directly:
-./scripts/update-version.py phone-logger 1.7.4 [--check-release] [--dry-run]
+./internal/update-version.py phone-logger 1.7.4 [--check-release] [--dry-run]
 ```
 
 ## Critical: 3-File Versioning Scheme
 
 Every add-on maintains versions across exactly 3 files that must stay in sync. This is enforced by pre-commit hooks
-(`scripts/validate-versions.sh`):
+(`internal/validate-versions.sh`):
 
 | File                             | Format                    | Example   |
 | -------------------------------- | ------------------------- | --------- |
@@ -49,7 +49,7 @@ Every add-on maintains versions across exactly 3 files that must stay in sync. T
 | `build.yaml` (as `args.VERSION`) | `X.Y.Z` (no subpatch)     | `1.7.3`   |
 | `README.md` (shield badges)      | `vX.Y.Z` in badge URLs    | `v1.7.3`  |
 
-**Never edit versions manually.** Always use `make update-version` or `scripts/update-version.py`. The subpatch suffix
+**Never edit versions manually.** Always use `make update-version` or `internal/update-version.py`. The subpatch suffix
 in config.yaml resets to `-0` when upstream version changes; increment it (e.g., `-1`, `-2`) for add-on-only fixes.
 
 ## Add-on Structure
@@ -121,8 +121,9 @@ tracking.
 ## Languages
 
 - **Python 3.12** — `phone-logger` upstream source downloaded at build time; add-on provides `generate_config.py` as the
-- **Bash** — `run.sh` in both add-ons (executed via `bashio`), `scripts/validate-versions.sh`, `scripts/setup-hooks.sh`
-- **Python 3** — `scripts/update-version.py`, `scripts/fix-markdown-lines.py` (stdlib only, no external deps)
+- **Bash** — `run.sh` in both add-ons (executed via `bashio`), `internal/validate-versions.sh`,
+  `internal/setup-hooks.sh`
+- **Python 3** — `internal/update-version.py`, `internal/fix-markdown-lines.py` (stdlib only, no external deps)
 
 ## Runtime
 
@@ -165,7 +166,7 @@ tracking.
 ## Key Observations
 
 - There is no Node.js `package.json` or lockfile in this repo; Node.js is only used in CI (`markdownlint-cli2`)
-- Python source code in this repo is limited to three scripts: `scripts/update-version.py`,
+- Python source code in this repo is limited to three scripts: `internal/update-version.py`,
 - `uv` is the single tool for both local dev setup and container dependency installation; no `pip` / `pipenv` / `poetry`
 - All container base images come from `ghcr.io/home-assistant/` — HA-specific, not generic Alpine or Python images
 - `bashio` is a critical runtime dependency but not declared anywhere in this repo; it is baked into the HA base images
@@ -202,7 +203,7 @@ tracking.
 - `SC2034` — "appears unused" (variables exported for child processes)
 - In GitHub Actions workflows additionally: `SC2086`, `SC2129`, `SC2001` (see `.actionlint.yml`)
 - `run.sh` for phone-logger: `#!/bin/sh` (POSIX shell, minimal)
-- Scripts in `scripts/`: `#!/bin/bash` with `set -e`
+- Scripts in `internal/`: `#!/bin/bash` with `set -e`
 
 ## Markdown Conventions
 
@@ -233,7 +234,7 @@ tracking.
 
 - Never edit versions manually — use `make update-version ADDON=name VERSION=X.Y.Z`
 - Subpatch (`-N`) resets to `-0` on upstream version change; increment for add-on-only fixes
-- Enforced by pre-commit hook `scripts/validate-versions.sh` and by `make validate-versions`
+- Enforced by pre-commit hook `internal/validate-versions.sh` and by `make validate-versions`
 
 ## File Naming
 
@@ -243,22 +244,22 @@ tracking.
 
 ## Pre-commit Hook Summary
 
-| Hook                 | Tool                    | Config                         |
-| -------------------- | ----------------------- | ------------------------------ |
-| YAML lint            | yamllint v1.35.1        | `.yamllint.yml`                |
-| Trailing whitespace  | pre-commit-hooks v6.0.0 | (built-in)                     |
-| End-of-file fixer    | pre-commit-hooks v6.0.0 | (built-in)                     |
-| YAML syntax check    | pre-commit-hooks v6.0.0 | `--unsafe` flag                |
-| Large file check     | pre-commit-hooks v6.0.0 | max 1000KB                     |
-| Case conflict check  | pre-commit-hooks v6.0.0 | (built-in)                     |
-| Merge conflict check | pre-commit-hooks v6.0.0 | (built-in)                     |
-| Shebang checks       | pre-commit-hooks v6.0.0 | (built-in)                     |
-| Line ending fix      | pre-commit-hooks v6.0.0 | `--fix=lf`                     |
-| Shell lint           | shellcheck v0.10.0.1    | `-e SC1091 -e SC2034`          |
-| Markdown format      | prettier v3.1.0         | `.prettierrc.yaml`             |
-| GitHub Actions lint  | actionlint v1.7.3       | `.actionlint.yml`              |
-| JSON format          | pre-commit-hooks v6.0.0 | `--indent=2`                   |
-| Version consistency  | local script            | `scripts/validate-versions.sh` |
+| Hook                 | Tool                    | Config                          |
+| -------------------- | ----------------------- | ------------------------------- |
+| YAML lint            | yamllint v1.35.1        | `.yamllint.yml`                 |
+| Trailing whitespace  | pre-commit-hooks v6.0.0 | (built-in)                      |
+| End-of-file fixer    | pre-commit-hooks v6.0.0 | (built-in)                      |
+| YAML syntax check    | pre-commit-hooks v6.0.0 | `--unsafe` flag                 |
+| Large file check     | pre-commit-hooks v6.0.0 | max 1000KB                      |
+| Case conflict check  | pre-commit-hooks v6.0.0 | (built-in)                      |
+| Merge conflict check | pre-commit-hooks v6.0.0 | (built-in)                      |
+| Shebang checks       | pre-commit-hooks v6.0.0 | (built-in)                      |
+| Line ending fix      | pre-commit-hooks v6.0.0 | `--fix=lf`                      |
+| Shell lint           | shellcheck v0.10.0.1    | `-e SC1091 -e SC2034`           |
+| Markdown format      | prettier v3.1.0         | `.prettierrc.yaml`              |
+| GitHub Actions lint  | actionlint v1.7.3       | `.actionlint.yml`               |
+| JSON format          | pre-commit-hooks v6.0.0 | `--indent=2`                    |
+| Version consistency  | local script            | `internal/validate-versions.sh` |
 
 ## Key Observations
 

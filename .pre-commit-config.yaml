@@ -80,19 +80,19 @@ repos:
     hooks:
       - id: validate-dockerfile-args
         name: Validate Dockerfile ARG-before-FROM scope
-        entry: ./scripts/validate-dockerfile-args.sh
+        entry: ./internal/validate-dockerfile-args.sh
         language: script
         files: ^(phone-logger|meridian)/Dockerfile$
         pass_filenames: true
       - id: validate-versions
         name: Validate Add-on Versioning
-        entry: ./scripts/validate-versions.sh
+        entry: ./internal/validate-versions.sh
         language: script
         always_run: true
         pass_filenames: false
       - id: validate-addon-config
         name: Validate Add-on config.yaml Schema
-        entry: python3 scripts/validate-addon-config.py
+        entry: python3 internal/validate-addon-config.py
         language: system
         always_run: true
         pass_filenames: false

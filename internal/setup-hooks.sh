@@ -24,7 +24,7 @@ pre-commit install --hook-type commit-msg || true
 echo "Installing pre-push hook (version tag sync)..."
 GIT_ROOT=$(git rev-parse --show-toplevel)
 HOOK_TARGET="$GIT_ROOT/.git/hooks/pre-push"
-HOOK_SOURCE="$GIT_ROOT/scripts/check-version-tags.sh"
+HOOK_SOURCE="$GIT_ROOT/internal/check-version-tags.sh"
 if [[ -f "$HOOK_SOURCE" ]]; then
     cp "$HOOK_SOURCE" "$HOOK_TARGET"
     chmod +x "$HOOK_TARGET"

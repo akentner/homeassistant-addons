@@ -34,7 +34,7 @@ init: ## Initialize development environment (install dependencies and hooks)
 
 install-hooks: ## Install pre-commit hooks
 	@echo "🔧 Installing pre-commit hooks..."
-	./scripts/setup-hooks.sh
+	./internal/setup-hooks.sh
 
 # Removed install-markdownlint target - we use the Python fix-markdown-lines.py script instead
 
@@ -93,11 +93,11 @@ validate-addons: ## Validate add-on configurations
 
 validate-versions: ## Validate add-on versioning consistency
 	@echo "🔍 Validating add-on versions..."
-	./scripts/validate-versions.sh
+	./internal/validate-versions.sh
 
 validate-dockerfiles: ## Validate ARG-before-FROM scope in all Dockerfiles
 	@echo "🔍 Validating Dockerfile ARG scope..."
-	./scripts/validate-dockerfile-args.sh
+	./internal/validate-dockerfile-args.sh
 
 docker-build-check: ## Check Dockerfile correctness without a full build (hadolint + ARG scope validation)
 	@echo "🐳 Checking Dockerfile correctness (no full build required)..."
@@ -120,7 +120,7 @@ docker-build-check: ## Check Dockerfile correctness without a full build (hadoli
 		exit 1; \
 	fi
 	@echo "  Running ARG-before-FROM scope check..."
-	@./scripts/validate-dockerfile-args.sh
+	@./internal/validate-dockerfile-args.sh
 	@echo "✅ All Dockerfile checks passed."
 
 build-addon: ## Build an add-on image locally, replicating the HA build process (usage: make build-addon ADDON=meridian [TIMEOUT=600])
@@ -183,7 +183,7 @@ update-version: ## Update add-on version (usage: make update-version ADDON=authe
 	if [ "$(CHECK_RELEASE)" = "yes" ]; then ARGS="--check-release"; fi; \
 	if [ "$(NO_TAG)" = "yes" ]; then ARGS="$$ARGS --no-tag"; fi; \
 	if [ "$(NO_PUSH)" = "yes" ]; then ARGS="$$ARGS --no-push"; fi; \
-	./scripts/update-version.py $(ADDON) $(VERSION) $$ARGS
+	./internal/update-version.py $(ADDON) $(VERSION) $$ARGS
 	@echo "🔍 Running validation..."
 	@make validate-versions
 

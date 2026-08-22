@@ -7,8 +7,8 @@
 #   "base name (<ARG_NAME>) should not be blank"
 #
 # Usage:
-#   ./scripts/validate-dockerfile-args.sh               # checks all add-on Dockerfiles
-#   ./scripts/validate-dockerfile-args.sh path/to/Dockerfile ...
+#   ./internal/validate-dockerfile-args.sh               # checks all add-on Dockerfiles
+#   ./internal/validate-dockerfile-args.sh path/to/Dockerfile ...
 
 set -euo pipefail
 

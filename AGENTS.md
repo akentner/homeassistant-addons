@@ -52,7 +52,7 @@ The `.upstream.yaml` enables daily automatic checks for upstream releases and pa
   - Add-on's own scripts (Python, shell) — new features, refactors, bug fixes in behavior
   - When SemVer changes, the subpatch **resets to `-0`**
 - Use `make update-version ADDON=<name> VERSION=<x.y.z>` — never edit versions manually
-- **Validation is enforced by pre-commit hook:** `scripts/validate-versions.sh` checks all three files match
+- **Validation is enforced by pre-commit hook:** `internal/validate-versions.sh` checks all three files match
 
 **Worked examples** (network-tools):
 
@@ -105,16 +105,16 @@ make update-version ADDON=<addon-name> VERSION=1.7.2 CHECK_RELEASE=yes
 make update-version ADDON=<addon-name> VERSION=1.7.2 NO_TAG=yes
 
 # Dry-run (shows what would change without modifying files)
-./scripts/update-version.py <addon-name> 1.7.2 --dry-run
+./internal/update-version.py <addon-name> 1.7.2 --dry-run
 ```
 
-**What this does:** Python script (`scripts/update-version.py`) updates `config.yaml`, `build.yaml`, and the README
+**What this does:** Python script (`internal/update-version.py`) updates `config.yaml`, `build.yaml`, and the README
 badge, then **creates and pushes the `v<version>` git tag** by default. The tag is required because
 `.github/workflows/build.yml` only builds Docker images on `git push` of a `v*` tag. Without the tag, the HA supervisor
 sees the new version in the store but the image at `ghcr.io` does not exist → 404 → "Unknown error, see supervisor
 logs".
 
-A pre-push hook (`scripts/check-version-tags.sh`, installed by `make init`) verifies that any addon whose
+A pre-push hook (`internal/check-version-tags.sh`, installed by `make init`) verifies that any addon whose
 `config.yaml`/`build.yaml` is being pushed has a matching `v<version>` tag locally or on origin. Bypass with
 `git push --no-verify` only in emergencies.
 
@@ -147,7 +147,7 @@ make validate-addons        # Validates add-on configs
 ### File Naming & Location Conventions
 
 - Add-on-specific logic: keep in `{addon-name}/` directory
-- Global utilities: place in `scripts/` (Python for complex logic, shell for simple tasks)
+- Global utilities: place in `internal/` (Python for complex logic, shell for simple tasks)
 - Documentation: `README.md` for user docs, `DOCS.md` for configuration reference, `DEVELOPMENT.md` for developer
   guidelines
 - GitHub Workflows: stored in `.github/workflows/` (currently only `lint.yml`)
@@ -254,7 +254,7 @@ viele Skills erzwingen aktuelle Doku statt vortrainiertem Wissen.
 - **`Makefile`** - Command definitions for common workflows
 - **`docs/DEVELOPMENT.md`** - Detailed versioning rules and rationale
 - **`docs/AUTO_UPDATE_GUIDE.md`** - Auto-update system architecture
-- **`scripts/validate-versions.sh`** - Pre-commit version validation logic
-- **`scripts/update-version.py`** - Automated version update tool
+- **`internal/validate-versions.sh`** - Pre-commit version validation logic
+- **`internal/update-version.py`** - Automated version update tool
 - **`.pre-commit-config.yaml`** - All linting tools and rules
 - **`phone-logger/config.yaml`** - Example add-on manifest structure

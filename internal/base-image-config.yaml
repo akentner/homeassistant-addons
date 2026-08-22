@@ -1,5 +1,5 @@
 # Base image update configuration for each add-on.
-# Used by scripts/update-base-image.py and .github/workflows/base-image-update.yml.
+# Used by internal/update-base-image.py and .github/workflows/base-image-update.yml.
 #
 # Strategy: Instead of querying GHCR tag listings (incomplete API),
 # we read the canonical Alpine/Python version from the home-assistant/docker-base

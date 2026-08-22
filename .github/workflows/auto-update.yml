@@ -82,7 +82,7 @@ jobs:
 
             # Update the 3-file version set (AUTO-02)
             # Do NOT pass --check-release (that flag is interactive and will hang the workflow)
-            python3 scripts/update-version.py "$addon_name" "$latest_version" || {
+            python3 internal/update-version.py "$addon_name" "$latest_version" || {
               echo "ERROR: update-version.py failed for $addon_name"
               ERRORS=1
               continue

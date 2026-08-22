@@ -41,7 +41,7 @@ jobs:
           while IFS= read -r addon; do
             echo "INFO: checking base image for $addon"
 
-            python3 scripts/update-base-image.py "$addon" || {
+            python3 internal/update-base-image.py "$addon" || {
               echo "ERROR: update-base-image.py failed for $addon"
               ERRORS=1
               continue
@@ -63,7 +63,7 @@ jobs:
           done < <(python3 - <<'EOF'
           import yaml, sys
           from pathlib import Path
-          cfg = yaml.safe_load(Path("scripts/base-image-config.yaml").read_text())
+          cfg = yaml.safe_load(Path("internal/base-image-config.yaml").read_text())
           for name in cfg.get("addons", {}):
               print(name)
           EOF
