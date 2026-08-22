@@ -95,8 +95,8 @@ Folgende Tools sind im Container verfügbar (via `docker exec` oder HA Terminal)
 | `ping`         | busybox      | ICMP-Ping (via busybox) |
 | `dig`          | bind-tools   | DNS-Lookup              |
 | `traceroute`   | traceroute   | Netzwerkpfad-Analyse    |
-| `avahi-browse` | avahi-utils  | mDNS/DNS-SD-Suche       |
-| `avahi-resolve`| avahi-utils  | mDNS-Hostname-Auflösung |
+| `avahi-browse` | avahi-tools  | mDNS/DNS-SD-Suche       |
+| `avahi-resolve`| avahi-tools  | mDNS-Hostname-Auflösung |
 
 ---
 
@@ -250,7 +250,7 @@ mosquitto_sub -h core-mosquitto -t 'homeassistant/binary_sensor/networktools_mdn
 | -------------------------------------------------- | ----------------------------------------------------------------- |
 | `state: not_found` obwohl iOS druckt               | Multicast vom Container geblockt — Firewall / AP Isolation prüfen |
 | `state: announced_unresolved` dauerhaft            | `avahi-resolve` schlägt fehl — DNS-Auflösung des `.local`-Hosts prüfen |
-| `state: error` mit `error: avahi-browse failed`    | Binary fehlt im Container — `avahi-utils` muss installiert sein   |
+| `state: error` mit `error: avahi-browse failed`    | Binary fehlt im Container — `avahi-tools` muss installiert sein    |
 | HA zeigt Entities als `unavailable`                | `mqtt_enabled` im Add-on fehlt oder Broker nicht erreichbar       |
 | Discovery-Configs erscheinen nicht in HA           | `mqtt_discovery_prefix` falsch — Default ist `homeassistant`       |
 | Filter greift nicht                                | Filter ist Substring-Match — exakten Hostnamen oder IP prüfen    |
