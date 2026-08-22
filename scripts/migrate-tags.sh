@@ -61,9 +61,10 @@ MAPPING=(
     "v1.0.0-alpha43|coding-assistants/v1.0.0-alpha43"
     "v1.0.0-alpha44|coding-assistants/v1.0.0-alpha44"
     "v1.0.0-alpha45|coding-assistants/v1.0.0-alpha45"
-    # v1.62.7 is the race-condition artefact from auto-update.yml: the tag
+    # v1.62.7 is a race-condition artefact from auto-update.yml: the tag
     # message claims 'meridian: 1.62.7' but the commit it points at is a
-    # coding-assistants bump. Re-tag under the real addon:
+    # coding-assistants bump. Re-tag under the addon that actually owns
+    # the commit:
     "v1.62.7|coding-assistants/v1.0.0-alpha45"
 
     # --- gatus (no legacy tags existed — nothing to migrate here) ---
@@ -79,21 +80,33 @@ MAPPING=(
     "v1.59.0|meridian/v1.59.0"
     "v1.60.0|meridian/v1.60.0"
     "v1.61.0|meridian/v1.61.0"
-    "v1.62.1|meridian/v1.62.1"
-    "v1.62.3|meridian/v1.62.3"
+    # v1.0.6 is a race-condition artefact: tag message claims
+    # 'phone-logger: 1.0.6' but the commit it points at is a meridian
+    # bump. The commit ('chore(meridian): update to 1.62.1') and the
+    # config.yaml it modifies (meridian/config.yaml -> 1.62.1) clearly
+    # identify it as a meridian release:
+    "v1.0.6|meridian/v1.62.1"
     "v1.62.5|meridian/v1.62.5"
-    # v1.62.6 is the race-condition artefact: tag claims 'meridian: 1.62.6'
-    # but points at an authentik commit. Re-tag under authentik — its
-    # config.yaml has been at 2026.8.0 since v2026.8.0 was tagged.
+    # v1.62.6 is a race-condition artefact: tag claims 'meridian: 1.62.6'
+    # but points at an authentik commit ('chore(authentik): update to
+    # 2026.8.0'). Re-tag under authentik — its config.yaml has been at
+    # 2026.8.0 since v2026.8.0 was tagged.
     "v1.62.6|authentik/v2026.8.0"
     # (v1.62.7 already listed under coding-assistants above.)
 
     # --- network-tools ---
     "v0.2.3-1|network-tools/v0.2.3-1"
-    "v0.4.0|network-tools/v0.4.0"
 
     # --- phone-logger ---
-    "v1.0.6|phone-logger/v1.0.6"
+    # v1.62.1 is a race-condition artefact: tag message claims
+    # 'meridian: 1.62.1' but the commit is a phone-logger bump. The
+    # commit ('chore(phone-logger): bump version to 1.0.8') and the
+    # config.yaml it modifies (phone-logger/config.yaml -> 1.0.8) clearly
+    # identify it as a phone-logger release:
+    "v1.62.1|phone-logger/v1.0.8"
+    # v1.62.3 is a race-condition artefact: tag claims 'meridian: 1.62.3'
+    # but the commit is a phone-logger bump to 1.0.6:
+    "v1.62.3|phone-logger/v1.0.6"
     "v1.0.7|phone-logger/v1.0.7"
     "v1.0.7-1|phone-logger/v1.0.7-1"
     "v1.0.8|phone-logger/v1.0.8"
