@@ -2,7 +2,7 @@ name: "Network Tools"
 description: >-
     Network diagnostics and host detection for Home Assistant. Provides ARP-based host detection
     via arping, plus nmap, dig, ping and traceroute for manual use.
-version: "0.2.3-1"
+version: "0.3.0-0"
 slug: "network-tools"
 image: "ghcr.io/akentner/homeassistant-addons/{arch}-network_tools"
 init: false
@@ -30,6 +30,25 @@ options:
     mqtt_username: ""
     mqtt_password: ""
     mqtt_discovery_prefix: "homeassistant"
+    # List of mDNS/DNS-SD service monitors. Each monitor runs independently and
+    # publishes its own state + details + last_check via MQTT, plus HA discovery
+    # entities (binary_sensor + 2 sensors). Add as many entries as you need.
+    mdns_monitors:
+        - name: "cups_airprint"
+          enabled: false
+          service_types:
+              - "_ipp._tcp"
+              - "_ipps._tcp"
+              - "_printer._tcp"
+              - "_airplay._tcp"
+              - "_googlecast._tcp"
+              - "_smb._tcp"
+              - "_http._tcp"
+          filter: []
+          interval: 60
+          timeout: 10
+          topic_prefix: "homeassistant/monitor/cups_airprint"
+          device_name: "Brother HL-L3270CDW"
 
 schema:
     arping_hosts:
@@ -48,3 +67,14 @@ schema:
     mqtt_username: str?
     mqtt_password: str?
     mqtt_discovery_prefix: str?
+    mdns_monitors:
+        - name: str
+          enabled: bool
+          service_types:
+              - str
+          filter:
+              - str
+          interval: int(10,3600)
+          timeout: int(1,60)
+          topic_prefix: str?
+          device_name: str?

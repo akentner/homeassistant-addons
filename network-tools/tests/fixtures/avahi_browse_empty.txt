@@ -1,0 +1,2 @@
+; avahi-browse -artp -t 10 _ipp._tcp
+; No services found

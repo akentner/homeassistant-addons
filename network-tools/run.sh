@@ -21,6 +21,8 @@ nginx -c /tmp/nginx-network-tools.conf &
 
 MQTT_WILL_PID=""
 
+log() { echo "[run.sh] $*" >&2; }
+
 mqtt_pub() {
     if [ -n "$MQTT_USER" ]; then
         mosquitto_pub -h "$MQTT_HOST" -p "$MQTT_PORT" -u "$MQTT_USER" -P "$MQTT_PASS" "$@"
@@ -38,7 +40,8 @@ mqtt_sub_will() {
 }
 
 if [ -n "$MQTT_ENABLED" ]; then
-    # Keep a persistent connection so the broker fires the will on crash
+    # Keep a persistent connection so the broker fires the will on crash.
+    # Single LWT subscription covers BOTH arp_loop and mdns_loop - both publish to AVAIL_TOPIC.
     mqtt_sub_will \
         --will-topic "$AVAIL_TOPIC" --will-payload "offline" --will-retain \
         -t "network-tools/arping/__keepalive" -q 1 &
@@ -53,11 +56,29 @@ cleanup() {
     fi
     if [ -n "$MQTT_WILL_PID" ]; then kill "$MQTT_WILL_PID" 2>/dev/null || true; fi
 }
-trap cleanup EXIT INT TERM
 
-python3 /usr/local/bin/arping_scan.py
+# mdns global sleep = min(interval) over enabled monitors; default 60
+MDNS_INTERVAL_GLOBAL=$(_opt "min((m.get('interval') or 60) for m in (d.get('mdns_monitors') or []) if m.get('enabled', True)) or 60" 60)
 
-while true; do
-    sleep "$INTERVAL"
-    python3 /usr/local/bin/arping_scan.py
-done
+arp_loop() {
+    while true; do
+        python3 /usr/local/bin/arping_scan.py || log "arping_loop_failed"
+        sleep "$INTERVAL"
+    done
+}
+
+mdns_loop() {
+    while true; do
+        python3 /usr/local/bin/mdns_scan.py || log "mdns_loop_failed"
+        sleep "$MDNS_INTERVAL_GLOBAL"
+    done
+}
+
+arp_loop &
+ARP_PID=$!
+mdns_loop &
+MDNS_PID=$!
+
+trap 'kill "$ARP_PID" "$MDNS_PID" 2>/dev/null; cleanup' EXIT INT TERM
+
+wait

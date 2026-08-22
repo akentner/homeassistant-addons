@@ -1,0 +1,5 @@
+; avahi-browse -artp -t 10 _ipp._tcp
+=;eth0;IPv4;Brother HL-L3270CDW series;_ipp._tcp;local;brother.local;192.168.178.50;631;"txtvers=1";"rp=printers/Brother"
+=;eth0;IPv4;Drucker Kueche & Co;_ipps._tcp;local;kueche.local;192.168.178.99;443;"txtvers=1"
++;eth0;IPv6;HP LaserJet Pro;_printer._tcp;local;hp.local;fe80::1234;9100;"ty=HP LaserJet"
+-;eth0;IPv4;Going Away Service;_ipp._tcp;local;going.local;192.168.178.77;631;
