@@ -24,8 +24,9 @@ Scan-Intervall in Sekunden. Standard: `30`. Minimum empfohlen: `10`.
 
 ### `port`
 
-TCP-Port auf dem nginx die REST API bereitstellt. Standard: `8080`. Ändern wenn ein anderer Add-on oder Dienst Port 8080
-belegt (z.B. auf `8082`). Der `ingress_port` in config.yaml muss mit diesem Wert übereinstimmen — bei Änderung beide
+TCP-Port auf dem nginx die REST API bereitstellt. Standard: `8080`. Ändern wenn ein anderer Add-on oder
+Dienst Port 8080 belegt (z.B. auf `8082`). Der `ingress_port` in config.yaml muss mit diesem Wert
+übereinstimmen — bei Änderung beide
 anpassen.
 
 ### `log_level`
@@ -148,16 +149,16 @@ ein eigenes Set aus State-Topic, Details-Topic und Last-Check-Topic sowie HA-Dis
 (Binary Sensor + 2 Sensoren). Eine Liste erlaubt es, mehrere Drucker / Dienste parallel zu
 überwachen, ohne mehrere Container zu betreiben.
 
-| Feld            | Typ           | Pflicht | Beschreibung                                                            |
-| --------------- | ------------- | ------- | ----------------------------------------------------------------------- |
-| `name`          | string        | ja      | Eindeutiger Bezeichner — wird Teil der Entity-IDs und MQTT-Topics       |
-| `enabled`       | bool          | ja      | Monitor ein-/ausschalten (deaktivierte Monitore werden übersprungen)    |
-| `service_types` | list[string]  | ja      | Zu überwachende DNS-SD-Service-Typen (siehe Tabelle unten)              |
-| `filter`        | list[string]  | nein    | Case-insensitive Substring-Filter gegen Name/Host/IP (any-match, leer = alle) |
-| `interval`      | int           | ja      | Prüfintervall in Sekunden (10–3600, Default 60)                         |
-| `timeout`       | int           | ja      | Timeout für `avahi-browse` / `avahi-resolve` in Sekunden (1–60, Default 10) |
-| `topic_prefix`  | string        | nein    | MQTT-Topic-Präfix für State/Details/Last-Check (Default: `homeassistant/monitor/networktools_mdns_<slug>`) |
-| `device_name`   | string        | nein    | Anzeigename im HA-Device-Block (Default: `name`)                        |
+| Feld            | Typ          | Pflicht | Beschreibung                                                     |
+| --------------- | ------------ | ------- | ---------------------------------------------------------------- |
+| `name`          | string       | ja      | Eindeutiger Bezeichner — wird Teil der Entity-IDs und MQTT-Topics |
+| `enabled`       | bool         | ja      | Monitor ein-/ausschalten (deaktivierte Monitore werden übersprungen) |
+| `service_types` | list[string] | ja      | Zu überwachende DNS-SD-Service-Typen (siehe Tabelle unten)       |
+| `filter`        | list[string] | nein    | Case-insensitive Substring-Filter (Name/Host/IP, any-match, leer = alle) |
+| `interval`      | int          | ja      | Prüfintervall in Sekunden (10–3600, Default 60)                  |
+| `timeout`       | int          | ja      | Timeout für `avahi-browse` / `avahi-resolve` in Sekunden (Default 10) |
+| `topic_prefix`  | string       | nein    | MQTT-Topic-Präfix (Default: `…/networktools_mdns_<slug>`) |
+| `device_name`   | string       | nein    | Anzeigename im HA-Device-Block (Default: `name`)                 |
 
 #### Unterstützte Service-Typen (Auswahl)
 
@@ -219,7 +220,8 @@ den ARPing- als auch den mDNS-Loop abdeckt.
 
 **Ab Version 0.4.0** wird pro Monitor **nur noch eine** HA-Entity emittiert (`binary_sensor.networktools_mdns_<slug>`).
 Vorher gab es zusätzlich `sensor.networktools_mdns_<slug>_state` und `sensor.networktools_mdns_<slug>_last_check`.
-Diese beiden Entitäten sind weg — ihre Inhalte leben jetzt im JSON-Attribute-Topic `<prefix>/details`. Das `state`-Feld
+Diese beiden Entitäten sind weg — ihre Inhalte leben jetzt im JSON-Attribute-Topic
+`<prefix>/details`. Das `state`-Feld
 dort enthält weiterhin den ausgeschriebenen Text (`online | offline | unknown`), `last_check` den ISO-Timestamp.
 
 ### MQTT-Auto-Discovery
@@ -260,12 +262,13 @@ werden — z.B. `state_attr('binary_sensor.networktools_mdns_brother_airprint', 
 
 ### Zustands-Klassifikation
 
-| Zustand                   | Bedingung                                                            | Binary-Sensor | `attributes.state` |
-| ------------------------- | -------------------------------------------------------------------- | ------------- | ------------------- |
-| `online`                  | Dienst angekündigt **und** per `avahi-resolve` auflösbar              | ON            | `online`            |
-| `announced_unresolved`    | Dienst angekündigt, Hostname nicht auflösbar                          | OFF           | `offline`           |
-| `not_found`               | Kein passender Dienst in diesem Check                                 | OFF           | `offline`           |
-| `error`                   | avahi-browse fehlgeschlagen oder Timeout                              | OFF           | `unknown`           |
+| Zustand | Bedingung | Binary-Sensor | `attributes.state` |
+| ------------------------- | -------------------------------------------------------------------- | ------------- |
+------------------- |
+| `online` | Dienst angekündigt **und** per `avahi-resolve` auflösbar | ON | `online` |
+| `announced_unresolved` | Dienst angekündigt, Hostname nicht auflösbar | OFF | `offline` |
+| `not_found` | Kein passender Dienst in diesem Check | OFF | `offline` |
+| `error` | avahi-browse fehlgeschlagen oder Timeout | OFF | `unknown` |
 
 ### Firewall / Multicast-Anforderungen
 
@@ -298,14 +301,15 @@ mosquitto_sub -h core-mosquitto -t 'homeassistant/binary_sensor/networktools_mdn
 
 ### Typische Fehlerbilder
 
-| Symptom                                            | Ursache / Lösung                                                  |
-| -------------------------------------------------- | ----------------------------------------------------------------- |
-| `state: not_found` obwohl iOS druckt               | Multicast vom Container geblockt — Firewall / AP Isolation prüfen |
-| `state: announced_unresolved` dauerhaft            | `avahi-resolve` schlägt fehl — DNS-Auflösung des `.local`-Hosts prüfen |
-| `state: error` mit `error: avahi-browse failed`    | Binary fehlt im Container — `avahi-tools` muss installiert sein    |
-| HA zeigt Entities als `unavailable`                | `mqtt_enabled` im Add-on fehlt oder Broker nicht erreichbar       |
-| Discovery-Configs erscheinen nicht in HA           | `mqtt_discovery_prefix` falsch — Default ist `homeassistant`       |
-| Filter greift nicht                                | Filter ist Substring-Match — exakten Hostnamen oder IP prüfen    |
+| Symptom | Ursache / Lösung |
+| -------------------------------------------------- | -----------------------------------------------------------------
+|
+| `state: not_found` obwohl iOS druckt | Multicast vom Container geblockt — Firewall / AP Isolation prüfen |
+| `state: announced_unresolved` dauerhaft | `avahi-resolve` fehlt — `.local`-DNS-Auflösung prüfen |
+| `state: error` mit `error: avahi-browse failed` | Binary fehlt im Container — `avahi-tools` muss installiert sein |
+| HA zeigt Entities als `unavailable` | `mqtt_enabled` im Add-on fehlt oder Broker nicht erreichbar |
+| Discovery-Configs erscheinen nicht in HA | `mqtt_discovery_prefix` falsch — Default ist `homeassistant` |
+| Filter greift nicht | Filter ist Substring-Match — exakten Hostnamen oder IP prüfen |
 
 ### Breaking Change: 0.3.0 → 0.4.0
 
@@ -318,4 +322,3 @@ referenzieren, müssen umgestellt werden auf `state_attr('binary_sensor.networkt
 `state_attr('binary_sensor.networktools_mdns_<slug>', 'timestamp')`. Die alten Entities werden von HA nach
 einem Geräte-Reset nicht mehr automatisch neu angelegt — am einfachsten das Gerät in
 Einstellungen → Geräte & Dienste → MQTT löschen und neu hinzufügen, dann werden die neuen Entities gepullt.
-
