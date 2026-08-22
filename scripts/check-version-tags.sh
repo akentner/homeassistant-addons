@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Pre-push hook for .github/workflows/build.yml: only builds Docker images on
-# `git push` of a `v*` tag. Without a matching tag, the HA supervisor sees the
-# new version in the store but the image at ghcr.io doesn't exist → 404 on update.
+# Pre-push hook for the per-addon build workflows (.github/workflows/build-<addon>.yml):
+# every workflow also triggers on `git push` of an `<addon>/v*` tag, so a matching
+# tag must exist locally or on origin for every config.yaml/build.yaml change that
+# lands in main. Without a matching tag the HA supervisor refresh sees the new version
+# in the store but the image at ghcr.io does not exist -> 404 -> "Unknown error".
 # Install via ./scripts/setup-hooks.sh.
 
 set -e
@@ -43,7 +45,7 @@ while IFS= read -r addon_dir; do
     version=$(grep '^version:' "$addon_dir/config.yaml" | sed 's/version: *"\([^"]*\)".*/\1/')
     [[ -z "$version" ]] && continue
 
-    tag="v$version"
+    tag="${addon_dir}/v${version}"
 
     if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null 2>&1; then
         echo "✓ $addon_dir: tag $tag exists locally"
@@ -63,12 +65,12 @@ while IFS= read -r addon_dir; do
     echo ""
     echo "❌ $addon_dir: version '$version' has no matching tag ($tag)"
     echo ""
-    echo "   The build workflow only runs on git tag push (refs/tags/v*)."
+    echo "   The build workflow for $addon_dir triggers on a '<addon>/v*' tag push."
     echo "   Without $tag, HA-Store-Refresh sees the new version but the"
     echo "   Docker image at ghcr.io doesn't exist → 404 on update."
     echo ""
     echo "   Fix options:"
-    echo "     make update-version ADDON=$addon_dir VERSION=$version"
+    echo "     make release ADDON=$addon_dir VERSION=$version"
     echo "     # or manually:"
     echo "     git tag -a $tag -m '$addon_dir: $version'"
     echo "     git push origin $tag"
