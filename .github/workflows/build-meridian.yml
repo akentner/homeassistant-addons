@@ -6,8 +6,8 @@ on:
       - main
     paths:
       - "meridian/**"
-    tags:
-      - "meridian/v*"
+    # tags:                       # tag-trigger temporarily disabled (see .github/RELEASE.md)
+    #   - "meridian/v*"           # re-enable by removing the leading '#' on both lines
   workflow_dispatch:
 
 jobs:

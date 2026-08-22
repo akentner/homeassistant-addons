@@ -6,8 +6,8 @@ on:
       - main
     paths:
       - "markdown-renderer/**"
-    tags:
-      - "markdown-renderer/v*"
+    # tags:                                 # tag-trigger temporarily disabled (see .github/RELEASE.md)
+    #   - "markdown-renderer/v*"            # re-enable by removing the leading '#' on both lines
   workflow_dispatch:
 
 jobs:
