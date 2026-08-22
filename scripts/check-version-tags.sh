@@ -14,6 +14,15 @@ while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
     [[ -n "$local_ref" ]] || continue
     [[ "$local_sha" == "0000000000000000000000000000000000000000" ]] && continue
 
+    # Tag pushes do not introduce new file contents - the tag merely points at
+    # an existing commit. The branch's working-tree build.yaml is irrelevant
+    # for the snapshot the tag was created against, so checking it would
+    # produce false positives when re-tagging an older commit whose
+    # build.yaml has since moved on. Skip tag pushes entirely.
+    if [[ "$local_ref" == refs/tags/* ]]; then
+        continue
+    fi
+
     if [[ "$remote_sha" == "0000000000000000000000000000000000000000" ]]; then
         range="$local_sha^..$local_sha"
     elif git rev-list --count "$remote_sha..$local_sha" 2>/dev/null | grep -q '^0$'; then
