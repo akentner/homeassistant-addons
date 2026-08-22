@@ -1,0 +1,165 @@
+# Build template shared by every per-addon build workflow.
+#
+# Reusable workflow (workflow_call) — invoked by build-<addon>.yml with
+# the per-addon inputs below. Keeps build matrix / QEMU / Buildx / GHCR
+# / HA notify boilerplate in one place; per-addon stubs only define
+# addon-name, display name, description and the arch matrix.
+name: Build Add-on Template
+
+on:
+  workflow_call:
+    inputs:
+      addon-name:
+        description: "Add-on directory name (e.g., meridian)"
+        required: true
+        type: string
+      addon-display-name:
+        description: "Human-readable name passed as BUILD_NAME"
+        required: true
+        type: string
+      addon-description:
+        description: "Short description passed as BUILD_DESCRIPTION"
+        required: true
+        type: string
+      archs:
+        description: "JSON array of architectures to build"
+        required: false
+        type: string
+        default: '["amd64", "aarch64"]'
+      notify-ha:
+        description: "POST start/finish events to the HA webhook"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ fromJSON(inputs.archs) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version and base image from build.yaml
+        id: meta
+        run: |
+          VERSION=$(yq eval '.args.VERSION' "${{ inputs.addon-name }}/build.yaml")
+          # The build_from keys match matrix.arch values exactly.
+          BUILD_FROM=$(yq eval ".build_from.\"${{ matrix.arch }}\" // \"\"" "${{ inputs.addon-name }}/build.yaml")
+          case "${{ matrix.arch }}" in
+            amd64)   PLATFORM="linux/amd64" ;;
+            aarch64) PLATFORM="linux/arm64" ;;
+            *)       echo "::error::unsupported arch '${{ matrix.arch }}'"; exit 1 ;;
+          esac
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::no args.VERSION in ${{ inputs.addon-name }}/build.yaml"
+            exit 1
+          fi
+          if [[ -z "$BUILD_FROM" ]]; then
+            echo "::error::no build_from.${{ matrix.arch }} in ${{ inputs.addon-name }}/build.yaml"
+            exit 1
+          fi
+          {
+            echo "VERSION=$VERSION"
+            echo "BUILD_FROM=$BUILD_FROM"
+            echo "PLATFORM=$PLATFORM"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Compute image slug (addon-name with underscores)
+        id: slug
+        run: echo "slug=$(echo '${{ inputs.addon-name }}' | tr '-' '_')" >> "$GITHUB_OUTPUT"
+
+      - name: Notify HA — build started
+        if: ${{ inputs.notify-ha && env.HA_BASE_URL != '' }}
+        env:
+          HA_BASE_URL: ${{ secrets.HA_BASE_URL }}
+          HA_WEBHOOK_ID: ${{ secrets.HA_WEBHOOK_ID }}
+          NOTIFY_DELIVERY_ID: ${{ github.run_id }}-${{ github.run_number }}
+          NOTIFY_EVENT: started
+          NOTIFY_PAYLOAD: >-
+            {
+              "event": "started",
+              "workflow": "${{ github.workflow }}",
+              "run_id": "${{ github.run_id }}",
+              "run_number": "${{ github.run_number }}",
+              "actor": "${{ github.actor }}",
+              "ref": "${{ github.ref }}",
+              "sha": "${{ github.sha }}",
+              "repository": "${{ github.repository }}",
+              "trigger": "${{ github.event_name }}",
+              "addon": "${{ inputs.addon-name }}",
+              "version": "${{ steps.meta.outputs.VERSION }}",
+              "arch": "${{ matrix.arch }}",
+              "started_at": "${{ github.event.head_commit.timestamp }}"
+            }
+        run: ./.github/scripts/notify-ha.sh
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        env:
+          IMAGE_BASE: ghcr.io/akentner/homeassistant-addons
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ inputs.addon-name }}
+          platforms: ${{ steps.meta.outputs.PLATFORM }}
+          push: true
+          build-args: |
+            BUILD_FROM=${{ steps.meta.outputs.BUILD_FROM }}
+            VERSION=${{ steps.meta.outputs.VERSION }}
+            BUILD_ARCH=${{ matrix.arch }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            BUILD_NAME=${{ inputs.addon-display-name }}
+            BUILD_DESCRIPTION=${{ inputs.addon-description }}
+            BUILD_REF=${{ github.sha }}
+            BUILD_REPOSITORY=${{ github.repository }}
+            BUILD_VERSION=${{ steps.meta.outputs.VERSION }}
+          tags: |
+            ${{ env.IMAGE_BASE }}/${{ matrix.arch }}-${{ steps.slug.outputs.slug }}:${{ steps.meta.outputs.VERSION }}
+            ${{ env.IMAGE_BASE }}/${{ matrix.arch }}-${{ steps.slug.outputs.slug }}:latest
+
+      - name: Notify HA — build finished
+        if: ${{ always() && inputs.notify-ha && env.HA_BASE_URL != '' }}
+        env:
+          IMAGE_BASE: ghcr.io/akentner/homeassistant-addons
+          HA_BASE_URL: ${{ secrets.HA_BASE_URL }}
+          HA_WEBHOOK_ID: ${{ secrets.HA_WEBHOOK_ID }}
+          NOTIFY_DELIVERY_ID: ${{ github.run_id }}-${{ github.run_number }}
+          NOTIFY_EVENT: finished
+          NOTIFY_PAYLOAD: >-
+            {
+              "event": "finished",
+              "workflow": "${{ github.workflow }}",
+              "run_id": "${{ github.run_id }}",
+              "run_number": "${{ github.run_number }}",
+              "actor": "${{ github.actor }}",
+              "ref": "${{ github.ref }}",
+              "sha": "${{ github.sha }}",
+              "repository": "${{ github.repository }}",
+              "trigger": "${{ github.event_name }}",
+              "addon": "${{ inputs.addon-name }}",
+              "version": "${{ steps.meta.outputs.VERSION }}",
+              "arch": "${{ matrix.arch }}",
+              "conclusion": "${{ job.status }}",
+              "image_tag": "${{ env.IMAGE_BASE }}/${{ matrix.arch }}-${{ steps.slug.outputs.slug }}:${{ steps.meta.outputs.VERSION }}",
+              "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+        run: ./.github/scripts/notify-ha.sh

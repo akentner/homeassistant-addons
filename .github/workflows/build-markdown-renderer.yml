@@ -1,0 +1,20 @@
+name: Build Markdown Renderer
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "markdown-renderer/**"
+    tags:
+      - "markdown-renderer/v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build-template.yml
+    with:
+      addon-name: markdown-renderer
+      addon-display-name: "Markdown Renderer"
+      addon-description: "Renders Markdown directories as Docsify SPAs through Home Assistant Ingress"
+      archs: '["amd64"]'

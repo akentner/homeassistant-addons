@@ -1,0 +1,20 @@
+name: Build Authentik
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "authentik/**"
+    tags:
+      - "authentik/v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build-template.yml
+    with:
+      addon-name: authentik
+      addon-display-name: "Authentik"
+      addon-description: "Open-source Identity Provider - SSO, OAuth2/OIDC, LDAP, SAML, and more"
+      archs: '["amd64"]'

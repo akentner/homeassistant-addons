@@ -1,0 +1,20 @@
+name: Build Meridian
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "meridian/**"
+    tags:
+      - "meridian/v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build-template.yml
+    with:
+      addon-name: meridian
+      addon-display-name: "Meridian Claude Max Proxy"
+      addon-description: "Exposes a local Anthropic-compatible API backed by a Claude Max subscription"
+      archs: '["amd64"]'
