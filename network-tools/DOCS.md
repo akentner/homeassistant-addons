@@ -75,24 +75,24 @@ Letztes Scan-Ergebnis als JSON:
 
 **Felder pro Host-Result:**
 
-| Feld | Typ | Immer gesetzt? | Beschreibung |
+| Feld | Typ | Wann gesetzt? | Beschreibung |
 | --- | --- | --- | --- |
-| `label` | string | ja | Anzeige-Label |
-| `ip` | string | ja | Ziel-IP-Adresse |
+| `label` | string | immer | Anzeige-Label |
+| `ip` | string | immer | Ziel-IP-Adresse |
 | `expected_mac` | string | wenn konfiguriert | Erwartete MAC (aus `arping_hosts`) |
-| `reachable` | bool | ja | Roher arping-Returncode-Erfolg (vor Flap-Detection) |
-| `effective_reachable` | bool | ja | Nach Flap-Detection (Sensor-Payload) |
-| `consecutive_failures` | int | ja | Zähler aufeinanderfolgender Fehler |
-| `disconnect_threshold` | int | ja | Aus Config (`disconnect_threshold`) |
+| `reachable` | bool | immer | Roher arping-Returncode-Erfolg |
+| `effective_reachable` | bool | immer | Nach Flap-Detection (Sensor-Payload) |
+| `consecutive_failures` | int | immer | Zähler aufeinanderfolgender Fehler |
+| `disconnect_threshold` | int | immer | Aus Config (`disconnect_threshold`) |
 | `mac` | string | wenn erreichbar | Tatsächliche MAC aus arping-Antwort |
-| `mac_match` | bool | wenn beide vorhanden | `true` wenn tatsächliche == erwartete MAC |
-| `rtt_ms` | float | wenn erreichbar | Mittlere Round-Trip-Time in Millisekunden (aus arping-Stats-Zeile) |
-| `rtt_min_ms` / `rtt_max_ms` / `rtt_stddev_ms` | float | wenn erreichbar | Min/Max/Stddev aus Stats-Zeile |
+| `mac_match` | bool | wenn beide vorhanden | `true` wenn MAC == erwartet |
+| `rtt_ms` | float | wenn erreichbar | Mittlere RTT in ms (aus Stats-Zeile) |
+| `rtt_min_ms` / `rtt_max_ms` / `rtt_stddev_ms` | float | wenn erreichbar | Min/Max/Stddev aus Stats |
 | `packets_sent` / `packets_received` | int | wenn erreichbar | Aus arping-Stats-Zeile |
 | `packet_loss_pct` | float | wenn erreichbar | Prozent verlorener Pakete |
-| `hostname` | string | wenn `getent hosts $ip` etwas findet | Reverse-DNS-Lookup (1s Timeout) |
-| `duration_ms` | int | ja | Dauer des arping-Aufrufs |
-| `error` | string | wenn nicht erreichbar | Grund des Fehlschlags (Timeout, stderr-Snippet) — sonst `null` |
+| `hostname` | string | wenn `getent hosts` etwas findet | Reverse-DNS-Lookup (1s Timeout) |
+| `duration_ms` | int | immer | Dauer des arping-Aufrufs |
+| `error` | string | wenn nicht erreichbar | Grund (Timeout, stderr-Snippet), sonst `null` |
 
 DieFelder `last_check` (ISO-Timestamp), `duration_ms`, `error`, `hostname`, RTT-Stats und Paket-Counter werden
 in der HA-MQTT-Discovery-Binary-Sensor-Entity als JSON-Attribute veröffentlicht (siehe `_build_attributes()`
