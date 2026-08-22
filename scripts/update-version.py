@@ -199,15 +199,17 @@ def check_github_release(version: str, addon_name: str) -> bool:
 def create_and_push_tag(version: str, addon_name: str, push: bool = True, dry_run: bool = False) -> bool:
     """Create an annotated git tag for the new version and push it to origin.
 
-    The tag is required because .github/workflows/build.yml only builds Docker images
-    on `git tag push` (refs/tags/v*). Without a matching tag, the HA supervisor sees
-    the new version in config.yaml but cannot pull the image → 404 → "Unknown error".
+    Tag format is '<addon>/v<version>' (e.g. 'authentik/v2026.8.0'). The tag is required
+    because per-addon build workflows (.github/workflows/build-<addon>.yml) trigger on
+    paths under the addon directory and are additionally re-runnable via `make release`,
+    which pushes a matching tag. Without a consistent tag name, the HA supervisor cannot
+    map the version to an image in ghcr.io.
 
     Returns True on success.
     """
     import subprocess
 
-    tag = f"v{version}"
+    tag = f"{addon_name}/v{version}"
     message = f"{addon_name}: {version}"
 
     if dry_run:
@@ -274,7 +276,7 @@ Examples:
     parser.add_argument('--check-release', action='store_true', help='Check if GitHub release exists')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be changed without making changes')
     parser.add_argument('--no-tag', dest='no_tag', action='store_true',
-                        help='Skip creating and pushing the v<version> tag (default: tag is created and pushed)')
+                        help='Skip creating and pushing the <addon>/v<version> tag (default: tag is created and pushed)')
     parser.add_argument('--no-push', dest='no_push', action='store_true',
                         help='Create the tag locally but do not push it to origin')
 
@@ -340,7 +342,7 @@ Examples:
 
         if args.dry_run:
             if not args.no_tag:
-                print(f"\n🏷️  Would also create and push tag v{new_v}")
+                print(f"\n🏷️  Would also create and push tag {args.addon_name}/v{new_v}")
             return 0
 
         if not args.no_tag:
@@ -355,14 +357,14 @@ Examples:
             if not tag_ok:
                 print()
                 print("⚠️  Files updated but tag push failed — push manually:")
-                print(f"   git push origin v{new_v}")
+                print(f"   git push origin {args.addon_name}/v{new_v}")
                 return 1
 
         print(f"\n💡 Next steps:")
         print(f"   • Run 'make validate-versions' to verify")
         print(f"   • Run 'make check-all' for full validation")
         print(f"   • Commit: git add {args.addon_name} && git commit -m 'chore: update {args.addon_name} to v{args.new_version}'")
-        print(f"   • Push:  git push origin main v{new_v}")
+        print(f"   • Push:  git push origin main {args.addon_name}/v{new_v}")
         return 0
     elif success_count == 0:
         print("⚠️  No files needed updating (already at target version?)")
