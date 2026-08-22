@@ -6,8 +6,8 @@ on:
       - main
     paths:
       - "network-tools/**"
-    # tags:                          # tag-trigger temporarily disabled (see .github/RELEASE.md)
-    #   - "network-tools/v*"         # re-enable by removing the leading '#' on both lines
+    tags:
+      - "network-tools/v*"
   workflow_dispatch:
 
 jobs:

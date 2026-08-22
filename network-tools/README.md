@@ -46,7 +46,7 @@ See [DOCS.md](DOCS.md) for full configuration reference and HA integration examp
 
 <!-- Badge Links -->
 
-[release-shield]: https://img.shields.io/badge/version-v0.4.0-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v0.4.0
+[release-shield]: https://img.shields.io/badge/version-v0.5.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v0.5.0
 [license-shield]: https://img.shields.io/badge/license-MIT-green.svg
 [license]: https://github.com/akentner/homeassistant-addons/blob/main/LICENSE

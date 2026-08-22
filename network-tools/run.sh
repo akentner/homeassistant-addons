@@ -62,22 +62,27 @@ MDNS_INTERVAL_GLOBAL=$(_opt "min((m.get('interval') or 60) for m in (d.get('mdns
 
 arp_loop() {
     while true; do
-        python3 /usr/local/bin/arping_scan.py || log "arping_loop_failed"
+        python3 /usr/local/bin/arping_scan.py || log "arping_loop_failed (rc=$?)"
         sleep "$INTERVAL"
     done
 }
 
 mdns_loop() {
     while true; do
-        python3 /usr/local/bin/mdns_scan.py || log "mdns_loop_failed"
+        python3 /usr/local/bin/mdns_scan.py || log "mdns_loop_failed (rc=$?)"
         sleep "$MDNS_INTERVAL_GLOBAL"
     done
 }
 
 arp_loop &
 ARP_PID=$!
-mdns_loop &
-MDNS_PID=$!
+
+if [ -f /usr/local/bin/mdns_scan.py ]; then
+    mdns_loop &
+    MDNS_PID=$!
+else
+    log "mdns_loop not started: /usr/local/bin/mdns_scan.py missing (mdns_monitors disabled)"
+fi
 
 trap 'kill "$ARP_PID" "$MDNS_PID" 2>/dev/null; cleanup' EXIT INT TERM
 

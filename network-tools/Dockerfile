@@ -14,6 +14,7 @@ RUN apk add --no-cache \
     nginx
 
 COPY arping_scan.py /usr/local/bin/arping_scan.py
+COPY mdns_scan.py /usr/local/bin/mdns_scan.py
 COPY run.sh /run.sh
 COPY nginx.conf /etc/nginx/network-tools.conf
 
