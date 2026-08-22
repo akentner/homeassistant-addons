@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -58,40 +59,117 @@ def arping_host(ip: str, interface: str) -> dict:
 
     Uses -i for interface (Thomas Habets convention, not iputils -I).
     Checks stdout + stderr combined — arping version/platform determines which stream is used.
+    Returns a dict with: reachable, mac, rtt_ms (avg), rtt_min_ms, rtt_max_ms, rtt_stddev_ms,
+    packets_sent, packets_received, packet_loss_pct, hostname, error, duration_ms.
     """
     cmd = ["arping", "-c", "2", "-w", "3", "-i", interface, ip]
     log.debug(f"arping: {' '.join(cmd)}")
+    started = time.monotonic()
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=6, check=False)
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         log.error(f"arping {ip} Fehler: {e}")
-        return {"reachable": False, "mac": None, "rtt_ms": None}
+        return _arping_failure_dict(ip, str(e))
 
+    duration_ms = int((time.monotonic() - started) * 1000)
     output = result.stdout + result.stderr
     log.debug(f"arping {ip} stdout: {result.stdout!r}")
     log.debug(f"arping {ip} stderr: {result.stderr!r}")
 
     reachable = result.returncode == 0
-    mac = None
-    rtt_ms = None
+    if not reachable:
+        return _arping_failure_dict(ip, _trim_stderr(result.stderr) or "arping exited non-zero", duration_ms)
 
-    if reachable:
-        # Format: "60 bytes from 44:4e:6d:22:40:48 (192.168.178.1): index=0 time=904.918 usec"
-        mac_match = re.search(r"from ([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})", output)
-        # Prefer avg RTT from stats line; fall back to first packet usec value
-        rtt_avg = re.search(r"rtt min/avg/max/std-dev = [\d.]+/([\d.]+)/", output)
-        rtt_usec = re.search(r"time=([\d.]+)\s*usec", output)
-        if mac_match:
-            mac = mac_match.group(1).upper()
-        if rtt_avg:
-            rtt_ms = float(rtt_avg.group(1))
-        elif rtt_usec:
-            rtt_ms = float(rtt_usec.group(1)) / 1000
+    # Format: "60 bytes from 44:4e:6d:22:40:48 (192.168.178.1): index=0 time=904.918 usec"
+    mac_match = re.search(r"from ([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})", output)
+    # rtt stats line: "round-trip min/avg/max/std-dev = 0.904/0.907/0.910/0.000 ms"
+    rtt_stats = re.search(
+        r"min/avg/max/std-dev = ([\d.]+)/([\d.]+)/([\d.]+)/([\d.]+)", output
+    )
+    rtt_usec = re.search(r"time=([\d.]+)\s*usec", output)
+    # packets stats: "2 packets transmitted, 2 packets received, 0% packet loss"
+    pkt_stats = re.search(
+        r"(\d+)\s+packets transmitted,\s+(\d+)\s+packets received,\s+([\d.]+)%\s+packet loss",
+        output,
+    )
 
-    log.info(f"arping {ip}: {'OK' if reachable else 'FAIL'} mac={mac} rtt={rtt_ms}ms")
-    if reachable and mac is None:
+    mac = mac_match.group(1).upper() if mac_match else None
+    rtt_min_ms = float(rtt_stats.group(1)) if rtt_stats else None
+    rtt_avg_ms = float(rtt_stats.group(2)) if rtt_stats else None
+    rtt_max_ms = float(rtt_stats.group(3)) if rtt_stats else None
+    rtt_stddev_ms = float(rtt_stats.group(4)) if rtt_stats else None
+    packets_sent = int(pkt_stats.group(1)) if pkt_stats else None
+    packets_received = int(pkt_stats.group(2)) if pkt_stats else None
+    packet_loss_pct = float(pkt_stats.group(3)) if pkt_stats else None
+    rtt_ms = rtt_avg_ms if rtt_avg_ms is not None else (
+        float(rtt_usec.group(1)) / 1000 if rtt_usec else None
+    )
+
+    hostname = _reverse_lookup(ip)
+
+    log.info(f"arping {ip}: OK mac={mac} rtt={rtt_ms}ms hostname={hostname}")
+    if mac is None:
         log.warning(f"arping {ip}: MAC nicht parsebar aus Output: {output!r}")
-    return {"reachable": reachable, "mac": mac, "rtt_ms": rtt_ms}
+    return {
+        "reachable": True,
+        "mac": mac,
+        "rtt_ms": rtt_ms,
+        "rtt_min_ms": rtt_min_ms,
+        "rtt_max_ms": rtt_max_ms,
+        "rtt_stddev_ms": rtt_stddev_ms,
+        "packets_sent": packets_sent,
+        "packets_received": packets_received,
+        "packet_loss_pct": packet_loss_pct,
+        "hostname": hostname,
+        "error": None,
+        "duration_ms": duration_ms,
+    }
+
+
+def _arping_failure_dict(ip: str, error: str, duration_ms: int = 0) -> dict:
+    """Build a standardized failure-result dict for arping_host."""
+    return {
+        "reachable": False,
+        "mac": None,
+        "rtt_ms": None,
+        "rtt_min_ms": None,
+        "rtt_max_ms": None,
+        "rtt_stddev_ms": None,
+        "packets_sent": None,
+        "packets_received": None,
+        "packet_loss_pct": None,
+        "hostname": None,
+        "error": error,
+        "duration_ms": duration_ms,
+    }
+
+
+def _reverse_lookup(ip: str) -> Optional[str]:
+    """Best-effort reverse DNS via getent(1). Returns hostname or None.
+
+    Bounded by a 1-second timeout — we don't want a slow DNS to block the scan loop.
+    """
+    try:
+        result = subprocess.run(
+            ["getent", "hosts", ip],
+            capture_output=True, text=True, timeout=1, check=False,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        log.debug(f"reverse lookup {ip} error: {e}")
+        return None
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    # Output: "<ip> <hostname>" — take the hostname (second column, first line)
+    parts = result.stdout.strip().split()
+    return parts[1] if len(parts) >= 2 else None
+
+
+def _trim_stderr(stderr: str, limit: int = 120) -> str:
+    """Trim and sanitize stderr for the error attribute."""
+    if not stderr:
+        return ""
+    s = stderr.strip().replace("\n", " ")
+    return s[:limit] + ("…" if len(s) > limit else "")
 
 
 def scan(options: dict, state: dict) -> dict:
@@ -138,6 +216,15 @@ def scan(options: dict, state: dict) -> dict:
                 "mac": probe["mac"],
                 "mac_match": mac_match,
                 "rtt_ms": probe["rtt_ms"],
+                "rtt_min_ms": probe.get("rtt_min_ms"),
+                "rtt_max_ms": probe.get("rtt_max_ms"),
+                "rtt_stddev_ms": probe.get("rtt_stddev_ms"),
+                "packets_sent": probe.get("packets_sent"),
+                "packets_received": probe.get("packets_received"),
+                "packet_loss_pct": probe.get("packet_loss_pct"),
+                "hostname": probe.get("hostname"),
+                "error": probe.get("error"),
+                "duration_ms": probe.get("duration_ms", 0),
             }
         )
 
@@ -208,10 +295,12 @@ def _build_attributes(result: dict, scan_timestamp: str, disconnect_threshold: i
     attrs: dict = {
         "ip": result["ip"],
         "label": result["label"],
-        "scan_timestamp": scan_timestamp,
+        "last_check": scan_timestamp,
         "last_raw_reachable": result["reachable"],
         "consecutive_failures": result["consecutive_failures"],
         "disconnect_threshold": disconnect_threshold,
+        "duration_ms": result.get("duration_ms", 0),
+        "error": result.get("error"),
     }
     if result.get("mac"):
         attrs["mac"] = result["mac"]
@@ -219,8 +308,22 @@ def _build_attributes(result: dict, scan_timestamp: str, disconnect_threshold: i
         attrs["expected_mac"] = result["expected_mac"]
     if result.get("mac_match") is not None:
         attrs["mac_match"] = result["mac_match"]
+    if result.get("hostname"):
+        attrs["hostname"] = result["hostname"]
     if result.get("rtt_ms") is not None:
         attrs["rtt_ms"] = result["rtt_ms"]
+    if result.get("rtt_min_ms") is not None:
+        attrs["rtt_min_ms"] = result["rtt_min_ms"]
+    if result.get("rtt_max_ms") is not None:
+        attrs["rtt_max_ms"] = result["rtt_max_ms"]
+    if result.get("rtt_stddev_ms") is not None:
+        attrs["rtt_stddev_ms"] = result["rtt_stddev_ms"]
+    if result.get("packets_sent") is not None:
+        attrs["packets_sent"] = result["packets_sent"]
+    if result.get("packets_received") is not None:
+        attrs["packets_received"] = result["packets_received"]
+    if result.get("packet_loss_pct") is not None:
+        attrs["packet_loss_pct"] = result["packet_loss_pct"]
     return attrs
 
 

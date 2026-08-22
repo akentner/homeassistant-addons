@@ -217,25 +217,27 @@ else:
 [ "$NF_OK" = "1" ] && A4=0 || A4=1
 assert_ok "A4: not_found monitor has service_name=null" "$A4"
 
-# A5: MQTT capture has Discovery config for binary_sensor
+# A5: discovery config exists + state topic carries ON (binary sensor, single entity)
 A5=0
-if grep -q 'homeassistant/binary_sensor/networktools_mdns_online_printer_available/config' "$LOG_DIR/mqtt.log"; then
+if grep -q 'homeassistant/binary_sensor/networktools_mdns_online_printer/config' "$LOG_DIR/mqtt.log" \
+    && grep -q 'homeassistant/monitor/online_printer/state ON' "$LOG_DIR/mqtt.log"; then
     A5=0
 else
     A5=1
-    echo "  A5 missing binary_sensor discovery config"
+    echo "  A5 missing binary_sensor discovery or state ON payload"
 fi
-assert_ok "A5: binary_sensor discovery config published" "$A5"
+assert_ok "A5: binary_sensor discovery + state ON payload published" "$A5"
 
-# A6: state topic published with online payload
+# A6: exactly one discovery config per monitor (binary_sensor only, NOT 3 entities)
 A6=0
-if grep -q 'homeassistant/monitor/online_printer/state online' "$LOG_DIR/mqtt.log"; then
+COUNT_DISC=$(grep -c 'homeassistant/.*sensor/networktools_mdns_online_printer.*/config' "$LOG_DIR/mqtt.log")
+if [ "$COUNT_DISC" = "1" ]; then
     A6=0
 else
     A6=1
-    echo "  A6 missing state online payload"
+    echo "  A6 expected exactly 1 discovery config per monitor, got $COUNT_DISC"
 fi
-assert_ok "A6: state topic published with online payload" "$A6"
+assert_ok "A6: exactly 1 discovery config per monitor (no state/last_check sensor)" "$A6"
 
 # A7: every captured MQTT publish used retain=true. We use a fresh mosquitto_sub subscriber
 # AFTER killing the container - retained messages arrive immediately on connect.
@@ -244,7 +246,7 @@ ADDON_PID=""
 sleep 2
 INSTANT=$(timeout 3 mosquitto_sub -h localhost -p 11883 -t 'homeassistant/monitor/online_printer/state' -C 1 2>&1 || true)
 A7=0
-if echo "$INSTANT" | grep -q 'online'; then
+if echo "$INSTANT" | grep -q 'ON'; then
     A7=0
 else
     A7=1
@@ -274,7 +276,6 @@ ADDON_PID=""
 # Wait for broker to detect disconnect and fire the will (default keepalive is 60s; we lower it
 # by re-reading the persisted "online" then expecting "offline" after disconnect).
 wait "$LWT_PID" 2>/dev/null || true
-A8=0
 if grep -q 'offline' "$LWT_LOG"; then
     A8=0
 else

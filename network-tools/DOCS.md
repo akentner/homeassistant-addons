@@ -44,7 +44,7 @@ Letztes Scan-Ergebnis als JSON:
 
 ```json
 {
-  "scan_timestamp": "2026-06-27T20:00:00+00:00",
+  "scan_timestamp": "2026-08-22T12:00:00+00:00",
   "scan_ok": true,
   "interface": "eth0",
   "hosts_total": 2,
@@ -57,11 +57,45 @@ Letztes Scan-Ergebnis als JSON:
       "reachable": true,
       "mac": "74:78:27:98:90:EE",
       "mac_match": true,
-      "rtt_ms": 0.8
+      "rtt_ms": 0.8,
+      "rtt_min_ms": 0.7,
+      "rtt_max_ms": 0.9,
+      "rtt_stddev_ms": 0.1,
+      "packets_sent": 2,
+      "packets_received": 2,
+      "packet_loss_pct": 0.0,
+      "hostname": "tux1.lan",
+      "duration_ms": 12,
+      "error": null
     }
   ]
 }
 ```
+
+**Felder pro Host-Result:**
+
+| Feld | Typ | Immer gesetzt? | Beschreibung |
+| --- | --- | --- | --- |
+| `label` | string | ja | Anzeige-Label |
+| `ip` | string | ja | Ziel-IP-Adresse |
+| `expected_mac` | string | wenn konfiguriert | Erwartete MAC (aus `arping_hosts`) |
+| `reachable` | bool | ja | Roher arping-Returncode-Erfolg (vor Flap-Detection) |
+| `effective_reachable` | bool | ja | Nach Flap-Detection (Sensor-Payload) |
+| `consecutive_failures` | int | ja | Zähler aufeinanderfolgender Fehler |
+| `disconnect_threshold` | int | ja | Aus Config (`disconnect_threshold`) |
+| `mac` | string | wenn erreichbar | Tatsächliche MAC aus arping-Antwort |
+| `mac_match` | bool | wenn beide vorhanden | `true` wenn tatsächliche == erwartete MAC |
+| `rtt_ms` | float | wenn erreichbar | Mittlere Round-Trip-Time in Millisekunden (aus arping-Stats-Zeile) |
+| `rtt_min_ms` / `rtt_max_ms` / `rtt_stddev_ms` | float | wenn erreichbar | Min/Max/Stddev aus Stats-Zeile |
+| `packets_sent` / `packets_received` | int | wenn erreichbar | Aus arping-Stats-Zeile |
+| `packet_loss_pct` | float | wenn erreichbar | Prozent verlorener Pakete |
+| `hostname` | string | wenn `getent hosts $ip` etwas findet | Reverse-DNS-Lookup (1s Timeout) |
+| `duration_ms` | int | ja | Dauer des arping-Aufrufs |
+| `error` | string | wenn nicht erreichbar | Grund des Fehlschlags (Timeout, stderr-Snippet) — sonst `null` |
+
+DieFelder `last_check` (ISO-Timestamp), `duration_ms`, `error`, `hostname`, RTT-Stats und Paket-Counter werden
+in der HA-MQTT-Discovery-Binary-Sensor-Entity als JSON-Attribute veröffentlicht (siehe `_build_attributes()`
+in `arping_scan.py`).
 
 ---
 
@@ -174,19 +208,34 @@ mdns_monitors:
 
 | Topic                                       | Payload                                | Retain | QoS |
 | ------------------------------------------- | -------------------------------------- | ------ | --- |
-| `<prefix>/state`                            | `online` / `offline` / `unknown`       | ja     | 1   |
-| `<prefix>/details`                          | JSON (siehe unten)                     | ja     | 0   |
-| `<prefix>/last_check`                       | ISO-Timestamp                          | ja     | 0   |
-| `homeassistant/binary_sensor/.../config`     | HA-Discovery (retain)                  | ja     | 0   |
-| `homeassistant/sensor/.../state/config`     | HA-Discovery (retain)                  | ja     | 0   |
-| `homeassistant/sensor/.../last_check/config` | HA-Discovery (retain)                 | ja     | 0   |
+| `<prefix>/state`                            | `ON` / `OFF` (Binary-Sensor-Payload)   | ja     | 1   |
+| `<prefix>/details`                          | JSON (alle Detailinformationen)        | ja     | 0   |
+| `homeassistant/binary_sensor/.../config`     | HA-Discovery (1 Entity pro Monitor)    | ja     | 0   |
 | `network-tools/arping/availability`         | `online` / `offline` (geteilt mit ARPing) | ja  | 0   |
 
 `<prefix>` ist standardmäßig `homeassistant/monitor/networktools_mdns_<slug>`. `network-tools/arping/availability`
 ist ein geteiltes Last-Will-Topic — der gesamte Container hat **eine** LWT-Subscription, die sowohl
 den ARPing- als auch den mDNS-Loop abdeckt.
 
-### JSON-Details-Schema
+**Ab Version 0.4.0** wird pro Monitor **nur noch eine** HA-Entity emittiert (`binary_sensor.networktools_mdns_<slug>`).
+Vorher gab es zusätzlich `sensor.networktools_mdns_<slug>_state` und `sensor.networktools_mdns_<slug>_last_check`.
+Diese beiden Entitäten sind weg — ihre Inhalte leben jetzt im JSON-Attribute-Topic `<prefix>/details`. Das `state`-Feld
+dort enthält weiterhin den ausgeschriebenen Text (`online | offline | unknown`), `last_check` den ISO-Timestamp.
+
+### MQTT-Auto-Discovery
+
+Es ist **kein** manueller Setup-Schritt nötig. Sobald die MQTT-Integration in HA aktiv ist (Standard seit HA 2024.x),
+sammelt HA die unter `<discovery_prefix>/+/+/+/config` publizierten Discovery-Payloads automatisch ein und registriert
+die zugehörigen Entities. Voraussetzung:
+
+1. `mqtt_enabled: true` im Add-on-Config
+2. MQTT-Integration in HA aktiv
+3. `mqtt_discovery_prefix` korrekt (Default: `homeassistant`)
+
+Die Discovery-Topics für die mDNS-Monitore heißen konkret:
+`homeassistant/binary_sensor/networktools_mdns_<slug>/config`.
+
+### JSON-Details-Schema (`<prefix>/details`)
 
 ```json
 {
@@ -206,14 +255,17 @@ den ARPing- als auch den mDNS-Loop abdeckt.
 }
 ```
 
+Das vollständige JSON landet als Attribute der Binary-Sensor-Entity und kann in HA-Templates referenziert
+werden — z.B. `state_attr('binary_sensor.networktools_mdns_brother_airprint', 'address')`.
+
 ### Zustands-Klassifikation
 
-| Zustand                   | Bedingung                                                            | MQTT-State | Binary-Sensor |
-| ------------------------- | -------------------------------------------------------------------- | ---------- | ------------- |
-| `online`                  | Dienst angekündigt **und** per `avahi-resolve` auflösbar              | `online`   | ON            |
-| `announced_unresolved`    | Dienst angekündigt, Hostname nicht auflösbar                          | `offline`  | OFF           |
-| `not_found`               | Kein passender Dienst in diesem Check                                 | `offline`  | OFF           |
-| `error`                   | avahi-browse fehlgeschlagen oder Timeout                              | `unknown`  | OFF           |
+| Zustand                   | Bedingung                                                            | Binary-Sensor | `attributes.state` |
+| ------------------------- | -------------------------------------------------------------------- | ------------- | ------------------- |
+| `online`                  | Dienst angekündigt **und** per `avahi-resolve` auflösbar              | ON            | `online`            |
+| `announced_unresolved`    | Dienst angekündigt, Hostname nicht auflösbar                          | OFF           | `offline`           |
+| `not_found`               | Kein passender Dienst in diesem Check                                 | OFF           | `offline`           |
+| `error`                   | avahi-browse fehlgeschlagen oder Timeout                              | OFF           | `unknown`           |
 
 ### Firewall / Multicast-Anforderungen
 
@@ -254,4 +306,16 @@ mosquitto_sub -h core-mosquitto -t 'homeassistant/binary_sensor/networktools_mdn
 | HA zeigt Entities als `unavailable`                | `mqtt_enabled` im Add-on fehlt oder Broker nicht erreichbar       |
 | Discovery-Configs erscheinen nicht in HA           | `mqtt_discovery_prefix` falsch — Default ist `homeassistant`       |
 | Filter greift nicht                                | Filter ist Substring-Match — exakten Hostnamen oder IP prüfen    |
+
+### Breaking Change: 0.3.0 → 0.4.0
+
+Vor 0.4.0 wurden pro Monitor **drei** HA-Entities emittiert (`binary_sensor._available` + `sensor._state`
++ `sensor._last_check`). Ab 0.4.0 ist es nur noch **eine** Binary-Sensor-Entity; `state` (Text) und
+`last_check` (ISO-Timestamp) leben in den JSON-Attributen.
+
+**Migration:** Bestehende-Dashboards, die auf `sensor.networktools_mdns_<slug>_state` oder `sensor.server._last_check`
+referenzieren, müssen umgestellt werden auf `state_attr('binary_sensor.networktools_mdns_<slug>', 'state')` bzw.
+`state_attr('binary_sensor.networktools_mdns_<slug>', 'timestamp')`. Die alten Entities werden von HA nach
+einem Geräte-Reset nicht mehr automatisch neu angelegt — am einfachsten das Gerät in
+Einstellungen → Geräte & Dienste → MQTT löschen und neu hinzufügen, dann werden die neuen Entities gepullt.
 

@@ -2,7 +2,7 @@ name: "Network Tools"
 description: >-
     Network diagnostics and host detection for Home Assistant. Provides ARP-based host detection
     via arping, plus nmap, dig, ping and traceroute for manual use.
-version: "0.3.0-1"
+version: "0.4.0-0"
 slug: "network-tools"
 image: "ghcr.io/akentner/homeassistant-addons/{arch}-network_tools"
 init: false
@@ -14,25 +14,10 @@ boot: "auto"
 host_network: true
 
 options:
-    arping_hosts:
-        - label: "example-host"
-          ip: "192.168.178.1"
-          mac: "AA:BB:CC:DD:EE:FF"
-          device_name: "My Router"
-    interface: "eth0"
-    interval: 30
-    disconnect_threshold: 3
-    port: 18080
-    log_level: "info"
-    mqtt_enabled: false
-    mqtt_host: "core-mosquitto"
-    mqtt_port: 1883
-    mqtt_username: ""
-    mqtt_password: ""
-    mqtt_discovery_prefix: "homeassistant"
     # List of mDNS/DNS-SD service monitors. Each monitor runs independently and
-    # publishes its own state + details + last_check via MQTT, plus HA discovery
-    # entities (binary_sensor + 2 sensors). Add as many entries as you need.
+    # publishes its own state + details via MQTT, plus a single HA discovery
+    # binary_sensor entity per monitor (all diagnostic info lives in the
+    # json_attributes_topic). Add as many entries as you need.
     mdns_monitors:
         - name: "cups_airprint"
           enabled: false
@@ -49,8 +34,35 @@ options:
           timeout: 10
           topic_prefix: "homeassistant/monitor/cups_airprint"
           device_name: "Brother HL-L3270CDW"
+    arping_hosts:
+        - label: "example-host"
+          ip: "192.168.178.1"
+          mac: "AA:BB:CC:DD:EE:FF"
+          device_name: "My Router"
+    interface: "eth0"
+    interval: 30
+    disconnect_threshold: 3
+    port: 18080
+    log_level: "info"
+    mqtt_enabled: false
+    mqtt_host: "core-mosquitto"
+    mqtt_port: 1883
+    mqtt_username: ""
+    mqtt_password: ""
+    mqtt_discovery_prefix: "homeassistant"
 
 schema:
+    mdns_monitors:
+        - name: str
+          enabled: bool
+          service_types:
+              - str
+          filter:
+              - str
+          interval: int(10,3600)
+          timeout: int(1,60)
+          topic_prefix: str?
+          device_name: str?
     arping_hosts:
         - label: str
           ip: str
@@ -67,14 +79,3 @@ schema:
     mqtt_username: str?
     mqtt_password: str?
     mqtt_discovery_prefix: str?
-    mdns_monitors:
-        - name: str
-          enabled: bool
-          service_types:
-              - str
-          filter:
-              - str
-          interval: int(10,3600)
-          timeout: int(1,60)
-          topic_prefix: str?
-          device_name: str?

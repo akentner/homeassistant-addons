@@ -216,10 +216,6 @@ def _details_topic_for(prefix: str) -> str:
     return f"{prefix.rstrip('/')}/details"
 
 
-def _last_check_topic_for(prefix: str) -> str:
-    return f"{prefix.rstrip('/')}/last_check"
-
-
 def _build_device_block(monitor: dict, slug: str) -> dict:
     """Build the HA device block for one monitor."""
     name = monitor.get("device_name") or monitor.get("name") or slug
@@ -231,10 +227,12 @@ def _build_device_block(monitor: dict, slug: str) -> dict:
     }
 
 
-def _build_discovery_payloads(monitor: dict, discovery_prefix: str, slug: str) -> dict:
-    """Build the 3 HA Discovery payloads for one monitor.
+def _build_discovery_payload(monitor: dict, discovery_prefix: str, slug: str) -> dict:
+    """Build the single HA Discovery payload for one monitor.
 
-    Returns dict with keys 'binary_sensor', 'sensor_state', 'sensor_last_check' plus '_topic_prefix'.
+    Returns a (payload, topic_prefix) tuple. Only one binary_sensor per monitor is
+    registered; all extra information (state, last_check, service details) lives in
+    json_attributes_topic.
     """
     topic_prefix = (
         monitor.get("topic_prefix")
@@ -242,56 +240,27 @@ def _build_discovery_payloads(monitor: dict, discovery_prefix: str, slug: str) -
     )
     state_topic = _state_topic_for(topic_prefix)
     details_topic = _details_topic_for(topic_prefix)
-    last_check_topic = _last_check_topic_for(topic_prefix)
     interval = int(monitor.get("interval", 60))
     expire_after = max(60, interval * 2)
     device = _build_device_block(monitor, slug)
     friendly = monitor.get("device_name") or monitor.get("name") or slug
 
-    binary_sensor = {
-        "name": f"{friendly} verfuegbar",
-        "unique_id": f"networktools_mdns_{slug}_available",
-        "default_entity_id": f"binary_sensor.networktools_mdns_{slug}_available",
-        "state_topic": state_topic,
-        "json_attributes_topic": details_topic,
-        "device_class": "connectivity",
-        "payload_on": "ON",
-        "payload_off": "OFF",
-        "availability_topic": SHARED_AVAIL_TOPIC,
-        "payload_available": "online",
-        "payload_not_available": "offline",
-        "expire_after": expire_after,
-        "device": device,
-    }
-    sensor_state = {
-        "name": f"{friendly} Status",
-        "unique_id": f"networktools_mdns_{slug}_state",
-        "default_entity_id": f"sensor.networktools_mdns_{slug}_state",
-        "state_topic": state_topic,
-        "json_attributes_topic": details_topic,
-        "availability_topic": SHARED_AVAIL_TOPIC,
-        "payload_available": "online",
-        "payload_not_available": "offline",
-        "expire_after": expire_after,
-        "device": device,
-    }
-    sensor_last_check = {
-        "name": f"{friendly} letzter Check",
-        "unique_id": f"networktools_mdns_{slug}_last_check",
-        "default_entity_id": f"sensor.networktools_mdns_{slug}_last_check",
-        "state_topic": last_check_topic,
-        "json_attributes_topic": details_topic,
-        "device_class": "timestamp",
-        "availability_topic": SHARED_AVAIL_TOPIC,
-        "payload_available": "online",
-        "payload_not_available": "offline",
-        "expire_after": expire_after,
-        "device": device,
-    }
     return {
-        "binary_sensor": binary_sensor,
-        "sensor_state": sensor_state,
-        "sensor_last_check": sensor_last_check,
+        "payload": {
+            "name": f"{friendly} verfuegbar",
+            "unique_id": f"networktools_mdns_{slug}",
+            "default_entity_id": f"binary_sensor.networktools_mdns_{slug}",
+            "state_topic": state_topic,
+            "json_attributes_topic": details_topic,
+            "device_class": "connectivity",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability_topic": SHARED_AVAIL_TOPIC,
+            "payload_available": "online",
+            "payload_not_available": "offline",
+            "expire_after": expire_after,
+            "device": device,
+        },
         "_topic_prefix": topic_prefix,
     }
 
@@ -301,22 +270,18 @@ def _state_to_binary(state: str) -> str:
 
     - online -> ON
     - announced_unresolved / not_found -> OFF
-    - error -> OFF (HA will show 'unknown' via the state sensor instead)
+    - error -> OFF
     """
     return "ON" if state == "online" else "OFF"
 
 
-def _state_text_for_sensor(state: str) -> str:
-    """Plain text payload for the state sensor: online|offline|unknown."""
-    if state == "online":
-        return "online"
-    if state == "error":
-        return "unknown"
-    return "offline"
-
-
 def publish_mqtt(monitor: dict, result: dict, options: dict, slug: str) -> None:
-    """Publish discovery + state + details + last_check + birth for one monitor."""
+    """Publish discovery + state + details + birth for one monitor.
+
+    Only one binary_sensor entity per monitor (HA MQTT Discovery auto-registers it).
+    The json_attributes_topic carries the full diagnostic payload (state text,
+    service details, last_check timestamp, error).
+    """
     if not options.get("mqtt_enabled"):
         return
     try:
@@ -351,32 +316,21 @@ def publish_mqtt(monitor: dict, result: dict, options: dict, slug: str) -> None:
     # Re-publish the shared birth message - single LWT covers both arping and mdns loops
     client.publish(SHARED_AVAIL_TOPIC, "online", retain=True)
 
-    payloads = _build_discovery_payloads(monitor, discovery_prefix, slug)
-    topic_prefix = payloads.pop("_topic_prefix")
+    built = _build_discovery_payload(monitor, discovery_prefix, slug)
+    payload = built["payload"]
+    topic_prefix = built["_topic_prefix"]
     state_topic = _state_topic_for(topic_prefix)
     details_topic = _details_topic_for(topic_prefix)
-    last_check_topic = _last_check_topic_for(topic_prefix)
 
-    discovery_topics = {
-        "binary_sensor": (
-            f"{discovery_prefix}/binary_sensor/networktools_mdns_"
-            f"{slug}_available/config"
-        ),
-        "sensor_state": (
-            f"{discovery_prefix}/sensor/networktools_mdns_{slug}_state/config"
-        ),
-        "sensor_last_check": (
-            f"{discovery_prefix}/sensor/networktools_mdns_{slug}_last_check/config"
-        ),
-    }
+    discovery_topic = (
+        f"{discovery_prefix}/binary_sensor/networktools_mdns_{slug}/config"
+    )
 
     try:
-        for kind, topic in discovery_topics.items():
-            client.publish(topic, json.dumps(payloads[kind]), retain=True)
-        state_payload = _state_text_for_sensor(result["state"])
+        client.publish(discovery_topic, json.dumps(payload), retain=True)
+        state_payload = _state_to_binary(result["state"])
         client.publish(state_topic, state_payload, retain=True, qos=1)
         client.publish(details_topic, json.dumps(result, default=str), retain=True)
-        client.publish(last_check_topic, result["timestamp"], retain=True)
         log.debug(
             f"MQTT published: {slug} -> state={state_payload} matched={bool(result.get('service_name'))}"
         )

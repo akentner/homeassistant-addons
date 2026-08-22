@@ -282,10 +282,11 @@ class TestMqttPublish:
         retain_calls = [
             c for c in mock_client.publish.call_args_list if c.kwargs.get("retain") is True
         ]
-        # 3 discovery configs + state + details + last_check + birth = 7
-        assert len(retain_calls) >= 7
+        # 1 discovery config + state + details + birth = 4
+        assert len(retain_calls) >= 4
 
-    def test_state_online_publishes_online(self):
+    def test_state_online_publishes_ON(self):
+        """Binary sensor state topic carries ON for online, OFF for everything else."""
         mock_client, _ = self._install_mock_paho()
         try:
             mdns_scan.publish_mqtt(
@@ -297,9 +298,10 @@ class TestMqttPublish:
             c for c in mock_client.publish.call_args_list
             if c.args and isinstance(c.args[0], str) and c.args[0].endswith("/state")
         ]
-        assert any(c.args[1] == "online" for c in state_calls)
+        assert any(c.args[1] == "ON" for c in state_calls)
 
-    def test_state_error_publishes_unknown(self):
+    def test_state_error_publishes_OFF_and_unknown_in_details(self):
+        """error -> binary OFF on state topic, but 'state' attribute carries 'unknown' text."""
         result = self._result()
         result["state"] = "error"
         mock_client, _ = self._install_mock_paho()
@@ -313,7 +315,12 @@ class TestMqttPublish:
             c for c in mock_client.publish.call_args_list
             if c.args and isinstance(c.args[0], str) and c.args[0].endswith("/state")
         ]
-        assert any(c.args[1] == "unknown" for c in state_calls)
+        assert any(c.args[1] == "OFF" for c in state_calls)
+        details_calls = [
+            c for c in mock_client.publish.call_args_list
+            if c.args and isinstance(c.args[0], str) and c.args[0].endswith("/details")
+        ]
+        assert any("\"state\": \"error\"" in str(c.args[1]) for c in details_calls)
 
     def test_discovery_device_block_uses_slug(self):
         mock_client, _ = self._install_mock_paho()
@@ -447,7 +454,11 @@ class TestMainIndependence:
 
 
 class TestDiscoveryPayloads:
-    """HA Discovery payload structure: each monitor emits 3 configs sharing a device block."""
+    """HA Discovery payload structure: each monitor emits exactly one binary_sensor.
+
+    All extra information (state text, last_check timestamp, service details,
+    duration, error) lives in the json_attributes_topic.
+    """
 
     def _monitor(self, slug="brother"):
         return {
@@ -460,52 +471,57 @@ class TestDiscoveryPayloads:
             "device_name": "Brother HL-L3270CDW",
         }
 
-    def test_three_discovery_payloads_with_correct_kinds(self):
-        payloads = mdns_scan._build_discovery_payloads(
+    def test_returns_single_binary_sensor_payload(self):
+        built = mdns_scan._build_discovery_payload(
             self._monitor(), "homeassistant", "brother"
         )
-        assert "binary_sensor" in payloads
-        assert "sensor_state" in payloads
-        assert "sensor_last_check" in payloads
-        assert payloads["_topic_prefix"] == "homeassistant/monitor/brother"
+        assert "payload" in built
+        assert built["_topic_prefix"] == "homeassistant/monitor/brother"
+        assert "sensor_state" not in built
+        assert "sensor_last_check" not in built
+        assert "binary_sensor" not in built  # the key is now 'payload' instead
 
     def test_binary_sensor_uses_connectivity_device_class(self):
-        payloads = mdns_scan._build_discovery_payloads(
+        built = mdns_scan._build_discovery_payload(
             self._monitor(), "homeassistant", "brother"
         )
-        bs = payloads["binary_sensor"]
+        bs = built["payload"]
         assert bs["device_class"] == "connectivity"
         assert bs["payload_on"] == "ON"
         assert bs["payload_off"] == "OFF"
 
-    def test_last_check_sensor_uses_timestamp_device_class(self):
-        payloads = mdns_scan._build_discovery_payloads(
+    def test_unique_id_uses_bare_slug_no_available_suffix(self):
+        """0.4.0 simplified naming: entity slug is just <slug>, no '_available' suffix."""
+        built = mdns_scan._build_discovery_payload(
             self._monitor(), "homeassistant", "brother"
         )
-        lc = payloads["sensor_last_check"]
-        assert lc["device_class"] == "timestamp"
+        bs = built["payload"]
+        assert bs["unique_id"] == "networktools_mdns_brother"
+        assert bs["default_entity_id"] == "binary_sensor.networktools_mdns_brother"
+
+    def test_json_attributes_topic_present(self):
+        built = mdns_scan._build_discovery_payload(
+            self._monitor(), "homeassistant", "brother"
+        )
+        bs = built["payload"]
+        assert "json_attributes_topic" in bs
+        assert bs["json_attributes_topic"].endswith("/details")
 
     def test_expire_after_doubles_interval(self):
-        payloads = mdns_scan._build_discovery_payloads(
+        built = mdns_scan._build_discovery_payload(
             self._monitor(), "homeassistant", "brother"
         )
         # interval is 60s in the test monitor
-        assert payloads["binary_sensor"]["expire_after"] == 120
-        assert payloads["sensor_state"]["expire_after"] == 120
-        assert payloads["sensor_last_check"]["expire_after"] == 120
+        assert built["payload"]["expire_after"] == 120
 
     def test_default_topic_prefix_when_unspecified(self):
         monitor = self._monitor()
         del monitor["topic_prefix"]
-        payloads = mdns_scan._build_discovery_payloads(monitor, "homeassistant", "brother")
-        assert payloads["_topic_prefix"] == "homeassistant/monitor/networktools_mdns_brother"
+        built = mdns_scan._build_discovery_payload(monitor, "homeassistant", "brother")
+        assert built["_topic_prefix"] == "homeassistant/monitor/networktools_mdns_brother"
 
     def test_state_payload_mappings(self):
         assert mdns_scan._state_to_binary("online") == "ON"
         assert mdns_scan._state_to_binary("not_found") == "OFF"
         assert mdns_scan._state_to_binary("announced_unresolved") == "OFF"
         assert mdns_scan._state_to_binary("error") == "OFF"
-        assert mdns_scan._state_text_for_sensor("online") == "online"
-        assert mdns_scan._state_text_for_sensor("not_found") == "offline"
-        assert mdns_scan._state_text_for_sensor("announced_unresolved") == "offline"
-        assert mdns_scan._state_text_for_sensor("error") == "unknown"
