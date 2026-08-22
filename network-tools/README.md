@@ -6,11 +6,10 @@ Network diagnostics and ARP-based host detection for Home Assistant.
 
 ## Features
 
-- **arping-based host detection** — ARP-Ping per Host, MAC verification, reachability tracking,
-  enriched attributes (RTT min/avg/max/stddev, packet loss, hostname, error)
-- **mDNS/DNS-SD service monitor** — generic per-service health checks (AirPrint, AirPlay, SMB, etc.)
-  with configurable filter, interval, and HA MQTT discovery. One binary_sensor per monitor;
-  full diagnostic info in JSON attributes.
+- **arping-based host detection** — ARP-Ping per Host, MAC verification, reachability tracking, enriched attributes (RTT
+  min/avg/max/stddev, packet loss, hostname, error)
+- **mDNS/DNS-SD service monitor** — generic per-service health checks (AirPrint, AirPlay, SMB, etc.) with configurable
+  filter, interval, and HA MQTT discovery. One binary_sensor per monitor; full diagnostic info in JSON attributes.
 - **Periodic scanning** — configurable interval (default: 30s), results served via REST
 - **Network tools** — nmap, ping, dig, traceroute, avahi-browse, avahi-resolve available in container
 - **host_network mode** — full Layer-2 access for ARP packets and mDNS multicast
@@ -40,11 +39,10 @@ See [DOCS.md](DOCS.md) for full configuration reference and HA integration examp
       `mosquitto_sub -t 'homeassistant/binary_sensor/networktools_arping_+/config' -v`
 - [ ] mDNS binary sensor `binary_sensor.networktools_mdns_<slug>` appears in HA after
       `mosquitto_sub -t 'homeassistant/binary_sensor/networktools_mdns_+/config' -v`
-- [ ] mDNS binary sensor reads `ON` / `OFF`; full diagnostic (state text, service_name, address,
-      last_check, error) lives in `attributes`
+- [ ] mDNS binary sensor reads `ON` / `OFF`; full diagnostic (state text, service_name, address, last_check, error)
+      lives in `attributes`
 - [ ] When `avahi-browse -artp _ipp._tcp` returns no results, mDNS binary sensor flips to `OFF`
-- [ ] When ARPing host is unreachable for `disconnect_threshold` consecutive cycles, the binary
-      sensor flips to `OFF`
+- [ ] When ARPing host is unreachable for `disconnect_threshold` consecutive cycles, the binary sensor flips to `OFF`
 
 <!-- Badge Links -->
 

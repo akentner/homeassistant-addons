@@ -136,8 +136,8 @@ Folgende Tools sind im Container verfügbar (via `docker exec` oder HA Terminal)
 
 Zusätzlich zum ARPing-Scan kann der Add-on beliebige mDNS-/DNS-SD-Dienste im LAN überwachen — z.B. einen
 CUPS-AirPrint-Drucker (Klassiker „CUPS läuft, iOS findet ihn nicht"), AirPlay-Empfänger, Chromecast, SMB-Shares,
-HTTP-Dienste. Der Check funktioniert ausschließlich über echtes mDNS (via `avahi-browse`);
-ein bloßer TCP-Portcheck auf 631 ist explizit nicht ausreichend.
+HTTP-Dienste. Der Check funktioniert ausschließlich über echtes mDNS (via `avahi-browse`); ein bloßer TCP-Portcheck auf
+631 ist explizit nicht ausreichend.
 
 ### `mdns_monitors`
 
@@ -211,13 +211,11 @@ mdns_monitors:
 | `network-tools/arping/availability`      | `online` / `offline` (geteilt mit ARPing) | ja     | 0   |
 
 `<prefix>` ist standardmäßig `homeassistant/monitor/networktools_mdns_<slug>`. `network-tools/arping/availability` ist
-ein geteiltes Last-Will-Topic — der gesamte Container hat **eine** LWT-Subscription, die
-ARPing- und mDNS-Loop abdeckt.
+ein geteiltes Last-Will-Topic — der gesamte Container hat **eine** LWT-Subscription, die ARPing- und mDNS-Loop abdeckt.
 
 **Ab Version 0.4.0** wird pro Monitor **nur noch eine** HA-Entity emittiert (`binary_sensor.networktools_mdns_<slug>`).
 Vorher gab es `sensor.networktools_mdns_<slug>_state` und `sensor.networktools_mdns_<slug>_last_check`. Diese beiden
-Entitäten sind weg — ihre Inhalte leben jetzt im JSON-Attribute-Topic `<prefix>/details`. Das
-`state`-Feld dort enthält
+Entitäten sind weg — ihre Inhalte leben jetzt im JSON-Attribute-Topic `<prefix>/details`. Das `state`-Feld dort enthält
 weiterhin den ausgeschriebenen Text (`online | offline | unknown`), `last_check` den ISO-Timestamp.
 
 ### MQTT-Auto-Discovery
@@ -253,8 +251,7 @@ Die Discovery-Topics für die mDNS-Monitore heißen konkret:
 }
 ```
 
-Das vollständige JSON landet als Attribute der Binary-Sensor-Entity und kann in HA-Templates
-referenziert werden — z.B.
+Das vollständige JSON landet als Attribute der Binary-Sensor-Entity und kann in HA-Templates referenziert werden — z.B.
 `state_attr('binary_sensor.networktools_mdns_brother_airprint', 'address')`.
 
 ### Zustands-Klassifikation
@@ -271,9 +268,8 @@ Der Check funktioniert nur, wenn Multicast-Pakete zwischen Container und LAN fli
 
 - UDP 5353 (mDNS) ist nicht durch eine Firewall zwischen Container-Host und LAN blockiert.
 - Die Multicast-Adresse `224.0.0.251` ist erreichbar (IPv4-mDNS) bzw. `ff02::fb` (IPv6).
-- WLAN-APs / Switches mit „AP Isolation" oder „Client Isolation" blockieren Multicast zwischen
-  Clients. In diesem Fall funktioniert AirPrint auch für iOS-Geräte nicht — der Check meldet korrekt
-  `not_found`, was das gewünschte Frühsignal
+- WLAN-APs / Switches mit „AP Isolation" oder „Client Isolation" blockieren Multicast zwischen Clients. In diesem Fall
+  funktioniert AirPrint auch für iOS-Geräte nicht — der Check meldet korrekt `not_found`, was das gewünschte Frühsignal
   ist. Frühsignal ist. Frühsignal ist.
 - Der Host hat mindestens ein Interface im Ziel-LAN (nicht `lo`, nicht das Container-Bridge-Device).
 
@@ -312,6 +308,5 @@ Vor 0.4.0 wurden pro Monitor **drei** HA-Entities emittiert (`binary_sensor._ava
 **Migration:** Bestehende-Dashboards, die auf `sensor.networktools_mdns_<slug>_state` oder `sensor.server._last_check`
 referenzieren, müssen umgestellt werden auf `state_attr('binary_sensor.networktools_mdns_<slug>', 'state')` bzw.
 `state_attr('binary_sensor.networktools_mdns_<slug>', 'timestamp')`. Die alten Entities werden von HA nach einem
-Geräte-Reset nicht mehr automatisch neu angelegt — am einfachsten das Gerät in
-Einstellungen → Geräte & Dienste → MQTT
+Geräte-Reset nicht mehr automatisch neu angelegt — am einfachsten das Gerät in Einstellungen → Geräte & Dienste → MQTT
 löschen und neu hinzufügen.

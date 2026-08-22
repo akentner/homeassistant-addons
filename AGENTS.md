@@ -45,8 +45,8 @@ The `.upstream.yaml` enables daily automatic checks for upstream releases and pa
 - **Subpatch (`-N`) bumps** are for changes that don't touch the add-on's program logic:
   - Dockerfile changes (new/changed apk packages, base-image bumps, build-arg tweaks)
   - ConfigFlow-only changes (YAML schema / option order / default values / DOCS+README copy)
-  - Forcing a new version rollout (e.g. when HA Supervisor caches the previous one and doesn't
-    surface an "update available" badge)
+  - Forcing a new version rollout (e.g. when HA Supervisor caches the previous one and doesn't surface an "update
+    available" badge)
 - **SemVer (`X.Y.Z`) bumps** are for program-logic changes:
   - Upstream binary or library updates
   - Add-on's own scripts (Python, shell) — new features, refactors, bug fixes in behavior
@@ -56,11 +56,11 @@ The `.upstream.yaml` enables daily automatic checks for upstream releases and pa
 
 **Worked examples** (network-tools):
 
-| Bump             | Why                                                       | Category        |
-| ---------------- | --------------------------------------------------------- | --------------- |
-| `0.2.3-1` → `0.3.0-0` | New `mdns_scan.py` + tests + verify script             | Program logic   |
-| `0.3.0-0` → `0.3.0-1` | `avahi-utils` → `avahi-tools` (Alpine package rename) | Dockerfile       |
-| `0.3.0-1` → `0.4.0-0` | Collapse 3 mDNS entities → 1 binary sensor + arping attribute enrichment | Program logic   |
+| Bump                  | Why                                                                      | Category      |
+| --------------------- | ------------------------------------------------------------------------ | ------------- |
+| `0.2.3-1` → `0.3.0-0` | New `mdns_scan.py` + tests + verify script                               | Program logic |
+| `0.3.0-0` → `0.3.0-1` | `avahi-utils` → `avahi-tools` (Alpine package rename)                    | Dockerfile    |
+| `0.3.0-1` → `0.4.0-0` | Collapse 3 mDNS entities → 1 binary sensor + arping attribute enrichment | Program logic |
 
 **Why this design:** Separates upstream version tracking (build.yaml) from add-on-specific patches (config.yaml
 subpatch). Enables automated upstream sync while allowing local bug fixes without breaking the sync mechanism.
