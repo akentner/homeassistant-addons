@@ -1,7 +1,7 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions update-version validate-dockerfiles docker-build-check build-addon
+.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions update-version validate-dockerfiles docker-build-check build-addon release
 
 # Default target
 help: ## Show this help message
@@ -9,8 +9,9 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "Examples:"
-	@echo "  make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2"
-	@echo "  make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2 CHECK_RELEASE=yes"
+	@echo "  make update-version ADDON=authentik VERSION=2026.8.0"
+	@echo "  make release ADDON=authentik VERSION=2026.8.0"
+	@echo "  make release ADDON=authentik VERSION=2026.8.0 GITHUB_RELEASE=yes"
 
 init: ## Initialize development environment (install dependencies and hooks)
 	@echo "🚀 Initializing development environment..."
@@ -169,12 +170,12 @@ build-addon: ## Build an add-on image locally, replicating the HA build process 
 	     fi; \
 	     exit $$EC; }
 
-update-version: ## Update add-on version (usage: make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2)
+update-version: ## Update add-on version (usage: make update-version ADDON=authentik VERSION=2026.8.0)
 	@if [ -z "$(ADDON)" ] || [ -z "$(VERSION)" ]; then \
 		echo "❌ Missing required parameters"; \
-		echo "Usage: make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2"; \
-		echo "       make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2 CHECK_RELEASE=yes"; \
-		echo "       make update-version ADDON=fritz-callmonitor2mqtt VERSION=1.7.2 NO_TAG=yes  # skip tag creation"; \
+		echo "Usage: make update-version ADDON=authentik VERSION=2026.8.0"; \
+		echo "       make update-version ADDON=authentik VERSION=2026.8.0 CHECK_RELEASE=yes"; \
+		echo "       make update-version ADDON=authentik VERSION=2026.8.0 NO_TAG=yes  # skip tag creation"; \
 		exit 1; \
 	fi
 	@echo "🔄 Updating $(ADDON) to version $(VERSION)..."
@@ -185,6 +186,37 @@ update-version: ## Update add-on version (usage: make update-version ADDON=fritz
 	./scripts/update-version.py $(ADDON) $(VERSION) $$ARGS
 	@echo "🔍 Running validation..."
 	@make validate-versions
+
+release: ## Bump, validate, tag and push a release (usage: make release ADDON=authentik VERSION=2026.8.0 [GITHUB_RELEASE=yes])
+	@if [ -z "$(ADDON)" ] || [ -z "$(VERSION)" ]; then \
+		echo "❌ Missing required parameters"; \
+		echo "Usage: make release ADDON=authentik VERSION=2026.8.0"; \
+		echo "       make release ADDON=authentik VERSION=2026.8.0 GITHUB_RELEASE=yes"; \
+		exit 1; \
+	fi
+	@if [ ! -d "$(ADDON)" ]; then \
+		echo "❌ Add-on directory '$(ADDON)' not found"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(ADDON)/config.yaml" ] || [ ! -f "$(ADDON)/build.yaml" ]; then \
+		echo "❌ '$(ADDON)' is not a valid add-on (missing config.yaml or build.yaml)"; \
+		exit 1; \
+	fi
+	@TAG="$(ADDON)/v$(VERSION)"; \
+	echo "🚀 Releasing $(ADDON) at $(VERSION) (tag: $$TAG)"; \
+	$(MAKE) update-version ADDON=$(ADDON) VERSION=$(VERSION); \
+	if [ "$(GITHUB_RELEASE)" = "yes" ] && command -v gh >/dev/null 2>&1; then \
+		echo "📝 Creating GitHub Release for $$TAG..."; \
+		gh release create "$$TAG" \
+			--title "$$TAG" \
+			--generate-notes \
+			|| echo "⚠️  GitHub Release creation failed — push manually with:" \
+				"   gh release create $$TAG --generate-notes"; \
+	elif [ "$(GITHUB_RELEASE)" = "yes" ]; then \
+		echo "⚠️  'gh' CLI not found — GitHub Release must be created manually:"; \
+		echo "   gh release create $$TAG --generate-notes"; \
+	fi; \
+	echo "✅ Release $$TAG complete. The build workflow for $(ADDON) will pick it up on the tag push."
 
 check-all: lint validate-addons validate-versions validate-dockerfiles ## Run all checks (lint + validate + versions + dockerfile args)
 
