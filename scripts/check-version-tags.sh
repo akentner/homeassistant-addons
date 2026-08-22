@@ -42,7 +42,11 @@ errored=0
 while IFS= read -r addon_dir; do
     [[ -n "$addon_dir" ]] || continue
 
-    version=$(grep '^version:' "$addon_dir/config.yaml" | sed 's/version: *"\([^"]*\)".*/\1/')
+    # The git tag is named after the base version in build.yaml (args.VERSION),
+    # NOT after config.yaml which carries an additional '-N' subpatch suffix.
+    # update-version.py creates the tag from the make-release CLI argument,
+    # which is the base version (matching build.yaml).
+    version=$(grep 'VERSION:' "$addon_dir/build.yaml" | sed 's/.*VERSION: *"\([^"]*\)".*/\1/')
     [[ -z "$version" ]] && continue
 
     tag="${addon_dir}/v${version}"
