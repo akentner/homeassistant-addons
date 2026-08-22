@@ -5,6 +5,22 @@ on:
     - cron: "0 6 * * *"
   workflow_dispatch:
 
+# Serialize auto-update runs so two of them cannot race for the same
+# upstream bump. cancel-in-progress: false means a second run (e.g. a
+# daily cron that fires while the previous day's run is still in
+# progress, or a manual workflow_dispatch while the schedule is
+# running) queues and waits rather than aborting either. Without this,
+# the second run reads the same current_version, sees the same
+# upstream-newer-version, runs update-version.py, and races the
+# first run's git push (which fails with non-fast-forward on the
+# second, or - worse - succeeds with the wrong content if both had
+# local commits staged). With the new <addon>/v<version> tag schema
+# the tag-collision risk is gone, but the git-push race remains, so
+# the serialization still pays for itself.
+concurrency:
+  group: auto-update
+  cancel-in-progress: false
+
 jobs:
   update:
     runs-on: ubuntu-latest
