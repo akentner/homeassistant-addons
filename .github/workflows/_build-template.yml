@@ -31,6 +31,13 @@ on:
         required: false
         type: boolean
         default: true
+    secrets:
+      HA_BASE_URL:
+        description: "Base URL of the Home Assistant instance that receives webhook notifications"
+        required: false
+      HA_WEBHOOK_ID:
+        description: "ID of the HA webhook to POST build start/finish events to"
+        required: false
 
 jobs:
   build:
