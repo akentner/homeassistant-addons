@@ -13,8 +13,14 @@ on:
 jobs:
   build:
     uses: ./.github/workflows/_build-template.yml
+    permissions:
+      contents: read
+      packages: write
     with:
       addon-name: phone-logger
       addon-display-name: "Phone Logger"
       addon-description: "Phone logging and adapter integration for Home Assistant"
       archs: '["amd64"]'
+    secrets:
+      HA_BASE_URL: ${{ secrets.HA_BASE_URL }}
+      HA_WEBHOOK_ID: ${{ secrets.HA_WEBHOOK_ID }}
