@@ -77,6 +77,18 @@ mdns_loop() {
 arp_loop &
 ARP_PID=$!
 
+# mDNS discovery needs a running system D-Bus and an Avahi daemon - otherwise
+# avahi-browse exits with "Failed to create client object: Daemon not running".
+# Start them before mdns_loop. Failures are non-fatal: mdns_scan will log the
+# error and the loop will retry on the next cycle.
+mkdir -p /var/run/dbus /var/run/avahi-daemon
+if [ -x /usr/bin/dbus-daemon ]; then
+    dbus-daemon --system --fork 2>/dev/null || log "dbus-daemon failed to start"
+fi
+if [ -x /usr/sbin/avahi-daemon ]; then
+    avahi-daemon --daemonize 2>/dev/null || log "avahi-daemon failed to start"
+fi
+
 if [ -f /usr/local/bin/mdns_scan.py ]; then
     mdns_loop &
     MDNS_PID=$!
