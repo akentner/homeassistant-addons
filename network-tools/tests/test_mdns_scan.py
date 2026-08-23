@@ -211,6 +211,86 @@ class TestAvahiBrowseTimeout:
         assert err == "no output"
 
 
+# ----------------------------- _run_avahi_browse command shape -----------------------------
+
+
+class TestAvahiBrowseCommandShape:
+    """Contract: _run_avahi_browse must invoke avahi-browse with the canonical
+    '-r -p -t <service_type>' flag set - NOT the legacy '-artp -t <timeout> <service_type>'
+    form that avahi-browse >=0.9 rejects with 'Too many arguments' (the previous
+    '-t <N>' was misinterpreted as the service-type selector because '-t' is
+    the flag for service-type, not a browse-side timeout).
+
+    The Python subprocess.run() call still carries the timeout, so the
+    browse-side timeout (which collides with -t = service type) is intentionally
+    dropped.
+    """
+
+    def test_command_uses_canonical_resolve_parsable_service_type_flags(self):
+        mock_result = MagicMock()
+        mock_result.stdout = (FIXTURES / "avahi_browse_online.txt").read_text()
+        mock_result.stderr = ""
+        mock_result.returncode = 0
+        with patch("subprocess.run", return_value=mock_result) as mock_run:
+            mdns_scan._run_avahi_browse("_ipp._tcp", 5)
+        cmd = mock_run.call_args.args[0]
+        assert cmd[0] == "avahi-browse"
+        # Canonical form: -r (resolve), -p (parsable), -t <service_type>.
+        # No -a (all-events), no legacy timeout arg that collides with -t.
+        assert cmd == ["avahi-browse", "-r", "-p", "-t", "_ipp._tcp"]
+
+    def test_drops_legacy_timeout_arg_from_command(self):
+        """The previous '-artp -t <N>' form put a timeout where -t expects a service type.
+
+        Make that regression impossible by asserting the command never contains
+        a numeric token right after -t.
+        """
+        mock_result = MagicMock()
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+        mock_result.returncode = 0
+        with patch("subprocess.run", return_value=mock_result) as mock_run:
+            mdns_scan._run_avahi_browse("_ipp._tcp", 5)
+        cmd = mock_run.call_args.args[0]
+        # Find the index of -t and assert the next token is NOT a number.
+        if "-t" in cmd:
+            idx = cmd.index("-t")
+            assert idx + 1 < len(cmd), "avahi-browse -t must be followed by a service type"
+            assert not cmd[idx + 1].isdigit(), (
+                f"avahi-browse -t <{cmd[idx + 1]}> looks like a leaked timeout; "
+                "should be -t <service_type>"
+            )
+
+    def test_subprocess_timeout_still_passed(self):
+        """Python-side timeout is the only timeout contract - subprocess.run must receive it."""
+        mock_result = MagicMock()
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+        mock_result.returncode = 0
+        with patch("subprocess.run", return_value=mock_result) as mock_run:
+            mdns_scan._run_avahi_browse("_ipp._tcp", 5)
+        kwargs = mock_run.call_args.kwargs
+        # Python-side timeout = configured timeout + 5s slack
+        assert kwargs["timeout"] == 10
+        assert kwargs["text"] is True
+        assert kwargs["capture_output"] is True
+
+    def test_parsable_output_still_parsed_after_command_reshape(self):
+        """After fixing the command shape, parsable output still classifies correctly."""
+        mock_result = MagicMock()
+        mock_result.stdout = (FIXTURES / "avahi_browse_online.txt").read_text()
+        mock_result.stderr = ""
+        mock_result.returncode = 0
+        with patch("subprocess.run", return_value=mock_result):
+            with patch("mdns_scan.resolve_host", return_value=True):
+                parsed, err = mdns_scan._run_avahi_browse("_ipp._tcp", 5)
+        assert err == ""
+        # 3 entries from the fixture (one '-' going-away skipped)
+        assert len(parsed) == 3
+        # None of the parsed events should be '-'
+        assert all(p["event"] != "-" for p in parsed)
+
+
 # ----------------------------- publish_mqtt -----------------------------
 
 

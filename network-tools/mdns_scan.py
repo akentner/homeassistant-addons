@@ -119,8 +119,17 @@ def resolve_host(host: str, timeout: int) -> bool:
 
 
 def _run_avahi_browse(service_type: str, timeout: int) -> tuple[list[dict], str]:
-    """Run avahi-browse for one service_type. Returns (parsed_lines, error_or_empty)."""
-    cmd = ["avahi-browse", "-artp", "-t", str(timeout), service_type]
+    """Run avahi-browse for one service_type. Returns (parsed_lines, error_or_empty).
+
+    The command uses the canonical avahi-browse CLI form `-r -p -t <service_type>`.
+    The previous `-artp -t <N> <service_type>` form was invalid for two reasons:
+    1. `-artp` is a short-option cluster (-a -r -t -p) where `-t` already means
+       "service-type" - so a second `-t <N>` collides with the service-type
+       selector. avahi-browse >=0.9 rejects this with "Too many arguments".
+    2. avahi-browse has no built-in browse-side timeout flag; the timeout is
+       enforced at the subprocess layer (timeout=timeout + 5 below).
+    """
+    cmd = ["avahi-browse", "-r", "-p", "-t", service_type]
     log.debug(f"avahi-browse: {' '.join(cmd)}")
     try:
         result = subprocess.run(
