@@ -36,7 +36,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      # Repo default workflow permissions are read-only, so `contents: read`
+      # is sufficient; `packages: write` is required for GHCR push.
+      contents: read
       packages: write
 
     strategy:
