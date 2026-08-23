@@ -13,8 +13,14 @@ on:
 jobs:
   build:
     uses: ./.github/workflows/_build-template.yml
+    permissions:
+      contents: read
+      packages: write
     with:
       addon-name: authentik
       addon-display-name: "Authentik"
       addon-description: "Open-source Identity Provider - SSO, OAuth2/OIDC, LDAP, SAML, and more"
       archs: '["amd64"]'
+    secrets:
+      HA_BASE_URL: ${{ secrets.HA_BASE_URL }}
+      HA_WEBHOOK_ID: ${{ secrets.HA_WEBHOOK_ID }}
