@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: markdown-renderer
-status: Milestone complete
-last_updated: "2026-06-27T23:03:38.323Z"
+status: Ready to execute
+last_updated: "2026-08-30T15:26:45.358Z"
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_phases: 8
+  completed_phases: 6
+  total_plans: 19
+  completed_plans: 14
 ---
 
 # Project State
@@ -18,7 +18,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Phase 06 — git-integration
+tracking. **Current focus:** Phase 08 — ci-cd-hardening
 
 ## Milestone v1.0 — COMPLETE
 
@@ -40,11 +40,30 @@ Roadmap: 3 phases (4-6). All phases complete.
 | 5     | Multi-Namespace + Dynamic Config | Complete | 2026-06-27 |
 | 6     | Git Integration                  | Complete | 2026-06-28 |
 
+## Milestone v1.2 — PLANNED
+
+Roadmap: 1 phase (8), 4 plans in 4 waves. Source: GitHub Actions audit 2026-08-30. Requirements CI-01..CI-10.
+
+| Phase | Name              | Status  | Completed |
+| ----- | ----------------- | ------- | --------- |
+| 8     | CI/CD Hardening   | Planned | —         |
+
+Plans are strictly serial: 08-01, 08-02 and 08-03 all modify `.github/workflows/_build-template.yml`, so only one may
+write per wave. 08-04 documents the end state and therefore runs last.
+
+| Plan  | Wave | Blocked on user                                                              |
+| ----- | ---- | ---------------------------------------------------------------------------- |
+| 08-01 | 1    | no                                                                           |
+| 08-02 | 2    | approval for an image-overwriting verification build; PR #39/#40 disposition  |
+| 08-03 | 3    | **yes** — Cloudflare service token + Access app + 2 GitHub secrets            |
+| 08-04 | 4    | no                                                                           |
+
 ## Current Position
 
-Phase: 06 of 2 (git-integration)
+Phase: 08 (ci-cd-hardening) — EXECUTING
+Plan: 3 of 4
 
-**Progress bar**: `[██████████] 100%`
+**Progress bar**: `[███████░░░] 74%`
 
 ## Accumulated Context
 
@@ -66,6 +85,25 @@ Phase: 06 of 2 (git-integration)
 | Dockerfile COPY `_git_sync.py` (06-02)        | Plan 01 added the helper but didn't update the Dockerfile's COPY line; new file never made it into the built image   |
 | INFO: log lines on git pull/clone success     | Pre-existing `subprocess.run(capture_output=True)` swallowed git's stdout; surfacing it lets operators verify pulls  |
 | Bumped v1.0.0 → v1.1.0 in 06-02 (not 06-01)   | Per Phase 5 pattern: empirical verification may surface issues; minor bump clearer than subpatch for new feature     |
+
+### Key Decisions (v1.2)
+
+| Decision                                                            | Rationale                                                                                                                                       |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cloudflare Access **service token**, not a Bypass policy            | The webhook has no HMAC; `notify-ha.sh` itself says "not acceptable for public exposure". Bypass would be a downgrade from today's protected state |
+| Separate path-scoped Access app for `/api/webhook/*`                | Cloudflare matches the most specific path first, so the hostname-wide app and its human policies stay untouched                                  |
+| **Reversed** D-03: named secret mappings, NOT `secrets: inherit`     | `docs/DEVELOPMENT.md:113-115` already forbids `inherit` for least privilege. The planning error was caught only because that sentence exists      |
+| `notify-ha.sh` fails fast on `3xx`                                  | An auth-proxy redirect is structurally never transient; 3 retries wasted time and buried the signal                                             |
+| Diagnostics must read the response **body** file                    | Existing code read curl's stderr, which is empty on a 302 — that is why the annotation was `HTTP 302:` with nothing after the colon               |
+| Never add `-L` to the notify curl                                   | Following the redirect fetches the Access login page, which returns 200 — the script would report success while HA received nothing               |
+| Per-job timeouts sized ~3x observed p100                            | A 45-minute cap on a 40-second lint job is not a cap. aarch64 measured 13m28s vs amd64 2m49s                                                     |
+| Bump all 5 actions together                                         | Breaking-change audit showed all four Docker majors are the same Node-24 + ESM change; the removals do not apply to this repo                    |
+| No `ignoreDeps` in `.github/renovate.json`                          | The 2026-07-27 batch-close was an accident, not policy; suppressing Renovate would encode the accident as intent                                 |
+| Verification builds treated as service-affecting                     | Per `docs/DEVELOPMENT.md` "Trigger Pitfalls" — a dispatch pushes images to GHCR and fires HA webhooks; needs explicit approval                    |
+| Bundled all 5 action bumps in one plan (08-02)                       | The original D-08 isolated `build-push-action` v6→v7; the audit showed the same Node-24 + ESM change across all four Docker majors, so isolation added risk without value |
+| Verification build target = `coding-assistants`                      | Only add-on with an aarch64 leg (so it is the only one exercising `setup-qemu-action@v4`); pre-alpha with no stability commitment; freshly rebuilt so the digest overwrite is no-op |
+| PRs #39/#40 auto-closed by Renovate                                  | Both target `@v4` major-only patches (`login-action` v4.6.0, `setup-buildx-action` v4.3.0); once Task 1's `@v4` pin landed, Renovate satisfied them and auto-closed. No manual close needed — closing would have rewritten the floating-major convention (D-09) |
+| Aarch64 leg 11m1s vs baseline 13m28s                                  | `-2m27s` (-18%) — QEMU emulation is faster on `setup-qemu-action@v4` than the v3 baseline, well within the 2x regression threshold                       |
 
 ### Research Flags (open questions for implementation)
 
@@ -93,7 +131,27 @@ Phase: 06 of 2 (git-integration)
 
 ### Blockers
 
-None.
+Phase 8 cannot complete without user action:
+
+- **08-03 is blocked** on the Cloudflare side (Q-02): service token, path-scoped Access application, and the two GitHub
+  secrets `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`. Unassigned — user dashboard vs. agent via API not decided.
+
+- **08-02 Task 3 and 08-03 Task 5** need approval for a verification build that overwrites published ghcr.io images.
+
+Open questions carried in `.planning/phases/08-ci-cd-hardening/08-CONTEXT.md`:
+
+- **Q-02**: who performs the Cloudflare Zero Trust configuration
+- **Q-03**: `07-tolaria-add-on-scaffold` — 3 plans + CONTEXT from 2026-07-30, no SUMMARYs, absent from ROADMAP and STATE.
+  Abandoned or paused? Phase 8 sidestepped it rather than renumbering
+
+- **Q-04**: `Build Markdown Renderer` and `Build Meridian` have never run — no push has touched their paths since
+  creation. Validate via `workflow_dispatch` (~3 min each)?
+
+- **HMAC**: 08-04 will *delete* the false `HA_WEBHOOK_SECRET` claim rather than implement it. If payload signing is
+  actually wanted, that is a separate plan (script + HA-side verification)
+
+Also unresolved, discovered during the audit but out of scope: milestone v1.1 is marked complete but was never archived
+via `/gsd-complete-milestone` — `REQUIREMENTS.md` still carries the v1.1 title while now also holding the CI section.
 
 ## Performance Metrics
 
@@ -101,6 +159,8 @@ None.
 | ----- | ---- | -------- | ----- | ----- |
 | 06    | 01   | 19 min   | 3     | 4     |
 | 06    | 02   | 36 min   | 3     | 9     |
+| Phase 08 P01 | 2 min | 3 tasks | 5 files |
+| Phase 08 P02 | 15 | 3 tasks | 5 files |
 
 ## Quick Tasks Completed
 
@@ -117,9 +177,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-28T00:00:00.000Z
+Last session: 2026-08-30T15:26:45.354Z
 
 ---
 
-_State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_ _Milestone v1.1 roadmap written: 2026-06-27_ _Last
-activity: 2026-06-27 — v1.1 roadmap defined (3 phases, 20 requirements)_
+_State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_ _Milestone v1.1 roadmap written: 2026-06-27_
+_Milestone v1.2 (Phase 8, CI/CD Hardening) planned: 2026-08-30 from a GitHub Actions audit — 4 plans, requirements
+CI-01..CI-10, nothing executed yet_

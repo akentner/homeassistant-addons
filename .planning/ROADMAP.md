@@ -3,7 +3,8 @@
 ## Milestones
 
 - ✅ **v1.0 MVP** — Phases 1-3 (shipped 2026-04-04)
-- 📋 **v1.1 markdown-renderer** — Phases 4-6 (planned)
+- ✅ **v1.1 markdown-renderer** — Phases 4-6 (complete 2026-06-28)
+- 📋 **v1.2 CI/CD Hardening** — Phase 8 (planned 2026-08-30)
 
 ## Phases
 
@@ -26,6 +27,16 @@ Full details: [.planning/milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
       served as isolated SPAs, landing page at ingress root
 - [x] **Phase 6: Git Integration** — Optional per-namespace git pull at startup and on a background interval; errors
       non-blocking (completed 2026-06-28)
+
+### 📋 v1.2 CI/CD Hardening (Phase 8)
+
+- [ ] **Phase 8: CI/CD Hardening** — Close the three latent defects found by the 2026-08-30 GitHub Actions audit (silent
+      HA-notification failure, missing job timeouts, action versions frozen by an accidental Renovate PR batch-close) plus
+      the documentation drift found alongside them
+
+> Phase 7 (`07-tolaria-add-on-scaffold`) has 3 plans and a CONTEXT from 2026-07-30 but no SUMMARY files and no entry in
+> this roadmap or STATE.md. Its status is unresolved (Q-03 in `08-CONTEXT.md`). Phase 8 deliberately takes the next number
+> rather than renumbering or absorbing it.
 
 ## Phase Details
 
@@ -128,6 +139,50 @@ Plans:
       failure, no-invocation-when-disabled, periodic sync, and first-time clone via `git_url`; capture transcript;
       document in DOCS.md `## Git Sync` section and README.md checklist items 11–13
 
+### Phase 8: CI/CD Hardening
+
+**Goal**: The CI/CD pipeline's three invisible defects are closed and the conventions that prevent their recurrence are
+written down. All 12 workflows reported green during the audit — these are the failures a green run-status column cannot
+show: one fails silently by design, one has no failure mode until it triggers, one surfaces only as a warning annotation.
+
+**Depends on**: Nothing (independent of the markdown-renderer milestone)
+
+**Requirements**: CI-01, CI-02, CI-03, CI-04, CI-05, CI-06, CI-07, CI-08, CI-09, CI-10
+
+**Success Criteria** (what must be TRUE):
+
+1. Home Assistant observably processes a build notification — the receiving automation's `last_triggered` advances after
+   a real build, rather than the script merely collecting an HTTP 200 (HA answers 200 for any webhook ID, registered or
+   not)
+2. An unauthenticated POST to the webhook path from the public internet is still redirected to the Cloudflare Access
+   login; authenticating the runner did not make the path publicly triggerable
+3. Every workflow job carries an explicit `timeout-minutes`; a hung aarch64 QEMU build can no longer burn a 6-hour
+   runner block
+4. No build run carries the "Node.js 20 is deprecated" annotation, and `actions/checkout` sits at a single major across
+   all five files that use it
+5. A real multi-arch build (amd64 + aarch64) is green on the bumped action set, proving emulation still works rather
+   than assuming it
+6. No document references the removed `.github/workflows/build.yml`, no document advertises the nonexistent
+   `HA_WEBHOOK_SECRET` capability, and the per-add-on tag-trigger state is documented with its rationale
+
+**Plans**: 4 plans in 4 waves (strictly serial — plans 01, 02 and 03 all modify `_build-template.yml`, so
+single-writer-per-wave is the only safe ordering)
+
+Plans:
+
+- [x] 08-01-PLAN.md — `timeout-minutes` on all 6 jobs across 5 workflow files, each cap sized from measured runtime
+      (build 45 / auto-update 20 / base-image 15 / lint 15 / lint-results 5 / opencode 30)
+- [x] 08-02-PLAN.md — Bump 4 Docker actions + unify `actions/checkout` on one major; breaking-change audit re-verified
+      empirically; one real multi-arch verification build (amd64 3m54s + aarch64 11m1s, both success, zero Node 20
+      annotations); Renovate PRs #39/#40 auto-closed
+- [ ] 08-03-PLAN.md — Cloudflare Access service token for the webhook path (separate path-scoped Access app, Service Auth
+      policy, not a Bypass); `notify-ha.sh` gains auth, 3xx fail-fast and real diagnostics; 4 named secrets threaded
+      through 7 callers
+- [ ] 08-04-PLAN.md — 9 documentation drift instances corrected across README / AGENTS / WEBHOOK_SETUP / RELEASE /
+      DEVELOPMENT, plus the timeout, pinning and secrets conventions recorded
+
+**UI hint**: no
+
 ## Progress
 
 | Phase                               | Milestone | Plans Complete | Status   | Completed  |
@@ -138,3 +193,4 @@ Plans:
 | 4. Scaffold + Ingress Validation    | v1.1      | 3/3            | Complete | 2026-06-27 |
 | 5. Multi-Namespace + Dynamic Config | v1.1      | 1/1            | Complete | 2026-06-27 |
 | 6. Git Integration                  | v1.1      | 2/2            | Complete | 2026-06-28 |
+| 8. CI/CD Hardening                  | v1.2      | 2/4            | Executing | —          |

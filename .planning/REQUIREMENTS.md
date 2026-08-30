@@ -71,6 +71,35 @@ namespaced HTML endpoints via HA Ingress, with Mermaid diagram support and optio
 - [x] **GIT-05**: Startup is not blocked if a git directory is unreachable; git pull errors are logged but do not
       prevent the namespace from being served
 
+### CI — CI/CD Hardening (v1.2, Phase 8)
+
+<!-- Added 2026-08-30 from the GitHub Actions audit. All runs were green; these are the defects that a green run-status
+     column cannot show — one fails silently, one has no failure mode until it triggers, one is only a warning. -->
+
+- [x] **CI-01**: Every job in every workflow declares an explicit `timeout-minutes`; no job relies on GitHub's
+      360-minute default. The number of declarations equals the number of jobs (currently 6)
+- [x] **CI-02**: The add-on build job is bounded such that a hung aarch64 QEMU leg cannot consume a 6-hour runner block;
+      the cap is derived from the measured 13m28s emulated build, not guessed
+- [x] **CI-03**: No action in any workflow targets the deprecated Node 20 runtime; the "Node.js 20 is deprecated"
+      annotation no longer appears on build runs — closed by `grep -c 'Node.js 20 is deprecated'` returning `0` on
+      the verification build (`gh run view 33319080212`, amd64 3m54s + aarch64 11m1s, both `success`)
+- [x] **CI-04**: `actions/checkout` sits at one single major version across every workflow that uses it (no v4/v6/v7
+      split) — closed by `grep -rh 'actions/checkout@' .github/workflows/ | sort -u` returning exactly one unique line
+      (`actions/checkout@v7`), 5 occurrences total
+- [ ] **CI-05**: Home Assistant receives and observably processes the `started` notification for a real add-on build —
+      the receiving automation's `last_triggered` advances, since HA returns 200 for any webhook ID whether registered or
+      not
+- [ ] **CI-06**: Home Assistant receives the `finished` notification carrying `conclusion` and `image_tag`
+- [ ] **CI-07**: The webhook path remains protected; an unauthenticated POST from the public internet is still
+      redirected to the Cloudflare Access login and does not reach HA
+- [ ] **CI-08**: A notification failure can never fail a build, but it is reported actionably — a `3xx` fails fast naming
+      the Access policy instead of three identical retries against a non-transient condition
+- [ ] **CI-09**: No document references the removed `.github/workflows/build.yml`; the build trigger and the
+      `<addon>/v<version>` tag schema are described as they actually are, and no doc advertises a capability the code
+      lacks
+- [ ] **CI-10**: The per-add-on tag-trigger state is documented with its rationale, so the in-workflow comment pointing
+      at `.github/RELEASE.md` resolves to a real explanation
+
 ---
 
 ## Future Requirements
@@ -131,7 +160,17 @@ namespaced HTML endpoints via HA Ingress, with Mermaid diagram support and optio
 | GIT-03     | Phase 6: Git Integration                  | 06-02 (empirical: verify-git-integration.sh Scenario C — no git pull/clone in logs)                                 |
 | GIT-04     | Phase 6: Git Integration                  | 06-02 (empirical: verify-git-integration.sh Scenario D — 4 git pull invocations during 15s window)                  |
 | GIT-05     | Phase 6: Git Integration                  | 06-02 (empirical: verify-git-integration.sh Scenario B — unreachable URL, WARNING in logs, container stays running) |
+| CI-01      | Phase 8: CI/CD Hardening                  | 08-01 (Tasks 1-3: 6 caps across 5 workflow files; invariant = declarations equal job count)                          |
+| CI-02      | Phase 8: CI/CD Hardening                  | 08-01 (Task 1: build job capped at 45 min, derived from the measured 13m28s aarch64 leg)                             |
+| CI-03      | Phase 8: CI/CD Hardening                  | 08-02 (Task 1 + Task 3: 4 Docker actions bumped; verified by absence of the Node 20 annotation on a real build)      |
+| CI-04      | Phase 8: CI/CD Hardening                  | 08-02 (Task 2: all 5 `actions/checkout` references unified on one major)                                             |
+| CI-05      | Phase 8: CI/CD Hardening                  | 08-03 (Task 5: HA-side `last_triggered` observation, not merely an HTTP 200)                                         |
+| CI-06      | Phase 8: CI/CD Hardening                  | 08-03 (Task 3 wires both notify steps; Task 5 confirms the finished event in the build log)                          |
+| CI-07      | Phase 8: CI/CD Hardening                  | 08-03 (Task 5: negative edge probe — no CF headers must still return 302 to the Access login)                        |
+| CI-08      | Phase 8: CI/CD Hardening                  | 08-03 (Task 2: 3xx fail-fast branch before the backoff path; script still always exits 0)                           |
+| CI-09      | Phase 8: CI/CD Hardening                  | 08-04 (Tasks 1-2: 9 drift instances incl. the false `HA_WEBHOOK_SECRET` capability claim)                            |
+| CI-10      | Phase 8: CI/CD Hardening                  | 08-04 (Task 3: per-add-on tag-trigger table + rationale from 287c79f / 60e7835)                                      |
 
 ---
 
-_Last updated: 2026-06-27 — v1.1 roadmap written; traceability complete_
+_Last updated: 2026-08-30 — CI-01..CI-10 added for v1.2 Phase 8 (CI/CD Hardening); traceability complete_
