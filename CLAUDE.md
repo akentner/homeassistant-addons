@@ -110,6 +110,7 @@ tracking.
   run.sh) + `.upstream.yaml`
 - **No bundled source**: Dockerfiles must download upstream code at build time, not copy local source
 - **Meridian auth**: `claude login` requires interactive terminal — handled via HA terminal add-on, not automation
+
 <!-- GSD:project-end -->
 
 <!-- GSD:stack-start source:codebase/STACK.md -->
@@ -170,6 +171,7 @@ tracking.
 - `uv` is the single tool for both local dev setup and container dependency installation; no `pip` / `pipenv` / `poetry`
 - All container base images come from `ghcr.io/home-assistant/` — HA-specific, not generic Alpine or Python images
 - `bashio` is a critical runtime dependency but not declared anywhere in this repo; it is baked into the HA base images
+
 <!-- GSD:stack-end -->
 
 <!-- GSD:conventions-start source:CONVENTIONS.md -->
@@ -269,6 +271,7 @@ tracking.
 - The version validation hook runs on every commit (`always_run: true` in `.pre-commit-config.yaml`)
 - Python scripts use `uv tool install` for tool management — there is no `requirements.txt` for dev tools, only
 - No commit message format is enforced (commit-msg hook install is best-effort: `|| true`)
+
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
@@ -337,6 +340,7 @@ tracking.
 - Both add-ons are currently `amd64`-only in practice (other architectures commented out in `build.yaml`/`config.yaml`)
 - The upstream source is always fetched at build time; there is no local copy of upstream code in this repository
 - `uv` is used in phone-logger's container to manage Python deps and run the application; not used in CI for the add-on
+
 <!-- GSD:architecture-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->
