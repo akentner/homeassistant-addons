@@ -24,3 +24,5 @@ jobs:
     secrets:
       HA_BASE_URL: ${{ secrets.HA_BASE_URL }}
       HA_WEBHOOK_ID: ${{ secrets.HA_WEBHOOK_ID }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
