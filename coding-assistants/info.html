@@ -48,15 +48,14 @@
   </style>
 </head>
 <body>
-  <h1>Coding Assistants</h1>
-  <p class="subtitle">SSH + Web Terminal with Claude Code, OpenCode &amp; GitHub Copilot CLI</p>
+<h1>Coding Assistants</h1>
+<p class="subtitle">SSH + Web Terminal with OpenCode &amp; GitHub Copilot CLI</p>
 
-  <h2>Versions</h2>
-  <table id="versions-table">
-    <tr><td>Add-on</td><td><span class="badge" id="v-addon">…</span></td></tr>
-    <tr><td>Claude Code</td><td><b id="v-claude">…</b></td></tr>
-    <tr><td>OpenCode</td><td><b id="v-opencode">…</b></td></tr>
-  </table>
+<h2>Versions</h2>
+<table id="versions-table">
+  <tr><td>Add-on</td><td><span class="badge" id="v-addon">…</span></td></tr>
+  <tr><td>OpenCode</td><td><b id="v-opencode">…</b></td></tr>
+</table>
 
   <h2>Services</h2>
   <table>
@@ -78,7 +77,6 @@
       .then(r => r.json())
       .then(v => {
         document.getElementById('v-addon').textContent    = v.addon    || '—';
-        document.getElementById('v-claude').textContent   = v.claude   || '—';
         document.getElementById('v-opencode').textContent = v.opencode || '—';
       })
       .catch(() => {});
