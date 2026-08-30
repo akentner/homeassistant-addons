@@ -103,4 +103,4 @@ default_language_version:
 
 # Global settings
 fail_fast: false
-minimum_pre_commit_version: "3.0.0"
+minimum_pre_commit_version: "4.6.2"
