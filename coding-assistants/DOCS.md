@@ -50,7 +50,7 @@ env_vars:
 ### `zigbee2mqtt`
 
 Dedicated integration for the [zigbee2mqtt MCP server](https://github.com/akentner/mcp2zigbee2mqtt). When enabled, the
-MCP server is automatically registered in Claude Code and OpenCode — no manual `mcp_servers` entry required. MQTT
+MCP server is automatically registered in OpenCode — no manual `mcp_servers` entry required. MQTT
 connection variables (`MQTT_BROKER_URL`, `MQTT_USERNAME`, `MQTT_PASSWORD`, `MQTT_BASE_TOPIC`) are also injected into
 every session.
 
@@ -75,9 +75,50 @@ zigbee2mqtt:
 | `db_path`         | string   | `/data/zigbee2mqtt-mcp.db`  | Path for the MCP server's SQLite database         |
 | `log_level`       | string   | `info`                      | Log level: `debug`, `info`, `warning`, `error`    |
 
+### `mycli`
+
+Configures one or more MariaDB/MySQL connections for the bundled `mycli` client and `mcp-server-mysql` MCP server.
+When enabled, each connection becomes a DSN alias in `/data/.myclirc` (chmod 600) and an auto-registered MCP
+server (`mariadb-<name>`) for OpenCode. The active default connection is exposed as
+`MYCLI_HOST` / `MYCLI_PORT` / `MYCLI_USER` / `MYCLI_PASSWORD` / `MYCLI_DATABASE` env vars in every shell.
+
+Connection names must match `[a-zA-Z0-9_-]+` and must be unique. Names are case-insensitive DSN aliases — pass them to
+mycli via `mycli -D <name>`. Without an explicit `default`, the first entry is used.
+
+```yaml
+mycli:
+  enabled: true
+  default: homeassistant        # optional; defaults to the first entry
+  connections:
+    - name: homeassistant
+      host: core-mariadb
+      port: 3306
+      username: hass
+      password: !secret mariadb_pw
+      database: homeassistant
+    - name: analytics
+      host: 10.0.1.50
+      port: 3306
+      username: readonly
+      password: !secret analytics_pw
+      database: metrics
+```
+
+| Option           | Type     | Default     | Description                                                       |
+| ---------------- | -------- | ----------- | ----------------------------------------------------------------- |
+| `enabled`        | bool     | `false`     | Enable the mycli / MariaDB-MCP integration                        |
+| `default`        | string   | first entry | DSN alias used by bare `mycli` and by exported env vars           |
+| `connections`    | list     | `[]`        | Connection profiles                                               |
+| `name`           | string   | —           | Connection name (DSN alias + MCP suffix), `[a-zA-Z0-9_-]+`        |
+| `host`           | string   | —           | MariaDB/MySQL hostname or IP                                      |
+| `port`           | int      | `3306`      | TCP port                                                          |
+| `username`       | string   | —           | Database user                                                     |
+| `password`       | password | `""`        | Database password (masked in UI)                                  |
+| `database`       | string   | `""`        | Default database/schema                                           |
+
 ### `mcp_servers`
 
-Manual MCP server registrations. Each entry is merged into Claude Code (`~/.claude.json`) and OpenCode (`opencode.json`)
+Manual MCP server registrations. Each entry is merged into OpenCode's `opencode.json`
 on startup. Use this for MCP servers that do not have a dedicated config block above.
 
 ```yaml
@@ -131,7 +172,6 @@ tmux new-session -A -s main -c /homeassistant
 
 | Tool           | Purpose                |
 | -------------- | ---------------------- |
-| `claude`       | Claude Code CLI        |
 | `opencode`     | OpenCode AI agent      |
 | `copilot`      | GitHub Copilot CLI     |
 | `git`, `gh`    | Git + GitHub CLI       |
@@ -149,14 +189,15 @@ tmux new-session -A -s main -c /homeassistant
 | `make`         | Build tool             |
 | `tmux`         | Terminal multiplexer   |
 | `curl`, `wget` | HTTP utilities         |
+| `mycli`        | MariaDB/MySQL client   |
+| `sqlite3`      | SQLite CLI for HA      |
 
-## Upgrading `claude` and `opencode`
+## Upgrading `opencode`
 
-Both coding assistants can be upgraded inside a running container — no add-on rebuild required.
+`opencode` can be upgraded inside a running container — no add-on rebuild required.
 
 ```bash
 opencode upgrade        # downloads the latest release to ~/.opencode/bin
-claude update           # reruns npm install -g @anthropic-ai/claude-code@latest
 ```
 
 The opencode binary lives under `/root/.opencode/bin`, which the add-on symlinks into the persistent `/data` volume.
@@ -176,3 +217,25 @@ Key bindings (prefix: `Ctrl-a`):
 | `Ctrl-a c`  | New window              |
 | `Ctrl-a r`  | Reload tmux config      |
 | `Ctrl-a [`  | Enter scroll/copy mode  |
+
+## mycli
+
+When at least one connection is configured in the `mycli:` option, the bundled `mycli` client connects on first run.
+The default connection is set via `mycli.default` (or the first entry) and is also exposed in the shell as
+`MYCLI_HOST` / `MYCLI_PORT` / `MYCLI_USER` / `MYCLI_PASSWORD` / `MYCLI_DATABASE`.
+
+```bash
+mycli                       # connect to the default connection
+mycli -D analytics          # switch to the 'analytics' alias from /data/.myclirc
+mycli schema                # show the schema of the default database
+mycli -h db.example.com     # ad-hoc override (any standard mysql CLI flag works)
+```
+
+All connections are auto-registered as a `mariadb-<name>` MCP server, so OpenCode can run
+SQL against them without leaving the assistant:
+
+> "Use the `mariadb-homeassistant` MCP tools to list the last 24 hours of `sensor.*` state changes."
+
+The connection credentials live in `/data/.myclirc` (chmod 600) and the per-connection wrapper scripts at
+`/usr/local/bin/mariadb-<name>` (chmod 700). Both are recreated on every container start from the current add-on
+configuration, so editing `mycli:` in the add-on options and restarting is enough to roll or rotate credentials.

@@ -6,24 +6,37 @@ bashio::log.level "${LOG_LEVEL}"
 
 # Write MOTD with current addon version and tool versions
 ADDON_VERSION=$(bashio::addon.version)
-CLAUDE_VERSION=$(claude --version 2>/dev/null | awk '{print $1}')
 OPENCODE_VERSION=$(opencode --version 2>/dev/null | head -1)
 MOTD_HA_URL=$(bashio::config 'ha_url')
 cat > /etc/motd << EOF
-Coding Assistants ${ADDON_VERSION}  |  claude ${CLAUDE_VERSION}  |  opencode ${OPENCODE_VERSION}
+Coding Assistants ${ADDON_VERSION}  |  opencode ${OPENCODE_VERSION}
 HA: ${MOTD_HA_URL}
 EOF
 
 # Version info for web UI
-printf '{"addon":"%s","claude":"%s","opencode":"%s"}\n' \
-    "${ADDON_VERSION}" "${CLAUDE_VERSION}" "${OPENCODE_VERSION}" \
+printf '{"addon":"%s","opencode":"%s"}\n' \
+    "${ADDON_VERSION}" "${OPENCODE_VERSION}" \
     > /opt/coding-assistants/versions.json
 
 # Persist /data directories for all coding assistants
 mkdir -p \
-    /data/claude \
     /data/.config/opencode \
     /data/.local/share/opencode
+
+# Git config persistence — copy on first run, then symlink
+if [[ -f /root/.gitconfig ]] && [[ ! -f /data/.gitconfig ]]; then
+    cp /root/.gitconfig /data/.gitconfig
+fi
+rm -f /root/.gitconfig
+ln -sf /data/.gitconfig /root/.gitconfig
+
+OPENCODE_JSON="/data/.config/opencode/opencode.json"
+[[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
+tmp=$(mktemp)
+jq --rawfile inst "${TOOLS_MD}" '.instructions = [$inst]' "${OPENCODE_JSON}" > "${tmp}"
+cp "${tmp}" "${OPENCODE_JSON}"
+rm "${tmp}"
+bashio::log.info "Updated tool context in OpenCode instructions"
 
 # Opencode binary persistence — first start copies the bundled binary into /data,
 # then symlinks /root/.opencode/bin → /data/opencode/bin. The official installer writes
@@ -46,81 +59,9 @@ fi
 rm -rf /root/.config/fish
 ln -s /data/.config/fish /root/.config/fish
 
-# Claude Code — symlink ~/.claude* into /data (does not honour XDG)
-rm -rf /root/.claude
-ln -s /data/claude/.claude /root/.claude 2>/dev/null || true
-rm -f /root/.claude.json
-ln -s /data/claude/.claude.json /root/.claude.json 2>/dev/null || true
-
-# Claude Code agents — symlink ~/.agents into /data
-mkdir -p /data/.agents
-rm -rf /root/.agents
-ln -s /data/.agents /root/.agents
-
-# Git config persistence — copy on first run, then symlink
-if [[ -f /root/.gitconfig ]] && [[ ! -f /data/.gitconfig ]]; then
-    cp /root/.gitconfig /data/.gitconfig
-fi
-rm -f /root/.gitconfig
-ln -sf /data/.gitconfig /root/.gitconfig
-
-# Inject tool context into AI assistant configs (always updated on start)
-TOOLS_MD="/etc/coding-assistants/TOOLS.md"
-CLAUDE_MD="/data/claude/.claude/CLAUDE.md"
-mkdir -p /data/claude/.claude
-python3 - <<'PYEOF'
-import re, pathlib
-BEGIN = "<!-- coding-assistants:begin -->\n"
-END = "<!-- coding-assistants:end -->\n"
-tools = pathlib.Path("/etc/coding-assistants/TOOLS.md").read_text()
-section = BEGIN + tools + "\n" + END
-p = pathlib.Path("/data/claude/.claude/CLAUDE.md")
-content = p.read_text() if p.exists() else ""
-if BEGIN in content:
-    content = re.sub(r"<!-- coding-assistants:begin -->.*?<!-- coding-assistants:end -->\n?",
-                     section, content, flags=re.DOTALL)
-else:
-    content = (content.rstrip("\n") + "\n\n" + section) if content else section
-p.write_text(content)
-PYEOF
-bashio::log.info "Updated tool context in Claude Code CLAUDE.md"
-
-OPENCODE_JSON="/data/.config/opencode/opencode.json"
-[[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
-tmp=$(mktemp)
-jq --rawfile inst "${TOOLS_MD}" '.instructions = [$inst]' "${OPENCODE_JSON}" > "${tmp}"
-cp "${tmp}" "${OPENCODE_JSON}"
-rm "${tmp}"
-bashio::log.info "Updated tool context in OpenCode instructions"
-
-# MCP server auto-registration — merge addon config into ~/.claude.json
-CLAUDE_JSON="/data/claude/.claude.json"
-[[ -f "${CLAUDE_JSON}" ]] || echo '{}' > "${CLAUDE_JSON}"
+# MCP server auto-registration — merge addon config into OpenCode's opencode.json
 if jq -e '.mcp_servers | length > 0' /data/options.json > /dev/null 2>&1; then
-    # Claude Code format: stdio → { type, command, args, env }  http → { type, url }
-    MCP_OBJ=$(jq -c '
-        .mcp_servers
-        | map(
-            if .type == "http" then
-                { (.name): { type: "http", url: .url } }
-            else
-                { (.name): {
-                    type: "stdio",
-                    command: .command,
-                    args: (.args // []),
-                    env: ((.env // []) | map({ (.name): .value }) | add // {})
-                  }
-                }
-            end
-          )
-        | add // {}
-    ' /data/options.json)
-    tmp=$(mktemp)
-    jq --argjson mcp "${MCP_OBJ}" '.mcpServers = ($mcp + (.mcpServers // {}))' "${CLAUDE_JSON}" > "${tmp}"
-    cp "${tmp}" "${CLAUDE_JSON}"
-    rm "${tmp}"
-
-    # OpenCode format: { name: { type, command: [...], enabled } }
+    # OpenCode format: { name: { type: "local", command: [...], enabled } }
     OPENCODE_JSON="/data/.config/opencode/opencode.json"
     [[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
     MCP_OBJ_OC=$(jq -c '
@@ -134,7 +75,8 @@ if jq -e '.mcp_servers | length > 0' /data/options.json > /dev/null 2>&1; then
     cp "${tmp}" "${OPENCODE_JSON}"
     rm "${tmp}"
 
-    bashio::log.info "Registered $(echo "${MCP_OBJ}" | jq -r 'keys | length') MCP server(s) in Claude Code + OpenCode config"
+    MCP_COUNT=$(jq -r '.mcp_servers | length' /data/options.json)
+    bashio::log.info "Registered ${MCP_COUNT} MCP server(s) in OpenCode config"
 fi
 
 # Zigbee2MQTT MCP auto-registration — registers the dedicated MCP server when enabled
@@ -163,20 +105,6 @@ if bashio::config.true 'zigbee2mqtt.enabled'; then
             LOG_LEVEL: $log
         }')
 
-    # Register in Claude Code ~/.claude.json
-    CLAUDE_JSON="/data/claude/.claude.json"
-    [[ -f "${CLAUDE_JSON}" ]] || echo '{}' > "${CLAUDE_JSON}"
-    tmp=$(mktemp)
-    jq --argjson env "${Z2M_ENV_JSON}" \
-        '.mcpServers["zigbee2mqtt"] = {
-            type: "stdio",
-            command: "node",
-            args: ["/opt/mcp2zigbee2mqtt/dist/index.js"],
-            env: $env
-        }' "${CLAUDE_JSON}" > "${tmp}"
-    cp "${tmp}" "${CLAUDE_JSON}"
-    rm "${tmp}"
-
     # Register in OpenCode opencode.json
     OPENCODE_JSON="/data/.config/opencode/opencode.json"
     [[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
@@ -189,7 +117,7 @@ if bashio::config.true 'zigbee2mqtt.enabled'; then
     cp "${tmp}" "${OPENCODE_JSON}"
     rm "${tmp}"
 
-    bashio::log.info "Registered zigbee2mqtt MCP server in Claude Code + OpenCode config"
+    bashio::log.info "Registered zigbee2mqtt MCP server in OpenCode config"
 
     # Inject MQTT env vars into profile scripts for use by other tools
     {
@@ -209,22 +137,124 @@ if bashio::config.true 'zigbee2mqtt.enabled'; then
     } >> "${FISH_CONF}"
 fi
 
-# Cleanup stale stdio MCP entries from manually-managed global claude config
-GLOBAL_CLAUDE_JSON="/homeassistant/.claudecode/.claude.json"
-if [[ -f "${GLOBAL_CLAUDE_JSON}" ]] && jq -e '.mcpServers' "${GLOBAL_CLAUDE_JSON}" > /dev/null 2>&1; then
-    while IFS=$'\t' read -r name cmd; do
-        if [[ -n "$cmd" ]] && ! command -v "$cmd" > /dev/null 2>&1; then
-            bashio::log.warning "Removing stale MCP entry '${name}': command '${cmd}' not found"
-            tmp=$(mktemp)
-            jq --arg n "$name" 'del(.mcpServers[$n])' "${GLOBAL_CLAUDE_JSON}" > "${tmp}" \
-                && cp "${tmp}" "${GLOBAL_CLAUDE_JSON}"
-            rm -f "${tmp}"
+# mycli / MariaDB auto-configuration — writes /data/.myclirc, generates per-connection
+# mcp-server-mysql wrapper scripts, registers them in OpenCode, and exports
+# default-connection env vars (MYCLI_*) to /etc/profile.d/00-coding-assistants.sh.
+# Fish env var append happens later (after FISH_CONF is built).
+if bashio::config.true 'mycli.enabled'; then
+    # Validate: connections must be a non-empty array
+    if ! jq -e '.mycli.connections | type == "array" and length > 0' /data/options.json > /dev/null 2>&1; then
+        bashio::exit.nok "mycli.enabled=true but mycli.connections is empty or not an array"
+    fi
+
+    # Validate: no duplicate connection names
+    if [[ "$(jq -r '[.mycli.connections[].name] | group_by(.) | map(select(length > 1)) | length' /data/options.json)" != "0" ]]; then
+        bashio::exit.nok "mycli.connections has duplicate connection names"
+    fi
+
+    # Validate: connection names match a safe shell-suffix + JSON-key charset
+    while IFS= read -r n; do
+        if ! [[ "${n}" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            bashio::exit.nok "mycli connection name '${n}' must match [a-zA-Z0-9_-]+"
         fi
-    done < <(jq -r '
-        .mcpServers | to_entries[]
-        | select(.value.type != "http")
-        | [.key, (.value.command // "")] | @tsv
-    ' "${GLOBAL_CLAUDE_JSON}")
+    done < <(jq -r '.mycli.connections[].name' /data/options.json)
+
+    # Resolve default connection name (explicit `mycli.default` or fall back to first)
+    MYCLI_DEFAULT=$(bashio::config 'mycli.default')
+    if [[ -z "${MYCLI_DEFAULT}" || "${MYCLI_DEFAULT}" == "null" ]]; then
+        MYCLI_DEFAULT=$(jq -r '.mycli.connections[0].name' /data/options.json)
+        bashio::log.info "mycli.default not set — using first connection: '${MYCLI_DEFAULT}'"
+    elif ! jq -e --arg n "${MYCLI_DEFAULT}" '.mycli.connections[] | select(.name == $n)' /data/options.json > /dev/null 2>&1; then
+        bashio::exit.nok "mycli.default='${MYCLI_DEFAULT}' does not match any connection name"
+    fi
+
+    CONNECTION_COUNT=$(jq -r '.mycli.connections | length' /data/options.json)
+
+    # Write /data/.myclirc with [client] default + [alias_<name>] per connection
+    python3 - "${MYCLI_DEFAULT}" > /data/.myclirc <<'PYEOF'
+import configparser, json, pathlib, sys
+default_name = sys.argv[1]
+cfg = json.loads(pathlib.Path("/data/options.json").read_text())["mycli"]
+connections = cfg["connections"]
+p = configparser.ConfigParser()
+default_conn = next(c for c in connections if c["name"] == default_name)
+client = {
+    "host": default_conn["host"],
+    "port": str(default_conn.get("port") or 3306),
+    "user": default_conn["username"],
+}
+if default_conn.get("password"):
+    client["password"] = default_conn["password"]
+if default_conn.get("database"):
+    client["database"] = default_conn["database"]
+p["client"] = client
+for c in connections:
+    sect = f"alias_{c['name']}"
+    p[sect] = {
+        "host": c["host"],
+        "port": str(c.get("port") or 3306),
+        "user": c["username"],
+    }
+    if c.get("password"):
+        p[sect]["password"] = c["password"]
+    if c.get("database"):
+        p[sect]["database"] = c["database"]
+p.write(sys.stdout)
+PYEOF
+    chmod 600 /data/.myclirc
+    bashio::log.info "Wrote /data/.myclirc with ${CONNECTION_COUNT} connection(s); default='${MYCLI_DEFAULT}'"
+
+    # Per connection: generate env-baked wrapper script + register as MCP server
+    while IFS= read -r entry; do
+        name=$(echo "${entry}" | jq -r '.name')
+        host=$(echo "${entry}" | jq -r '.host')
+        port=$(echo "${entry}" | jq -r '.port // 3306')
+        user=$(echo "${entry}" | jq -r '.username')
+        password=$(echo "${entry}" | jq -r '.password // ""')
+        database=$(echo "${entry}" | jq -r '.database // ""')
+        mcp_name="mariadb-${name}"
+        mcp_script="/usr/local/bin/${mcp_name}"
+
+        # Wrapper script: set env then exec mcp-server-mysql. printf %q handles single quotes safely.
+        {
+            printf '#!/bin/bash\n'
+            printf 'set -e\n'
+            printf 'export MYSQL_HOST=%q\n' "${host}"
+            printf 'export MYSQL_PORT=%q\n' "${port}"
+            printf 'export MYSQL_USER=%q\n' "${user}"
+            [[ -n "${password}" ]] && printf 'export MYSQL_PASSWORD=%q\n' "${password}"
+            [[ -n "${database}" ]] && printf 'export MYSQL_DATABASE=%q\n' "${database}"
+            printf 'exec mcp-server-mysql "$@"\n'
+        } > "${mcp_script}"
+        chmod 700 "${mcp_script}"
+
+        # Register in OpenCode (opencode.json → mcp)
+        OPENCODE_JSON="/data/.config/opencode/opencode.json"
+        [[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
+        tmp=$(mktemp)
+        jq --arg n "${mcp_name}" --arg cmd "${mcp_script}" \
+            '.mcp[$n] = { type: "local", command: [$cmd], enabled: true }' "${OPENCODE_JSON}" > "${tmp}"
+        cp "${tmp}" "${OPENCODE_JSON}"
+        rm "${tmp}"
+    done < <(jq -c '.mycli.connections[]' /data/options.json)
+
+    bashio::log.info "Registered ${CONNECTION_COUNT} mariadb-mcp server(s) in OpenCode config"
+
+    # Stash default-connection values for the late fish append (below)
+    MYCLI_DEFAULT_HOST=$(jq -r --arg n "${MYCLI_DEFAULT}" '.mycli.connections[] | select(.name == $n) | .host' /data/options.json)
+    MYCLI_DEFAULT_PORT=$(jq -r --arg n "${MYCLI_DEFAULT}" '.mycli.connections[] | select(.name == $n) | (.port // 3306)' /data/options.json)
+    MYCLI_DEFAULT_USER=$(jq -r --arg n "${MYCLI_DEFAULT}" '.mycli.connections[] | select(.name == $n) | .username' /data/options.json)
+    MYCLI_DEFAULT_PWD=$(jq -r --arg n "${MYCLI_DEFAULT}" '.mycli.connections[] | select(.name == $n) | (.password // "")' /data/options.json)
+    MYCLI_DEFAULT_DB=$(jq -r --arg n "${MYCLI_DEFAULT}" '.mycli.connections[] | select(.name == $n) | (.database // "")' /data/options.json)
+
+    # Inject MYCLI_* env vars into /etc/profile.d/00-coding-assistants.sh (bash login shells)
+    {
+        printf 'export MYCLI_HOST=%q\n' "${MYCLI_DEFAULT_HOST}"
+        printf 'export MYCLI_PORT=%q\n' "${MYCLI_DEFAULT_PORT}"
+        printf 'export MYCLI_USER=%q\n' "${MYCLI_DEFAULT_USER}"
+        [[ -n "${MYCLI_DEFAULT_PWD}" ]] && printf 'export MYCLI_PASSWORD=%q\n' "${MYCLI_DEFAULT_PWD}"
+        [[ -n "${MYCLI_DEFAULT_DB}" ]] && printf 'export MYCLI_DATABASE=%q\n' "${MYCLI_DEFAULT_DB}"
+    } >> /etc/profile.d/00-coding-assistants.sh
 fi
 
 # Write env profile (picked up by SSH login shells and ttyd/tmux via bash -l)
@@ -333,6 +363,17 @@ if jq -e '.env_vars | length > 0' /data/options.json > /dev/null 2>&1; then
         val=$(echo "$entry" | jq -r '.value')
         printf 'set -x %s %s\n' "$name" "$val" >> "${FISH_CONF}"
     done < <(jq -c '.env_vars[]' /data/options.json)
+fi
+
+# Fish config — append MYCLI_* env vars for default connection (set in mycli block above)
+if [[ -n "${MYCLI_DEFAULT:-}" ]]; then
+    {
+        printf 'set -x MYCLI_HOST %s\n' "${MYCLI_DEFAULT_HOST}"
+        printf 'set -x MYCLI_PORT %s\n' "${MYCLI_DEFAULT_PORT}"
+        printf 'set -x MYCLI_USER %s\n' "${MYCLI_DEFAULT_USER}"
+        [[ -n "${MYCLI_DEFAULT_PWD}" ]] && printf 'set -x MYCLI_PASSWORD %s\n' "${MYCLI_DEFAULT_PWD}"
+        [[ -n "${MYCLI_DEFAULT_DB}" ]] && printf 'set -x MYCLI_DATABASE %s\n' "${MYCLI_DEFAULT_DB}"
+    } >> "${FISH_CONF}"
 fi
 
 # Set bash as login shell for root so SSH sessions source /etc/profile.d/*
