@@ -15,6 +15,9 @@ concurrency:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    # Observed 37-45s. 15 minutes covers a full pre-commit environment
+    # rebuild when the Python/Node caches miss.
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -157,6 +160,8 @@ jobs:
   lint-results:
     needs: lint
     runs-on: ubuntu-latest
+    # Reporting job: echoes a verdict and exits. Seconds, not minutes.
+    timeout-minutes: 5
     if: always()
     steps:
       - name: Report results
