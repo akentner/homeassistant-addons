@@ -258,3 +258,11 @@ is preserved; only the abbreviations (`CF Access` instead of `Cloudflare Access`
 *Plan: 04*
 *Completed: 2026-08-30*
 *Requirements closed: CI-09, CI-10*
+
+---
+
+## Self-Check: PASSED
+
+All 5 task commits present in `git log` (aa8ab45 / 96b0300 / bde105c / 0c67f10 / 9e48a34). SUMMARY.md exists at
+`.planning/phases/08-ci-cd-hardening/08-04-SUMMARY.md`. `git status -sb` shows `main...origin/main` clean. Repo-wide
+`build.yml` and `HA_WEBHOOK_SECRET` sweeps return zero hits outside `.planning/`.
