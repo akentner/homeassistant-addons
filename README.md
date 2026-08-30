@@ -124,9 +124,9 @@ TLS for production use.
 
 _Terminal with OpenCode and GitHub Copilot CLI — accessible via SSH and web terminal._
 
-Pre-alpha developer add-on that bundles OpenCode and the GitHub Copilot CLI into a single container
-exposed via SSH and a web terminal. Designed for Home Assistant OS / Supervised installations where installing these
-tools on the host is not practical.
+Pre-alpha developer add-on that bundles OpenCode and the GitHub Copilot CLI into a single container exposed via SSH and
+a web terminal. Designed for Home Assistant OS / Supervised installations where installing these tools on the host is
+not practical.
 
 **Status:** Pre-alpha — APIs and configuration may change without notice.
 

@@ -83,17 +83,17 @@ Actions → "Run workflow"
 
 ```yaml
 addon:
-  version_pattern: "auto"    # 0.1-3 → 0.1-4 (recommended)
-  version_pattern: "sync"    # 1.0.3 → 1.0.4 (follows upstream)
+  version_pattern: "auto" # 0.1-3 → 0.1-4 (recommended)
+  version_pattern: "sync" # 1.0.3 → 1.0.4 (follows upstream)
 ```
 
 ### Upstream Patterns
 
 ```yaml
 upstream:
-  version_pattern: "v*"      # Matches: v1.0.3, v2.1.0
-  version_pattern: "*"       # Matches: 1.0.3, 2024.10.1
-  version_strip: "^v"        # v1.0.3 → 1.0.3
+  version_pattern: "v*" # Matches: v1.0.3, v2.1.0
+  version_pattern: "*" # Matches: 1.0.3, 2024.10.1
+  version_strip: "^v" # v1.0.3 → 1.0.3
   version_strip: "^release-" # release-1.0.3 → 1.0.3
 ```
 
