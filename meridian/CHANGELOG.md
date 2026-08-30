@@ -1,3 +1,15 @@
+## [1.65.0](https://github.com/rynfar/meridian/compare/meridian-v1.64.0...meridian-v1.65.0) (2026-08-29)
+
+### Features
+
+- **routing:** add durable next-user-turn priority failback ([#897](https://github.com/rynfar/meridian/issues/897))
+  ([2e51fdb](https://github.com/rynfar/meridian/commit/2e51fdb8e17eed5ff0e26ed0f926de449fe8106e))
+
+### Bug Fixes
+
+- **errors:** classify exhausted usage credits ([#890](https://github.com/rynfar/meridian/issues/890))
+  ([099741d](https://github.com/rynfar/meridian/commit/099741dd7a341daa767b08e20649456c51675b62))
+
 ## [1.64.0](https://github.com/rynfar/meridian/compare/meridian-v1.63.0...meridian-v1.64.0) (2026-08-27)
 
 ### Features
