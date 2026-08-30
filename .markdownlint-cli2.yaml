@@ -10,3 +10,4 @@ ignores:
   - "**/.planning/**"
   - "**/.claude/**"
   - "**/.agents/**"
+  - "**/.omo/**"
