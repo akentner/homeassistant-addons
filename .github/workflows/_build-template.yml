@@ -42,6 +42,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # The aarch64 leg builds under QEMU emulation at roughly 5x amd64 wall
+    # time (measured 13m28s vs 2m49s on run 33314988015). 45 minutes is
+    # ~3.3x that, which absorbs a cold buildx cache or a larger base image
+    # while still failing a genuinely hung emulated build in under an hour
+    # instead of burning GitHub's 360-minute default.
+    timeout-minutes: 45
     permissions:
       # Repo default workflow permissions are read-only, so `contents: read`
       # is sufficient; `packages: write` is required for GHCR push.
