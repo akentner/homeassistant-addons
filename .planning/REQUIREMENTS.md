@@ -94,10 +94,10 @@ namespaced HTML endpoints via HA Ingress, with Mermaid diagram support and optio
       redirected to the Cloudflare Access login and does not reach HA
 - [ ] **CI-08**: A notification failure can never fail a build, but it is reported actionably — a `3xx` fails fast naming
       the Access policy instead of three identical retries against a non-transient condition
-- [ ] **CI-09**: No document references the removed `.github/workflows/build.yml`; the build trigger and the
+- [x] **CI-09**: No document references the removed `.github/workflows/build.yml`; the build trigger and the
       `<addon>/v<version>` tag schema are described as they actually are, and no doc advertises a capability the code
       lacks
-- [ ] **CI-10**: The per-add-on tag-trigger state is documented with its rationale, so the in-workflow comment pointing
+- [x] **CI-10**: The per-add-on tag-trigger state is documented with its rationale, so the in-workflow comment pointing
       at `.github/RELEASE.md` resolves to a real explanation
 
 ---

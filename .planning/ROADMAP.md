@@ -178,7 +178,7 @@ Plans:
 - [ ] 08-03-PLAN.md — Cloudflare Access service token for the webhook path (separate path-scoped Access app, Service Auth
       policy, not a Bypass); `notify-ha.sh` gains auth, 3xx fail-fast and real diagnostics; 4 named secrets threaded
       through 7 callers
-- [ ] 08-04-PLAN.md — 9 documentation drift instances corrected across README / AGENTS / WEBHOOK_SETUP / RELEASE /
+- [x] 08-04-PLAN.md — 9 documentation drift instances corrected across README / AGENTS / WEBHOOK_SETUP / RELEASE /
       DEVELOPMENT, plus the timeout, pinning and secrets conventions recorded
 
 **UI hint**: no
@@ -193,4 +193,4 @@ Plans:
 | 4. Scaffold + Ingress Validation    | v1.1      | 3/3            | Complete | 2026-06-27 |
 | 5. Multi-Namespace + Dynamic Config | v1.1      | 1/1            | Complete | 2026-06-27 |
 | 6. Git Integration                  | v1.1      | 2/2            | Complete | 2026-06-28 |
-| 8. CI/CD Hardening                  | v1.2      | 2/4            | Executing | —          |
+| 8. CI/CD Hardening                  | v1.2      | 3/4            | Executing | —          |

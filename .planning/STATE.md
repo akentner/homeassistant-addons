@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: markdown-renderer
 status: Ready to execute
-last_updated: "2026-08-30T15:26:45.358Z"
+last_updated: "2026-08-30T17:31:51.960Z"
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 19
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # Project State
@@ -61,9 +61,9 @@ write per wave. 08-04 documents the end state and therefore runs last.
 ## Current Position
 
 Phase: 08 (ci-cd-hardening) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4 (08-04 just completed; 08-03 still pending)
 
-**Progress bar**: `[███████░░░] 74%`
+**Progress bar**: `[████████░░] 79%` (15/19 plans complete)
 
 ## Accumulated Context
 
@@ -104,6 +104,9 @@ Plan: 3 of 4
 | Verification build target = `coding-assistants`                      | Only add-on with an aarch64 leg (so it is the only one exercising `setup-qemu-action@v4`); pre-alpha with no stability commitment; freshly rebuilt so the digest overwrite is no-op |
 | PRs #39/#40 auto-closed by Renovate                                  | Both target `@v4` major-only patches (`login-action` v4.6.0, `setup-buildx-action` v4.3.0); once Task 1's `@v4` pin landed, Renovate satisfied them and auto-closed. No manual close needed — closing would have rewritten the floating-major convention (D-09) |
 | Aarch64 leg 11m1s vs baseline 13m28s                                  | `-2m27s` (-18%) — QEMU emulation is faster on `setup-qemu-action@v4` than the v3 baseline, well within the 2x regression threshold                       |
+| Build trigger described as `paths:`-on-`main`, NOT tag-push (08-04) | For 6 of 7 add-ons the tag-trigger is commented out today, so describing it as a tag push would have been the next round of drift. RELEASE.md carries the per-addon tag-trigger detail |
+| DELETE the false HA_WEBHOOK_SECRET / X-HA-Signature claim (08-04)   | A speculative "coming soon" promise is how the original false claim came about. The webhook has no HMAC; Cloudflare Access is the only transport protection. If HMAC is wanted later, that is a separate plan |
+| Renovate close-suppresses-forever trap recorded as a convention (08-04) | The 2026-07-27 accidental batch-close permanently suppressed 3 versions; recorded in DEVELOPMENT.md so future maintainers know that closing a bump PR is a policy decision, not a no-op |
 
 ### Research Flags (open questions for implementation)
 
@@ -161,6 +164,7 @@ via `/gsd-complete-milestone` — `REQUIREMENTS.md` still carries the v1.1 title
 | 06    | 02   | 36 min   | 3     | 9     |
 | Phase 08 P01 | 2 min | 3 tasks | 5 files |
 | Phase 08 P02 | 15 | 3 tasks | 5 files |
+| Phase 08 P04 | 25 | 4 tasks | 5 files |
 
 ## Quick Tasks Completed
 
@@ -177,7 +181,7 @@ via `/gsd-complete-milestone` — `REQUIREMENTS.md` still carries the v1.1 title
 
 ## Session Continuity
 
-Last session: 2026-08-30T15:26:45.354Z
+Last session: 2026-08-30T17:31:51.956Z
 
 ---
 
