@@ -60,10 +60,12 @@ write per wave. 08-04 documents the end state and therefore runs last.
 
 ## Current Position
 
-Phase: 08 (ci-cd-hardening) — EXECUTING
-Plan: 4 of 4 (08-04 just completed; 08-03 still pending)
+Phase: 08 (ci-cd-hardening) — EXECUTING (gap_closure pending)
+Plan: 4 of 4 originally planned; **08-03 partial** (Tasks 2-4 done; Tasks 1+5 deferred to gap-closure plan `08-05-GAP-PLAN.md`)
 
-**Progress bar**: `[████████░░] 79%` (15/19 plans complete)
+**Progress bar**: `[████████░░] 89%` (15 of 17 effective plans complete; 1 gap-closure plan ready)
+
+**Branch state:** `main...origin/main` clean; 15 commits on top of pre-phase `5c413aa` (all pushed). `08-03-SUMMARY.md` written as `status: partial`; `08-05-GAP-PLAN.md` written as `gap_closure: true`.
 
 ## Accumulated Context
 

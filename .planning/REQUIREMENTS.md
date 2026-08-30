@@ -164,13 +164,13 @@ namespaced HTML endpoints via HA Ingress, with Mermaid diagram support and optio
 | CI-02      | Phase 8: CI/CD Hardening                  | 08-01 (Task 1: build job capped at 45 min, derived from the measured 13m28s aarch64 leg)                             |
 | CI-03      | Phase 8: CI/CD Hardening                  | 08-02 (Task 1 + Task 3: 4 Docker actions bumped; verified by absence of the Node 20 annotation on a real build)      |
 | CI-04      | Phase 8: CI/CD Hardening                  | 08-02 (Task 2: all 5 `actions/checkout` references unified on one major)                                             |
-| CI-05      | Phase 8: CI/CD Hardening                  | 08-03 (Task 5: HA-side `last_triggered` observation, not merely an HTTP 200)                                         |
-| CI-06      | Phase 8: CI/CD Hardening                  | 08-03 (Task 3 wires both notify steps; Task 5 confirms the finished event in the build log)                          |
-| CI-07      | Phase 8: CI/CD Hardening                  | 08-03 (Task 5: negative edge probe — no CF headers must still return 302 to the Access login)                        |
-| CI-08      | Phase 8: CI/CD Hardening                  | 08-03 (Task 2: 3xx fail-fast branch before the backoff path; script still always exits 0)                           |
+| CI-05      | Phase 8: CI/CD Hardening                  | 08-05 (gap-closure — Task 5 #4: HA-side `last_triggered` advances; 08-03 partial covered Tasks 2-4 only)            |
+| CI-06      | Phase 8: CI/CD Hardening                  | 08-05 (gap-closure — Task 5 #5: end-to-end build log shows two `HA notification OK` notices and zero 302 warnings) |
+| CI-07      | Phase 8: CI/CD Hardening                  | 08-03 partial (Task 5 #2 negative edge probe PASSED — HTTP 302 to Access login); 08-05 Task 5 #4 re-confirms         |
+| CI-08      | Phase 8: CI/CD Hardening                  | 08-03 partial (Task 2 script logic in place — `^3` branch precedes `LAST_ERR`, no `-L`, always `exit 0`)           |
 | CI-09      | Phase 8: CI/CD Hardening                  | 08-04 (Tasks 1-2: 9 drift instances incl. the false `HA_WEBHOOK_SECRET` capability claim)                            |
 | CI-10      | Phase 8: CI/CD Hardening                  | 08-04 (Task 3: per-add-on tag-trigger table + rationale from 287c79f / 60e7835)                                      |
 
 ---
 
-_Last updated: 2026-08-30 — CI-01..CI-10 added for v1.2 Phase 8 (CI/CD Hardening); traceability complete_
+_Last updated: 2026-08-30 — CI-01..CI-10 added for v1.2 Phase 8 (CI/CD Hardening); CI-01/02/03/04/09/10 closed, CI-05/06/07/08 deferred to gap-closure plan 08-05 (Cloudflare Access setup + verification probes blocked on user action)_

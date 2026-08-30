@@ -175,9 +175,12 @@ Plans:
 - [x] 08-02-PLAN.md — Bump 4 Docker actions + unify `actions/checkout` on one major; breaking-change audit re-verified
       empirically; one real multi-arch verification build (amd64 3m54s + aarch64 11m1s, both success, zero Node 20
       annotations); Renovate PRs #39/#40 auto-closed
-- [ ] 08-03-PLAN.md — Cloudflare Access service token for the webhook path (separate path-scoped Access app, Service Auth
-      policy, not a Bypass); `notify-ha.sh` gains auth, 3xx fail-fast and real diagnostics; 4 named secrets threaded
-      through 7 callers
+- [~] 08-03-PLAN.md — **PARTIAL** (Tasks 2-4 landed; Tasks 1 + 5 deferred). Cloudflare Access service-token code: `notify-ha.sh`
+      gains auth, 3xx fail-fast, real diagnostics; 4 named secrets threaded through 7 callers. Code shipped, **empirical
+      verification blocked on user Cloudflare setup**. See `08-03-SUMMARY.md` (status: partial).
+- [ ] 08-05-GAP-PLAN.md — **GAP CLOSURE** for 08-03: complete Cloudflare dashboard setup (user) + run probes 1/4/5 to close
+      CI-05/CI-06/CI-07/CI-08. Pre-flight verifies CF secrets in GitHub + local env. Run after the user creates the service
+      token and scoped Access app.
 - [x] 08-04-PLAN.md — 9 documentation drift instances corrected across README / AGENTS / WEBHOOK_SETUP / RELEASE /
       DEVELOPMENT, plus the timeout, pinning and secrets conventions recorded
 
@@ -185,12 +188,12 @@ Plans:
 
 ## Progress
 
-| Phase                               | Milestone | Plans Complete | Status   | Completed  |
-| ----------------------------------- | --------- | -------------- | -------- | ---------- |
-| 1. Quality Fixes                    | v1.0      | 2/2            | Complete | 2026-04-03 |
-| 2. Auto-Update Workflow             | v1.0      | 1/1            | Complete | 2026-04-04 |
-| 3. Meridian Add-on                  | v1.0      | 3/3            | Complete | 2026-04-04 |
-| 4. Scaffold + Ingress Validation    | v1.1      | 3/3            | Complete | 2026-06-27 |
-| 5. Multi-Namespace + Dynamic Config | v1.1      | 1/1            | Complete | 2026-06-27 |
-| 6. Git Integration                  | v1.1      | 2/2            | Complete | 2026-06-28 |
-| 8. CI/CD Hardening                  | v1.2      | 3/4            | Executing | —          |
+| Phase                               | Milestone | Plans Complete | Status     | Completed  |
+| ----------------------------------- | --------- | -------------- | ---------- | ---------- |
+| 1. Quality Fixes                    | v1.0      | 2/2            | Complete   | 2026-04-03 |
+| 2. Auto-Update Workflow             | v1.0      | 1/1            | Complete   | 2026-04-04 |
+| 3. Meridian Add-on                  | v1.0      | 3/3            | Complete   | 2026-04-04 |
+| 4. Scaffold + Ingress Validation    | v1.1      | 3/3            | Complete   | 2026-06-27 |
+| 5. Multi-Namespace + Dynamic Config | v1.1      | 1/1            | Complete   | 2026-06-27 |
+| 6. Git Integration                  | v1.1      | 2/2            | Complete   | 2026-06-28 |
+| 8. CI/CD Hardening                  | v1.2      | 3/4 (1 partial + 1 gap-closure pending) | Gap closure pending | —          |
