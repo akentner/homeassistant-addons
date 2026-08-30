@@ -1,6 +1,10 @@
 # env file
 .env
 
+# Python virtualenvs (transient dev envs from pre-commit work)
+.venv-precommit*/
+.venv/
+
 # Editor/IDE
 .idea/
 .vscode/
