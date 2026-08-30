@@ -24,6 +24,10 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    # Observed 8-28s across daily runs. 20 minutes covers a cold start plus
+    # one gh-API call and one `npx prettier` fetch per add-on; anything
+    # beyond that means a hung network call, not slow work.
+    timeout-minutes: 20
     permissions:
       contents: write
     steps:

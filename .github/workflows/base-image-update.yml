@@ -8,6 +8,10 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
+    # Observed 11-15s across daily runs. No per-add-on network fetches
+    # beyond the base-image digest lookups, so a tighter cap than
+    # auto-update is appropriate.
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
