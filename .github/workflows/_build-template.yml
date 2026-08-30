@@ -60,7 +60,7 @@ jobs:
         arch: ${{ fromJSON(inputs.archs) }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Resolve version and base image from build.yaml
         id: meta
