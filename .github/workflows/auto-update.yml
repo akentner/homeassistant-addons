@@ -107,7 +107,7 @@ jobs:
               fi
               mv "$tmp" "$changelog"
               # Format with prettier so lint.yml does not reject the commit
-              npx --yes prettier@3.1.0 --write "$changelog"
+              npx --yes prettier@3.9.6 --write "$changelog"
               git add "$changelog"
             fi
 
