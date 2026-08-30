@@ -34,7 +34,9 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && ln -sf /root/.local/bin/uvx /usr/local/bin/uvx
 
 # Python packages via uv
-RUN uv pip install --system --break-system-packages httpie websockets pyyaml python-dotenv paho-mqtt
+RUN uv pip install --system --break-system-packages \
+    httpie websockets pyyaml python-dotenv paho-mqtt \
+    mycli pymysql cryptography
 
 # Debian installs fd as fdfind and bat as batcat — create standard aliases
 RUN ln -sf /usr/bin/fdfind /usr/local/bin/fd \
@@ -179,9 +181,9 @@ RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
     && cp /root/.opencode/bin/opencode /opt/opencode-initial/opencode \
     && ln -sf /root/.opencode/bin/opencode /usr/local/bin/opencode
 
-# Coding assistants + fx JSON viewer via npm
+# OpenCode + GitHub Copilot CLI + fx JSON viewer + MariaDB/MySQL MCP server via npm
 # hadolint ignore=DL3016
-RUN npm install -g @anthropic-ai/claude-code @github/copilot fx
+RUN npm install -g @github/copilot fx mcp-server-mysql
 
 # Web UI + nginx config
 RUN mkdir -p /opt/coding-assistants

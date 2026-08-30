@@ -1,6 +1,6 @@
 name: "Coding Assistants"
-description: "Terminal with Claude Code, OpenCode, and GitHub Copilot CLI — SSH + web terminal"
-version: "1.0.0-alpha45"
+description: "Terminal with OpenCode and GitHub Copilot CLI — SSH + web terminal"
+version: "1.0.0-0"
 slug: "coding_assistants"
 init: false
 hassio_api: true
@@ -51,6 +51,10 @@ options:
     mqtt_base_topic: "zigbee2mqtt"
     db_path: "/data/zigbee2mqtt-mcp.db"
     log_level: "info"
+  mycli:
+    enabled: false
+    default: ""
+    connections: []
   mcp_servers:
     - name: ha-mcp
       type: http
@@ -78,6 +82,16 @@ schema:
     mqtt_base_topic: str?
     db_path: str?
     log_level: str?
+  mycli:
+    enabled: bool?
+    default: str?
+    connections:
+      - name: str
+        host: str
+        port: int?
+        username: str
+        password: password?
+        database: str?
   mcp_servers:
     - name: str
       type: list(stdio|http)

@@ -52,19 +52,36 @@ Persistent storage is at `/data`.
 
 ## AI & MCP
 
-- `claude` — Claude Code CLI
 - `opencode` — OpenCode AI CLI
 - `gh copilot` — GitHub Copilot CLI (`gh copilot suggest`, `gh copilot explain`)
-- `fff-mcp` — fast file search MCP server (register in Claude Code / OpenCode config)
-- `node /opt/mcp2zigbee2mqtt/dist/index.js` — Zigbee2MQTT MCP server; register as a `stdio` entry in `mcp_servers`
-  config with `MQTT_BROKER_URL`, `MQTT_BASE_TOPIC`, and `DB_PATH` env vars
+- `fff-mcp` — fast file search MCP server (auto-registered in OpenCode via the `mcp_servers:` config block)
+- `node /opt/mcp2zigbee2mqtt/dist/index.js` — Zigbee2MQTT MCP server; auto-registered in OpenCode when the
+  `zigbee2mqtt.enabled` option is on
+- `mcp-server-mysql` (`mariadb-<name>` wrapper auto-registered when the `mycli:` config block is active) —
+  MariaDB/MySQL MCP server for SQL queries from OpenCode. Each configured connection gets its
+  own wrapper at `/usr/local/bin/mariadb-<name>` with `MYSQL_HOST/PORT/USER/PASSWORD/DATABASE` baked in.
+  Connection details persist across container rebuilds via `/data/.myclirc` (chmod 600).
+
+## Databases
+
+- `mycli` — interactive MariaDB/MySQL client with autocompletion (SQL keywords + tables/columns via
+  INFORMATION_SCHEMA), syntax highlighting, multi-line queries, safe paste. Connection details come from
+  `/data/.myclirc` (chmod 600, persisted across container rebuilds). The active default connection is
+  exposed as `MYCLI_HOST` / `MYCLI_PORT` / `MYCLI_USER` / `MYCLI_PASSWORD` / `MYCLI_DATABASE` env vars. With
+  the `mycli:` add-on option active:
+
+  ```sh
+  mycli                    # default connection (or whichever mycli.default names)
+  mycli -D analytics       # switch to the 'analytics' alias from /data/.myclirc
+  mycli -h db.example.com  # ad-hoc override via CLI flag
+  ```
+
 - `graphify` — knowledge graph for AI coding assistants; turns code + docs into a queryable graph (no embeddings, runs
   entirely locally). Build: `graphify .` — Update: `graphify . --update` — Query: `graphify query "<question>"`
 
   **Assistant integration (once per workspace, not at build time):**
 
   ```sh
-  graphify claude install     # writes CLAUDE.md directive + PreToolUse hook
   graphify opencode install   # writes AGENTS.md directive
   ```
 

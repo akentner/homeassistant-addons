@@ -2,14 +2,13 @@
 
 [![Release][release-shield]][release] ![Project Stage][project-stage-shield] ![Project Maintenance][maintenance-shield]
 
-Terminal environment with Claude Code, OpenCode, and GitHub Copilot CLI — accessible via SSH and web terminal.
+Terminal environment with OpenCode and GitHub Copilot CLI — accessible via SSH and web terminal.
 
 ## About
 
-This add-on provides a persistent development terminal inside Home Assistant with three AI coding assistants
+This add-on provides a persistent development terminal inside Home Assistant with two AI coding assistants
 pre-installed:
 
-- **Claude Code** (`claude`) — Anthropic's agentic CLI
 - **OpenCode** (`opencode`) — OpenCode AI agent
 - **GitHub Copilot CLI** (`copilot`) — GitHub Copilot in the terminal
 
@@ -45,7 +44,7 @@ env_vars:
 ```
 
 [docs]: https://github.com/akentner/homeassistant-addons/blob/main/coding-assistants/DOCS.md
-[release-shield]: https://img.shields.io/badge/version-v1.0.0--alpha45-orange.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.0.0-alpha45
+[release-shield]: https://img.shields.io/badge/version-v1.0.0-orange.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.0.0
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
