@@ -311,7 +311,12 @@ artifacts in a single release cycle.
    `validate-versions.sh` blocks commits where Bridge `build.yaml` and Provider `build.yaml` versions drift; the
    existing pre-push hook (`internal/check-version-tags.sh`) extends cleanly to cover the new add-on
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] `15-01-PLAN.md` — `make install-provider` target (TOFU-04) + dev_overrides hint
+- [ ] `15-02-PLAN.md` — Bridge build + Provider test GitHub Actions workflows + tag triggers + hermetic verifier
+- [ ] `15-03-PLAN.md` — `/v1/version` handler + test Bridge fixture + E2E CI verification workflow
 
 **UI hint**: no
 
@@ -332,7 +337,7 @@ artifacts in a single release cycle.
 | 12. Bridge Write API + Safety        | v1.3      | 0/TBD          | Not started | —         |
 | 13. Provider + Resource + Data       | v1.3      | 0/TBD          | Not started | —         |
 | 14. Real-HA E2E + Docs               | v1.3      | 0/TBD          | Not started | —         |
-| 15. CI + Provider Install            | v1.3      | 0/TBD          | Not started | —         |
+| 15. CI + Provider Install            | v1.3      | 0/3            | Not started | —         |
 
 ---
 
