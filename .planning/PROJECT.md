@@ -80,6 +80,11 @@ Ingress, with extensible diagram rendering and optional Git sync.
   Validated in Phase 05: multi-namespace-dynamic-config
 - ✓ `markdown-renderer` optional per-namespace git sync empirically verified (18 assertions pass, GIT-01..05) —
   Validated in Phase 06: git-integration
+- ✓ `terraform-bridge` auth layer + structured logging + healthcheck landed — bearer token with SHA-256 hash-at-rest +
+  atomic chmod 600 (AUTH-02), crypto/subtle.ConstantTimeCompare 401 path (AUTH-03), POST /v1/auth/rotate with 24h grace
+  file (AUTH-04), two-layer log masking (AUTH-05), Tailscale-interface bind-address gate with 0.0.0.0 refusal (AUTH-07),
+  per-request slog records with OPS-01 mandatory fields (OPS-01), GET /healthz probing Supervisor via 2s timeout
+  SupervisorClient (OPS-03) — Validated in Phase 10: auth-layer-structured-logging-healthcheck
 
 ### Active
 
@@ -164,4 +169,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-08-31 — Milestone v1.3 Phase 9 complete: terraform-bridge + terraform-provider-homeassistant scaffolds landed (18 atomic commits across 4 plans), D-18 + D-19 resolved empirically (token_unchanged / addon_config_backed_up), OPS-05 wording revised to ≤ 60 MiB uncompressed. Next: Phase 10 auth-layer-+-structured-logging-+-healthcheck. v1.2 Phase 8 gap-closure (08-05) still pending user Cloudflare setup — `/gsd-execute-phase 8 --gaps-only`._
+_Last updated: 2026-08-31 — Milestone v1.3 Phase 10 complete: auth-layer + structured-logging + healthcheck landed (12 atomic commits across 3 plans; 7 reqs AUTH-02/03/04/05/07 + OPS-01/03). Next: Phase 11 bridge-read-api. v1.2 Phase 8 gap-closure (08-05) still pending user Cloudflare setup — `/gsd-execute-phase 8 --gaps-only`._
