@@ -45,8 +45,7 @@ cleanup() {
     local exit_code=$?
     yellow ""
     yellow "── Cleanup: removing sentinel + local backup copy ──"
-    ssh "${HOST}" sudo ha apps stdin "${ADDON_SLUG}" \
-        sh -c "rm -f /addon_config/${SENTINEL_NAME}" >/dev/null 2>&1 || true
+    ssh "${HOST}" "rm -f /addon_configs/${ADDON_SLUG}/${SENTINEL_NAME}" >/dev/null 2>&1 || true
     rm -rf "/tmp/phase9-backup-${RUN_ID}.tar" \
            "/tmp/phase9-backup-${RUN_ID}" >/dev/null 2>&1 || true
     exit "${exit_code}"
@@ -77,15 +76,21 @@ ADDON_INFO="$(ssh "${HOST}" sudo ha apps info "${ADDON_SLUG}" 2>&1)" || {
 green "  ✓ Add-on ${ADDON_SLUG} found on ${HOST}"
 
 # ── Step 1: create sentinel inside the target add-on container ──────────────────
+# The add-on's /addon_config/ path is bind-mounted from the host at
+# /addon_configs/<slug>/. Writing directly to the host path is equivalent to
+# writing inside the container (the bind mount is bidirectional) and avoids
+# the need for `ha apps stdin` (which is not implemented in the current `ha`
+# CLI as of 2026-08; the SPIKE-09 alternative is the Supervisor REST API's
+# /addons/<slug>/exec endpoint, which would require a SUPERVISOR_TOKEN).
 blue ""
 blue "── Step 1: write sentinel file under /addon_config inside ${ADDON_SLUG} ──"
-green "  ssh ${HOST} sudo ha apps stdin ${ADDON_SLUG} sh -c 'echo ${SENTINEL_DATA} > /addon_config/${SENTINEL_NAME}'"
-ssh "${HOST}" sudo ha apps stdin "${ADDON_SLUG}" \
-    sh -c "echo '${SENTINEL_DATA}' > /addon_config/${SENTINEL_NAME}"
-green "  verifying sentinel is reachable inside the add-on:"
-ssh "${HOST}" sudo ha apps stdin "${ADDON_SLUG}" \
-    sh -c "ls -la /addon_config/${SENTINEL_NAME} && cat /addon_config/${SENTINEL_NAME}"
-green "Step 1 complete: sentinel file written and verified inside add-on container."
+SENTINEL_HOST_DIR="/addon_configs/${ADDON_SLUG}"
+green "  ssh ${HOST} -- 'echo ${SENTINEL_DATA} > ${SENTINEL_HOST_DIR}/${SENTINEL_NAME}'"
+ssh "${HOST}" "echo '${SENTINEL_DATA}' > ${SENTINEL_HOST_DIR}/${SENTINEL_NAME}"
+green "  verifying sentinel exists on host at ${SENTINEL_HOST_DIR}/${SENTINEL_NAME}:"
+ssh "${HOST}" "ls -la ${SENTINEL_HOST_DIR}/${SENTINEL_NAME}"
+ssh "${HOST}" "cat ${SENTINEL_HOST_DIR}/${SENTINEL_NAME}"
+green "Step 1 complete: sentinel file written on host (visible to add-on container via bind mount)."
 
 # ── Step 2: trigger HA backup ───────────────────────────────────────────────────
 blue ""
