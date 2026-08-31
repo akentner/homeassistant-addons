@@ -88,7 +88,7 @@ func main() {
 			"plaintext", token, // single emission, never repeated
 		)
 	} else {
-		slog.Info("bridge.token.loaded", "actor_token_fp", "<redacted>")
+		slog.Info("bridge.token.loaded", "actor_token_fp", auth.HashFingerprint(store.Hash()))
 	}
 
 	// Supervisor HTTP client (Plan 02's /healthz uses it).
