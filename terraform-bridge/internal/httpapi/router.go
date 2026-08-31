@@ -27,6 +27,7 @@ func NewRouter(bridgeVersion string, store *auth.TokenStore, supClient *supervis
 	// Public, unauthenticated.
 	r.Get("/", rootHandler(bridgeVersion))
 	r.Get("/healthz", handlers.Healthz(supClient, bridgeVersion))
+	r.Get("/v1/version", handlers.NewVersionHandler(bridgeVersion))
 
 	// Auth-protected /v1/*.
 	r.Route("/v1", func(r chi.Router) {
