@@ -27,9 +27,8 @@ declarative `*.tf` configuration.
   than downloaded from an upstream tag at build time. Reason: the provider schema and the Bridge API must evolve
   together; an out-of-tree provider would require cross-repo coordination that is overkill for a private tool. Both
   artifacts share the same version (3-file scheme).
-- **Auth model (preliminary):** Add-on → Supervisor: SUPERVISOR_TOKEN (auto-injected by Supervisor). External
-  Provider → Bridge: a long-lived bearer token generated and rotated by the Bridge, surfaced through the add-on's
-  config UI.
+- **Auth model (preliminary):** Add-on → Supervisor: SUPERVISOR_TOKEN (auto-injected by Supervisor). External Provider →
+  Bridge: a long-lived bearer token generated and rotated by the Bridge, surfaced through the add-on's config UI.
 - **State backend:** Local Terraform state file in the add-on volume (`/data/terraform.tfstate`). Remote backend
   (S3-compatible, etc.) deferred until multiple users / CI apply runs demand it.
 
@@ -40,8 +39,8 @@ Optional in Phase 1: `homeassistant_addon_repository` for managing store reposit
 milestone plan is approved. Requirements `TOFU-01..NN` to be defined in step 9 of this workflow.
 
 **Status (2026-08-31):** v1.2 ci-cd-hardening (Phase 8) running in parallel — `08-05-GAP-PLAN.md` remains ready for
-`/gsd-execute-phase 8 --gaps-only` whenever the Cloudflare service token and GitHub secrets are in place. Per
-explicit user decision, v1.3 starts parallel to v1.2 rather than waiting for Phase 8 closure.
+`/gsd-execute-phase 8 --gaps-only` whenever the Cloudflare service token and GitHub secrets are in place. Per explicit
+user decision, v1.3 starts parallel to v1.2 rather than waiting for Phase 8 closure.
 
 ## Previous Milestone: v1.1 markdown-renderer (COMPLETE 2026-06-28)
 
@@ -85,6 +84,8 @@ Ingress, with extensible diagram rendering and optional Git sync.
   file (AUTH-04), two-layer log masking (AUTH-05), Tailscale-interface bind-address gate with 0.0.0.0 refusal (AUTH-07),
   per-request slog records with OPS-01 mandatory fields (OPS-01), GET /healthz probing Supervisor via 2s timeout
   SupervisorClient (OPS-03) — Validated in Phase 10: auth-layer-structured-logging-healthcheck
+- ✓ CI hardening + Provider install workflow (TOFU-04) — `make install-provider` with DESTDIR override builds
+  `terraform-provider-homeassistant` from local source and installs to `${DESTDIR}${HOME}/.terraform.d/plugins/localhost/akentner/homeassistant/<version>/` for OpenTofu dev_overrides; `internal/verify-install-provider.sh` hermetic shell verifier; `.github/workflows/build-terraform-bridge.yml` (Bridge image build on push + tag, GHCR push via reusable `_build-template.yml`); `.github/workflows/test-terraform-provider.yml` (gofmt -l + go vet + go test on Provider, explicit `timeout-minutes: 10`); `.github/workflows/test-install-provider.yml` E2E (build + install + ephemeral fixture + `tofu init` + `tofu plan` with handshake check, `timeout-minutes: 15`); `GET /v1/version` Bridge handler + `tools/test-bridge-fixture/` stdlib-only HTTP simulator for the E2E handshake test — Validated in Phase 15: ci-hardening-provider-install-workflow
 
 ### Active
 
@@ -92,8 +93,7 @@ Ingress, with extensible diagram rendering and optional Git sync.
 
 ### v1.3 opentofu-bridge (planning)
 
-- `terraform-bridge` add-on — HTTP/REST service wrapping the Supervisor API, consumable by an external OpenTofu
-  provider
+- `terraform-bridge` add-on — HTTP/REST service wrapping the Supervisor API, consumable by an external OpenTofu provider
 - `terraform-provider-homeassistant` Go module — co-located in this repo, shares 3-file versioning with the bridge
 - Phase-1 resource: `homeassistant_addon` (CRUD: install, start, stop, uninstall, options update)
 - Bearer-token auth for Provider → Bridge (token generated/rotated by the add-on)
@@ -136,15 +136,15 @@ Ingress, with extensible diagram rendering and optional Git sync.
 
 ## Key Decisions
 
-| Decision                                              | Rationale                                                      | Outcome |
-| ----------------------------------------------------- | -------------------------------------------------------------- | ------- |
-| Download upstream at build time, no bundled source    | Keeps repo lean; version updates are a Dockerfile ARG change   | ✓ Good  |
-| `claude login` via HA terminal for Meridian           | Avoids OAuth token in plaintext config; simpler setup          | ✓ Good  |
-| Meridian source from GitHub (not npm) at build time   | Consistent with existing add-on pattern; no node_modules bloat | ✓ Good  |
-| Fully automatic auto-update merge (no manual PR step) | Upstream releases are trusted (own projects + meridian) | ✓ Good  |
-| v1.3: Bridge add-on + Provider co-located in this repo | Provider and Bridge must evolve together; cross-repo versioning overhead is unjustified for a private tool | ✓ Good  |
-| v1.3: Bearer token for Provider → Bridge auth | mTLS needs a CA inside the container; OAuth adds a UI surface for one client. Bearer is the smallest correct primitive | ✓ Good  |
-| v1.3: Local state backend in `/data/terraform.tfstate` | Single-user / single-host setup today; remote backend only worth the complexity when CI or multi-host applies arrive | ✓ Good  |
+| Decision                                               | Rationale                                                                                                              | Outcome |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ------- |
+| Download upstream at build time, no bundled source     | Keeps repo lean; version updates are a Dockerfile ARG change                                                           | ✓ Good  |
+| `claude login` via HA terminal for Meridian            | Avoids OAuth token in plaintext config; simpler setup                                                                  | ✓ Good  |
+| Meridian source from GitHub (not npm) at build time    | Consistent with existing add-on pattern; no node_modules bloat                                                         | ✓ Good  |
+| Fully automatic auto-update merge (no manual PR step)  | Upstream releases are trusted (own projects + meridian)                                                                | ✓ Good  |
+| v1.3: Bridge add-on + Provider co-located in this repo | Provider and Bridge must evolve together; cross-repo versioning overhead is unjustified for a private tool             | ✓ Good  |
+| v1.3: Bearer token for Provider → Bridge auth          | mTLS needs a CA inside the container; OAuth adds a UI surface for one client. Bearer is the smallest correct primitive | ✓ Good  |
+| v1.3: Local state backend in `/data/terraform.tfstate` | Single-user / single-host setup today; remote backend only worth the complexity when CI or multi-host applies arrive   | ✓ Good  |
 
 ## Evolution
 
@@ -169,4 +169,10 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-08-31 — Milestone v1.3 Phase 10 complete: auth-layer + structured-logging + healthcheck landed (12 atomic commits across 3 plans; 7 reqs AUTH-02/03/04/05/07 + OPS-01/03). Next: Phase 11 bridge-read-api. v1.2 Phase 8 gap-closure (08-05) still pending user Cloudflare setup — `/gsd-execute-phase 8 --gaps-only`._
+_Last updated: 2026-08-31 — Milestone v1.3 Phase 15 complete: CI hardening + Provider install workflow (TOFU-04) — 11
+atomic commits across 3 plans: Makefile `install-provider` target + hermetic `verify-install-provider.sh`; three
+GitHub Actions workflows (Bridge build + Provider test + E2E `tofu init`/`tofu plan` handshake check); `GET /v1/version`
+handler on Bridge + `tools/test-bridge-fixture/` CI-only simulator. Phase 15 is the LAST phase of v1.3 milestone —
+milestone complete pending live-HA E2E verification (Phase 14, deferred) and Phase 9 H-1/§10 spike transcripts (still
+needed for PROV-03 contingency resolution). v1.2 Phase 8 gap-closure (08-05) still pending user Cloudflare setup —
+`/gsd-execute-phase 8 --gaps-only`._
