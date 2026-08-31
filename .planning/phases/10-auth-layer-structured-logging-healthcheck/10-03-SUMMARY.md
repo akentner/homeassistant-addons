@@ -1,5 +1,6 @@
 ---
 phase: 10-auth-layer-structured-logging-healthcheck
+plan: 03
 subsystem: auth
 tags: [go, auth, chi-middleware, slog, audit, grace-window, atomic-write, operator-docs]
 
