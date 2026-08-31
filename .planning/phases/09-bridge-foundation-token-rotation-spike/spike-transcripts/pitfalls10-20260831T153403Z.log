@@ -1,0 +1,58 @@
+[0;34m================================================================[0m
+[0;34mPITFALLS §10 SPIKE — Phase 9 backup integration vs /addon_config mount[0m
+[0;34m================================================================[0m
+[0;34mHost:         haos-op3050-1[0m
+[0;34mTarget slug:  72a005f5_phone-logger[0m
+[0;34mRun ID:       20260831T153403Z-605754[0m
+[0;34mTranscript:   /tmp/spike-pitfalls10-20260831T153403Z-605754.log[0m
+[0;34m[0m
+[0;34mRead-mostly: only the add-on's writable /addon_config path is touched.[0m
+[0;34mTriggering an HA backup is a brief snapshot, not a destructive op.[0m
+[0;34m[0m
+[0;34m── Pre-flight: verify target add-on has map: addon_config:rw ──[0m
+[0;32m  ✓ Add-on 72a005f5_phone-logger found on haos-op3050-1[0m
+[0;34m[0m
+[0;34m── Step 1: write sentinel file under /addon_config inside 72a005f5_phone-logger ──[0m
+[0;32m  ssh haos-op3050-1 -- 'echo phase-9-sentinel-data-20260831T153403Z-605754 > /addon_configs/72a005f5_phone-logger/phase9-sentinel-20260831T153403Z-605754.txt'[0m
+[0;32m  verifying sentinel exists on host at /addon_configs/72a005f5_phone-logger/phase9-sentinel-20260831T153403Z-605754.txt:[0m
+-rw-r--r-- 1 root root 46 Aug 31 17:34 /addon_configs/72a005f5_phone-logger/phase9-sentinel-20260831T153403Z-605754.txt
+phase-9-sentinel-data-20260831T153403Z-605754
+[0;32mStep 1 complete: sentinel file written on host (visible to add-on container via bind mount).[0m
+[0;34m[0m
+[0;34m── Step 2: trigger HA backup integration ──[0m
+[0;32m  ssh haos-op3050-1 sudo ha backups new --name phase9-20260831T153403Z-605754 --app 72a005f5_phone-logger[0m
+job_id: 1ee7be8b8e7841cdb4e6641702d3cbd7
+slug: 0bfb03b3
+[0;32m  verifying backup appears in 'ha backups list':[0m
+  name: phase9-20260831T153403Z-605754
+[0;32mStep 2 complete: HA backup created and visible.[0m
+[0;34m[0m
+[0;34m── Step 3: download backup tarball and inspect contents ──[0m
+[0;32m  resolved slug: 0bfb03b3 → file: 0bfb03b3.tar[0m
+[0;32m  rsync -av haos-op3050-1:/backup/0bfb03b3.tar /tmp/0bfb03b3.tar[0m
+
+sent 43 bytes  received 309.671.850 bytes  41.289.585,73 bytes/sec
+total size is 309.596.160  speedup is 1,00
+[0;32m  tar -xf '/tmp/0bfb03b3.tar' -C '/tmp/phase9-backup-20260831T153403Z-605754'[0m
+[0;32m  backup root contents (first 30 entries):[0m
+72a005f5_phone-logger.tar.gz
+backup.json
+[0;32mStep 3 complete: backup unpacked locally.[0m
+[0;34m[0m
+[0;34m── Step 4: search backup for sentinel file (recursive unpack + grep) ──[0m
+[0;32m  extracting all per-addon tar.gz files into /tmp/phase9-backup-20260831T153403Z-605754/extracted[0m
+[0;32m  grepping extracted tree for sentinel data string:[0m
+/tmp/phase9-backup-20260831T153403Z-605754/extracted/72a005f5_phone-logger/config/phase9-sentinel-20260831T153403Z-605754.txt:phase-9-sentinel-data-20260831T153403Z-605754
+[0;32m[0m
+[0;32m  ✓ Sentinel FOUND in backup tarball.[0m
+[0;32m[0m
+[0;32mRESULT: addon_config_backed_up[0m
+[0;34m[0m
+[0;34m  D-19 implication: Phase 13 STATE-01 mitigation (map: addon_config:rw)[0m
+[0;34m  works as designed — secondary state files ARE included in HA backups.[0m
+[0;34m  Phase 13 may rely on this for the secondary state-copy mitigation.[0m
+
+TRANSCRIPT DONE: /tmp/spike-pitfalls10-20260831T153403Z-605754.log
+RESULT: addon_config_backed_up
+[0;33m[0m
+[0;33m── Cleanup: removing sentinel + local backup copy ──[0m

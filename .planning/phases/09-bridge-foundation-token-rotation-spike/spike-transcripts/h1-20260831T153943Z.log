@@ -1,0 +1,49 @@
+[0;34m================================================================[0m
+[0;34mH-1 SPIKE — Phase 9 SUPERVISOR_TOKEN rotation across Supervisor restart[0m
+[0;34m================================================================[0m
+[0;34mHost:       haos-op3050-1[0m
+[0;34mTarget:     72a005f5_phone-logger[0m
+[0;34mRun ID:     20260831T153943Z-607912[0m
+[0;34mTranscript: /tmp/spike-h1-20260831T153943Z-607912.log[0m
+[0;34m[0m
+[0;34mSERVICE-DISRUPTING — restarts HA Supervisor on haos-op3050-1.[0m
+[0;34mEvery add-on restarts; HA Core restarts; live automations pause[0m
+[0;34mfor ~30s + add-on respawn. Run only with explicit user approval[0m
+[0;34m(AGENTS.md Live Systems rule).[0m
+[0;34m[0m
+[0;32mPre-flight: verify 72a005f5_phone-logger is running on haos-op3050-1[0m
+[0;32m  Container app_72a005f5_phone-logger is running[0m
+[0;34m[0m
+[0;34mStep 1: capture SUPERVISOR_TOKEN fingerprint BEFORE Supervisor restart[0m
+[0;32m  BEFORE: sha256=103e99d5577d575ae5bf898cde0d2f9add2d426a3d1284148b116713e948963a  at 2026-08-31T15:39:44Z[0m
+[0;34m[0m
+[0;34mStep 2: ha supervisor restart (SERVICE-DISRUPTING)[0m
+[0;33m  Sleeping 10s before issuing restart — press Ctrl+C NOW if you have NOT[0m
+[0;33m  announced this run to the user / on-call.[0m
+[0;32m  ssh haos-op3050-1 sudo ha supervisor restart[0m
+Command completed successfully.
+[0;32mSupervisor restart issued at 2026-08-31T15:39:54Z[0m
+[0;34m[0m
+[0;34mStep 3: wait for Supervisor + add-on to come back online[0m
+[0;33m  Polling for Supervisor availability (max 120s)...[0m
+[0;32m  Supervisor back online after 0s[0m
+[0;33m  Waiting for app_72a005f5_phone-logger to respawn (max 60s)...[0m
+[0;32m  app_72a005f5_phone-logger respawned after 0s[0m
+[0;34m[0m
+[0;34mStep 4: capture SUPERVISOR_TOKEN fingerprint AFTER Supervisor restart[0m
+[0;32m  AFTER:  sha256=103e99d5577d575ae5bf898cde0d2f9add2d426a3d1284148b116713e948963a  at 2026-08-31T15:40:00Z[0m
+[0;34m[0m
+[0;34mStep 5: compare fingerprints[0m
+[0;32m  before sha256: 103e99d5577d575ae5bf898cde0d2f9add2d426a3d1284148b116713e948963a  at 2026-08-31T15:39:44Z[0m
+[0;32m  after  sha256: 103e99d5577d575ae5bf898cde0d2f9add2d426a3d1284148b116713e948963a  at 2026-08-31T15:40:00Z[0m
+[0;32m  IDENTICAL — Supervisor did NOT rotate the per-add-on token across restart.[0m
+[0;32m[0m
+[0;32mRESULT: token_unchanged[0m
+[0;34m[0m
+[0;34m  D-18 implication: Phase 10 auth design MAY cache the token at startup.[0m
+[0;34m  (Both designs are Phase-9-compatible; caching is the cheaper default.)[0m
+[0;32m[0m
+[0;32mTime delta before/after capture: 16 seconds[0m
+
+TRANSCRIPT DONE: /tmp/spike-h1-20260831T153943Z-607912.log
+RESULT: token_unchanged
