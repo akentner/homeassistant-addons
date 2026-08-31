@@ -140,7 +140,12 @@ phase builds on a secure logging baseline.
    Tailscale IP"; startup refuses to launch and logs a clear error if the detected interface is not a Tailscale
    interface (Phase-1 network-layer ACL boundary; TLS termination remains out of scope)
 
-**Plans**: TBD
+**Plans**: 3 plans in 3 waves
+
+Plans:
+- [ ] `10-01-PLAN.md` — TokenStore (crypto/rand + SHA-256 + chmod 600 + ConstantTimeCompare) + auth middleware (Bearer extraction + 401 typed error) + bind-address resolver (Tailscale /sys/class/net + bind_allowed_subnets + 0.0.0.0 refusal) + Supervisor HTTP client (token-injecting RoundTripper, re-reads env per call) + /v1/whoami test endpoint + config.yaml schema for bind_address + bind_allowed_subnets
+- [ ] `10-02-PLAN.md` — Scrubbing slog.Handler wrapper (case-insensitive key-name mask: Authorization, Bearer, bridge_token, SUPERVISOR_TOKEN, supervisor_token, bearer, token, password → <redacted>) + chi RequestLogger middleware (OPS-01 fields: request_id, route, method, status, duration_ms; strips Authorization from r.Header.Clone() before logging) + GET /healthz (probes /supervisor/ping with 2s timeout; 200 + HealthResponse on success, 503 + empty body on failure) + AUTH-05 invariant unit tests + strengthened internal/verify-bridge-no-token-leak.sh (exactly-once plaintext + actor_token_fp positive control + OPS-01 field assertions) + pre-commit hook entry
+- [ ] `10-03-PLAN.md` — TokenStore.Rotate() (new plaintext + atomic persist + grace file /data/bridge-token.grace chmod 600 with 24-hour expiry) + POST /v1/auth/rotate handler (requires valid bearer per D-12; emits bridge.token.rotated audit record with fingerprints only) + DOCS.md operator procedure (issuance/rotation/recovery) + 10-SUMMARY.md
 
 **UI hint**: no
 
@@ -322,7 +327,7 @@ artifacts in a single release cycle.
 | 6. Git Integration                   | v1.1      | 2/2            | Complete    | 2026-06-28 |
 | 8. CI/CD Hardening                   | v1.2      | 3/4 (1 partial + 1 gap-closure pending) | Gap closure pending | —  |
 | 9. Bridge Foundation + Token Spike   | v1.3      | 3/4 | In Progress|  |
-| 10. Auth + Logging + Healthcheck     | v1.3      | 0/TBD          | Not started | —         |
+| 10. Auth + Logging + Healthcheck     | v1.3      | 0/3            | Planned     | —         |
 | 11. Bridge Read API                  | v1.3      | 0/TBD          | Not started | —         |
 | 12. Bridge Write API + Safety        | v1.3      | 0/TBD          | Not started | —         |
 | 13. Provider + Resource + Data       | v1.3      | 0/TBD          | Not started | —         |
