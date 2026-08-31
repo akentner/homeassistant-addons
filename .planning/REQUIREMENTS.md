@@ -36,10 +36,10 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
 - [x] **AUTH-01**: Bridge → Supervisor uses `SUPERVISOR_TOKEN` auto-injected by Supervisor when `hassio_api: true` is
       set in `config.yaml`; the token is **never** logged, **never** sent to the Provider, and **never** accepted from
       a non-loopback source
-- [ ] **AUTH-02**: Bridge generates a 256-bit bearer token on first start using `crypto/rand`; stores its SHA-256 hash
+- [x] **AUTH-02**: Bridge generates a 256-bit bearer token on first start using `crypto/rand`; stores its SHA-256 hash
       in `/data/bridge-token` with `chmod 600`; surfaces the plaintext token exactly once via add-on log + Options UI
       on first start and on subsequent rotation
-- [ ] **AUTH-03**: Provider → Bridge requests must include `Authorization: Bearer <token>`; Bridge validates with
+- [x] **AUTH-03**: Provider → Bridge requests must include `Authorization: Bearer <token>`; Bridge validates with
       `crypto/subtle.ConstantTimeCompare` against the on-disk hash
 - [ ] **AUTH-04**: Bridge exposes `POST /v1/auth/rotate` returning a new token plus a 24-hour grace window where the
       old token still authenticates successfully; grace state is persisted in `/data/bridge-token.grace`
@@ -47,7 +47,7 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
       middleware); a `bridge_token` field in any log record is forbidden and enforced by a unit test
 - [x] **AUTH-06**: Bridge declares `hassio_role: manager` in `config.yaml` so it can read other add-ons' `options`
       (which Supervisor redacts for non-manager apps per `supervisor/api/middleware/security.py`)
-- [ ] **AUTH-07**: Bridge listener binds to `0.0.0.0:<port>` (default `8124/tcp`); for Phase 1 the network layer
+- [x] **AUTH-07**: Bridge listener binds to `0.0.0.0:<port>` (default `8124/tcp`); for Phase 1 the network layer
       (Tailscale ACL or LAN) enforces access control, not the Bridge itself; TLS termination is documented as
       out-of-scope for Phase 1
 

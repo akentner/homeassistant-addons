@@ -327,7 +327,7 @@ artifacts in a single release cycle.
 | 6. Git Integration                   | v1.1      | 2/2            | Complete    | 2026-06-28 |
 | 8. CI/CD Hardening                   | v1.2      | 3/4 (1 partial + 1 gap-closure pending) | Gap closure pending | —  |
 | 9. Bridge Foundation + Token Spike   | v1.3      | 3/4 | In Progress|  |
-| 10. Auth + Logging + Healthcheck     | v1.3      | 0/3            | Planned     | —         |
+| 10. Auth + Logging + Healthcheck     | v1.3      | 1/3 | In Progress|  |
 | 11. Bridge Read API                  | v1.3      | 0/TBD          | Not started | —         |
 | 12. Bridge Write API + Safety        | v1.3      | 0/TBD          | Not started | —         |
 | 13. Provider + Resource + Data       | v1.3      | 0/TBD          | Not started | —         |
