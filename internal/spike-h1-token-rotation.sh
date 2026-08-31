@@ -63,13 +63,13 @@ fi
 green "  Container ${CONTAINER_NAME} is running"
 
 # Capture the SUPERVISOR_TOKEN fingerprint from inside the add-on container.
-# /proc/1/environ is kernel view of PID 1's environment (NULL-separated).
-# Read it via 'docker exec' (root on host), extract the SUPERVISOR_TOKEN
-# line, sha256-hash the value, print ONLY the fingerprint.
+# We use 'docker exec ... env' (root on host) instead of reading /proc/1/environ
+# because some container runtimes make /proc/<pid>/environ unreadable from
+# inside the container's PID namespace even with --privileged.
 CAPTURE_TOKEN() {
     local raw=""
-    raw="$(ssh "${HOST}" "sudo docker exec ${CONTAINER_NAME} \
-        sh -c 'tr \"\\0\" \"\\n\" < /proc/1/environ | grep \"^SUPERVISOR_TOKEN=\"'")"
+    raw="$(ssh "${HOST}" "sudo docker exec ${CONTAINER_NAME} env" 2>/dev/null \
+        | grep '^SUPERVISOR_TOKEN=' || true)"
     raw="${raw#SUPERVISOR_TOKEN=}"
     if [[ -z "${raw}" ]]; then
         echo ""
