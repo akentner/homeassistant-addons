@@ -19,7 +19,7 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
 - [x] **TOFU-01**: `terraform-bridge/` add-on follows the established 4-file pattern (`config.yaml`, `build.yaml`,
       `Dockerfile`, `run.sh`) consistent with every other add-on in the repo; no `.upstream.yaml` because there is no
       external upstream project
-- [ ] **TOFU-02**: `terraform-provider-homeassistant/` is a Go module built from **local source** in the repo
+- [x] **TOFU-02**: `terraform-provider-homeassistant/` is a Go module built from **local source** in the repo
       (documented exception to the "Dockerfiles must download upstream at build time" rule); same Go toolchain (≥ 1.25)
       for both Bridge and Provider
 - [x] **TOFU-03**: Bridge and Provider share one release cycle via the existing 3-file scheme: Bridge `config.yaml`
@@ -28,7 +28,7 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
 - [ ] **TOFU-04**: A Makefile target (`make install-provider`) installs the built Provider binary into
       `~/.terraform.d/plugins/<host>/akentner/homeassistant/<version>/` so OpenTofu discovers it via the dev_overrides
       workflow
-- [ ] **TOFU-05**: `internal/validate-versions.sh` is extended to enforce that Bridge `build.yaml` and Provider
+- [x] **TOFU-05**: `internal/validate-versions.sh` is extended to enforce that Bridge `build.yaml` and Provider
       `build.yaml` carry the same `X.Y.Z` portion; mismatched versions fail pre-commit
 
 ### AUTH — Auth & Security
@@ -135,7 +135,7 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
 - [ ] **OPS-01**: Bridge emits structured JSON log records to stdout (one record per line) with `ts`, `level`,
       `msg`, `request_id`, `route`, `method`, `status`, `duration_ms`; logs include the Supervisor call name
       (`supervisor.method = "apps.install"`) but never the Authorization header or token
-- [ ] **OPS-02**: Bridge handles `SIGTERM` gracefully — drains in-flight requests up to 30 seconds, then exits;
+- [x] **OPS-02**: Bridge handles `SIGTERM` gracefully — drains in-flight requests up to 30 seconds, then exits;
       handles `SIGHUP` to rotate logs without restart
 - [ ] **OPS-03**: Bridge exposes `GET /healthz` (non-authenticated) returning `200 OK` if it can reach Supervisor
       (used by HA Supervisor's health-check and by external monitors)
@@ -143,7 +143,10 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
       (`cat /data/bridge-token`), OpenTofu provider install (`make install-provider`), example `*.tf` file, every
       resource attribute with example values, every error code with remediation, troubleshooting section
 - [x] **OPS-05**: Bridge Dockerfile is multi-stage: `golang:1.25-alpine` builds a static binary, which is copied into
-      `ghcr.io/home-assistant/amd64-base:3.24`; image size target ≤ 30 MiB
+      `ghcr.io/home-assistant/amd64-base:3.24`; image size target ≤ 60 MiB uncompressed, ≤ 30 MiB compressed
+      *(revised 2026-08-31 from ≤ 30 MiB — HA base 3.24 alone is 49 MiB uncompressed;
+      compressed size is ~22 MiB which is under the original target;
+      documented deviation in 09-01-SUMMARY + 09-04-SUMMARY)*
 
 ---
 
