@@ -1,6 +1,6 @@
 name: "Terraform Bridge"
 description: "Bearer-authenticated JSON proxy of the HA Supervisor HTTP API for OpenTofu/Terraform management."
-version: "0.1.0-4"
+version: "0.1.0-5"
 slug: "terraform-bridge"
 init: false
 arch:
@@ -16,9 +16,9 @@ ports:
 ports_description:
   8124/tcp: "Terraform Bridge JSON API (HTTP, Tailscale-filtered)"
 map:
-  - type: addon_config
+  - type: app_config
     read_only: false
-    path: /addon_config
+    path: /app_config
 options:
   bind_address: "auto"
   bind_allowed_subnets: []
