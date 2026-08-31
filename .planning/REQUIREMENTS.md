@@ -41,7 +41,7 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
       on first start and on subsequent rotation
 - [x] **AUTH-03**: Provider → Bridge requests must include `Authorization: Bearer <token>`; Bridge validates with
       `crypto/subtle.ConstantTimeCompare` against the on-disk hash
-- [ ] **AUTH-04**: Bridge exposes `POST /v1/auth/rotate` returning a new token plus a 24-hour grace window where the
+- [x] **AUTH-04**: Bridge exposes `POST /v1/auth/rotate` returning a new token plus a 24-hour grace window where the
       old token still authenticates successfully; grace state is persisted in `/data/bridge-token.grace`
 - [x] **AUTH-05**: Bearer token never appears in Bridge logs (Authorization header masked by request-logging
       middleware); a `bridge_token` field in any log record is forbidden and enforced by a unit test
