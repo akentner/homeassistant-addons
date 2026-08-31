@@ -12,6 +12,7 @@ import (
 
 	"terraform-bridge/internal/auth"
 	"terraform-bridge/internal/httpapi"
+	"terraform-bridge/internal/logging"
 	"terraform-bridge/internal/supervisor"
 )
 
@@ -36,7 +37,7 @@ func main() {
 	// Structured JSON logging via stdlib log/slog (Phase 9 baseline).
 	// Plan 02 wraps this with a scrubbingHandler that masks sensitive
 	// keys before serialization.
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := slog.New(logging.NewScrubbingHandler(slog.NewJSONHandler(os.Stdout, nil)))
 	slog.SetDefault(logger)
 
 	// Read add-on options from /data/options.json (HA add-on store).
@@ -99,10 +100,7 @@ func main() {
 	)
 
 	// Build the router — pass store so the auth middleware can validate.
-	router := httpapi.NewRouter(bridgeVersion, store)
-
-	// Suppress unused-variable warning until /healthz (Plan 02) wires it.
-	_ = supClient
+	router := httpapi.NewRouter(bridgeVersion, store, supClient)
 
 	srv := &http.Server{
 		Addr:              bindIP + ":8124",
