@@ -54,7 +54,7 @@ SUPERVISOR_TOKEN-rotation-across-restart — empirical spike required in Phase 9
       empirical verification of SUPERVISOR_TOKEN rotation and HA backup integration *(plans 01-04 complete;
       H-1 + §10 spike scripts authored; live spike execution deferred pending per-call authorization for
       Supervisor restart + backup snapshot — see `09-SUMMARY.md`)*
-- [ ] **Phase 10: Auth Layer + Structured Logging + Healthcheck** — Bearer generation, hash-at-rest, constant-time
+- [x] **Phase 10: Auth Layer + Structured Logging + Healthcheck** — Bearer generation, hash-at-rest, constant-time (completed 2026-08-31)
       compare, rotation with grace, log masking, /healthz
 - [ ] **Phase 11: Bridge Read API** — /v1/version, /v1/addons, /v1/addons/{slug}/info, /v1/info
 - [ ] **Phase 12: Bridge Write API + Critical-Addon Safety + Concurrency + State Index** — install/uninstall/start/stop/
@@ -327,7 +327,7 @@ artifacts in a single release cycle.
 | 6. Git Integration                   | v1.1      | 2/2            | Complete    | 2026-06-28 |
 | 8. CI/CD Hardening                   | v1.2      | 3/4 (1 partial + 1 gap-closure pending) | Gap closure pending | —  |
 | 9. Bridge Foundation + Token Spike   | v1.3      | 3/4 | In Progress|  |
-| 10. Auth + Logging + Healthcheck     | v1.3      | 2/3 | In Progress|  |
+| 10. Auth + Logging + Healthcheck     | v1.3      | 3/3 | Complete   | 2026-08-31 |
 | 11. Bridge Read API                  | v1.3      | 0/TBD          | Not started | —         |
 | 12. Bridge Write API + Safety        | v1.3      | 0/TBD          | Not started | —         |
 | 13. Provider + Resource + Data       | v1.3      | 0/TBD          | Not started | —         |

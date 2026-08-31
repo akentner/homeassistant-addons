@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: opentofu-bridge
-status: executing
-stopped_at: Completed 10-02-PLAN.md
-last_updated: "2026-08-31T18:55:00Z"
+status: verifying
+stopped_at: Completed 10-03-PLAN.md
+last_updated: "2026-08-31T17:01:27.533Z"
 last_activity: 2026-08-31
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -69,7 +69,7 @@ roadmap approved; Phase 9 ready to plan. v1.3 runs in parallel with v1.2 Phase 8
 | Phase | Name                                                 | Status      | Completed |
 | ----- | ---------------------------------------------------- | ----------- | --------- |
 | 9     | Bridge Foundation + Token Rotation Spike              | In progress (deferred spike execution) | 2026-08-31 (plans 01-04; H-1 + §10 pending live run) |
-| 10    | Auth Layer + Structured Logging + Healthcheck         | Not started | —         |
+| 10    | Auth Layer + Structured Logging + Healthcheck         | Complete | 2026-08-31 (plans 01-03; live-HA verify deferred to Phase 14) |
 | 11    | Bridge Read API                                      | Not started | —         |
 | 12    | Bridge Write API + Critical-Addon Safety + Concurrency | Not started | —         |
 | 13    | Provider + Resource + Data Sources + Schema Handshake | Not started | —         |
@@ -82,9 +82,10 @@ the rest.
 
 ## Current Position
 
-Phase: 10 (auth-layer-structured-logging-healthcheck) — EXECUTING
+Phase: 10 (auth-layer-structured-logging-healthcheck) — COMPLETE
 Plan: 3 of 3
-Status: Ready to execute (Plan 02 complete; Plan 03 = rotation + grace window)
+Status: Complete — pending Phase 14 live-HA verify (deferred per 09-SUMMARY §H-1/§10)
+Next: Phase 11 (Bridge Read API)
 Last activity: 2026-08-31
 
 ## Accumulated Context
@@ -102,6 +103,9 @@ Last activity: 2026-08-31
 | **Two-layer AUTH-05 masking (Plan 02):** slog.Handler wrapper scrubs every record + chi middleware strips Authorization from r.Header before request-log snapshot | D-10 layered defense — if the slog scrubber ever regresses, the chi middleware still prevents leakage. Both proven by unit tests. Phase 10 plan 02 commits. |
 | **/healthz probe (Plan 02):** real /supervisor/ping call with 2s context deadline, no caching. 503 body always empty (Content-Length: 0) | D-07 freshness > p99 reduction at this poll cadence. D-08 prevents internal-state leak on health-check failure. Phase 10 plan 02 commits. |
 | **verify-script adaptation (Plan 02):** positive-control assertions rewritten to parse `bridge.token.issued` JSON and assert actor_token_fp == SHA-256[8](plaintext) instead of comparing against FAKE_TOKEN (the supervisor token the bridge never logs) | Plan-adaptation deviation. Adding a BRIDGE_TOKEN env override to TokenStore would be an out-of-scope architectural change; same invariants proven without it. Documented in 10-02-SUMMARY §Deviations. |
+| **AUTH-04 grace file format (Plan 03):** /data/bridge-token.grace is a 2-line plaintext format (hex64 + RFC3339) instead of JSON — keeps Plan 01's readGraceFile parser unchanged; D-13 per-request expiry semantics means the file becomes inert without background goroutines | Plan-adaptation choice. JSON would have been equally correct on disk but required rewiring the reader AND adding a JSON-path through Plan 01's already-committed code. Text format respects the existing reader and locks the security invariant (no plaintext ever) more defensively. |
+| **AUTH-04 rotate write order (Plan 03):** TokenStore.Rotate writes the new primary hash BEFORE writing the grace file. If the grace write fails, the old token still authenticates against the new hash; on-disk primary state is always consistent | Failure-mode lockdown. Reversing the order would leave a window where the new token authenticates against /data/bridge-token but the old token does not — exactly the scenario D-02/D-12 are designed to prevent. Cost of writing primary first is one extra renamed file; cost of reversal is a window of forced 401s on a still-valid token. |
+| **D-03 timestamp pair (Plan 03):** RotateResponse.GraceExpiresAt and OldTokenValidUntil are byte-identical RFC3339 strings — duplicated on purpose so Provider consumers can pick whichever schema field name they prefer without an extra hop | Provider-side ergonomics. PROV-03 / PROV-05 reference these fields from Phase 13's resource shape; duplication costs zero on the wire (~70 bytes) and removes a constant from the Provider's schema mapping table. |
 
 ### Research Flags (open questions for implementation — must resolve before/during Phase 9)
 
@@ -153,6 +157,7 @@ Last activity: 2026-08-31
 | Phase 10 P01 | 35min | 3 tasks | 11 files |
 | Phase 10 P02 | 25min | 3 tasks | 11 files |
 | Phase 10 P02 | 25min | 3 tasks | 11 files |
+| Phase 10-auth-layer-structured-logging-healthcheck P03 | 4 min | 3 tasks | 6 files |
 
 ## Quick Tasks Completed
 
@@ -169,9 +174,9 @@ Last activity: 2026-08-31
 
 ## Session Continuity
 
-Last session: 2026-08-31T16:44:23.812Z
-Stopped at: Completed 10-01-PLAN.md
-to proceed to `/gsd-plan-phase 9`
+Last session: 2026-08-31T17:01:27.530Z
+Stopped at: Completed 10-03-PLAN.md (Phase 10 closed — 3 plans / 9 atomic commits / 11 new tests)
+Next step: `/gsd-plan-phase 11` (Bridge Read API — BRIDGE-01..03 + BRIDGE-10)
 Resume file: None
 
 ---
