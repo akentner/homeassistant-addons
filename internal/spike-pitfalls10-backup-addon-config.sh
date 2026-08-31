@@ -119,7 +119,7 @@ blue "── Step 3: download backup tarball and inspect contents ──"
 # the `slug:` field from the same YAML record.
 BACKUP_SLUG="$(ssh "${HOST}" sudo ha backups list 2>&1 | awk -v name="phase9-${RUN_ID}" '
     $0 ~ "name: " name {found=1; next}
-    found && /slug:/ {print $2; exit}
+    found && /slug:/ {gsub(/["'"'"']/, "", $2); print $2; exit}
     found && /^[^ ]/ {found=0}
 ')"
 if [[ -z "${BACKUP_SLUG}" ]]; then
