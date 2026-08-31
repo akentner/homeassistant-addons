@@ -96,6 +96,22 @@ repos:
         language: system
         always_run: true
         pass_filenames: false
+      - id: verify-bridge-scaffold
+        name: terraform-bridge scaffold verify
+        description: Build the Bridge, assert <= 30 MiB image, JSON placeholder, SIGTERM drain, SIGHUP reopen
+        entry: bash internal/verify-bridge-scaffold.sh
+        language: system
+        pass_filenames: false
+        files: ^terraform-bridge/.*$
+        require_serial: true
+      - id: verify-bridge-no-token-leak
+        name: terraform-bridge no-token-leak
+        description: Assert no SUPERVISOR_TOKEN/Bearer/bridge_token substrings in Bridge stdout
+        entry: bash internal/verify-bridge-no-token-leak.sh
+        language: system
+        pass_filenames: false
+        files: ^terraform-bridge/.*$
+        require_serial: true
 
 # Configuration
 default_language_version:
