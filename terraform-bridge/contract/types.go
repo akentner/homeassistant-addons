@@ -44,3 +44,45 @@ type VersionHandshake struct {
 	MinProviderVersion string `json:"min_provider_version"`
 	MaxProviderVersion string `json:"max_provider_version"`
 }
+
+// ErrorResponse is the body of every 4xx/5xx response from the
+// Bridge. error_code is the machine-readable identifier
+// ("unauthorized", "not_found", "critical_addon_protected", …);
+// request_id, when present, lets operators correlate the response
+// with a specific Bridge log record. Plaintext tokens, request
+// bodies, and env-derived secrets are NEVER included.
+type ErrorResponse struct {
+	ErrorCode string `json:"error_code"`
+	Message   string `json:"message,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+}
+
+// TokenResponse is returned by /v1/whoami (this phase) and any
+// future endpoint that needs to identify the authenticated caller
+// without echoing the bearer token itself. actor_token_fp is the
+// 16-char hex SHA-256[8] fingerprint of the validated token; two
+// tokens never collide at this width with negligible probability.
+type TokenResponse struct {
+	ActorTokenFP string `json:"actor_token_fp"`
+}
+
+// RotateResponse is the body of POST /v1/auth/rotate (Plan 03).
+// Both timestamp fields carry the same RFC3339 instant; the
+// duplication lets Provider consumers use whichever field the
+// OpenTofu schema prefers without an extra hop (CONTEXT D-03).
+type RotateResponse struct {
+	NewToken           string `json:"new_token"`
+	GraceExpiresAt     string `json:"grace_expires_at"`
+	OldTokenValidUntil string `json:"old_token_valid_until"`
+}
+
+// HealthResponse is the body of GET /healthz (Plan 02) on the
+// success path. On failure (Supervisor unreachable), the response
+// is HTTP 503 with an empty body (D-08: never leak internal state
+// on health-check failure). SupervisorReachable mirrors the HTTP
+// status for callers that prefer JSON over status-code parsing.
+type HealthResponse struct {
+	Status              string `json:"status"`
+	SupervisorReachable bool   `json:"supervisor_reachable"`
+	BridgeVersion       string `json:"bridge_version"`
+}
