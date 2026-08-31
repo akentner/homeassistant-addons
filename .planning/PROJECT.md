@@ -12,19 +12,36 @@ adapter architecture), and `meridian` (Claude Max → local Anthropic-compatible
 
 Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version tracking.
 
-## Current Milestone: v1.2 ci-cd-hardening (Phase 8)
+## Current Milestone: v1.3 opentofu-bridge (in planning)
 
-**Goal:** Close the three latent defects found by the 2026-08-30 GitHub Actions audit and document the conventions
-that prevent their recurrence.
+**Goal:** Ship a Home Assistant add-on that exposes the Supervisor API as a versioned HTTP service consumable by a
+custom OpenTofu provider living in this repo, so that Apps (and eventually other HA resources) can be managed via
+declarative `*.tf` configuration.
 
-**Source:** `.planning/phases/08-ci-cd-hardening/` — 4 plans (08-01..04) + gap-closure plan 08-05. Requirements CI-01..CI-10
-tracked in `REQUIREMENTS.md`.
+**Architecture (decided 2026-08-31):**
 
-**Status (2026-08-30):** Plans 08-01 (timeouts), 08-02 (action majors + verification build), 08-04 (docs) shipped
-empirically verified — 6 of 10 requirements closed. Plan 08-03 partially shipped (code complete for Cloudflare Access
-service-token auth + 3xx fail-fast + diagnostics + 7 caller wirings); empirical verification (probes 1, 4, 5) blocked
-on user-side Cloudflare dashboard setup. Gap-closure plan `08-05-GAP-PLAN.md` ready; resume via
-`/gsd-execute-phase 8 --gaps-only` after the user creates the service token and GitHub secrets.
+- **Bridge add-on (`terraform-bridge/`)** — HA Supervisor add-on that wraps the Supervisor HTTP API and exposes a
+  stable, idempotent JSON-over-HTTP surface. Follows the standard 4-file pattern (`config.yaml`, `build.yaml`,
+  `Dockerfile`, `run.sh`). No `.upstream.yaml` (no external upstream project).
+- **OpenTofu provider (`terraform-provider-homeassistant/`)** — Go module at repo top-level, BUILT IN THIS REPO rather
+  than downloaded from an upstream tag at build time. Reason: the provider schema and the Bridge API must evolve
+  together; an out-of-tree provider would require cross-repo coordination that is overkill for a private tool. Both
+  artifacts share the same version (3-file scheme).
+- **Auth model (preliminary):** Add-on → Supervisor: SUPERVISOR_TOKEN (auto-injected by Supervisor). External
+  Provider → Bridge: a long-lived bearer token generated and rotated by the Bridge, surfaced through the add-on's
+  config UI.
+- **State backend:** Local Terraform state file in the add-on volume (`/data/terraform.tfstate`). Remote backend
+  (S3-compatible, etc.) deferred until multiple users / CI apply runs demand it.
+
+**Phase 1 scope (decided):** `homeassistant_addon` resource — install/start/stop/uninstall + options-schema CRUD.
+Optional in Phase 1: `homeassistant_addon_repository` for managing store repositories.
+
+**Source:** TBD — `.planning/phases/09-opentofu-bridge-scaffold/` will be created by `gsd-roadmapper` after this
+milestone plan is approved. Requirements `TOFU-01..NN` to be defined in step 9 of this workflow.
+
+**Status (2026-08-31):** v1.2 ci-cd-hardening (Phase 8) running in parallel — `08-05-GAP-PLAN.md` remains ready for
+`/gsd-execute-phase 8 --gaps-only` whenever the Cloudflare service token and GitHub secrets are in place. Per
+explicit user decision, v1.3 starts parallel to v1.2 rather than waiting for Phase 8 closure.
 
 ## Previous Milestone: v1.1 markdown-renderer (COMPLETE 2026-06-28)
 
@@ -68,9 +85,13 @@ Ingress, with extensible diagram rendering and optional Git sync.
 
 <!-- Current scope. Building toward these. -->
 
-- `markdown-renderer` add-on Grundgerüst (config.yaml, build.yaml, Dockerfile, run.sh, .upstream.yaml)
-- Multi-Directory Routing unter Ingress (ein Namespace pro konfiguriertem Verzeichnis)
-- Client-seitiges Markdown-Rendering mit Mermaid/Diagramm-Support
+### v1.3 opentofu-bridge (planning)
+
+- `terraform-bridge` add-on — HTTP/REST service wrapping the Supervisor API, consumable by an external OpenTofu
+  provider
+- `terraform-provider-homeassistant` Go module — co-located in this repo, shares 3-file versioning with the bridge
+- Phase-1 resource: `homeassistant_addon` (CRUD: install, start, stop, uninstall, options update)
+- Bearer-token auth for Provider → Bridge (token generated/rotated by the add-on)
 
 ### Out of Scope
 
@@ -104,6 +125,8 @@ Ingress, with extensible diagram rendering and optional Git sync.
 - **Pattern consistency**: New add-ons must follow the established 4-file pattern (config.yaml, build.yaml, Dockerfile,
   run.sh) + `.upstream.yaml`
 - **No bundled source**: Dockerfiles must download upstream code at build time, not copy local source
+  - **Exception (v1.3 opentofu-bridge):** `terraform-provider-homeassistant/` is built from local source because the
+    provider and the bridge must version together
 - **Meridian auth**: `claude login` requires interactive terminal — handled via HA terminal add-on, not automation
 
 ## Key Decisions
@@ -113,7 +136,10 @@ Ingress, with extensible diagram rendering and optional Git sync.
 | Download upstream at build time, no bundled source    | Keeps repo lean; version updates are a Dockerfile ARG change   | ✓ Good  |
 | `claude login` via HA terminal for Meridian           | Avoids OAuth token in plaintext config; simpler setup          | ✓ Good  |
 | Meridian source from GitHub (not npm) at build time   | Consistent with existing add-on pattern; no node_modules bloat | ✓ Good  |
-| Fully automatic auto-update merge (no manual PR step) | Upstream releases are trusted (own projects + meridian)        | ✓ Good  |
+| Fully automatic auto-update merge (no manual PR step) | Upstream releases are trusted (own projects + meridian) | ✓ Good  |
+| v1.3: Bridge add-on + Provider co-located in this repo | Provider and Bridge must evolve together; cross-repo versioning overhead is unjustified for a private tool | ✓ Good  |
+| v1.3: Bearer token for Provider → Bridge auth | mTLS needs a CA inside the container; OAuth adds a UI surface for one client. Bearer is the smallest correct primitive | ✓ Good  |
+| v1.3: Local state backend in `/data/terraform.tfstate` | Single-user / single-host setup today; remote backend only worth the complexity when CI or multi-host applies arrive | ✓ Good  |
 
 ## Evolution
 
@@ -138,7 +164,5 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-08-30 — Phase 8 in progress (ci-cd-hardening); 3 of 4 plans shipped empirically (08-01 timeouts,
-08-02 action majors + verification build 33319080212, 08-04 docs); 08-03 code complete but empirical verification
-blocked on user-side Cloudflare setup (gap-closure plan `08-05-GAP-PLAN.md` ready; resume via
-`/gsd-execute-phase 8 --gaps-only`)_
+_Last updated: 2026-08-31 — Milestone v1.3 opentofu-bridge started; v1.2 Phase 8 continues in parallel (gap-closure
+plan `08-05-GAP-PLAN.md` still pending user Cloudflare setup; resume via `/gsd-execute-phase 8 --gaps-only`)._
