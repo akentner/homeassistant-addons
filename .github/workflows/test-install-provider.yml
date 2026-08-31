@@ -1,0 +1,115 @@
+name: Test install-provider (TOFU-04 E2E)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "Makefile"
+      - ".github/workflows/test-install-provider.yml"
+      - ".planning/phases/15-ci-hardening-provider-install-workflow/**"
+      - "terraform-bridge/internal/httpapi/handlers/version.go"
+      - "terraform-bridge/internal/httpapi/router.go"
+      - "terraform-bridge/contract/**"
+      - "terraform-provider-homeassistant/**"
+      - "tools/test-bridge-fixture/**"
+  workflow_dispatch:
+
+jobs:
+  test-install-provider:
+    runs-on: ubuntu-latest
+    # Build + install + fixture start + tofu init + tofu plan + teardown.
+    # Measured locally: ~20s for build/install/fixture, ~10s for tofu init
+    # + plan (cold cache). 15 minutes absorbs a slow runner.
+    timeout-minutes: 15
+    env:
+      BRIDGE_PORT: 18224
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+
+      - name: Install OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          opentofu-version: '~> 1.6'
+
+      - name: "Pre-flight: verify install-provider works"
+        run: make verify-install-provider
+
+      - name: Install Provider to temp DESTDIR
+        env:
+          PLUGIN_DEST: ${{ runner.temp }}/plugins
+        run: make install-provider DESTDIR="$PLUGIN_DEST/"
+        # Make PLUGIN_DEST available to subsequent steps.
+      - name: Export PLUGIN_DEST
+        run: echo "PLUGIN_DEST=${{ runner.temp }}/plugins" >> "$GITHUB_ENV"
+
+      - name: Build test Bridge fixture
+        run: cd tools/test-bridge-fixture && go build -o test-bridge-fixture .
+
+      - name: Start test Bridge fixture (background)
+        run: |
+          ./tools/test-bridge-fixture/test-bridge-fixture \
+            --port $BRIDGE_PORT \
+            --repo-root "$GITHUB_WORKSPACE" &
+          FIXTURE_PID=$!
+          echo "FIXTURE_PID=$FIXTURE_PID" >> "$GITHUB_ENV"
+          # Wait for the fixture to start listening (poll /v1/version)
+          for i in $(seq 1 30); do
+            if curl -sf "http://127.0.0.1:${BRIDGE_PORT}/v1/version" >/dev/null; then
+              echo "fixture ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "fixture failed to start"
+          exit 1
+
+      - name: Write OpenTofu CLI config (dev_overrides)
+        run: |
+          mkdir -p "$PLUGIN_DEST/root/.config/opentofu"
+          PROVIDER_VERSION=$(grep VERSION: terraform-provider-homeassistant/build.yaml \
+            | sed 's/.*VERSION: *"\([^"]*\)".*/\1/')
+          PLUGIN_DIR="$PLUGIN_DEST/root/.terraform.d/plugins/localhost/akentner/homeassistant/${PROVIDER_VERSION}"
+          cat > "$PLUGIN_DEST/cli-config.tfrc" <<EOF
+          provider_installation {
+            dev_overrides {
+              "akentner/homeassistant" = "${PLUGIN_DIR}"
+            }
+          }
+          EOF
+          cat "$PLUGIN_DEST/cli-config.tfrc"
+
+      - name: Write example main.tf
+        run: |
+          cat > main.tf <<EOF
+          terraform {
+            required_providers {
+              homeassistant = {
+                source = "akentner/homeassistant"
+              }
+            }
+          }
+          EOF
+
+      - name: tofu init (verifies dev_overrides + schema handshake)
+        env:
+          TF_CLI_CONFIG_FILE: ${{ env.PLUGIN_DEST }}/cli-config.tfrc
+        run: |
+          tofu init -input=false
+
+      - name: tofu plan (verifies schema handshake succeeds)
+        env:
+          TF_CLI_CONFIG_FILE: ${{ env.PLUGIN_DEST }}/cli-config.tfrc
+        run: |
+          tofu plan -input=false
+
+      - name: Stop test Bridge fixture
+        if: always()
+        run: |
+          if [ -n "$FIXTURE_PID" ]; then kill "$FIXTURE_PID" 2>/dev/null || true; fi
