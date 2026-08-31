@@ -1,0 +1,40 @@
+name: Test terraform-provider-homeassistant
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "terraform-provider-homeassistant/**"
+    tags:
+      - "terraform-provider-homeassistant/v*"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # Provider module is ~5000 LOC including indirect deps; gofmt/vet/test
+    # finish in seconds on a warm cache. 10 minutes covers a clean Go module
+    # cache + cold `go test -count=1 ./...` of the full module.
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: terraform-provider-homeassistant
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache-dependency-path: terraform-provider-homeassistant/go.sum
+
+      - name: gofmt
+        run: gofmt -l .
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./...
