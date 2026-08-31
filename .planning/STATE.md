@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: opentofu-bridge
 status: executing
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-08-31T16:44:23.816Z"
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-08-31T18:55:00Z"
 last_activity: 2026-08-31
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -83,8 +83,8 @@ the rest.
 ## Current Position
 
 Phase: 10 (auth-layer-structured-logging-healthcheck) — EXECUTING
-Plan: 2 of 3
-Status: Ready to execute
+Plan: 3 of 3
+Status: Ready to execute (Plan 02 complete; Plan 03 = rotation + grace window)
 Last activity: 2026-08-31
 
 ## Accumulated Context
@@ -99,6 +99,9 @@ Last activity: 2026-08-31
 | Real-HA E2E gets its own phase (14), not folded into Provider (13)      | Phase-8 pattern: empirical verification against live HA host deserves its own validation gate; docs written from observed behavior, not theory   |
 | Phase 15 (CI + install-provider) is intentionally thin                  | The CI work is substantial (new build workflow, new test workflow, install verification); TOFU-04 is the single REQ-ID; non-req deliverables carry the weight |
 | `homeassistant_addon_repository` deferred to v1.4 (per existing decision) | PROJECT.md + REQUIREMENTS.md both record this; do NOT re-add in any v1.3 phase                                                                  |
+| **Two-layer AUTH-05 masking (Plan 02):** slog.Handler wrapper scrubs every record + chi middleware strips Authorization from r.Header before request-log snapshot | D-10 layered defense — if the slog scrubber ever regresses, the chi middleware still prevents leakage. Both proven by unit tests. Phase 10 plan 02 commits. |
+| **/healthz probe (Plan 02):** real /supervisor/ping call with 2s context deadline, no caching. 503 body always empty (Content-Length: 0) | D-07 freshness > p99 reduction at this poll cadence. D-08 prevents internal-state leak on health-check failure. Phase 10 plan 02 commits. |
+| **verify-script adaptation (Plan 02):** positive-control assertions rewritten to parse `bridge.token.issued` JSON and assert actor_token_fp == SHA-256[8](plaintext) instead of comparing against FAKE_TOKEN (the supervisor token the bridge never logs) | Plan-adaptation deviation. Adding a BRIDGE_TOKEN env override to TokenStore would be an out-of-scope architectural change; same invariants proven without it. Documented in 10-02-SUMMARY §Deviations. |
 
 ### Research Flags (open questions for implementation — must resolve before/during Phase 9)
 
@@ -148,6 +151,8 @@ Last activity: 2026-08-31
 | Phase 9 P3 | 9min | 3 tasks | 5 files |
 | Phase 09 P04 | 25min | 4 tasks | 3 files |
 | Phase 10 P01 | 35min | 3 tasks | 11 files |
+| Phase 10 P02 | 25min | 3 tasks | 11 files |
+| Phase 10 P02 | 25min | 3 tasks | 11 files |
 
 ## Quick Tasks Completed
 

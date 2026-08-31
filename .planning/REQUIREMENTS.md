@@ -43,7 +43,7 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
       `crypto/subtle.ConstantTimeCompare` against the on-disk hash
 - [ ] **AUTH-04**: Bridge exposes `POST /v1/auth/rotate` returning a new token plus a 24-hour grace window where the
       old token still authenticates successfully; grace state is persisted in `/data/bridge-token.grace`
-- [ ] **AUTH-05**: Bearer token never appears in Bridge logs (Authorization header masked by request-logging
+- [x] **AUTH-05**: Bearer token never appears in Bridge logs (Authorization header masked by request-logging
       middleware); a `bridge_token` field in any log record is forbidden and enforced by a unit test
 - [x] **AUTH-06**: Bridge declares `hassio_role: manager` in `config.yaml` so it can read other add-ons' `options`
       (which Supervisor redacts for non-manager apps per `supervisor/api/middleware/security.py`)
@@ -132,12 +132,12 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
 
 ### OPS — Operations
 
-- [ ] **OPS-01**: Bridge emits structured JSON log records to stdout (one record per line) with `ts`, `level`,
+- [x] **OPS-01**: Bridge emits structured JSON log records to stdout (one record per line) with `ts`, `level`,
       `msg`, `request_id`, `route`, `method`, `status`, `duration_ms`; logs include the Supervisor call name
       (`supervisor.method = "apps.install"`) but never the Authorization header or token
 - [x] **OPS-02**: Bridge handles `SIGTERM` gracefully — drains in-flight requests up to 30 seconds, then exits;
       handles `SIGHUP` to rotate logs without restart
-- [ ] **OPS-03**: Bridge exposes `GET /healthz` (non-authenticated) returning `200 OK` if it can reach Supervisor
+- [x] **OPS-03**: Bridge exposes `GET /healthz` (non-authenticated) returning `200 OK` if it can reach Supervisor
       (used by HA Supervisor's health-check and by external monitors)
 - [ ] **OPS-04**: Bridge README.md and DOCS.md document: install (HA add-on store), token issuance + rotation
       (`cat /data/bridge-token`), OpenTofu provider install (`make install-provider`), example `*.tf` file, every
