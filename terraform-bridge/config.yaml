@@ -1,0 +1,23 @@
+name: "Terraform Bridge"
+description: "Bearer-authenticated JSON proxy of the HA Supervisor HTTP API for OpenTofu/Terraform management."
+version: "0.1.0-0"
+slug: "terraform-bridge"
+init: false
+arch:
+  - amd64
+url: "https://github.com/akentner/homeassistant-addons"
+startup: "application"
+boot: "manual"
+host_network: false
+hassio_api: true
+hassio_role: manager
+ports:
+  8124/tcp: 8124
+ports_description:
+  8124/tcp: "Terraform Bridge JSON API (HTTP, Tailscale-filtered)"
+map:
+  - type: addon_config
+    read_only: false
+    path: /addon_config
+options: {}
+schema: {}

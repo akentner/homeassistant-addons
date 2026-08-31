@@ -29,7 +29,11 @@ validate_addon() {
     fi
 
     if [[ -f "$ADDON_DIR/build.yaml" ]]; then
-        BUILD_VERSION=$(grep 'VERSION:' "$ADDON_DIR/build.yaml" | sed 's/.*VERSION: *"\([^"]*\)".*/\1/')
+        # Anchor VERSION: with leading-whitespace tolerance (it's nested under
+        # args:). Unanchored grep would also match BRIDGE_VERSION: /
+        # CHROMIUM_VERSION: etc., producing a multi-line BUILD_VERSION that
+        # breaks the regex check below.
+        BUILD_VERSION=$(grep -E '^[[:space:]]*VERSION:' "$ADDON_DIR/build.yaml" | sed 's/^[[:space:]]*VERSION: *"\([^"]*\)".*/\1/')
     fi
 
     echo "   config.yaml: $CONFIG_VERSION"
