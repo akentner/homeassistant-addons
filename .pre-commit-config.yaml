@@ -106,7 +106,7 @@ repos:
         require_serial: true
       - id: verify-bridge-no-token-leak
         name: terraform-bridge no-token-leak
-        description: Assert AUTH-05 + CF-02 + OPS-01 invariants: no SUPERVISOR_TOKEN/Bearer/bridge_token substrings in stdout, bridge plaintext surfaces exactly once, actor_token_fp matches SHA-256[8], OPS-01 request-log emitted for GET /
+        description: "Assert AUTH-05 + CF-02 + OPS-01 invariants: no SUPERVISOR_TOKEN/Bearer/bridge_token substrings in stdout, bridge plaintext surfaces exactly once, actor_token_fp matches SHA-256[8], OPS-01 request-log emitted for GET /"
         entry: bash internal/verify-bridge-no-token-leak.sh
         language: system
         pass_filenames: false
