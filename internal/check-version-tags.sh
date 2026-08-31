@@ -55,7 +55,11 @@ while IFS= read -r addon_dir; do
     # NOT after config.yaml which carries an additional '-N' subpatch suffix.
     # update-version.py creates the tag from the make-release CLI argument,
     # which is the base version (matching build.yaml).
-    version=$(grep 'VERSION:' "$addon_dir/build.yaml" | sed 's/.*VERSION: *"\([^"]*\)".*/\1/')
+    # Anchor VERSION: with leading-whitespace tolerance (it's nested under
+    # args: in terraform-bridge/build.yaml). Unanchored grep also matches
+    # BRIDGE_VERSION: / CHROMIUM_VERSION: etc., producing a multi-line
+    # BUILD_VERSION that breaks the tag lookup below.
+    version=$(grep -E '^[[:space:]]*VERSION:' "$addon_dir/build.yaml" | sed 's/^[[:space:]]*VERSION: *"\([^"]*\)".*/\1/' | head -1)
     [[ -z "$version" ]] && continue
 
     tag="${addon_dir}/v${version}"
