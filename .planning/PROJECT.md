@@ -164,5 +164,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-08-31 — Milestone v1.3 opentofu-bridge started; v1.2 Phase 8 continues in parallel (gap-closure
-plan `08-05-GAP-PLAN.md` still pending user Cloudflare setup; resume via `/gsd-execute-phase 8 --gaps-only`)._
+_Last updated: 2026-08-31 — Milestone v1.3 Phase 9 complete: terraform-bridge + terraform-provider-homeassistant scaffolds landed (18 atomic commits across 4 plans), D-18 + D-19 resolved empirically (token_unchanged / addon_config_backed_up), OPS-05 wording revised to ≤ 60 MiB uncompressed. Next: Phase 10 auth-layer-+-structured-logging-+-healthcheck. v1.2 Phase 8 gap-closure (08-05) still pending user Cloudflare setup — `/gsd-execute-phase 8 --gaps-only`._
