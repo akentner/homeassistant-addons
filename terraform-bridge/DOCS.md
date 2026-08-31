@@ -14,16 +14,15 @@ verification, per-error-code remediation, and the full troubleshooting section a
   OR falls inside one of `bind_allowed_subnets`. `bind_address: "0.0.0.0"` is **always refused** regardless of
   `bind_allowed_subnets` — strict reading of PITFALLS S-4. Misconfiguration is fatal at startup (no degraded mode).
 
-`bind_allowed_subnets` (default `""`)
+`bind_allowed_subnets` (default `[]`)
 
-: A **comma-separated string of CIDRs** (e.g. `"192.168.1.0/24,10.0.0.0/8"`) that broaden the bind gate beyond
-  Tailscale. Useful when the Provider runs on a LAN device that cannot reach Tailscale. Each entry is logged at
-  startup. **This is a Phase-1 escape hatch, not a relaxation of the strict-by-default policy** — every entry must
-  be deliberate.
+: A list of CIDR strings (e.g. `["192.168.1.0/24", "10.0.0.0/8"]`) that broaden the bind gate beyond Tailscale. Useful
+  when the Provider runs on a LAN device that cannot reach Tailscale. Each entry is logged at startup. **This is a Phase-1
+  escape hatch, not a relaxation of the strict-by-default policy** — every entry must be deliberate.
 
-The schema is a single string (not a JSON array) because the HA Supervisor add-on config schema DSL does not
-support a list-of-arbitrary-strings type — `list(<inner>)` is parsed as an enum-list with one allowed value. The
-Bridge splits the value on `,` and trims whitespace around each entry before checking CIDR membership.
+The schema uses the YAML-list form (`- "str"`), not the string `list(str)` form. Supervisor's schema parser treats
+the string `list(<inner>)` as a one-value enum (split on `|`); the YAML-list form correctly validates each element as
+`str`. See `supervisor/apps/options.py` (`isinstance(typ, list)` → `_nested_validate_list` branch).
 
 ## Token issuance
 
