@@ -1,0 +1,28 @@
+name: Build Terraform Bridge
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "terraform-bridge/**"
+    tags:
+      - "terraform-bridge/v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build-template.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      addon-name: terraform-bridge
+      addon-display-name: "Terraform Bridge"
+      addon-description: "Bearer-authenticated JSON proxy of the Home Assistant Supervisor HTTP API for OpenTofu"
+      archs: '["amd64"]'
+    secrets:
+      HA_BASE_URL: ${{ secrets.HA_BASE_URL }}
+      HA_WEBHOOK_ID: ${{ secrets.HA_WEBHOOK_ID }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
