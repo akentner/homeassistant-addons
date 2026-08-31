@@ -30,3 +30,9 @@ network-tools/.planning/
 .planning/research/
 internal/__pycache__/
 markdown-renderer/__pycache__/
+
+# Go build artifacts (terraform-provider-homeassistant/ compiles a binary named
+# after the module; same pattern would apply to any future Go module under the repo)
+terraform-provider-homeassistant/terraform-provider-homeassistant
+*.test
+*.out

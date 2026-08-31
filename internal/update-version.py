@@ -334,6 +334,35 @@ Examples:
     if success:
         success_count += 1
 
+    # ── Cross-artifact Provider bump (TOFU-03: Bridge+Provider share one release cycle) ──
+    # When the addon being bumped is terraform-bridge, also touch
+    # terraform-provider-homeassistant/build.yaml's VERSION field with the
+    # same X.Y.Z. Provider has no config.yaml, no README, and no git tag of
+    # its own — it's a co-located Go module, not a separately-released add-on.
+    if args.addon_name == "terraform-bridge":
+        provider_dir = Path("terraform-provider-homeassistant")
+        provider_build = provider_dir / "build.yaml"
+        if provider_build.exists():
+            ok, old_pv, new_pv = update_build_yaml(
+                provider_dir, args.new_version, dry_run=args.dry_run
+            )
+            if ok:
+                print(
+                    f"   • Co-located Provider bumped: "
+                    f"terraform-provider-homeassistant/build.yaml {old_pv} → {new_pv}"
+                )
+            else:
+                print(
+                    f"⚠️  Failed to bump Provider build.yaml — Bridge and Provider are out of sync. "
+                    f"Run validate-versions to confirm and fix manually."
+                )
+                return 1
+        else:
+            print(
+                f"ℹ️  terraform-provider-homeassistant/build.yaml not found; "
+                f"skipping Provider bump (post-Phase-9 repo state)."
+            )
+
     print()
     print(f"📊 {'Would update' if args.dry_run else 'Updated'} {success_count}/{total_files} files")
 
