@@ -101,6 +101,28 @@ for addon in "${ADDON_DIRS[@]}"; do
     echo ""
 done
 
+# ── Cross-artifact Bridge/Provider sync (TOFU-05) ────────────────────────
+# Bridge and Provider share one release cycle via the 3-file scheme.
+# When both build.yaml files exist, their VERSION fields must match
+# exactly. The check is conditional on both existing (pre-Phase-9
+# repositories that migrate forward without the Provider don't fail).
+BRIDGE_BUILD="terraform-bridge/build.yaml"
+PROVIDER_BUILD="terraform-provider-homeassistant/build.yaml"
+if [[ -f "$BRIDGE_BUILD" ]] && [[ -f "$PROVIDER_BUILD" ]]; then
+    # Whitespace-tolerant (Wave 1 fix for BRIDGE_VERSION/CHROMIUM_VERSION prefix
+    # collision — VERSION: is nested under args: in terraform-bridge/build.yaml).
+    BRIDGE_VERSION=$(grep -E '^[[:space:]]*VERSION:' "$BRIDGE_BUILD" | sed 's/^[[:space:]]*VERSION: *"\([^"]*\)".*/\1/')
+    PROVIDER_VERSION=$(grep -E '^[[:space:]]*VERSION:' "$PROVIDER_BUILD" | sed 's/^[[:space:]]*VERSION: *"\([^"]*\)".*/\1/')
+    echo ""
+    echo "Cross-artifact check (TOFU-05):"
+    echo "   $BRIDGE_BUILD: $BRIDGE_VERSION"
+    echo "   $PROVIDER_BUILD: $PROVIDER_VERSION"
+    if [[ "$BRIDGE_VERSION" != "$PROVIDER_VERSION" ]]; then
+        GLOBAL_ERRORS+=("[TOFU-05] Version mismatch: terraform-bridge '$BRIDGE_VERSION' != terraform-provider-homeassistant '$PROVIDER_VERSION'")
+        GLOBAL_ERRORS+=("           Run: make update-version ADDON=terraform-bridge VERSION=$BRIDGE_VERSION")
+    fi
+fi
+
 if [[ ${#GLOBAL_ERRORS[@]} -eq 0 ]]; then
     echo -e "${GREEN}Version validation passed for all add-ons!${NC}"
     exit 0
