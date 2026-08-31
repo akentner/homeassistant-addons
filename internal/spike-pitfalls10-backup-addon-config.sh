@@ -141,9 +141,24 @@ ls "${BACKUP_DIR}" | head -30
 green "Step 3 complete: backup unpacked locally."
 
 # ── Step 4: search for the sentinel under any backup path ──────────────────────
+# The HA backup structure is: top-level backup tar contains per-addon tar.gz
+# files (one per add-on) PLUS a backup.json manifest. The actual add-on data
+# (including /addon_config contents when symlinked into /data) lives INSIDE
+# the per-addon tar.gz. So we have to extract each per-addon tar.gz and grep
+# recursively across the extracted tree to find the sentinel data string.
 blue ""
-blue "── Step 4: search backup for sentinel file ──"
-if grep -r -- "${SENTINEL_DATA}" "${BACKUP_DIR}" 2>/dev/null; then
+blue "── Step 4: search backup for sentinel file (recursive unpack + grep) ──"
+EXTRACTED_DIR="${BACKUP_DIR}/extracted"
+mkdir -p "${EXTRACTED_DIR}"
+green "  extracting all per-addon tar.gz files into ${EXTRACTED_DIR}"
+for tgz in "${BACKUP_DIR}"/*.tar.gz; do
+    [[ -e "${tgz}" ]] || continue
+    base="$(basename "${tgz}" .tar.gz)"
+    mkdir -p "${EXTRACTED_DIR}/${base}"
+    tar -xzf "${tgz}" -C "${EXTRACTED_DIR}/${base}" 2>/dev/null || true
+done
+green "  grepping extracted tree for sentinel data string:"
+if grep -r -- "${SENTINEL_DATA}" "${EXTRACTED_DIR}" 2>/dev/null; then
     RESULT="addon_config_backed_up"
     green ""
     green "  ✓ Sentinel FOUND in backup tarball."
