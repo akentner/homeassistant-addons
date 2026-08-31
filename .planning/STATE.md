@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: opentofu-bridge
-status: executing
-stopped_at: Completed 09-01-PLAN.md (Bridge 4-file scaffold + Go module + chi + slog)
-last_updated: "2026-08-31T12:45:39.338Z"
+status: verifying
+stopped_at: Completed 09-04-PLAN.md (H-1 + §10 spike scripts authored; live execution deferred pending per-call authorization for Supervisor restart + backup snapshot)
+last_updated: "2026-08-31T15:39:00.000Z"
 last_activity: 2026-08-31
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 4
 ---
 
 # Project State
@@ -68,7 +68,7 @@ roadmap approved; Phase 9 ready to plan. v1.3 runs in parallel with v1.2 Phase 8
 
 | Phase | Name                                                 | Status      | Completed |
 | ----- | ---------------------------------------------------- | ----------- | --------- |
-| 9     | Bridge Foundation + Token Rotation Spike              | Not started | —         |
+| 9     | Bridge Foundation + Token Rotation Spike              | In progress (deferred spike execution) | 2026-08-31 (plans 01-04; H-1 + §10 pending live run) |
 | 10    | Auth Layer + Structured Logging + Healthcheck         | Not started | —         |
 | 11    | Bridge Read API                                      | Not started | —         |
 | 12    | Bridge Write API + Critical-Addon Safety + Concurrency | Not started | —         |
@@ -83,8 +83,8 @@ the rest.
 ## Current Position
 
 Phase: 09 (bridge-foundation-token-rotation-spike) — EXECUTING
-Plan: 2 of 4
-Status: Ready to execute
+Plan: 4 of 4
+Status: Phase complete — ready for verification
 Last activity: 2026-08-31
 
 ## Accumulated Context
@@ -124,10 +124,10 @@ Last activity: 2026-08-31
 
 ### Todos
 
-- [ ] Phase 9: Run empirical SUPERVISOR_TOKEN rotation spike against ha-nextgen (or haos-op3050-1) — PITFALLS H-1
-- [ ] Phase 9: Verify HA backup integration includes `/data` mounted via `addon_config:rw` — PITFALLS §10
-- [ ] Phase 9: Extend `internal/validate-versions.sh` to enforce Bridge `build.yaml` == Provider `build.yaml` semver
-- [ ] Phase 9: Scaffold `terraform-bridge/` 4-file pattern + `terraform-provider-homeassistant/` Go module
+- [ ] Phase 9: **Capture H-1 spike transcript** — `internal/spike-h1-token-rotation.sh` committed (e29f5cd); run against haos-op3050-1 with explicit per-call authorization for Supervisor restart; paste transcript into `09-SUMMARY.md` and resolve D-18 contingency (PITFALLS H-1)
+- [ ] Phase 9: **Capture §10 spike transcript** — `internal/spike-pitfalls10-backup-addon-config.sh` committed (6f254d5); run against haos-op3050-1 with explicit per-call authorization for `ha backups new`; paste transcript into `09-SUMMARY.md` and resolve D-19 contingency (PITFALLS §10)
+- [x] Phase 9: Extend `internal/validate-versions.sh` to enforce Bridge `build.yaml` == Provider `build.yaml` semver — done in 09-02 (`d0d516d`)
+- [x] Phase 9: Scaffold `terraform-bridge/` 4-file pattern + `terraform-provider-homeassistant/` Go module — done in 09-01 + 09-02
 
 ### Blockers
 
@@ -144,6 +144,9 @@ Last activity: 2026-08-31
 | Phase 08 P02 | 15 | 3 tasks | 5 files |
 | Phase 08 P04 | 25 | 4 tasks | 5 files |
 | Phase 09 P01 | 40 | 3 tasks | 15 files |
+| Phase 09 P02 | 458s | 3 tasks | 8 files |
+| Phase 9 P3 | 9min | 3 tasks | 5 files |
+| Phase 09 P04 | 25min | 4 tasks | 3 files |
 
 ## Quick Tasks Completed
 
@@ -160,8 +163,8 @@ Last activity: 2026-08-31
 
 ## Session Continuity
 
-Last session: 2026-08-31T12:45:39.335Z
-Stopped at: Completed 09-01-PLAN.md (Bridge 4-file scaffold + Go module + chi + slog)
+Last session: 2026-08-31T13:16:43.933Z
+Stopped at: Completed 09-03-PLAN.md (signals + verify scripts + pre-commit hooks)
 to proceed to `/gsd-plan-phase 9`
 Resume file: None
 

@@ -50,8 +50,10 @@ repo's 3-file versioning scheme. Phase-1 scope: `homeassistant_addon` resource (
 **Source:** `.planning/research/SUMMARY.md` (HIGH confidence on stack; MEDIUM on V1/V2 timeline; LOW on
 SUPERVISOR_TOKEN-rotation-across-restart — empirical spike required in Phase 9).
 
-- [ ] **Phase 9: Bridge Foundation + Token Rotation Spike** — 4-file pattern, Go module, multi-stage Dockerfile,
-      empirical verification of SUPERVISOR_TOKEN rotation and HA backup integration
+- [x] **Phase 9: Bridge Foundation + Token Rotation Spike** — 4-file pattern, Go module, multi-stage Dockerfile,
+      empirical verification of SUPERVISOR_TOKEN rotation and HA backup integration *(plans 01-04 complete;
+      H-1 + §10 spike scripts authored; live spike execution deferred pending per-call authorization for
+      Supervisor restart + backup snapshot — see `09-SUMMARY.md`)*
 - [ ] **Phase 10: Auth Layer + Structured Logging + Healthcheck** — Bearer generation, hash-at-rest, constant-time
       compare, rotation with grace, log masking, /healthz
 - [ ] **Phase 11: Bridge Read API** — /v1/version, /v1/addons, /v1/addons/{slug}/info, /v1/info
@@ -101,10 +103,10 @@ and documented before any auth or API work proceeds.
 **Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] `09-01-PLAN.md` — terraform-bridge/ 4-file scaffold (Go module, chi, slog, Dockerfile multi-stage, README, DOCS stub)
-- [ ] `09-02-PLAN.md` — terraform-provider-homeassistant/ Go module + TOFU-05/TOFU-03 cross-artifact version sync
-- [ ] `09-03-PLAN.md` — SIGTERM/SIGHUP signal handling + verify-bridge-scaffold.sh + verify-bridge-no-token-leak.sh + pre-commit hooks
-- [ ] `09-04-PLAN.md` — Empirical H-1 (SUPERVISOR_TOKEN rotation) and PITFALLS §10 (HA backup + addon_config) spikes + 09-SUMMARY.md (has checkpoint:human-verify)
+- [x] `09-01-PLAN.md` — terraform-bridge/ 4-file scaffold (Go module, chi, slog, Dockerfile multi-stage, README, DOCS stub)
+- [x] `09-02-PLAN.md` — terraform-provider-homeassistant/ Go module + TOFU-05/TOFU-03 cross-artifact version sync
+- [x] `09-03-PLAN.md` — SIGTERM/SIGHUP signal handling + verify-bridge-scaffold.sh + verify-bridge-no-token-leak.sh + pre-commit hooks
+- [x] `09-04-PLAN.md` — Empirical H-1 (SUPERVISOR_TOKEN rotation) and PITFALLS §10 (HA backup + addon_config) spikes + 09-SUMMARY.md (checkpoint:human-verify resolved as deferred-execution; spike scripts committed and ready to run; live transcripts pending per-call authorization)
 
 **UI hint**: no
 
@@ -319,7 +321,7 @@ artifacts in a single release cycle.
 | 5. Multi-Namespace + Dynamic Config  | v1.1      | 1/1            | Complete    | 2026-06-27 |
 | 6. Git Integration                   | v1.1      | 2/2            | Complete    | 2026-06-28 |
 | 8. CI/CD Hardening                   | v1.2      | 3/4 (1 partial + 1 gap-closure pending) | Gap closure pending | —  |
-| 9. Bridge Foundation + Token Spike   | v1.3      | 1/4 | In Progress|  |
+| 9. Bridge Foundation + Token Spike   | v1.3      | 3/4 | In Progress|  |
 | 10. Auth + Logging + Healthcheck     | v1.3      | 0/TBD          | Not started | —         |
 | 11. Bridge Read API                  | v1.3      | 0/TBD          | Not started | —         |
 | 12. Bridge Write API + Safety        | v1.3      | 0/TBD          | Not started | —         |
