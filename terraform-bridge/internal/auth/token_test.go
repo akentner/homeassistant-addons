@@ -124,3 +124,84 @@ func TestGraceWindowAcceptsPreviousHash(t *testing.T) {
 		t.Errorf("Validate(newToken) after grace expiry: %v", err)
 	}
 }
+
+func TestTokenStoreRotate(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := NewFileTokenStore(dir)
+	oldPlain, _ := store.Generate()
+	_ = store.Persist(oldPlain)
+
+	res, err := store.Rotate()
+	if err != nil {
+		t.Fatalf("Rotate: %v", err)
+	}
+	if res.NewPlaintext == oldPlain {
+		t.Errorf("Rotate returned the same plaintext as before")
+	}
+	if res.NewPlaintext == "" {
+		t.Errorf("NewPlaintext is empty")
+	}
+	if res.GraceExpiresAt == "" {
+		t.Errorf("GraceExpiresAt is empty")
+	}
+
+	if err := store.Validate(oldPlain); err != nil {
+		t.Errorf("Validate(oldPlain) during grace: %v", err)
+	}
+	if err := store.Validate(res.NewPlaintext); err != nil {
+		t.Errorf("Validate(NewPlaintext) during grace: %v", err)
+	}
+
+	store.mu.Lock()
+	store.grace.expiresAt = time.Now().Add(-1 * time.Second)
+	store.mu.Unlock()
+
+	if err := store.Validate(oldPlain); err != ErrInvalidToken {
+		t.Errorf("Validate(oldPlain) after expiry = %v, want ErrInvalidToken", err)
+	}
+	if err := store.Validate(res.NewPlaintext); err != nil {
+		t.Errorf("Validate(NewPlaintext) after expiry: %v", err)
+	}
+}
+
+func TestTokenStoreGracePersistsAcrossReload(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := NewFileTokenStore(dir)
+	oldPlain, _ := store.Generate()
+	_ = store.Persist(oldPlain)
+	res, _ := store.Rotate()
+
+	reloaded, err := NewFileTokenStore(dir)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if err := reloaded.Validate(oldPlain); err != nil {
+		t.Errorf("Validate(oldPlain) after reload: %v", err)
+	}
+	if err := reloaded.Validate(res.NewPlaintext); err != nil {
+		t.Errorf("Validate(NewPlaintext) after reload: %v", err)
+	}
+
+	graceBytes, err := os.ReadFile(filepath.Join(dir, "bridge-token.grace"))
+	if err != nil {
+		t.Fatalf("read grace: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(graceBytes)), "\n")
+	if len(lines) != 2 {
+		t.Errorf("grace file lines = %d, want 2", len(lines))
+	}
+	if len(lines[0]) != 64 {
+		t.Errorf("grace file line 1 length = %d, want 64 hex chars", len(lines[0]))
+	}
+	if _, err := time.Parse(time.RFC3339, lines[1]); err != nil {
+		t.Errorf("grace file line 2 not RFC3339: %v", err)
+	}
+
+	info, err := os.Stat(filepath.Join(dir, "bridge-token.grace"))
+	if err != nil {
+		t.Fatalf("stat grace: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("grace file mode = %o, want 0600", perm)
+	}
+}

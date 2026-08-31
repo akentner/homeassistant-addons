@@ -201,6 +201,24 @@ func (s *TokenStore) Validate(plaintext string) error {
 	return ErrInvalidToken
 }
 
+// GraceWindow is the lifetime of a rotation grace period (D-02).
+// After this window elapses, the previous token stops authenticating.
+const GraceWindow = 24 * time.Hour
+
+// RotateResult is what TokenStore.Rotate returns. OldTokenFP and
+// NewTokenFP are the sha256[8] hex fingerprints of the previous and
+// newly-issued tokens respectively — safe to log in audit records.
+// NewPlaintext is the freshly-issued plaintext (the caller surfaces
+// it in the POST /v1/auth/rotate response body exactly once per CF-02).
+// GraceExpiresAt is the RFC3339 instant after which the previous
+// token stops authenticating (D-13).
+type RotateResult struct {
+	NewPlaintext   string
+	OldTokenFP     string
+	NewTokenFP     string
+	GraceExpiresAt string // RFC3339
+}
+
 // Fingerprint returns the first 8 bytes of SHA-256(plaintext) as
 // hex — a stable, non-reversible identifier safe to log in audit
 // records. Two distinct tokens never collide at this width with
@@ -208,6 +226,114 @@ func (s *TokenStore) Validate(plaintext string) error {
 func Fingerprint(plaintext string) string {
 	sum := sha256.Sum256([]byte(plaintext))
 	return hex.EncodeToString(sum[:8])
+}
+
+// HashFingerprint returns the first 8 bytes of an already-computed
+// SHA-256 hash as hex — the log-safe fingerprint of a token when the
+// plaintext is no longer available (used by main.go's bridge.token.loaded
+// record and by Rotate when fingerprinting the just-replaced token
+// without re-deriving its plaintext). Both fingerprints are derivable
+// from the same SHA-256 input, so HashFingerprint(hash) ==
+// Fingerprint(plaintext) for any plaintext hashing to `hash`.
+func HashFingerprint(hash []byte) string {
+	if len(hash) < 8 {
+		return ""
+	}
+	return hex.EncodeToString(hash[:8])
+}
+
+// Rotate issues a fresh token, persists its hash to the primary
+// /data/bridge-token file (chmod 600, atomic rename), and persists
+// the previous hash to /data/bridge-token.grace with a grace expiry
+// of now + GraceWindow (D-02). The returned RotateResult carries
+// the new plaintext (caller surfaces once) and three fingerprints
+// for the audit record. After Rotate returns, Validate accepts
+// BOTH the old and new tokens until GraceExpiresAt.
+//
+// The auth package emits no log records; the caller is responsible
+// for logging the audit record (auth package invariant: "no slog
+// calls in this package").
+func (s *TokenStore) Rotate() (RotateResult, error) {
+	prevHash := s.Hash()
+
+	newPlaintext, err := s.Generate()
+	if err != nil {
+		return RotateResult{}, fmt.Errorf("auth: rotate generate: %w", err)
+	}
+
+	sum := sha256.Sum256([]byte(newPlaintext))
+	newHash := sum[:]
+
+	tmp, err := os.CreateTemp(s.dataDir, ".bridge-token.*.tmp")
+	if err != nil {
+		return RotateResult{}, fmt.Errorf("auth: rotate create tmp: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+
+	if _, err := tmp.Write(newHash); err != nil {
+		tmp.Close()
+		return RotateResult{}, fmt.Errorf("auth: rotate write: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return RotateResult{}, fmt.Errorf("auth: rotate sync: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return RotateResult{}, fmt.Errorf("auth: rotate close: %w", err)
+	}
+	if err := os.Chmod(tmpName, 0o600); err != nil {
+		return RotateResult{}, fmt.Errorf("auth: rotate chmod: %w", err)
+	}
+	if err := os.Rename(tmpName, s.tokenPath); err != nil {
+		return RotateResult{}, fmt.Errorf("auth: rotate rename: %w", err)
+	}
+
+	expiresAt := time.Now().Add(GraceWindow)
+	graceExpiresRFC := expiresAt.UTC().Format(time.RFC3339)
+
+	prevHashHex := hex.EncodeToString(prevHash)
+	graceBody := prevHashHex + "\n" + graceExpiresRFC + "\n"
+
+	gtmp, err := os.CreateTemp(s.dataDir, ".bridge-token.grace.*.tmp")
+	if err != nil {
+		return RotateResult{}, fmt.Errorf("auth: rotate grace tmp: %w", err)
+	}
+	gtmpName := gtmp.Name()
+	defer os.Remove(gtmpName)
+
+	if _, err := gtmp.WriteString(graceBody); err != nil {
+		gtmp.Close()
+		return RotateResult{}, fmt.Errorf("auth: rotate grace write: %w", err)
+	}
+	if err := gtmp.Sync(); err != nil {
+		gtmp.Close()
+		return RotateResult{}, fmt.Errorf("auth: rotate grace sync: %w", err)
+	}
+	if err := gtmp.Close(); err != nil {
+		return RotateResult{}, fmt.Errorf("auth: rotate grace close: %w", err)
+	}
+	if err := os.Chmod(gtmpName, 0o600); err != nil {
+		return RotateResult{}, fmt.Errorf("auth: rotate grace chmod: %w", err)
+	}
+	if err := os.Rename(gtmpName, s.gracePath); err != nil {
+		return RotateResult{}, fmt.Errorf("auth: rotate grace rename: %w", err)
+	}
+
+	s.mu.Lock()
+	s.hash = newHash
+	s.grace = &graceEntry{
+		prevHash:  prevHash,
+		expiresAt: expiresAt,
+	}
+	s.mu.Unlock()
+
+	return RotateResult{
+		NewPlaintext:   newPlaintext,
+		OldTokenFP:     HashFingerprint(prevHash),
+		NewTokenFP:     Fingerprint(newPlaintext),
+		GraceExpiresAt: graceExpiresRFC,
+	}, nil
 }
 
 // readHashFile reads the on-disk hash; returns ErrNoToken when the
