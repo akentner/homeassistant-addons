@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"terraform-bridge/internal/httpapi"
@@ -48,27 +46,28 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	// SIGTERM drains in-flight requests for up to 30s then exits; SIGHUP
-	// is accepted (no-op in Phase 9 — log reopen lands in Plan 03). Plan 03
-	// extends this further with token-rotation tracking and the hard 30s
-	// shutdown deadline.
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGHUP)
-	defer stop()
-
+	// Signal handling: SIGTERM drains in-flight requests with a 30s deadline;
+	// SIGHUP reopens logs without restart.  HandleSignals owns the entire
+	// lifecycle — see cmd/bridge/signals.go for the implementation and the
+	// defense-in-depth second-SIGTERM-during-drain escalation.  OPS-02.
+	//
+	// Run in a goroutine so the call does not block ListenAndServe below:
+	// HandleSignals blocks on the signal channel for the lifetime of the
+	// process and would prevent the HTTP server from ever binding to :8124
+	// if invoked inline.  signalsDone is closed when HandleSignals returns
+	// (after a successful drain) so main can wait for the lifecycle audit
+	// trail before exiting — otherwise the "shutdown_complete" log record
+	// would race with process termination.
+	signalsDone := make(chan struct{})
 	go func() {
-		<-ctx.Done()
-		slog.Info("shutdown_signal_received", "cause", ctx.Err())
-
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			slog.Error("shutdown_error", "err", err.Error())
-		}
+		defer close(signalsDone)
+		HandleSignals(context.Background(), srv, logger)
 	}()
 
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		slog.Error("listen_error", "err", err.Error())
 		os.Exit(1)
 	}
+
+	<-signalsDone
 }
