@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -9,13 +10,21 @@ import (
 	"os"
 	"time"
 
+	"terraform-bridge/internal/auth"
 	"terraform-bridge/internal/httpapi"
+	"terraform-bridge/internal/supervisor"
 )
 
+// options is the subset of /data/options.json the Bridge reads at
+// startup. BindAddress defaults to "auto" (Tailscale detection);
+// BindAllowedSubnets defaults to [] (strict refusal of non-Tailscale
+// IPs).
+type options struct {
+	BindAddress        string   `json:"bind_address"`
+	BindAllowedSubnets []string `json:"bind_allowed_subnets"`
+}
+
 func main() {
-	// CLI flag: -version prints the embedded bridge version and exits 0.
-	// Used by build verification, smoke tests, and operators double-checking
-	// which binary is running inside the Supervisor container.
 	version := flag.Bool("version", false, "print bridge version and exit")
 	flag.Parse()
 
@@ -25,39 +34,83 @@ func main() {
 	}
 
 	// Structured JSON logging via stdlib log/slog (Phase 9 baseline).
-	// Phase 10 OPS-01 extends this with request_id / route / method / status /
-	// duration_ms via chi middleware.
+	// Plan 02 wraps this with a scrubbingHandler that masks sensitive
+	// keys before serialization.
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	slog.Info("starting",
+	// Read add-on options from /data/options.json (HA add-on store).
+	opts := options{BindAddress: "auto", BindAllowedSubnets: []string{}}
+	if b, err := os.ReadFile("/data/options.json"); err == nil {
+		_ = json.Unmarshal(b, &opts) // fall back to defaults on parse failure
+	} else if !os.IsNotExist(err) {
+		slog.Error("options_read_failed", "err", err.Error())
+	}
+
+	// Resolve the bind address (D-04..D-06). Refusal is fatal — no
+	// degraded mode (AGENTS.md Live Systems rule).
+	bindIP, err := auth.ResolveBindAddress(opts.BindAddress, opts.BindAllowedSubnets, "/sys/class/net")
+	if err != nil {
+		slog.Error("bind_resolution_failed",
+			"bind_address", opts.BindAddress,
+			"err", err.Error(),
+		)
+		os.Exit(1)
+	}
+	slog.Info("bind_resolved",
+		"bind_address", opts.BindAddress,
+		"bind_ip", bindIP,
+		"allowed_subnets", opts.BindAllowedSubnets,
+	)
+
+	// TokenStore — load from /data or generate on first start.
+	store, err := auth.NewFileTokenStore("/data")
+	if err != nil {
+		slog.Error("token_store_init_failed", "err", err.Error())
+		os.Exit(1)
+	}
+	if store.Hash() == nil {
+		// First start: generate + persist + log exactly once.
+		token, err := store.Generate()
+		if err != nil {
+			slog.Error("token_generate_failed", "err", err.Error())
+			os.Exit(1)
+		}
+		if err := store.Persist(token); err != nil {
+			slog.Error("token_persist_failed", "err", err.Error())
+			os.Exit(1)
+		}
+		// CF-02: plaintext surfaces exactly once in this single log
+		// record. Subsequent restarts do NOT re-surface.
+		slog.Info("bridge.token.issued",
+			"actor_token_fp", auth.Fingerprint(token),
+			"plaintext", token, // single emission, never repeated
+		)
+	} else {
+		slog.Info("bridge.token.loaded", "actor_token_fp", "<redacted>")
+	}
+
+	// Supervisor HTTP client (Plan 02's /healthz uses it).
+	supClient := supervisor.NewClient(supervisor.ReadSupervisorToken)
+
+	logger.Info("starting",
 		"bridge_version", bridgeVersion,
 		"pid", os.Getpid(),
 	)
 
-	// HTTP router (chi v5) wired with the single Phase 9 endpoint.
-	// Plan 03 binds the listener to a Tailscale-only address; Phase 9 binds
-	// to :8124 (any) because Tailscale interface detection lands in Phase 10.
-	router := httpapi.NewRouter(bridgeVersion)
+	// Build the router — pass store so the auth middleware can validate.
+	router := httpapi.NewRouter(bridgeVersion, store)
+
+	// Suppress unused-variable warning until /healthz (Plan 02) wires it.
+	_ = supClient
 
 	srv := &http.Server{
-		Addr:              ":8124",
+		Addr:              bindIP + ":8124",
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	// Signal handling: SIGTERM drains in-flight requests with a 30s deadline;
-	// SIGHUP reopens logs without restart.  HandleSignals owns the entire
-	// lifecycle — see cmd/bridge/signals.go for the implementation and the
-	// defense-in-depth second-SIGTERM-during-drain escalation.  OPS-02.
-	//
-	// Run in a goroutine so the call does not block ListenAndServe below:
-	// HandleSignals blocks on the signal channel for the lifetime of the
-	// process and would prevent the HTTP server from ever binding to :8124
-	// if invoked inline.  signalsDone is closed when HandleSignals returns
-	// (after a successful drain) so main can wait for the lifecycle audit
-	// trail before exiting — otherwise the "shutdown_complete" log record
-	// would race with process termination.
+	// Signal handling — Phase 9's HandleSignals owns the lifecycle.
 	signalsDone := make(chan struct{})
 	go func() {
 		defer close(signalsDone)
