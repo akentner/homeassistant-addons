@@ -78,7 +78,11 @@ func main() {
 		os.Exit(1)
 	}
 	if store.Hash() == nil {
-		// First start: generate + persist + log exactly once.
+		// First start: generate + persist + write the plaintext to a
+		// chmod-600 file so the operator can configure their Provider
+		// without the plaintext ever passing through a log stream.
+		// The log record carries a 3+3-char preview (Truncate) and the
+		// file path; subsequent restarts do NOT re-emit either.
 		token, err := store.Generate()
 		if err != nil {
 			slog.Error("token_generate_failed", "err", err.Error())
@@ -88,11 +92,15 @@ func main() {
 			slog.Error("token_persist_failed", "err", err.Error())
 			os.Exit(1)
 		}
-		// CF-02: plaintext surfaces exactly once in this single log
-		// record. Subsequent restarts do NOT re-surface.
+		path, err := store.WriteInitialTokenFile(token)
+		if err != nil {
+			slog.Error("token_file_write_failed", "err", err.Error())
+			os.Exit(1)
+		}
 		slog.Info("bridge.token.issued",
 			"actor_token_fp", auth.Fingerprint(token),
-			"plaintext", token, // single emission, never repeated
+			"preview", auth.Truncate(token), // 3...3 of 43 chars
+			"path", path, // /data/initial-token — chmod 600
 		)
 	} else {
 		slog.Info("bridge.token.loaded", "actor_token_fp", auth.HashFingerprint(store.Hash()))

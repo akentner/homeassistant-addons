@@ -34,8 +34,8 @@ LAN, or a reverse proxy). Plain HTTP; TLS termination is out of scope for v1.3.
 See [DOCS.md][docs]. Phase 9 ships with no user-facing options (empty schema); operator-configurable options land in
 Phase 10 (`bind_address`).
 
-[release-shield]: https://img.shields.io/badge/version-v0.1.0-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v0.1.0
+[release-shield]: https://img.shields.io/badge/version-v0.2.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v0.2.0
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [license-shield]: https://img.shields.io/badge/license-MIT-green.svg

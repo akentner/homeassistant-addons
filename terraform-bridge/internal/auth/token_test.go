@@ -61,6 +61,39 @@ func TestTokenStoreValidateRejectsWrongToken(t *testing.T) {
 	}
 }
 
+func TestWriteInitialTokenFileCreatesChmod600(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewFileTokenStore(dir)
+	if err != nil {
+		t.Fatalf("NewFileTokenStore: %v", err)
+	}
+	token, _ := store.Generate()
+
+	path, err := store.WriteInitialTokenFile(token)
+	if err != nil {
+		t.Fatalf("WriteInitialTokenFile: %v", err)
+	}
+	if path != filepath.Join(dir, "initial-token") {
+		t.Errorf("path = %q, want %q", path, filepath.Join(dir, "initial-token"))
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat initial-token: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("initial-token mode = %o, want 0600", perm)
+	}
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read initial-token: %v", err)
+	}
+	if strings.TrimSpace(string(body)) != token {
+		t.Errorf("initial-token body = %q, want %q", string(body), token)
+	}
+}
+
 func TestTokenStoreLoadMissingReturnsErrNoToken(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewFileTokenStore(dir)
@@ -83,6 +116,48 @@ func TestFingerprintIsStable(t *testing.T) {
 	}
 	if len(a) != 16 {
 		t.Errorf("Fingerprint len = %d, want 16 (8 bytes hex)", len(a))
+	}
+}
+
+func TestTruncatePreviewFormat(t *testing.T) {
+	// Normal-length token (43 chars, real base64url token length).
+	tok := "abcdefghijklmnopqrstuvwxyz0123456789abcdefghi"
+	got := Truncate(tok)
+	want := "abc...ghi"
+	if got != want {
+		t.Errorf("Truncate(43-char) = %q, want %q", got, want)
+	}
+
+	// Short token below the 6-char threshold: full string preserved.
+	if got := Truncate("abc"); got != "abc" {
+		t.Errorf("Truncate(3-char) = %q, want %q", got, "abc")
+	}
+
+	// Exactly 6 chars: full string preserved (2*edge boundary).
+	if got := Truncate("abcdef"); got != "abcdef" {
+		t.Errorf("Truncate(6-char) = %q, want %q", got, "abcdef")
+	}
+
+	// 7 chars: truncation kicks in.
+	if got := Truncate("abcdefg"); got != "abc...efg" {
+		t.Errorf("Truncate(7-char) = %q, want %q", got, "abc...efg")
+	}
+}
+
+func TestTruncatePreviewDoesNotContainInterior(t *testing.T) {
+	// Negative control: the interior of the token must NOT appear in
+	// the preview. Guards against regressions where Truncate starts
+	// leaking more than the 3+3 edges.
+	tok := "prefix-INTERIOR-suffix"
+	got := Truncate(tok)
+	if strings.Contains(got, "INTERIOR") {
+		t.Errorf("Truncate leaked interior: %q", got)
+	}
+	if !strings.HasPrefix(got, "pre") {
+		t.Errorf("Truncate prefix wrong: %q", got)
+	}
+	if !strings.HasSuffix(got, "fix") {
+		t.Errorf("Truncate suffix wrong: %q", got)
 	}
 }
 

@@ -15,11 +15,19 @@
 // SECURITY INVARIANTS — DO NOT VIOLATE:
 //  1. The plaintext token never enters a log record. The Fingerprint
 //     helper (sha256[8] hex) is the only token-derived value that
-//     ever appears in logs.
+//     ever appears in logs. Truncate is a deliberate, narrow
+//     exception for first-start identification — it surfaces 6 of
+//     43 chars (3 prefix + 3 suffix) for human correlation only;
+//     callers needing security MUST use Fingerprint instead.
 //  2. The hash on disk is SHA-256 (not the plaintext). Restoring the
 //     plaintext from disk is impossible by construction.
 //  3. Error messages do not include the presented token, the on-disk
 //     hash, or any fragment thereof.
+//  4. The plaintext token is written to disk exactly once, on first
+//     start, at /data/initial-token (chmod 600, atomic rename), so
+//     operators can configure their Provider without the token ever
+//     passing through a log stream. Subsequent restarts do NOT
+//     re-write this file.
 package auth
 
 import (
@@ -153,6 +161,46 @@ func (s *TokenStore) Persist(plaintext string) error {
 	return nil
 }
 
+// WriteInitialTokenFile persists the plaintext token to
+// /data/initial-token (chmod 600, atomic rename) on first start so
+// operators can configure their Provider without the plaintext
+// ever passing through a log stream. The returned path is logged
+// (along with the truncated preview emitted by Truncate) in the
+// bridge.token.issued record. Subsequent restarts do NOT call this
+// method — the file is written exactly once. Operators SHOULD delete
+// the file (e.g. `ha addons cli terraform-bridge exec rm /data/initial-token`)
+// after configuring their Provider so the plaintext is not stored
+// on disk any longer than necessary.
+func (s *TokenStore) WriteInitialTokenFile(plaintext string) (string, error) {
+	path := filepath.Join(s.dataDir, "initial-token")
+
+	tmp, err := os.CreateTemp(s.dataDir, ".initial-token.*.tmp")
+	if err != nil {
+		return "", fmt.Errorf("auth: create initial-token tmp: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op if rename succeeded
+
+	if _, err := tmp.WriteString(plaintext + "\n"); err != nil {
+		tmp.Close()
+		return "", fmt.Errorf("auth: write initial-token: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return "", fmt.Errorf("auth: sync initial-token: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return "", fmt.Errorf("auth: close initial-token: %w", err)
+	}
+	if err := os.Chmod(tmpName, 0o600); err != nil {
+		return "", fmt.Errorf("auth: chmod initial-token: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return "", fmt.Errorf("auth: rename initial-token: %w", err)
+	}
+	return path, nil
+}
+
 // Hash returns the on-disk SHA-256 hash (copy), used by the
 // /v1/whoami handler to compute actor_token_fp. Returns nil if no
 // token has been generated yet (first-start, pre-Generate).
@@ -223,6 +271,16 @@ type RotateResult struct {
 // hex — a stable, non-reversible identifier safe to log in audit
 // records. Two distinct tokens never collide at this width with
 // negligible probability (~ 1 / 2^32).
+//
+// Truncate returns a log-safe *preview* of a plaintext token:
+// first 3 chars + "..." + last 3 chars. Used by main.go's
+// first-start emission (bridge.token.issued) so the log carries a
+// human-readable identifier without disclosing the bearer. For
+// tokens shorter than 6 chars the entire string is returned
+// (truncation would discard more than it preserves). The preview is
+// NOT cryptographically derived — it is purely a display helper.
+// Callers that need a stable, non-reversible identifier MUST use
+// Fingerprint instead.
 func Fingerprint(plaintext string) string {
 	sum := sha256.Sum256([]byte(plaintext))
 	return hex.EncodeToString(sum[:8])
@@ -240,6 +298,23 @@ func HashFingerprint(hash []byte) string {
 		return ""
 	}
 	return hex.EncodeToString(hash[:8])
+}
+
+// Truncate returns a log-safe preview of a plaintext token:
+// first 3 chars + "..." + last 3 chars. Used by main.go's
+// first-start emission (bridge.token.issued) so the log carries a
+// human-readable identifier without disclosing the bearer. For
+// tokens shorter than 6 chars the entire string is returned
+// (truncation would discard more than it preserves). The preview is
+// NOT cryptographically derived — it is purely a display helper.
+// Callers that need a stable, non-reversible identifier MUST use
+// Fingerprint instead.
+func Truncate(plaintext string) string {
+	const edge = 3
+	if len(plaintext) <= 2*edge {
+		return plaintext
+	}
+	return plaintext[:edge] + "..." + plaintext[len(plaintext)-edge:]
 }
 
 // Rotate issues a fresh token, persists its hash to the primary

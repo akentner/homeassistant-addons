@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
-# verify-bridge-no-token-leak.sh — Phase 9+10 no-token-leak invariant (D-12 + AUTH-05 + OPS-01).
+# verify-bridge-no-token-leak.sh — Phase 9+10+15 no-token-leak invariant (D-12 + AUTH-05 + OPS-01).
 #
 # Runs the Bridge container with a fake SUPERVISOR_TOKEN in the env,
 # captures stdout for ~10 seconds, and asserts:
 #   1. The captured output contains NONE of: SUPERVISOR_TOKEN, Bearer,
 #      bridge_token (Phase 9 D-12 boundary check; AUTH-01 + AUTH-05).
 #   2. The fake token value itself is absent from stdout (S-1).
-#   3. The bridge.token.issued record's plaintext appears EXACTLY ONCE
-#      (CF-02 positive control) — proves the single-emission invariant
-#      without leaking the token to a downstream log path.
-#   4. The actor_token_fp field in that record equals SHA-256[8] of the
-#      plaintext — positive control that the fingerprint helper
-#      agrees with a fresh SHA-256.
-#   5. A GET / produced an OPS-01 request-log record carrying the
+#   3. The bridge plaintext is absent from stdout (Phase 15 hardening —
+#      the previous CF-02 exactly-once-emission invariant was
+#      deliberately downgraded to zero emissions; the plaintext now
+#      surfaces only in /data/initial-token).
+#   4. The actor_token_fp field in bridge.token.issued equals SHA-256[8]
+#      of the plaintext read from /data/initial-token — positive control
+#      that the fingerprint helper agrees with a fresh SHA-256 AND that
+#      the on-disk file actually contains the same token the hash was
+#      derived from.
+#   5. The bridge.token.issued record carries a "preview" field whose
+#      value is first3+"..."+last3 of the plaintext, and a "path" field
+#      pointing at /data/initial-token — proves the new log shape is in
+#      place without leaking the token.
+#   6. A GET / produced an OPS-01 request-log record carrying the
 #      mandatory fields (route, method).
 
 set -euo pipefail
@@ -55,6 +62,17 @@ sleep 2
 curl -sS --max-time 5 "http://localhost:8124/" >/dev/null 2>&1 || true
 sleep 8
 
+# Pull the plaintext token out of the container before it stops
+# (docker run --rm removes it on exit). The Bridge writes the plaintext
+# to /data/initial-token on first start so operators can configure
+# their Provider without the token ever passing through a log stream.
+INITIAL_TOKEN=$(docker exec "${CONTAINER_NAME}" cat /data/initial-token 2>/dev/null | tr -d '\n' || true)
+if [[ -z "${INITIAL_TOKEN}" ]]; then
+    red "   FAIL: could not read /data/initial-token from running container"
+    docker logs "${CONTAINER_NAME}" 2>&1 | tail -20 || true
+    exit 1
+fi
+
 CAPTURED=$(docker logs "${CONTAINER_NAME}" 2>&1)
 echo "   captured ${#CAPTURED} bytes of container output"
 
@@ -79,42 +97,63 @@ else
     echo "   PASS: fake token value not present in stdout"
 fi
 
-# Phase 10 strengthening (AUTH-05 + CF-02 + OPS-01):
-# Adapted from the plan's original check, which injected the FAKE_TOKEN
-# as the bridge's own plaintext via an env override that is NOT part of
-# the bridge's production code. We instead parse the bridge.token.issued
-# record that the bridge emits on first start, extract its plaintext +
-# actor_token_fp fields, and assert:
-#   - The actor_token_fp equals SHA-256[8] of the plaintext
-#     (positive control on the fingerprint helper).
-#   - The plaintext appears EXACTLY ONCE in stdout (CF-02 exactly-once
-#     invariant; second emission would leak the token to a downstream
-#     log path).
-ISSUED_RECORD=$(echo "${CAPTURED}" | grep -F '"msg":"bridge.token.issued"' || true)
-if [[ -z "${ISSUED_RECORD}" ]]; then
-    red "   FAIL: no bridge.token.issued record in stdout (CF-02 expectation)"
+# Phase 15 strengthening (AUTH-05 hardening): the plaintext token must
+# NEVER appear in stdout. The previous CF-02 exactly-once invariant was
+# deliberately downgraded — the plaintext now surfaces only via the
+# chmod-600 /data/initial-token file, which is the operator's manual
+# retrieval path. Second emissions would leak the token to any
+# downstream log shipper (HA Cloud, Loki, journald, …).
+if echo "${CAPTURED}" | grep -F -q -- "${INITIAL_TOKEN}"; then
+    red "   FAIL: bridge plaintext found in container stdout (was previously CF-02 once, now must be 0)"
+    echo "${CAPTURED}" | grep -F -- "${INITIAL_TOKEN}" | head -3
     FAIL=1
 else
-    PLAINTEXT=$(echo "${ISSUED_RECORD}" | grep -oE '"plaintext":"[^"]*"' | head -1 | sed 's/^"plaintext":"//; s/"$//')
+    echo "   PASS: bridge plaintext absent from stdout (Phase 15 hardening)"
+fi
+
+# Phase 15 positive controls on the new log shape (preview + path fields):
+ISSUED_RECORD=$(echo "${CAPTURED}" | grep -F '"msg":"bridge.token.issued"' || true)
+if [[ -z "${ISSUED_RECORD}" ]]; then
+    red "   FAIL: no bridge.token.issued record in stdout"
+    FAIL=1
+else
     ACTOR_FP=$(echo "${ISSUED_RECORD}" | grep -oE '"actor_token_fp":"[^"]*"' | head -1 | sed 's/^"actor_token_fp":"//; s/"$//')
-    if [[ -z "${PLAINTEXT}" || -z "${ACTOR_FP}" ]]; then
-        red "   FAIL: bridge.token.issued record missing plaintext or actor_token_fp field"
+    PREVIEW=$(echo "${ISSUED_RECORD}" | grep -oE '"preview":"[^"]*"' | head -1 | sed 's/^"preview":"//; s/"$//')
+    PATH_FIELD=$(echo "${ISSUED_RECORD}" | grep -oE '"path":"[^"]*"' | head -1 | sed 's/^"path":"//; s/"$//')
+    if [[ -z "${ACTOR_FP}" ]]; then
+        red "   FAIL: bridge.token.issued record missing actor_token_fp field"
         FAIL=1
     else
-        EXPECTED_FP=$(printf '%s' "${PLAINTEXT}" | sha256sum | cut -c1-16)
+        EXPECTED_FP=$(printf '%s' "${INITIAL_TOKEN}" | sha256sum | cut -c1-16)
         if [[ "${EXPECTED_FP}" = "${ACTOR_FP}" ]]; then
-            echo "   PASS: actor_token_fp matches SHA-256[8] of bridge plaintext (positive control)"
+            echo "   PASS: actor_token_fp matches SHA-256[8] of /data/initial-token (positive control)"
         else
-            red "   FAIL: actor_token_fp (${ACTOR_FP}) != SHA-256[8](plaintext) (${EXPECTED_FP})"
+            red "   FAIL: actor_token_fp (${ACTOR_FP}) != SHA-256[8](initial-token) (${EXPECTED_FP})"
             FAIL=1
         fi
-        COUNT=$(echo "${CAPTURED}" | grep -F -c -- "${PLAINTEXT}" || true)
-        if (( COUNT == 1 )); then
-            echo "   PASS: bridge plaintext appears exactly once in stdout (CF-02)"
+    fi
+    if [[ -z "${PREVIEW}" ]]; then
+        red "   FAIL: bridge.token.issued record missing preview field"
+        FAIL=1
+    else
+        TOKEN_LEN=${#INITIAL_TOKEN}
+        if (( TOKEN_LEN > 6 )); then
+            EXPECTED_PREVIEW="${INITIAL_TOKEN:0:3}...${INITIAL_TOKEN: -3}"
         else
-            red "   FAIL: bridge plaintext appears ${COUNT} times in stdout (want 1; CF-02)"
+            EXPECTED_PREVIEW="${INITIAL_TOKEN}"
+        fi
+        if [[ "${PREVIEW}" = "${EXPECTED_PREVIEW}" ]]; then
+            echo "   PASS: preview field is first3+'...'+last3 of initial-token"
+        else
+            red "   FAIL: preview (${PREVIEW}) != first3+'...'+last3 of initial-token (${EXPECTED_PREVIEW})"
             FAIL=1
         fi
+    fi
+    if [[ "${PATH_FIELD}" != "/data/initial-token" ]]; then
+        red "   FAIL: path field = ${PATH_FIELD}, want /data/initial-token"
+        FAIL=1
+    else
+        echo "   PASS: path field points at /data/initial-token"
     fi
 fi
 

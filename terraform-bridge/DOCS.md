@@ -27,17 +27,34 @@ the string `list(<inner>)` as a one-value enum (split on `|`); the YAML-list for
 ## Token issuance
 
 On first start the Bridge generates a 256-bit bearer token via `crypto/rand`, encodes it base64url (43 chars, no
-padding), and surfaces the plaintext **exactly once** in the add-on log:
+padding), writes its SHA-256 hash to `/data/bridge-token` (chmod 600), and writes the plaintext to
+`/data/initial-token` (chmod 600). The plaintext **never enters a log stream** — the log record carries only the
+16-char fingerprint, a 3+3-char preview, and the file path:
 
 ```json
-{"ts":"...","level":"INFO","msg":"bridge.token.issued","actor_token_fp":"...","plaintext":"<the-token>"}
+{"ts":"...","level":"INFO","msg":"bridge.token.issued","actor_token_fp":"...","preview":"abc...xyz","path":"/data/initial-token"}
 ```
 
-**Capture this line on first start.** The plaintext is never persisted (only its SHA-256 hash is written to
-`/data/bridge-token`, chmod 600) and is never re-surfaced on subsequent restarts. Subsequent restarts emit
-`bridge.token.loaded` with only the `actor_token_fp` — the plaintext is not retrievable.
+**To retrieve the plaintext** (one-time per fresh install), read `/data/initial-token` via one of:
 
-If you miss the `bridge.token.issued` line, the recovery path (below) is the only way to issue a fresh token.
+```bash
+# From the HA host shell — the add-on's /data volume is mounted under
+# /usr/share/hassio/addons/data/<slug>/ on the host.
+sudo cat /usr/share/hassio/addons/data/terraform-bridge/initial-token
+
+# Or, from inside the running container via the Supervisor CLI:
+ha addons cli terraform-bridge cat /data/initial-token
+```
+
+After configuring your Provider with the token, **delete the file** to minimise on-disk exposure:
+
+```bash
+sudo rm /usr/share/hassio/addons/data/terraform-bridge/initial-token
+```
+
+Subsequent restarts do NOT re-emit the `bridge.token.issued` record and do NOT re-write `/data/initial-token` — both
+events fire exactly once per fresh install. Once the plaintext file is gone, recovery is the uninstall/reinstall
+flow described below.
 
 ## Token rotation
 
