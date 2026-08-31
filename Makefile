@@ -1,7 +1,7 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions update-version validate-dockerfiles docker-build-check build-addon release
+.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions update-version validate-dockerfiles docker-build-check build-addon release install-provider verify-install-provider
 
 # Default target
 help: ## Show this help message
@@ -217,6 +217,35 @@ release: ## Bump, validate, tag and push a release (usage: make release ADDON=au
 		echo "   gh release create $$TAG --generate-notes"; \
 	fi; \
 	echo "✅ Release $$TAG complete. The build workflow for $(ADDON) will pick it up on the tag push."
+
+install-provider: ## Build and install terraform-provider-homeassistant for OpenTofu dev_overrides (usage: make install-provider [DESTDIR=/tmp/foo])
+	@if [ ! -f "terraform-provider-homeassistant/build.yaml" ]; then \
+		echo "❌ terraform-provider-homeassistant/build.yaml not found"; \
+		exit 1; \
+	fi
+	$(eval PROVIDER_VERSION := $(shell grep -E '^[[:space:]]*VERSION:' terraform-provider-homeassistant/build.yaml | sed 's/^[[:space:]]*VERSION: *"\([^"]*\)".*/\1/'))
+	$(eval _PLUGIN_DIR := $(DESTDIR)$(HOME)/.terraform.d/plugins/localhost/akentner/homeassistant/$(PROVIDER_VERSION))
+	@echo "🔨 Building terraform-provider-homeassistant v$(PROVIDER_VERSION)..."
+	@cd terraform-provider-homeassistant && go build -o terraform-provider-homeassistant .
+	@echo "📦 Installing to $(_PLUGIN_DIR)..."
+	@mkdir -p "$(_PLUGIN_DIR)"
+	@cp terraform-provider-homeassistant/terraform-provider-homeassistant "$(_PLUGIN_DIR)/terraform-provider-homeassistant"
+	@chmod 0755 "$(_PLUGIN_DIR)/terraform-provider-homeassistant"
+	@echo "✅ Provider installed at $(_PLUGIN_DIR)/terraform-provider-homeassistant"
+	@echo ""
+	@echo "To use with OpenTofu, add a CLI config file (e.g. ~/.config/opentofu/cli-config.tfrc or ~/.terraformrc):"
+	@echo ""
+	@echo "  dev_overrides {"
+	@echo "    \"akentner/homeassistant\" = \"$(_PLUGIN_DIR)\""
+	@echo "  }"
+	@echo ""
+	@echo "Note: dev_overrides bypasses the provider registry and is supported by OpenTofu"
+	@echo "(requires OpenTofu >= 1.6); it does NOT work with \`terraform init\` against the registry."
+	@echo ""
+	@echo "Override DESTDIR for CI isolation: make install-provider DESTDIR=/tmp/test-plugins"
+
+verify-install-provider: ## Hermetic E2E check that make install-provider produces a runnable Provider
+	@bash internal/verify-install-provider.sh
 
 check-all: lint validate-addons validate-versions validate-dockerfiles ## Run all checks (lint + validate + versions + dockerfile args)
 
