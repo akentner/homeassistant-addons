@@ -1,6 +1,6 @@
 name: "Terraform Bridge"
 description: "Bearer-authenticated JSON proxy of the HA Supervisor HTTP API for OpenTofu/Terraform management."
-version: "0.1.0-1"
+version: "0.1.0-2"
 slug: "terraform-bridge"
 init: false
 arch:
@@ -24,4 +24,4 @@ options:
   bind_allowed_subnets: []
 schema:
   bind_address: "match(^auto$|^(([0-9]{1,3}\\.){3}[0-9]{1,3})$)?"
-  bind_allowed_subnets: list(str)?
+  bind_allowed_subnets: list(match(.*))?
