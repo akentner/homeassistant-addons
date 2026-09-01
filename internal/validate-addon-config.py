@@ -11,6 +11,7 @@ VALID_STARTUP = {"application", "initialize", "system", "once", "services"}
 VALID_BOOT = {"auto", "manual", "manual_only"}
 VALID_MAP_TYPES = {
     "addon_config",
+    "app_config",
     "backup",
     "config",
     "data",

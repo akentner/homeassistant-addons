@@ -63,7 +63,7 @@ docker build -t "${IMAGE_NAME}" \
 
 IMG_SIZE_HUMAN=$(docker images "${IMAGE_NAME}" --format '{{.Size}}')
 IMG_SIZE_BYTES=$(docker images "${IMAGE_NAME}" --format '{{.Size}}' \
-                 | python3 -c 'import sys; s=sys.stdin.read().strip(); v=float(s.split()[0]); u=s.split()[1].upper(); mult={"B":1,"KB":1024,"MB":1024**2,"GB":1024**3}; print(int(v*mult[u]))')
+                 | python3 -c 'import sys, re; s=sys.stdin.read().strip(); m=re.match(r"([\d.]+)\s*([A-Za-z]+)", s); v=float(m.group(1)); u=m.group(2).upper(); mult={"B":1,"KB":1024,"MB":1024**2,"GB":1024**3}; print(int(v*mult[u]))')
 MAX_BYTES=$((30 * 1024 * 1024))
 echo "   docker image size: ${IMG_SIZE_HUMAN} (${IMG_SIZE_BYTES} bytes; cap = ${MAX_BYTES})"
 if (( IMG_SIZE_BYTES > MAX_BYTES )); then
