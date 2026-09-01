@@ -1,10 +1,10 @@
 # GitHub → Home Assistant Webhook Setup
 
 This repository's build workflows (seven per-addon `build-<addon>.yml` callers, each invoking the reusable
-`_build-template.yml`) POST a JSON payload to a Home Assistant inbound webhook each time a build starts and each time
-it finishes. The caller invokes `.github/scripts/notify-ha.sh` from both steps, so the receiving HA automation sees
-two events per leg (one `started`, one `finished`). HA automations can react to those events to push notifications,
-update sensors, or trigger follow-on actions (e.g. restart the add-on after an update).
+`_build-template.yml`) POST a JSON payload to a Home Assistant inbound webhook each time a build starts and each time it
+finishes. The caller invokes `.github/scripts/notify-ha.sh` from both steps, so the receiving HA automation sees two
+events per leg (one `started`, one `finished`). HA automations can react to those events to push notifications, update
+sensors, or trigger follow-on actions (e.g. restart the add-on after an update).
 
 ## Why a webhook?
 
@@ -65,12 +65,12 @@ action:
 
 In your repository → Settings → Secrets and variables → Actions → New repository secret.
 
-| Secret                   | Value                                                                       | Required |
-| ------------------------ | --------------------------------------------------------------------------- | -------- |
-| `HA_BASE_URL`            | `https://ha-nextgen.akentner.de` (no trailing slash, no `/api/webhook/...`) | yes      |
-| `HA_WEBHOOK_ID`          | the random string from step 1                                               | yes      |
-| `CF_ACCESS_CLIENT_ID`    | Cloudflare Access service-token Client ID                                   | optional |
-| `CF_ACCESS_CLIENT_SECRET`| Cloudflare Access service-token Client Secret                               | optional |
+| Secret                    | Value                                                                       | Required |
+| ------------------------- | --------------------------------------------------------------------------- | -------- |
+| `HA_BASE_URL`             | `https://ha-nextgen.akentner.de` (no trailing slash, no `/api/webhook/...`) | yes      |
+| `HA_WEBHOOK_ID`           | the random string from step 1                                               | yes      |
+| `CF_ACCESS_CLIENT_ID`     | Cloudflare Access service-token Client ID                                   | optional |
+| `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access service-token Client Secret                               | optional |
 
 The webhook has no HMAC or payload signature. Its only secret is the webhook ID itself, so use a long random value.
 Transport-level protection comes from Cloudflare Access (see below), which is what prevents the path from being
@@ -101,8 +101,8 @@ HA should fire the automation. If it doesn't:
 ## Cloudflare Access
 
 Cloudflare Access fronts this HA instance on the public hostname. The webhook path is not exempt — an unauthenticated
-POST from the internet is redirected to a login page instead of reaching HA. Build notifications have failed silently
-in this state (the script catches the failure, logs a warning, and exits 0) since the secrets were first created on
+POST from the internet is redirected to a login page instead of reaching HA. Build notifications have failed silently in
+this state (the script catches the failure, logs a warning, and exits 0) since the secrets were first created on
 2026-06-28. The fix is a Cloudflare Access Service Token; a Bypass policy is **not** acceptable and is rejected below.
 
 ### Why this matters here
@@ -134,14 +134,13 @@ the CF headers are missing.
 ### The fix — separate Access app + Service Auth policy
 
 Create a **second** Cloudflare Access application, scoped to `ha-nextgen.akentner.de/api/webhook/*`, with a single
-`Service Auth` policy that grants access to a fresh Service Token. Leave the existing hostname-wide application and
-its human-facing policies alone. Cloudflare resolves the most specific path match first, so the narrow app wins for
-webhook requests only.
+`Service Auth` policy that grants access to a fresh Service Token. Leave the existing hostname-wide application and its
+human-facing policies alone. Cloudflare resolves the most specific path match first, so the narrow app wins for webhook
+requests only.
 
-Why not a Bypass policy on the existing app: the webhook has no HMAC, so a Bypass would make the path
-world-triggerable. That is a security downgrade from the protected state — the script's own header calls this out as
-"not acceptable for public exposure". Service Auth + per-token credentials keeps the path gated while letting the
-runner through.
+Why not a Bypass policy on the existing app: the webhook has no HMAC, so a Bypass would make the path world-triggerable.
+That is a security downgrade from the protected state — the script's own header calls this out as "not acceptable for
+public exposure". Service Auth + per-token credentials keeps the path gated while letting the runner through.
 
 Generate the token from Zero Trust → Access → Service Auth → Create Service Token. The two values Cloudflare shows
 become `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` in the GitHub repository secrets table above.
@@ -178,8 +177,8 @@ curl -sS -o /dev/null -D - --resolve ha-nextgen.akentner.de:443:188.114.97.3 \
 ```
 
 If the negative probe returns 200, the Access app is not actually scoped to `/api/webhook/*` (most common cause: scope
-was set to the hostname rather than the path). If the positive probe returns 302, the Service Token is not attached
-to the Service Auth policy, or the `kid` query parameter does not match the Access app the policy lives in.
+was set to the hostname rather than the path). If the positive probe returns 302, the Service Token is not attached to
+the Service Auth policy, or the `kid` query parameter does not match the Access app the policy lives in.
 
 A 200 response only proves the request traversed Access and reached HA. It does not prove the automation ran. After a
 real build, confirm the receiving automation's `last_triggered` advanced, or watch Developer Tools → Events for
@@ -243,10 +242,10 @@ intervention.
 mechanisms in order of preference:
 
 - **3xx (auth-proxy redirect) — fail fast.** A redirect from a Cloudflare or other auth proxy is structurally never
-  transient. The script logs an actionable warning naming the Access policy to check and exits. There is no retry and
-  no backoff: three identical attempts against a permanent misconfiguration would burn ~7 s and bury the signal.
-- **5xx / connect errors — three retries with exponential backoff** (1 s, 2 s, 4 s). Genuinely transient failures
-  (HA rebooting, broker flapping, brief DNS hiccup) recover inside this window. The response body is logged for the
-  last attempt so the next reader does not have to re-derive what the server actually said.
+  transient. The script logs an actionable warning naming the Access policy to check and exits. There is no retry and no
+  backoff: three identical attempts against a permanent misconfiguration would burn ~7 s and bury the signal.
+- **5xx / connect errors — three retries with exponential backoff** (1 s, 2 s, 4 s). Genuinely transient failures (HA
+  rebooting, broker flapping, brief DNS hiccup) recover inside this window. The response body is logged for the last
+  attempt so the next reader does not have to re-derive what the server actually said.
 - **Always `exit 0`.** Every path ends with `exit 0` so a flaky HA cannot break a build. Notification failures are
   surfaced as `::warning::` annotations on the workflow run for visibility — they do not turn the run red.

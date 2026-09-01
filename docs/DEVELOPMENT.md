@@ -110,18 +110,18 @@ time.
 ### Secrets Contract
 
 Four secrets are threaded through the build workflow. `_build-template.yml` declares all four as optional `secrets:`
-(`HA_BASE_URL`, `HA_WEBHOOK_ID`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`) and reads them by name in the
-notify steps. Each caller passes them explicitly with named mappings. Missing callee secret declarations alone are not a
+(`HA_BASE_URL`, `HA_WEBHOOK_ID`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`) and reads them by name in the notify
+steps. Each caller passes them explicitly with named mappings. Missing callee secret declarations alone are not a
 `startup_failure` cause when using `secrets: inherit`; named mappings are used here for least privilege. Do not use
 `secrets: inherit` when least privilege is the goal. `GITHUB_TOKEN` is auto-injected and used directly by
 `docker/login-action` to authenticate to `ghcr.io`.
 
-| Secret                   | Required | Notes                                |
-| ------------------------ | -------- | ------------------------------------ |
-| `HA_BASE_URL`            | yes      | Public HA URL; no trailing slash     |
-| `HA_WEBHOOK_ID`          | yes      | Random value; see WEBHOOK_SETUP.md   |
-| `CF_ACCESS_CLIENT_ID`    | optional | Needed when HA is behind CF Access   |
-| `CF_ACCESS_CLIENT_SECRET`| optional | Needed when HA is behind CF Access   |
+| Secret                    | Required | Notes                              |
+| ------------------------- | -------- | ---------------------------------- |
+| `HA_BASE_URL`             | yes      | Public HA URL; no trailing slash   |
+| `HA_WEBHOOK_ID`           | yes      | Random value; see WEBHOOK_SETUP.md |
+| `CF_ACCESS_CLIENT_ID`     | optional | Needed when HA is behind CF Access |
+| `CF_ACCESS_CLIENT_SECRET` | optional | Needed when HA is behind CF Access |
 
 The two `CF_ACCESS_*` secrets are optional because `notify-ha.sh` reads them at runtime and adds the matching
 `CF-Access-Client-Id` / `CF-Access-Client-Secret` request headers to the POST only when both are set. When either is
@@ -135,14 +135,14 @@ Every job in the repository declares an explicit `timeout-minutes` adjacent to i
 GitHub's 360-minute default. The caps are sized per-job from measured runtimes, not guessed, with a multiplier that
 absorbs a cold cache or one stalled leg without burning a multi-hour runner block.
 
-| Workflow                | Job            | Cap | Derived from             |
-| ----------------------- | -------------- | --- | ------------------------ |
-| `_build-template.yml`   | `build`        | 45  | aarch64 QEMU leg 13m28s  |
-| `auto-update.yml`       | `update`       | 20  | observed 8-28s           |
-| `base-image-update.yml` | `update`       | 15  | observed 11-15s          |
-| `lint.yml`              | `lint`         | 15  | observed 37-45s          |
-| `lint.yml`              | `lint-results` | 5   | reporting only           |
-| `opencode.yml`          | `opencode`     | 30  | no baseline; ceiling     |
+| Workflow                | Job            | Cap | Derived from            |
+| ----------------------- | -------------- | --- | ----------------------- |
+| `_build-template.yml`   | `build`        | 45  | aarch64 QEMU leg 13m28s |
+| `auto-update.yml`       | `update`       | 20  | observed 8-28s          |
+| `base-image-update.yml` | `update`       | 15  | observed 11-15s         |
+| `lint.yml`              | `lint`         | 15  | observed 37-45s         |
+| `lint.yml`              | `lint-results` | 5   | reporting only          |
+| `opencode.yml`          | `opencode`     | 30  | no baseline; ceiling    |
 
 **Invariant:** the number of `timeout-minutes:` declarations must equal the number of jobs. The check is:
 
@@ -151,35 +151,34 @@ grep -rh 'timeout-minutes:' .github/workflows/*.yml | wc -l   # must equal job c
 ```
 
 (The build matrix gives each leg its own cap automatically; the count is per-`timeout-minutes` line, not per matrix
-leg.) A new job that ships without a cap is a regression — the CI run inherits the 360-minute default and a hung
-build can burn half a day of runner time before GitHub kills it.
+leg.) A new job that ships without a cap is a regression — the CI run inherits the 360-minute default and a hung build
+can burn half a day of runner time before GitHub kills it.
 
-The build cap (45 min) is far larger than the rest because the aarch64 leg runs under QEMU emulation at roughly 5x
-amd64 wall time. The empirical basis for that leg is exactly one data point — the first ever successful
+The build cap (45 min) is far larger than the rest because the aarch64 leg runs under QEMU emulation at roughly 5x amd64
+wall time. The empirical basis for that leg is exactly one data point — the first ever successful
 `Build Coding Assistants` run (`33314988015`, 13m28s) — so the cap absorbs a cold buildx cache rather than risking a
-cancellation of a legitimate build. The matrix gives each arch its own cap rather than sharing one; do not collapse
-them into a single value, or the amd64 leg would inherit the aarch64 bound.
+cancellation of a legitimate build. The matrix gives each arch its own cap rather than sharing one; do not collapse them
+into a single value, or the amd64 leg would inherit the aarch64 bound.
 
-**Re-deriving a cap:** when you add a new job or move an existing one to a slower runner, measure at least one real
-run and multiply by ~3x, then round up to a 5-minute boundary. The empirical-basis comment adjacent to each
+**Re-deriving a cap:** when you add a new job or move an existing one to a slower runner, measure at least one real run
+and multiply by ~3x, then round up to a 5-minute boundary. The empirical-basis comment adjacent to each
 `timeout-minutes:` line names the measurement that justifies it — keep that comment in sync with the cap.
 
 ### Action Pinning
 
 All action references in `.github/workflows/*.yml` use **floating-major pins**: `@v7`, `@v4`, `@v6`. Never exact patch
-versions (`@v7.0.1`), never commit SHAs. Renovate raises majors against floating majors, so the repo gets a PR
-when a major lands and the dependency drift stays visible.
+versions (`@v7.0.1`), never commit SHAs. Renovate raises majors against floating majors, so the repo gets a PR when a
+major lands and the dependency drift stays visible.
 
-The trap is mechanical: **closing a Renovate PR tells Renovate never to offer that exact version again.** Five PRs
-were closed manually on 2026-07-27 between 18:10:30 and 18:10:40 — ten seconds for five PRs. The user has since
-confirmed this was a mistake, not a decision. Three of those versions (`actions/checkout` v7.0.1,
-`docker/build-push-action` v7.3.0, `docker/setup-qemu-action` v4.2.0) consequently have not been re-offered, and
-the Node 20 deprecation warning that those bumps would have cleared would have persisted indefinitely. PRs `39` and
-`40` exist only because newer versions appeared after the close (`docker/login-action` v4.5.1 → v4.6.0,
-`docker/setup-buildx-action` v4.2.0 → v4.3.0).
+The trap is mechanical: **closing a Renovate PR tells Renovate never to offer that exact version again.** Five PRs were
+closed manually on 2026-07-27 between 18:10:30 and 18:10:40 — ten seconds for five PRs. The user has since confirmed
+this was a mistake, not a decision. Three of those versions (`actions/checkout` v7.0.1, `docker/build-push-action`
+v7.3.0, `docker/setup-qemu-action` v4.2.0) consequently have not been re-offered, and the Node 20 deprecation warning
+that those bumps would have cleared would have persisted indefinitely. PRs `39` and `40` exist only because newer
+versions appeared after the close (`docker/login-action` v4.5.1 → v4.6.0, `docker/setup-buildx-action` v4.2.0 → v4.3.0).
 
-If a Renovate bump is unwanted, record why in a comment and let it close itself on a future baseline. If a closed
-bump is wanted later, apply it by hand or reopen the branch — do not ignore it. `.github/renovate.json` carries no
+If a Renovate bump is unwanted, record why in a comment and let it close itself on a future baseline. If a closed bump
+is wanted later, apply it by hand or reopen the branch — do not ignore it. `.github/renovate.json` carries no
 `ignoreDeps` / `allowedVersions` entries, by design: the accidental close is not encoded as policy.
 
 ### Trigger Pitfalls

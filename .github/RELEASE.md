@@ -28,19 +28,19 @@ Examples:
 version itself. CalVer is supported (`authentik/v2026.8.0`); pre-release and subpatch suffixes are preserved
 (`v1.0.0-alpha45`, `v1.0.6-0`).
 
-Every per-addon build workflow (`build-<addon>.yml`) triggers on a `push` to `main` with changes under `<addon>/**`.
-A second trigger on `push` of a `<addon>/v*` tag exists in each file but is **commented out for all add-ons except
+Every per-addon build workflow (`build-<addon>.yml`) triggers on a `push` to `main` with changes under `<addon>/**`. A
+second trigger on `push` of a `<addon>/v*` tag exists in each file but is **commented out for all add-ons except
 network-tools**:
 
-| Add-on             | `paths:` on `main` | `<addon>/v*` tag |
-| ------------------ | ------------------ | ---------------- |
-| authentik          | active             | disabled         |
-| coding-assistants  | active             | disabled         |
-| gatus              | active             | disabled         |
-| markdown-renderer  | active             | disabled         |
-| meridian           | active             | disabled         |
-| network-tools      | active             | **active**       |
-| phone-logger       | active             | disabled         |
+| Add-on            | `paths:` on `main` | `<addon>/v*` tag |
+| ----------------- | ------------------ | ---------------- |
+| authentik         | active             | disabled         |
+| coding-assistants | active             | disabled         |
+| gatus             | active             | disabled         |
+| markdown-renderer | active             | disabled         |
+| meridian          | active             | disabled         |
+| network-tools     | active             | **active**       |
+| phone-logger      | active             | disabled         |
 
 This split is deliberate. The `tags:` block in each caller carries the in-file comment
 `# tag-trigger temporarily disabled (see .github/RELEASE.md)` — this section is what that comment resolves to.
@@ -49,35 +49,34 @@ This split is deliberate. The `tags:` block in each caller carries the in-file c
 
 Two commits, both on `main`, hold the rationale. They are quoted from their commit messages, not paraphrased:
 
-- `287c79f` (`ci(build): temporarily disable tag-trigger in per-addon workflows`) disabled the tag trigger in all
-  seven. After the historical tag migration, origin held 24 `<addon>/v<version>` tags pointing at commits that were
-  no longer the source of truth for their add-on directory. Re-enabling tag pushes unconditionally would have
-  re-fired a build for every one of those 24 tags — roughly 30 minutes of runner time rebuilding images that
-  already existed, and overwriting the ghcr.io images the HA Supervisor was serving, possibly with different content
-  if any Dockerfile argument had changed since.
+- `287c79f` (`ci(build): temporarily disable tag-trigger in per-addon workflows`) disabled the tag trigger in all seven.
+  After the historical tag migration, origin held 24 `<addon>/v<version>` tags pointing at commits that were no longer
+  the source of truth for their add-on directory. Re-enabling tag pushes unconditionally would have re-fired a build for
+  every one of those 24 tags — roughly 30 minutes of runner time rebuilding images that already existed, and overwriting
+  the ghcr.io images the HA Supervisor was serving, possibly with different content if any Dockerfile argument had
+  changed since.
 - `60e7835` (`fix(network-tools): ship mdns_scan.py … ci(build-network-tools): re-enable tag-trigger`) re-enabled the
-  tag trigger for network-tools only. That add-on had just two tags (`v0.4.0`, `v0.2.3-1`) and `v0.4.0` already
-  pointed at near-current source, so the contained risk was much smaller than for the other six.
+  tag trigger for network-tools only. That add-on had just two tags (`v0.4.0`, `v0.2.3-1`) and `v0.4.0` already pointed
+  at near-current source, so the contained risk was much smaller than for the other six.
 
 ### What this means operationally
 
 For the six add-ons with the tag-trigger disabled, pushing the tag alone does **not** build an image. Step 2 of the
 release flow below (committing and pushing `config.yaml` / `build.yaml` / `README.md` to `main`) is what fires the
-build, via the `paths:` filter. Skipping it produces exactly the 404 that the versioning docs warn about, even when
-the tag exists on origin.
+build, via the `paths:` filter. Skipping it produces exactly the 404 that the versioning docs warn about, even when the
+tag exists on origin.
 
-Only `network-tools` is built twice when both the commit and the tag are pushed: once by the `paths:` trigger and
-once by the active `tags:` trigger. The double-build is intentional — the tag-triggered leg is the one that pulls
+Only `network-tools` is built twice when both the commit and the tag are pushed: once by the `paths:` trigger and once
+by the active `tags:` trigger. The double-build is intentional — the tag-triggered leg is the one that pulls
 `build.yaml:args.VERSION`, so it produces the canonical image for the tag.
 
 ### Re-enabling a tag trigger
 
 To re-enable for an add-on:
 
-1. Inspect `git ls-remote --tags origin <addon>/v\*` and check whether any tag points at a commit that is no longer
-   the source of truth for `<addon>/**`. If yes, delete or move those tags first (rebuild cost compounds).
-2. Edit `.github/workflows/build-<addon>.yml`: remove the leading `#` from the two commented lines in the `tags:`
-   block.
+1. Inspect `git ls-remote --tags origin <addon>/v\*` and check whether any tag points at a commit that is no longer the
+   source of truth for `<addon>/**`. If yes, delete or move those tags first (rebuild cost compounds).
+2. Edit `.github/workflows/build-<addon>.yml`: remove the leading `#` from the two commented lines in the `tags:` block.
 3. Open a PR with the rationale and a roll-back plan if the rebuild would overwrite a published image unexpectedly.
 
 The seven callers carry the comment `# tag-trigger temporarily disabled (see .github/RELEASE.md)` for exactly this
