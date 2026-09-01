@@ -30,6 +30,7 @@ fi
 rm -f /root/.gitconfig
 ln -sf /data/.gitconfig /root/.gitconfig
 
+TOOLS_MD="/etc/coding-assistants/TOOLS.md"
 OPENCODE_JSON="/data/.config/opencode/opencode.json"
 [[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
 tmp=$(mktemp)
