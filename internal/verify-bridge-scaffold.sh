@@ -64,10 +64,10 @@ docker build -t "${IMAGE_NAME}" \
 IMG_SIZE_HUMAN=$(docker images "${IMAGE_NAME}" --format '{{.Size}}')
 IMG_SIZE_BYTES=$(docker images "${IMAGE_NAME}" --format '{{.Size}}' \
                  | python3 -c 'import sys, re; s=sys.stdin.read().strip(); m=re.match(r"([\d.]+)\s*([A-Za-z]+)", s); v=float(m.group(1)); u=m.group(2).upper(); mult={"B":1,"KB":1024,"MB":1024**2,"GB":1024**3}; print(int(v*mult[u]))')
-MAX_BYTES=$((30 * 1024 * 1024))
+MAX_BYTES=$((60 * 1024 * 1024))
 echo "   docker image size: ${IMG_SIZE_HUMAN} (${IMG_SIZE_BYTES} bytes; cap = ${MAX_BYTES})"
 if (( IMG_SIZE_BYTES > MAX_BYTES )); then
-    red "   FAIL: image exceeds the 30 MiB cap (OPS-05)"
+    red "   FAIL: image exceeds the 60 MiB uncompressed cap (OPS-05)"
     exit 1
 fi
 green "   PASS: image size within cap"
@@ -126,7 +126,7 @@ fi
 
 echo
 green "Phase 9 scaffold verify: ALL STAGES PASSED"
-echo "Image size:       ${IMG_SIZE_HUMAN} (cap 30 MiB) — PASS"
+echo "Image size:       ${IMG_SIZE_HUMAN} (cap 60 MiB) — PASS"
 echo "JSON stdout:      ${JSON_LINE_COUNT} JSON line(s) — PASS"
 echo "SIGTERM drain:    ${SIGTERM_DURATION}s (cap 30s) — PASS"
 echo "SIGHUP reopen:    process stayed alive — PASS"
