@@ -108,6 +108,43 @@ func TestTokenStoreLoadMissingReturnsErrNoToken(t *testing.T) {
 	}
 }
 
+// TestNewFileTokenStoreCreatesMissingDataDir is a regression test for
+// item-7-data-mkdir-gap: NewFileTokenStore must create dataDir if it
+// does not already exist, rather than silently deferring the failure
+// to the first Persist/WriteInitialTokenFile call (which is what
+// caused the terraform-bridge container to crash on first start when
+// run without a pre-existing /data — reproduced live in CI, see
+// .planning/debug/resolved/item-7-data-mkdir-gap.md).
+func TestNewFileTokenStoreCreatesMissingDataDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "nested", "does-not-exist-yet")
+
+	store, err := NewFileTokenStore(dir)
+	if err != nil {
+		t.Fatalf("NewFileTokenStore on missing dir: %v", err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("dataDir was not created: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("dataDir path exists but is not a directory")
+	}
+
+	// First-start sequence exactly as main.go performs it — must not
+	// fail with ENOENT now that dataDir is guaranteed to exist.
+	token, err := store.Generate()
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if err := store.Persist(token); err != nil {
+		t.Fatalf("Persist on freshly-created dataDir: %v", err)
+	}
+	if _, err := store.WriteInitialTokenFile(token); err != nil {
+		t.Fatalf("WriteInitialTokenFile on freshly-created dataDir: %v", err)
+	}
+}
+
 func TestFingerprintIsStable(t *testing.T) {
 	a := Fingerprint("token-a")
 	b := Fingerprint("token-a")

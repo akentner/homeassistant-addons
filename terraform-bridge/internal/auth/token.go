@@ -83,7 +83,20 @@ type graceEntry struct {
 // endpoint. The returned error is only non-nil for I/O failures
 // OTHER than ErrNoToken — partial reads, permission errors, or a
 // corrupt hash file all surface as wrapped errors here.
+//
+// dataDir is created (os.MkdirAll, 0700) if it does not already
+// exist. Under real HA Supervisor deployment this is normally a
+// no-op — Supervisor bind-mounts /data before the container starts,
+// and dockerd auto-creates bind-mount target directories — but
+// NewFileTokenStore must not rely on that external guarantee: any
+// caller (main.go, tests, a plain `docker run` with no volume) gets
+// a working, self-contained store rather than a hard crash on the
+// first Persist/WriteInitialTokenFile call.
 func NewFileTokenStore(dataDir string) (*TokenStore, error) {
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		return nil, fmt.Errorf("auth: mkdir data dir: %w", err)
+	}
+
 	s := &TokenStore{
 		dataDir:   dataDir,
 		tokenPath: filepath.Join(dataDir, "bridge-token"),

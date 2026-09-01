@@ -32,12 +32,30 @@ IMAGE_NAME="terraform-bridge:leak-$(date +%s)"
 CONTAINER_NAME="terraform-bridge-leak-test"
 FAKE_TOKEN="phase-9-fake-supervisor-token-do-not-use-in-prod"
 
+# A real, host-backed /data so the container has genuine persistent
+# storage (matching Supervisor's per-addon /data mount) instead of
+# relying on the image or docker-run to provide one. Also carries an
+# explicit bind_address + bind_allowed_subnets override: this smoke
+# test asserts token-leak/AUTH-05/OPS-01 invariants, NOT the
+# bind_address=auto Tailscale auto-detection (that has its own unit
+# tests in internal/auth/bind_test.go) — no CI runner has a
+# tailscale* interface, so "auto" would always fail bind resolution
+# before the bridge ever reaches the token store. 127.0.0.1 +
+# 127.0.0.0/8 satisfies ResolveBindAddress's explicit-IP +
+# bind_allowed_subnets path without needing Tailscale or
+# --network host.
+DATA_DIR="$(mktemp -d)"
+cat > "${DATA_DIR}/options.json" <<'JSON'
+{"bind_address":"127.0.0.1","bind_allowed_subnets":["127.0.0.0/8"]}
+JSON
+
 red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
 
 cleanup() {
     docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
     docker rmi  "${IMAGE_NAME}"       >/dev/null 2>&1 || true
+    rm -rf "${DATA_DIR}"              >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -52,14 +70,18 @@ docker build -t "${IMAGE_NAME}" \
              --build-arg "BRIDGE_VERSION=${BRIDGE_VERSION}" \
              "${BRIDGE_DIR}" >/dev/null 2>&1
 
-# Run with a fake SUPERVISOR_TOKEN. Touch GET / once during the capture
-# window so any request-logging middleware (Phase 10 OPS-01) also has a
-# chance to write a line we'd be checking.
+# Run with a fake SUPERVISOR_TOKEN and the /data override above. The
+# bridge binds to 127.0.0.1 only (see options.json above), so the GET
+# / touch below runs via `docker exec` (inside the container's own
+# network namespace) rather than through a host-mapped port — nothing
+# listens on an externally-reachable interface by design (bind_address
+# 0.0.0.0 is always refused; see PITFALLS S-4).
 docker run --rm -d --name "${CONTAINER_NAME}" \
            -e "SUPERVISOR_TOKEN=${FAKE_TOKEN}" \
-           -p 8124:8124 "${IMAGE_NAME}"
+           -v "${DATA_DIR}:/data" \
+           "${IMAGE_NAME}"
 sleep 2
-curl -sS --max-time 5 "http://localhost:8124/" >/dev/null 2>&1 || true
+docker exec "${CONTAINER_NAME}" curl -sS --max-time 5 "http://127.0.0.1:8124/" >/dev/null 2>&1 || true
 sleep 8
 
 # Pull the plaintext token out of the container before it stops
