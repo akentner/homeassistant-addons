@@ -27,6 +27,16 @@ CONTAINER_NAME_2="terraform-bridge-sighup"
 KEEP=0
 [[ "${1:-}" == "--keep" ]] && KEEP=1
 
+# Explicit bind_address override (mirrors verify-bridge-no-token-leak.sh):
+# CI runners have no tailscale* interface, so "auto" (the compiled-in
+# default) always fails bind resolution before the bridge ever starts
+# listening. 127.0.0.1 + 127.0.0.0/8 satisfies ResolveBindAddress's
+# explicit-IP path without needing Tailscale or --network host.
+DATA_DIR="$(mktemp -d)"
+cat > "${DATA_DIR}/options.json" <<'JSON'
+{"bind_address":"127.0.0.1","bind_allowed_subnets":["127.0.0.0/8"]}
+JSON
+
 red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
 yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
@@ -35,6 +45,7 @@ cleanup() {
     if [[ "${KEEP}" == "0" ]]; then
         docker rm -f "${CONTAINER_NAME_1}" "${CONTAINER_NAME_2}" >/dev/null 2>&1 || true
         docker rmi  "${IMAGE_NAME}"                   >/dev/null 2>&1 || true
+        rm -rf "${DATA_DIR}"                          >/dev/null 2>&1 || true
     fi
 }
 trap cleanup EXIT
@@ -72,9 +83,11 @@ if (( IMG_SIZE_BYTES > MAX_BYTES )); then
 fi
 green "   PASS: image size within cap"
 
-docker run --rm -d --name "${CONTAINER_NAME_1}" -p 8124:8124 "${IMAGE_NAME}"
+docker run --rm -d --name "${CONTAINER_NAME_1}" \
+           -v "${DATA_DIR}:/data" \
+           "${IMAGE_NAME}"
 sleep 1
-curl -sS --max-time 5 http://localhost:8124/ > /tmp/_bridge-get_root.json
+docker exec "${CONTAINER_NAME_1}" curl -sS --max-time 5 http://127.0.0.1:8124/ > /tmp/_bridge-get_root.json
 if ! jq -e '.bridge_version and .status and .msg' /tmp/_bridge-get_root.json >/dev/null; then
     red "   FAIL: GET / did not return the required JSON keys"
     cat /tmp/_bridge-get_root.json
@@ -112,7 +125,9 @@ green "   PASS: SIGTERM drain completed within deadline"
 
 # Stage 3: SIGHUP reopen (process stays alive)
 yellow "Stage 3: SIGHUP reopen (process must stay alive)"
-docker run --rm -d --name "${CONTAINER_NAME_2}" -p 8124:8124 "${IMAGE_NAME}"
+docker run --rm -d --name "${CONTAINER_NAME_2}" \
+           -v "${DATA_DIR}:/data" \
+           "${IMAGE_NAME}"
 sleep 1
 docker kill --signal=SIGHUP "${CONTAINER_NAME_2}"
 sleep 3
