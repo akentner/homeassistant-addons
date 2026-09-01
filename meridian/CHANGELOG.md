@@ -1,3 +1,21 @@
+## [1.66.0](https://github.com/rynfar/meridian/compare/meridian-v1.65.2...meridian-v1.66.0) (2026-08-31)
+
+### Features
+
+- cancel RLM subagent trees when the parent request aborts
+  ([99bedee](https://github.com/rynfar/meridian/commit/99bedeec7b9d212e36e2dd560d860ca48690419f))
+- cancel RLM subagent trees when the parent request aborts
+  ([ad55c22](https://github.com/rynfar/meridian/commit/ad55c22b5e79ac963dec6a695eb05e9d56178c83)), closes
+  [#902](https://github.com/rynfar/meridian/issues/902)
+- emit Retry-After and scope [1m] rate-limit benching per session
+  ([49e04d1](https://github.com/rynfar/meridian/commit/49e04d131a6b168986cef53b99780ef624a092ff))
+
+### Bug Fixes
+
+- **openai:** profile-aware model catalog, SSE keepalives, cached-token usage
+  ([#914](https://github.com/rynfar/meridian/issues/914))
+  ([a167bc1](https://github.com/rynfar/meridian/commit/a167bc1992b883787e33ae37b28fa9ecae8fe0f0))
+
 ## [1.65.2](https://github.com/rynfar/meridian/compare/meridian-v1.65.1...meridian-v1.65.2) (2026-08-31)
 
 ### Bug Fixes
