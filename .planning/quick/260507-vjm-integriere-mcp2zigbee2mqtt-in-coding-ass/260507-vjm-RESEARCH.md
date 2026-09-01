@@ -22,14 +22,12 @@ transport.
 
 ### Configuration (env vars)
 
-| Env Var           | Default       | Purpose                                                      |
-| ----------------- | ------------- | ------------------------------------------------------------ | ----- | ---- | ---- | ------ |
-| `MQTT_BROKER_URL` | —             | MQTT broker connection string (e.g. `mqtt://localhost:1883`) |
-| `MQTT_USERNAME`   | —             | MQTT auth username (optional)                                |
-| `MQTT_PASSWORD`   | —             | MQTT auth password (optional)                                |
-| `MQTT_BASE_TOPIC` | `zigbee2mqtt` | Root MQTT topic for Zigbee2MQTT messages                     |
-| `DB_PATH`         | —             | SQLite database file path                                    |
-| `LOG_LEVEL`       | `info`        | Verbosity: `silent                                           | error | warn | info | debug` |
+| Env Var | Default | Purpose | | ----------------- | ------------- |
+------------------------------------------------------------ | ----- | ---- | ---- | ------ | | `MQTT_BROKER_URL` | — |
+MQTT broker connection string (e.g. `mqtt://localhost:1883`) | | `MQTT_USERNAME` | — | MQTT auth username (optional) | |
+`MQTT_PASSWORD` | — | MQTT auth password (optional) | | `MQTT_BASE_TOPIC` | `zigbee2mqtt` | Root MQTT topic for
+Zigbee2MQTT messages | | `DB_PATH` | — | SQLite database file path | | `LOG_LEVEL` | `info` | Verbosity:
+`silent                                           | error | warn | info | debug` |
 
 ### Key Dependencies (native build required)
 

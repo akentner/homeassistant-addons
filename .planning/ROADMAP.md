@@ -65,8 +65,8 @@ SUPERVISOR_TOKEN-rotation-across-restart — empirical spike required in Phase 9
       `homeassistant_addon` CRUD round-trips against Bridge; data sources; prevent_destroy default; typed diagnostics
 - [ ] **Phase 14: Real-HA End-to-End Verification + Operator Documentation** — Empirical apply/destroy cycle against
       ha-nextgen (or haos-op3050-1); idempotency + drift observed; operator docs based on observed behavior
-- [x] **Phase 15: CI Hardening + Provider Install Workflow** — GitHub Actions build Bridge + test Provider workflows; (completed 2026-08-31)
-      `make install-provider` verified in CI; release-cycle end-to-end
+- [x] **Phase 15: CI Hardening + Provider Install Workflow** — GitHub Actions build Bridge + test Provider workflows;
+      (completed 2026-08-31) `make install-provider` verified in CI; release-cycle end-to-end
 
 ## Phase Details
 
@@ -356,7 +356,7 @@ Plans:
 | 12. Bridge Write API + Safety       | v1.3      | 0/TBD                                   | Not started         | —          |
 | 13. Provider + Resource + Data      | v1.3      | 0/TBD                                   | Not started         | —          |
 | 14. Real-HA E2E + Docs              | v1.3      | 0/TBD                                   | Not started         | —          |
-| 15. CI + Provider Install           | v1.3      | 0/3                                     | Complete    | 2026-08-31 |
+| 15. CI + Provider Install           | v1.3      | 0/3                                     | Complete            | 2026-08-31 |
 
 ---
 

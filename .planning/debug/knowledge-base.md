@@ -5,9 +5,30 @@ Resolved debug sessions. Used by `gsd-debugger` to surface known-pattern hypothe
 ---
 
 ## item-7-data-mkdir-gap — terraform-bridge verify-bridge-no-token-leak CI failure: missing /data mkdir + bind-address auto-detect gap
+
 - **Date:** 2026-09-01
-- **Error patterns:** could not read /data/initial-token from running container, No such container, bind_resolution_failed, auto-detect Tailscale interface, no tailscale* interface found in /sys/class/net, NewFileTokenStore, os.CreateTemp ENOENT, docker run --rm auto-removed container
-- **Root cause:** Two layered issues: (1) `NewFileTokenStore(dataDir)` in `terraform-bridge/internal/auth/token.go` never called `os.MkdirAll` on `dataDir`, so `Persist`/`WriteInitialTokenFile`/`Rotate` (all using `os.CreateTemp(dataDir, ...)`) would fail with ENOENT if the directory didn't already exist — a real defense-in-depth gap, but NOT the cause of the observed CI failure. (2) The actual cause: `main.go` calls `auth.ResolveBindAddress(opts.BindAddress, ...)` before `NewFileTokenStore` is ever reached; `bind_address` defaults to `"auto"`, which requires a `tailscale*` interface under `/sys/class/net`. `internal/verify-bridge-no-token-leak.sh`'s `docker run` never used `--network host` (production's `config.yaml host_network:true`, added in commit 680a1bf, was never mirrored into the test harness) and no GitHub Actions runner has Tailscale installed regardless of network mode — so the bridge always hit `bind_resolution_failed` and exited before ever calling the token store. The verify script's "could not read /data/initial-token" failure was a misleading downstream symptom of this earlier, unrelated crash.
-- **Fix:** (1) Added `os.MkdirAll(dataDir, 0o700)` as the first statement in `NewFileTokenStore`, covered by a new regression test `TestNewFileTokenStoreCreatesMissingDataDir`. (2) Updated `internal/verify-bridge-no-token-leak.sh` to mount a real host-backed `/data` dir (`mktemp -d`) containing an `options.json` with an explicit `bind_address=127.0.0.1` + `bind_allowed_subnets=["127.0.0.0/8"]` override, so the bridge takes the already-tested explicit-IP path instead of `"auto"` (no production code or `config.yaml` change). Since the bridge now binds loopback-only, the `GET /` smoke check runs via `docker exec ... curl` inside the container's own namespace instead of a host-mapped port (dropped the now-unusable `-p 8124:8124` mapping).
-- **Files changed:** terraform-bridge/internal/auth/token.go, terraform-bridge/internal/auth/token_test.go, internal/verify-bridge-no-token-leak.sh
+- **Error patterns:** could not read /data/initial-token from running container, No such container,
+  bind_resolution_failed, auto-detect Tailscale interface, no tailscale* interface found in /sys/class/net,
+  NewFileTokenStore, os.CreateTemp ENOENT, docker run --rm auto-removed container
+- **Root cause:** Two layered issues: (1) `NewFileTokenStore(dataDir)` in `terraform-bridge/internal/auth/token.go`
+  never called `os.MkdirAll` on `dataDir`, so `Persist`/`WriteInitialTokenFile`/`Rotate` (all using
+  `os.CreateTemp(dataDir, ...)`) would fail with ENOENT if the directory didn't already exist — a real defense-in-depth
+  gap, but NOT the cause of the observed CI failure. (2) The actual cause: `main.go` calls
+  `auth.ResolveBindAddress(opts.BindAddress, ...)` before `NewFileTokenStore` is ever reached; `bind_address` defaults
+  to `"auto"`, which requires a `tailscale*` interface under `/sys/class/net`.
+  `internal/verify-bridge-no-token-leak.sh`'s `docker run` never used `--network host` (production's
+  `config.yaml host_network:true`, added in commit 680a1bf, was never mirrored into the test harness) and no GitHub
+  Actions runner has Tailscale installed regardless of network mode — so the bridge always hit `bind_resolution_failed`
+  and exited before ever calling the token store. The verify script's "could not read /data/initial-token" failure was a
+  misleading downstream symptom of this earlier, unrelated crash.
+- **Fix:** (1) Added `os.MkdirAll(dataDir, 0o700)` as the first statement in `NewFileTokenStore`, covered by a new
+  regression test `TestNewFileTokenStoreCreatesMissingDataDir`. (2) Updated `internal/verify-bridge-no-token-leak.sh` to
+  mount a real host-backed `/data` dir (`mktemp -d`) containing an `options.json` with an explicit
+  `bind_address=127.0.0.1` + `bind_allowed_subnets=["127.0.0.0/8"]` override, so the bridge takes the already-tested
+  explicit-IP path instead of `"auto"` (no production code or `config.yaml` change). Since the bridge now binds
+  loopback-only, the `GET /` smoke check runs via `docker exec ... curl` inside the container's own namespace instead of
+  a host-mapped port (dropped the now-unusable `-p 8124:8124` mapping).
+- **Files changed:** terraform-bridge/internal/auth/token.go, terraform-bridge/internal/auth/token_test.go,
+  internal/verify-bridge-no-token-leak.sh
+
 ---

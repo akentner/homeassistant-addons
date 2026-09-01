@@ -85,7 +85,15 @@ Ingress, with extensible diagram rendering and optional Git sync.
   per-request slog records with OPS-01 mandatory fields (OPS-01), GET /healthz probing Supervisor via 2s timeout
   SupervisorClient (OPS-03) — Validated in Phase 10: auth-layer-structured-logging-healthcheck
 - ✓ CI hardening + Provider install workflow (TOFU-04) — `make install-provider` with DESTDIR override builds
-  `terraform-provider-homeassistant` from local source and installs to `${DESTDIR}${HOME}/.terraform.d/plugins/localhost/akentner/homeassistant/<version>/` for OpenTofu dev_overrides; `internal/verify-install-provider.sh` hermetic shell verifier; `.github/workflows/build-terraform-bridge.yml` (Bridge image build on push + tag, GHCR push via reusable `_build-template.yml`); `.github/workflows/test-terraform-provider.yml` (gofmt -l + go vet + go test on Provider, explicit `timeout-minutes: 10`); `.github/workflows/test-install-provider.yml` E2E (build + install + ephemeral fixture + `tofu init` + `tofu plan` with handshake check, `timeout-minutes: 15`); `GET /v1/version` Bridge handler + `tools/test-bridge-fixture/` stdlib-only HTTP simulator for the E2E handshake test — Validated in Phase 15: ci-hardening-provider-install-workflow
+  `terraform-provider-homeassistant` from local source and installs to
+  `${DESTDIR}${HOME}/.terraform.d/plugins/localhost/akentner/homeassistant/<version>/` for OpenTofu dev_overrides;
+  `internal/verify-install-provider.sh` hermetic shell verifier; `.github/workflows/build-terraform-bridge.yml` (Bridge
+  image build on push + tag, GHCR push via reusable `_build-template.yml`);
+  `.github/workflows/test-terraform-provider.yml` (gofmt -l + go vet + go test on Provider, explicit
+  `timeout-minutes: 10`); `.github/workflows/test-install-provider.yml` E2E (build + install + ephemeral fixture +
+  `tofu init` + `tofu plan` with handshake check, `timeout-minutes: 15`); `GET /v1/version` Bridge handler +
+  `tools/test-bridge-fixture/` stdlib-only HTTP simulator for the E2E handshake test — Validated in Phase 15:
+  ci-hardening-provider-install-workflow
 
 ### Active
 
@@ -170,8 +178,8 @@ This document evolves at phase transitions and milestone boundaries.
 ---
 
 _Last updated: 2026-08-31 — Milestone v1.3 Phase 15 complete: CI hardening + Provider install workflow (TOFU-04) — 11
-atomic commits across 3 plans: Makefile `install-provider` target + hermetic `verify-install-provider.sh`; three
-GitHub Actions workflows (Bridge build + Provider test + E2E `tofu init`/`tofu plan` handshake check); `GET /v1/version`
+atomic commits across 3 plans: Makefile `install-provider` target + hermetic `verify-install-provider.sh`; three GitHub
+Actions workflows (Bridge build + Provider test + E2E `tofu init`/`tofu plan` handshake check); `GET /v1/version`
 handler on Bridge + `tools/test-bridge-fixture/` CI-only simulator. Phase 15 is the LAST phase of v1.3 milestone —
 milestone complete pending live-HA E2E verification (Phase 14, deferred) and Phase 9 H-1/§10 spike transcripts (still
 needed for PROV-03 contingency resolution). v1.2 Phase 8 gap-closure (08-05) still pending user Cloudflare setup —
