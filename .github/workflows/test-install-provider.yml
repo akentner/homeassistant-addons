@@ -55,7 +55,7 @@ jobs:
       - name: Start test Bridge fixture (background)
         run: |
           ./tools/test-bridge-fixture/test-bridge-fixture \
-            --port $BRIDGE_PORT \
+            --port "$BRIDGE_PORT" \
             --repo-root "$GITHUB_WORKSPACE" &
           FIXTURE_PID=$!
           echo "FIXTURE_PID=$FIXTURE_PID" >> "$GITHUB_ENV"

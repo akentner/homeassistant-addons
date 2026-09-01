@@ -45,6 +45,7 @@ cleanup() {
     local exit_code=$?
     yellow ""
     yellow "── Cleanup: removing sentinel + local backup copy ──"
+    # shellcheck disable=SC2029 # intentional: local var expands client-side into remote ssh command, by design
     ssh "${HOST}" "rm -f /addon_configs/${ADDON_SLUG}/${SENTINEL_NAME}" >/dev/null 2>&1 || true
     rm -rf "${LOCAL_BACKUP:-/tmp/phase9-backup-${RUN_ID}.tar}" \
            "${BACKUP_DIR:-/tmp/phase9-backup-${RUN_ID}}" >/dev/null 2>&1 || true
@@ -66,6 +67,7 @@ blue ""
 
 # Pre-flight: confirm the target add-on is installed AND has addon_config:rw
 blue "── Pre-flight: verify target add-on has map: addon_config:rw ──"
+# shellcheck disable=SC2029 # intentional: local var expands client-side into remote ssh command, by design
 ADDON_INFO="$(ssh "${HOST}" sudo ha apps info "${ADDON_SLUG}" 2>&1)" || {
     red "  ✗ Add-on ${ADDON_SLUG} not installed on ${HOST}"
     red "    Install an add-on with map: addon_config:rw and re-run, e.g.:"
@@ -86,9 +88,12 @@ blue ""
 blue "── Step 1: write sentinel file under /addon_config inside ${ADDON_SLUG} ──"
 SENTINEL_HOST_DIR="/addon_configs/${ADDON_SLUG}"
 green "  ssh ${HOST} -- 'echo ${SENTINEL_DATA} > ${SENTINEL_HOST_DIR}/${SENTINEL_NAME}'"
+# shellcheck disable=SC2029 # intentional: local var expands client-side into remote ssh command, by design
 ssh "${HOST}" "echo '${SENTINEL_DATA}' > ${SENTINEL_HOST_DIR}/${SENTINEL_NAME}"
 green "  verifying sentinel exists on host at ${SENTINEL_HOST_DIR}/${SENTINEL_NAME}:"
+# shellcheck disable=SC2029 # intentional: local var expands client-side into remote ssh command, by design
 ssh "${HOST}" "ls -la ${SENTINEL_HOST_DIR}/${SENTINEL_NAME}"
+# shellcheck disable=SC2029 # intentional: local var expands client-side into remote ssh command, by design
 ssh "${HOST}" "cat ${SENTINEL_HOST_DIR}/${SENTINEL_NAME}"
 green "Step 1 complete: sentinel file written on host (visible to add-on container via bind mount)."
 
@@ -137,6 +142,7 @@ mkdir -p "${BACKUP_DIR}"
 green "  tar -xf '${LOCAL_BACKUP}' -C '${BACKUP_DIR}'"
 tar -xf "${LOCAL_BACKUP}" -C "${BACKUP_DIR}" 2>&1
 green "  backup root contents (first 30 entries):"
+# shellcheck disable=SC2012 # intentional: informational listing of our own generated filenames, not machine-parsed
 ls "${BACKUP_DIR}" | head -30
 green "Step 3 complete: backup unpacked locally."
 

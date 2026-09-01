@@ -54,6 +54,7 @@ blue ""
 # names add-on containers 'app_<slug>'. Verify the add-on is running first.
 green "Pre-flight: verify ${ADDON_SLUG} is running on ${HOST}"
 CONTAINER_NAME="app_${ADDON_SLUG}"
+# shellcheck disable=SC2029 # intentional: local var expands client-side into remote ssh command, by design
 if ! ssh "${HOST}" "sudo docker ps --format '{{.Names}}' | grep -qx '${CONTAINER_NAME}'"; then
     red "  Container ${CONTAINER_NAME} is not running on ${HOST}"
     red "  Start the add-on (ha addons start ${ADDON_SLUG}) or pass a different slug."
@@ -68,6 +69,7 @@ green "  Container ${CONTAINER_NAME} is running"
 # inside the container's PID namespace even with --privileged.
 CAPTURE_TOKEN() {
     local raw=""
+    # shellcheck disable=SC2029 # intentional: local var expands client-side into remote ssh command, by design
     raw="$(ssh "${HOST}" "sudo docker exec ${CONTAINER_NAME} env" 2>/dev/null \
         | grep '^SUPERVISOR_TOKEN=' || true)"
     raw="${raw#SUPERVISOR_TOKEN=}"
