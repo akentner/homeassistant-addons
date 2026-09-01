@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-09-01T14:34:45.090Z",
+  "phase": null,
+  "phase_name": null,
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "completed_tasks": [],
+  "remaining_tasks": [
+    {"id": 1, "name": "Run /gsd:quick to fix lint items 1-6 on main (see .continue-here.md for full list)", "status": "not_started"},
+    {"id": 2, "name": "Run /gsd:debug for item 7 (/data/initial-token bridge crash, commit 680a1bf)", "status": "not_started"}
+  ],
+  "blockers": [
+    {"description": "gsd-sdk in PATH resolves to /run/user/1000/fnm_multishells/.../bin/gsd-sdk (v0.1.0, no 'query' subcommand) instead of the working /mnt/c/Users/ak/.npm-global/gsd-sdk (also v0.1.0 but supports 'query'). GSD skills that shell out to 'gsd-sdk query ...' will fail with 'Unknown option' / usage errors until PATH order is fixed or the npm-global path is used explicitly.", "type": "technical", "workaround": "Call /mnt/c/Users/ak/.npm-global/gsd-sdk explicitly, or fix fish PATH ordering so npm-global precedes the fnm shim."}
+  ],
+  "human_actions_pending": [],
+  "decisions": [
+    {"decision": "Fix items 1-6 (mechanical lint fixes + 2 real script bugs) via /gsd:quick; fix item 7 (bridge startup crash, possible prod bug) separately via /gsd:debug", "rationale": "User's explicit split — item 7 needs deeper investigation as a potential production bug in terraform-bridge's token write path, not a mechanical fix", "phase": null}
+  ],
+  "uncommitted_files": [".planning/STATE.md (unexplained auto-modification, unrelated to this session's actual work — see note below, do not assume it reflects real progress changes)"],
+  "next_action": "Invoke /gsd:quick with the fix description for items 1-6 (full text preserved in .continue-here.md), then /gsd:debug for item 7.",
+  "context_notes": "No code changes made yet this session for the lint fixes — investigation/diagnosis only. All 7 root causes are fully diagnosed with exact file:line references; a fresh session does not need to re-diagnose, just execute the fixes."
+}
