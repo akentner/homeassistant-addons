@@ -8,7 +8,7 @@ ARG BRIDGE_VERSION=dev
 # Stage 1: Go build — produces a static binary that runs on Alpine/musl with
 # no libc/glibc mismatch (CGO_ENABLED=0). The full multi-stage pattern is what
 # keeps the runtime image under 60 MiB uncompressed (OPS-05).
-FROM golang:1.25-alpine AS builder
+FROM golang:1.27-alpine AS builder
 
 ARG BRIDGE_VERSION
 
