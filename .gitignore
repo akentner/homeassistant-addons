@@ -19,15 +19,10 @@
 .omo/
 skills-lock.json
 
-# GSD planning artifacts (research, quick, etc.)
-.planning/
-network-tools/.planning/
-
 # Python bytecode caches
 **/__pycache__/
 
 # GSD research artifacts
-.planning/research/
 internal/__pycache__/
 markdown-renderer/__pycache__/
 
