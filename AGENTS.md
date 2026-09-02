@@ -92,65 +92,22 @@ participate in auto-updates.
 
 ## 🛠️ Developer Workflows
 
-### Version Updates (Manual)
+### Version Updates
 
 The `update-version` script (`internal/update-version.py`, wrapped by `make update-version`) is the **only** supported
-way to change versions. It keeps `config.yaml`, `build.yaml`, and the README badge in sync and creates the matching git
-tag.
+way to change versions. Full reference — VERSION input formats, tag format, pre-push hook, cross-artifact bumping,
+worked examples — lives in **[`docs/UPDATE_VERSION.md`](docs/UPDATE_VERSION.md)**. AGENTS.md only summarises the
+critical points and common workflows below.
 
-**Choosing the right `VERSION=` value — the format determines the bump category:**
+Critical points:
 
-| Input format                                      | Subpatch behavior                                       | Use when…                                                                |
-| ------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `X.Y.Z`                                           | **Resets to `-0`** (e.g. `1.7.2-1` → `1.7.2-0`)         | Upstream binary/library update, new feature, breaking change → SemVer    |
-| `X.Y.Z-N`                                         | **Preserved as-is** (e.g. `1.0.0-1` → `1.0.0-2`)        | Local-only change (Dockerfile-only, ConfigFlow-only, DOCS) → subpatch    |
-| `X.Y.Z-{alpha\|beta\|rc}N`                        | Pre-release; `build.yaml` gets matching suffix too      | Pre-release builds                                                       |
-
-⚠️ **Critical:** passing `VERSION=1.0.0` on an addon whose config is already `1.0.0-2` will **silently reset the
-subpatch to `-0`**. If you want to preserve an existing subpatch (the common case for local-only fixes after a SemVer
-release), always pass the full `X.Y.Z-N`.
-
-**Concrete examples:**
-
-```bash
-# Upstream release / SemVer bump: resets subpatch to -0
-make update-version ADDON=<addon-name> VERSION=1.7.2
-
-# Local-only fix / subpatch bump: pass the full X.Y.Z-N — preserves the subpatch
-make update-version ADDON=<addon-name> VERSION=1.0.0-2
-
-# Subpatch bump without touching the git tag (e.g. iterating locally; tag is pushed later)
-make update-version ADDON=<addon-name> VERSION=1.0.0-2 NO_TAG=yes NO_PUSH=yes
-
-# With GitHub release verification (head-checks that v1.7.2 exists on GitHub first)
-make update-version ADDON=<addon-name> VERSION=1.7.2 CHECK_RELEASE=yes
-
-# Skip tag creation entirely (e.g. emergency patch; tag must be created/pushed manually)
-make update-version ADDON=<addon-name> VERSION=1.7.2 NO_TAG=yes
-
-# Dry-run (shows what would change without modifying files)
-# IMPORTANT: --dry-run MUST go to the script directly. `make ... --dry-run` is broken
-# because make intercepts --dry-run and exits without invoking the script.
-./internal/update-version.py <addon-name> 1.7.2 --dry-run
-#                                                     ^^^^^^^^^^ pass to the script, NOT to make
-```
-
-**What this does:** Python script updates `config.yaml`, `build.yaml`, and the README badge, then **creates and pushes
-the `<addon>/v<version>` git tag** by default. Tag format: `coding-assistants/v1.0.0-2` (subpatch is included so the
-git tag matches the OCI image tag `CONFIG_VERSION` that the build workflow publishes — see
-`.github/workflows/_build-template.yml:75-78`). Images are built by the per-add-on workflows (`build-<addon>.yml`, each
-calling the reusable `_build-template.yml`), which fire on a `push` to `main` touching `<addon>/**` AND on tag push.
-Without the tag, the HA supervisor sees the new version in the store but the image at `ghcr.io` does not exist → 404
-→ "Unknown error, see supervisor logs".
-
-A pre-push hook (`internal/check-version-tags.sh`, installed by `make init`), verifies that any addon whose
-`config.yaml`/`build.yaml` is being pushed has a matching `<addon>/v<config_version>` tag locally or on origin. For
-backwards compatibility the hook also accepts the legacy `<addon>/v<build_version>` format (no subpatch) so older
-addons don't break their pushes during the transition. Bypass with `git push --no-verify` only in emergencies.
-
-If config.yaml is already at the target version, the script is a no-op (prints warnings, exits 0). This is the canonical
-way to **confirm** a subpatch bump — the manual-editing instruction below is deprecated; prefer the tool even for
-subpatch-only changes so the bump is recorded the same way as a SemVer bump.
+- `VERSION=X.Y.Z` resets subpatch to `-0`. To preserve an existing `-N`, pass the full `X.Y.Z-N`.
+- Git tags use `<addon>/v<config_version>` (subpatch-suffixed, matches OCI image tag). The pre-push hook also accepts
+  the legacy `v<build_version>` form for older addons.
+- `make update-version ADDON=… VERSION=…` creates and pushes the tag by default. Use `NO_TAG=yes NO_PUSH=yes` for
+  local iteration; create+push the tag later when shipping.
+- For dry-run, invoke the script directly (`./internal/update-version.py <addon> <ver> --dry-run`) — `make --dry-run`
+  doesn't reach the script because make intercepts the flag.
 
 ### Code Quality & Validation
 
@@ -223,20 +180,20 @@ make validate-addons        # Validates add-on configs
 ### Updating an add-on to a new upstream release
 
 1. **Don't edit versions manually.** Use: `make update-version ADDON=<addon-name> VERSION=X.Y.Z`
-2. Script automatically updates all three version files and badges
-3. Pre-commit hook validates consistency before commit
+2. Script automatically updates all three version files and badges, then creates and pushes the git tag
+3. Pre-commit hook validates consistency before commit. See [`docs/UPDATE_VERSION.md`](docs/UPDATE_VERSION.md) for
+   the full reference (SemVer vs. subpatch, tag format, cross-artifact bumping for `terraform-bridge`, …)
 
 ### Fixing a bug in the add-on (not upstream)
 
 1. Make code changes in `{addon-name}/` (shell, Dockerfile, etc.)
-2. Bump subpatch via the tool — preserves consistency and records the change canonically:
+2. Bump subpatch via the tool with `NO_TAG=yes NO_PUSH=yes` (keeps iteration local):
    ```bash
    make update-version ADDON=<addon-name> VERSION=1.7.3-1 NO_TAG=yes NO_PUSH=yes
    ```
-   The `VERSION=X.Y.Z-N` format preserves the current SemVer base (`build.yaml` is NOT changed). `NO_TAG=yes NO_PUSH=yes`
-   keeps the bump local; create and push the tag later when you're ready to ship.
+   The `VERSION=X.Y.Z-N` format preserves the current SemVer base (`build.yaml` is NOT changed).
 3. Pre-commit hook validates the new version is consistent
-4. Commit normally
+4. Commit normally. Push the tag later (see [`docs/UPDATE_VERSION.md`](docs/UPDATE_VERSION.md)) when shipping.
 
 ### Adding markdown documentation
 
@@ -247,7 +204,8 @@ make validate-addons        # Validates add-on configs
 ## 🚨 Critical Gotchas
 
 1. **Never manually edit versions.** Use `make update-version` — even for subpatch bumps (pass `VERSION=X.Y.Z-N`).
-   The three-file sync is enforced by validation, so manual changes will fail pre-commit.
+   The three-file sync is enforced by validation, so manual changes will fail pre-commit. Full reference:
+   [`docs/UPDATE_VERSION.md`](docs/UPDATE_VERSION.md).
 
 2. **Subpatch always resets to -0 on upstream update.** When upstream releases new version, the automation sets subpatch
    back to `-0`. This is intentional—local fixes are temporary.

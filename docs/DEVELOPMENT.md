@@ -52,24 +52,21 @@ VERSION: "1.3.1"
 
 ## Version Update Tool
 
-For manual version updates an automated tool is available:
+For manual version updates use the `update-version` tool. Full reference — input formats, tag format, pre-push hook,
+cross-artifact bumping, worked examples — lives in **[`docs/UPDATE_VERSION.md`](UPDATE_VERSION.md)**. This section
+keeps only the minimal pointer.
+
+Quick reference:
 
 ```bash
-# Simple version update
+# SemVer bump (resets subpatch to -0)
 make update-version ADDON=<addon-name> VERSION=1.7.2
 
-# With GitHub Release Check
-make update-version ADDON=<addon-name> VERSION=1.7.2 CHECK_RELEASE=yes
-
-# Dry-run mode (show only, no changes)
-./internal/update-version.py <addon-name> 1.7.2 --dry-run
+# Subpatch bump (preserves subpatch)
+make update-version ADDON=<addon-name> VERSION=1.7.2-1
 ```
 
-The tool automatically updates:
-
-- `config.yaml`: `version: "1.7.2-0"`
-- `build.yaml`: `VERSION: "1.7.2"`
-- `README.md`: Badges and release links
+The tool updates `config.yaml`, `build.yaml`, and `README.md` badges, then creates and pushes the git tag.
 
 ## Auto-Update System
 
