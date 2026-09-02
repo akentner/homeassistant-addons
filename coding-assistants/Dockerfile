@@ -1,14 +1,14 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM $BUILD_FROM
 
-# System packages (Debian Bookworm)
+# System packages (Debian Bookworm) — nodejs is installed separately below
+# to pin to Node 24.x via NodeSource (Bookworm's main repo only ships Node 18).
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash tmux \
     openssh-server openssh-client \
     nginx \
     curl wget git jq make \
-    nodejs npm \
     ripgrep fd-find fzf bat shellcheck \
     python3 \
     gh \
@@ -20,6 +20,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && sed -i '/en_US.UTF-8/s/^# //' /etc/locale.gen \
     && locale-gen \
     && rm -rf /var/lib/apt/lists/*
+
+# Node.js 24.x via NodeSource — gsd-core@1.12.0 requires Node >=24
+# (Debian Bookworm's main repo only ships Node 18, and Debian does not backport newer Node).
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && node --version \
+    && npm --version
 
 # yq — not in Debian repos, install from GitHub
 RUN YQ_VER=$(curl -sf https://api.github.com/repos/mikefarah/yq/releases/latest | jq -r '.tag_name') \

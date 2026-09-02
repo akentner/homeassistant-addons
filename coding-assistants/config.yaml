@@ -1,6 +1,6 @@
 name: "Coding Assistants"
 description: "Terminal with OpenCode and GitHub Copilot CLI — SSH + web terminal"
-version: "1.0.0-1"
+version: "1.0.0-2"
 slug: "coding_assistants"
 init: false
 hassio_api: true
