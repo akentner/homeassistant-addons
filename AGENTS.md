@@ -104,8 +104,8 @@ Critical points:
 - `VERSION=X.Y.Z` resets subpatch to `-0`. To preserve an existing `-N`, pass the full `X.Y.Z-N`.
 - Git tags use `<addon>/v<config_version>` (subpatch-suffixed, matches OCI image tag). The pre-push hook also accepts
   the legacy `v<build_version>` form for older addons.
-- `make update-version ADDON=… VERSION=…` creates and pushes the tag by default. Use `NO_TAG=yes NO_PUSH=yes` for
-  local iteration; create+push the tag later when shipping.
+- `make update-version ADDON=… VERSION=…` creates and pushes the tag by default. Use `NO_TAG=yes NO_PUSH=yes` for local
+  iteration; create+push the tag later when shipping.
 - For dry-run, invoke the script directly (`./internal/update-version.py <addon> <ver> --dry-run`) — `make --dry-run`
   doesn't reach the script because make intercepts the flag.
 
@@ -181,17 +181,20 @@ make validate-addons        # Validates add-on configs
 
 1. **Don't edit versions manually.** Use: `make update-version ADDON=<addon-name> VERSION=X.Y.Z`
 2. Script automatically updates all three version files and badges, then creates and pushes the git tag
-3. Pre-commit hook validates consistency before commit. See [`docs/UPDATE_VERSION.md`](docs/UPDATE_VERSION.md) for
-   the full reference (SemVer vs. subpatch, tag format, cross-artifact bumping for `terraform-bridge`, …)
+3. Pre-commit hook validates consistency before commit. See [`docs/UPDATE_VERSION.md`](docs/UPDATE_VERSION.md) for the
+   full reference (SemVer vs. subpatch, tag format, cross-artifact bumping for `terraform-bridge`, …)
 
 ### Fixing a bug in the add-on (not upstream)
 
 1. Make code changes in `{addon-name}/` (shell, Dockerfile, etc.)
 2. Bump subpatch via the tool with `NO_TAG=yes NO_PUSH=yes` (keeps iteration local):
+
    ```bash
    make update-version ADDON=<addon-name> VERSION=1.7.3-1 NO_TAG=yes NO_PUSH=yes
    ```
+
    The `VERSION=X.Y.Z-N` format preserves the current SemVer base (`build.yaml` is NOT changed).
+
 3. Pre-commit hook validates the new version is consistent
 4. Commit normally. Push the tag later (see [`docs/UPDATE_VERSION.md`](docs/UPDATE_VERSION.md)) when shipping.
 
@@ -203,8 +206,8 @@ make validate-addons        # Validates add-on configs
 
 ## 🚨 Critical Gotchas
 
-1. **Never manually edit versions.** Use `make update-version` — even for subpatch bumps (pass `VERSION=X.Y.Z-N`).
-   The three-file sync is enforced by validation, so manual changes will fail pre-commit. Full reference:
+1. **Never manually edit versions.** Use `make update-version` — even for subpatch bumps (pass `VERSION=X.Y.Z-N`). The
+   three-file sync is enforced by validation, so manual changes will fail pre-commit. Full reference:
    [`docs/UPDATE_VERSION.md`](docs/UPDATE_VERSION.md).
 
 2. **Subpatch always resets to -0 on upstream update.** When upstream releases new version, the automation sets subpatch

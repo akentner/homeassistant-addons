@@ -7,11 +7,11 @@ for `sed` to edit a version anywhere in an addon's `config.yaml`, `build.yaml`, 
 
 The script keeps three files in sync and creates the matching git tag:
 
-| File             | Field updated         | Example                    |
-| ---------------- | --------------------- | -------------------------- |
-| `config.yaml`    | top-level `version:`  | `version: "1.0.0-2"`      |
-| `build.yaml`     | nested `args.VERSION` | `VERSION: "1.0.0"`        |
-| `README.md`      | shield badge + tree link | `v1.0.0`                |
+| File          | Field updated            | Example              |
+| ------------- | ------------------------ | -------------------- |
+| `config.yaml` | top-level `version:`     | `version: "1.0.0-2"` |
+| `build.yaml`  | nested `args.VERSION`    | `VERSION: "1.0.0"`   |
+| `README.md`   | shield badge + tree link | `v1.0.0`             |
 
 After updating files, it **creates and pushes the git tag `<addon>/v<config_version>`** (subpatch-suffixed) by default.
 See [Git tag format](#git-tag-format) below for why.
@@ -20,11 +20,11 @@ See [Git tag format](#git-tag-format) below for why.
 
 The format of the input determines the bump category. Pick wrong and the tool will silently do the wrong thing:
 
-| Input format                            | Subpatch behavior                                       | Use when…                                                                |
-| --------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `X.Y.Z`                                 | **Resets to `-0`** (e.g. `1.0.0-2` → `1.0.0-0`)         | Upstream binary/library update, new feature, breaking change → SemVer    |
-| `X.Y.Z-N`                               | **Preserved as-is** (e.g. `1.0.0-1` → `1.0.0-2`)        | Local-only change (Dockerfile-only, ConfigFlow-only, DOCS) → subpatch    |
-| `X.Y.Z-{alpha\|beta\|rc}N`              | Pre-release; `build.yaml` carries matching suffix too  | Pre-release builds                                                       |
+- `X.Y.Z` — **resets subpatch to `-0`** (e.g. `1.0.0-2` → `1.0.0-0`). Use for an upstream binary/library update, a new
+  feature, or breaking change (SemVer).
+- `X.Y.Z-N` — **preserves the existing subpatch** (e.g. `1.0.0-1` → `1.0.0-2`). Use for a local-only change
+  (Dockerfile-only, ConfigFlow-only, DOCS-only).
+- `X.Y.Z-{alpha|beta|rc}N` — pre-release. `build.yaml` carries the matching suffix too.
 
 ⚠️ **Critical:** passing `VERSION=1.0.0` on an addon whose `config.yaml` is already `1.0.0-2` will **silently reset the
 subpatch to `-0`**. If you want to preserve an existing subpatch (the common case for local-only fixes after a SemVer
@@ -62,6 +62,7 @@ matching the OCI image tag (`CONFIG_VERSION`) that the build workflow publishes.
 `.github/workflows/_build-template.yml:75-78`.
 
 Examples:
+
 - `coding-assistants/v1.0.0-2` — subpatch-suffixed (current standard)
 - `coding-assistants/v1.0.0` — legacy format, still accepted by the pre-push hook for backwards compatibility
 
@@ -73,10 +74,11 @@ and push the tag later — without it, the HA supervisor refresh sees the new ve
 
 A pre-push hook (`internal/check-version-tags.sh`, installed by `make init`) verifies that any addon whose
 `config.yaml`/`build.yaml` is being pushed has a matching `<addon>/v<config_version>` tag locally or on origin. For
-backwards compatibility the hook also accepts the legacy `<addon>/v<build_version>` format (no subpatch) so older
-addons don't break their pushes during the transition. Bypass with `git push --no-verify` only in emergencies.
+backwards compatibility the hook also accepts the legacy `<addon>/v<build_version>` format (no subpatch) so older addons
+don't break their pushes during the transition. Bypass with `git push --no-verify` only in emergencies.
 
 Tag lookup chain (in order):
+
 1. Local `refs/tags/<tag>` (after `git fetch --tags`)
 2. Local `refs/remotes/origin/<tag>`
 3. Network fallback: `git ls-remote origin refs/tags/<tag>`
@@ -92,9 +94,9 @@ subpatch-only changes so the bump is recorded the same way as a SemVer bump.
 
 ## Cross-artifact bumping (terraform-bridge)
 
-When bumping `terraform-bridge`, the script also touches `terraform-provider-homeassistant/build.yaml`'s `VERSION`
-field with the same `X.Y.Z`. The Provider has no `config.yaml`, no `README.md`, and no git tag of its own — it's a
-co-located Go module, not a separately-released add-on. Both Bridge and Provider share one release cycle.
+When bumping `terraform-bridge`, the script also touches `terraform-provider-homeassistant/build.yaml`'s `VERSION` field
+with the same `X.Y.Z`. The Provider has no `config.yaml`, no `README.md`, and no git tag of its own — it's a co-located
+Go module, not a separately-released add-on. Both Bridge and Provider share one release cycle.
 
 ## Worked example — subpatch bump (the common case after a SemVer release)
 

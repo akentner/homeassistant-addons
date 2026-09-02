@@ -53,8 +53,8 @@ VERSION: "1.3.1"
 ## Version Update Tool
 
 For manual version updates use the `update-version` tool. Full reference — input formats, tag format, pre-push hook,
-cross-artifact bumping, worked examples — lives in **[`docs/UPDATE_VERSION.md`](UPDATE_VERSION.md)**. This section
-keeps only the minimal pointer.
+cross-artifact bumping, worked examples — lives in **[`docs/UPDATE_VERSION.md`](UPDATE_VERSION.md)**. This section keeps
+only the minimal pointer.
 
 Quick reference:
 
