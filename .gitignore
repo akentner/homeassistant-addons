@@ -31,3 +31,6 @@ markdown-renderer/__pycache__/
 terraform-provider-homeassistant/terraform-provider-homeassistant
 *.test
 *.out
+
+# Very-early / idea-stage projects — not runnable, kept locally only
+info_hub/
