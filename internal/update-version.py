@@ -168,7 +168,7 @@ def update_readme_md(addon_dir: Path, new_version: str, dry_run: bool = False) -
                 print(f"   • {change}")
             return True, changes
         else:
-            print(f"⚠️  No version patterns found in {readme_file}")
+            print(f"⚠️  No changes needed in {readme_file.name} (already at target version)")
             return False, []
 
     except Exception as e:
