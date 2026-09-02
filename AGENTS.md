@@ -136,14 +136,17 @@ make update-version ADDON=<addon-name> VERSION=1.7.2 NO_TAG=yes
 ```
 
 **What this does:** Python script updates `config.yaml`, `build.yaml`, and the README badge, then **creates and pushes
-the `<addon>/v<version>` git tag** by default. Tag format: `coding-assistants/v1.0.0-2` (subpatch is included). Images
-are built by the per-add-on workflows (`build-<addon>.yml`, each calling the reusable `_build-template.yml`), which fire
-on a `push` to `main` touching `<addon>/**` AND on tag push. Without the tag, the HA supervisor sees the new version in
-the store but the image at `ghcr.io` does not exist → 404 → "Unknown error, see supervisor logs".
+the `<addon>/v<version>` git tag** by default. Tag format: `coding-assistants/v1.0.0-2` (subpatch is included so the
+git tag matches the OCI image tag `CONFIG_VERSION` that the build workflow publishes — see
+`.github/workflows/_build-template.yml:75-78`). Images are built by the per-add-on workflows (`build-<addon>.yml`, each
+calling the reusable `_build-template.yml`), which fire on a `push` to `main` touching `<addon>/**` AND on tag push.
+Without the tag, the HA supervisor sees the new version in the store but the image at `ghcr.io` does not exist → 404
+→ "Unknown error, see supervisor logs".
 
 A pre-push hook (`internal/check-version-tags.sh`, installed by `make init`), verifies that any addon whose
-`config.yaml`/`build.yaml` is being pushed has a matching `<addon>/v<version>` tag locally or on origin. Bypass with
-`git push --no-verify` only in emergencies.
+`config.yaml`/`build.yaml` is being pushed has a matching `<addon>/v<config_version>` tag locally or on origin. For
+backwards compatibility the hook also accepts the legacy `<addon>/v<build_version>` format (no subpatch) so older
+addons don't break their pushes during the transition. Bypass with `git push --no-verify` only in emergencies.
 
 If config.yaml is already at the target version, the script is a no-op (prints warnings, exits 0). This is the canonical
 way to **confirm** a subpatch bump — the manual-editing instruction below is deprecated; prefer the tool even for

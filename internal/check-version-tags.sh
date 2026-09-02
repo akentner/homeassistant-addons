@@ -48,49 +48,59 @@ fi
 
 errored=0
 
+# tag_exists: echoes 0 if the tag is reachable via local refs, origin remote
+# refs (after `git fetch --tags`), or `git ls-remote` against origin.
+tag_exists() {
+    local t="$1"
+    git rev-parse --verify --quiet "refs/tags/$t" >/dev/null 2>&1 \
+        || git rev-parse --verify --quiet "refs/remotes/origin/$t" >/dev/null 2>&1 \
+        || git ls-remote --exit-code --tags origin "refs/tags/$t" >/dev/null 2>&1
+}
+
 while IFS= read -r addon_dir; do
     [[ -n "$addon_dir" ]] || continue
 
-    # The git tag is named after the base version in build.yaml (args.VERSION),
-    # NOT after config.yaml which carries an additional '-N' subpatch suffix.
-    # update-version.py creates the tag from the make-release CLI argument,
-    # which is the base version (matching build.yaml).
     # Anchor VERSION: with leading-whitespace tolerance (it's nested under
     # args: in terraform-bridge/build.yaml). Unanchored grep also matches
     # BRIDGE_VERSION: / CHROMIUM_VERSION: etc., producing a multi-line
     # BUILD_VERSION that breaks the tag lookup below.
-    version=$(grep -E '^[[:space:]]*VERSION:' "$addon_dir/build.yaml" | sed 's/^[[:space:]]*VERSION: *"\([^"]*\)".*/\1/' | head -1)
-    [[ -z "$version" ]] && continue
+    build_version=$(grep -E '^[[:space:]]*VERSION:' "$addon_dir/build.yaml" | sed 's/^[[:space:]]*VERSION: *"\([^"]*\)".*/\1/' | head -1)
+    # config.yaml carries the subpatch suffix (X.Y.Z-N). Grep tolerant of
+    # quoted/unquoted values; head -1 protects against multi-line matches.
+    config_version=$(grep -E '^[[:space:]]*version:' "$addon_dir/config.yaml" | sed -E 's/^[[:space:]]*version:[[:space:]]*"?([^"]+)"?.*/\1/' | head -1)
+    [[ -z "$build_version" && -z "$config_version" ]] && continue
 
-    tag="${addon_dir}/v${version}"
+    # Tag format changed to include the subpatch suffix so it matches the OCI
+    # image tag (CONFIG_VERSION) the build workflow publishes. Older releases
+    # only tagged <addon>/v<build_version> (no suffix) — accept both formats
+    # so a transition doesn't break pushes for legacy addons.
+    primary_tag="${addon_dir}/v${config_version}"
+    legacy_tag="${addon_dir}/v${build_version}"
 
-    if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null 2>&1; then
-        echo "✓ $addon_dir: tag $tag exists locally"
+    if tag_exists "$primary_tag"; then
+        echo "✓ $addon_dir: tag $primary_tag exists"
         continue
     fi
-
-    if git rev-parse --verify --quiet "refs/remotes/origin/$tag" >/dev/null 2>&1; then
-        echo "✓ $addon_dir: tag $tag exists on origin (remote ref)"
-        continue
-    fi
-
-    if git ls-remote --exit-code --tags origin "refs/tags/$tag" 2>/dev/null | grep -q "$tag"; then
-        echo "✓ $addon_dir: tag $tag exists on origin (ls-remote)"
+    if [[ "$primary_tag" != "$legacy_tag" ]] && tag_exists "$legacy_tag"; then
+        echo "✓ $addon_dir: tag $legacy_tag exists (legacy format, no subpatch)"
         continue
     fi
 
     echo ""
-    echo "❌ $addon_dir: version '$version' has no matching tag ($tag)"
+    echo "❌ $addon_dir: no matching tag for version '$config_version' (expected $primary_tag)"
+    if [[ -n "$build_version" && "$build_version" != "$config_version" ]]; then
+        echo "   Legacy format $legacy_tag also missing."
+    fi
     echo ""
     echo "   The build workflow for $addon_dir triggers on a '<addon>/v*' tag push."
-    echo "   Without $tag, HA-Store-Refresh sees the new version but the"
+    echo "   Without $primary_tag, HA-Store-Refresh sees the new version but the"
     echo "   Docker image at ghcr.io doesn't exist → 404 on update."
     echo ""
     echo "   Fix options:"
-    echo "     make release ADDON=$addon_dir VERSION=$version"
+    echo "     make release ADDON=$addon_dir VERSION=$config_version"
     echo "     # or manually:"
-    echo "     git tag -a $tag -m '$addon_dir: $version'"
-    echo "     git push origin $tag"
+    echo "     git tag -a $primary_tag -m '$addon_dir: $config_version'"
+    echo "     git push origin $primary_tag"
     echo ""
     errored=1
 done <<< "$modified_addons"

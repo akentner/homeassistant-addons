@@ -339,16 +339,20 @@ Examples:
     success_count = 0
     total_files = 3
 
-    success, old_v, new_v = update_config_yaml(addon_dir, args.new_version, args.dry_run)
-    if success:
+    # Use distinct variable names so the tag (created later from config_new)
+    # carries the subpatch-suffixed config version, not the build.yaml base.
+    # The git tag should match the OCI image tag (CONFIG_VERSION in the build
+    # workflow), and image tags include subpatch — so do the git tags.
+    config_success, config_old, config_new = update_config_yaml(addon_dir, args.new_version, args.dry_run)
+    if config_success:
         success_count += 1
 
-    success, old_v, new_v = update_build_yaml(addon_dir, args.new_version, args.dry_run)
-    if success:
+    build_success, build_old, build_new = update_build_yaml(addon_dir, args.new_version, args.dry_run)
+    if build_success:
         success_count += 1
 
-    success, changes = update_readme_md(addon_dir, args.new_version, args.dry_run)
-    if success:
+    readme_success, readme_changes = update_readme_md(addon_dir, args.new_version, args.dry_run)
+    if readme_success:
         success_count += 1
 
     # ── Cross-artifact Provider bump (TOFU-03: Bridge+Provider share one release cycle) ──
@@ -388,7 +392,10 @@ Examples:
     # no-op confirmations shouldn't silently drop the tag request.
     if args.dry_run:
         if not args.no_tag:
-            print(f"\n🏷️  Would also create and push tag {args.addon_name}/v{new_v}")
+            # Use config_new (with subpatch) so the tag matches the OCI image tag
+            # the build workflow publishes. See comment at the update_*() calls
+            # above for why this is the canonical source.
+            print(f"\n🏷️  Would also create and push tag {args.addon_name}/v{config_new}")
         return 0
 
     if success_count == total_files:
@@ -402,7 +409,7 @@ Examples:
         print()
         print("🏷️  Creating and pushing git tag...")
         tag_ok = create_and_push_tag(
-            new_v,
+            config_new,
             args.addon_name,
             push=not args.no_push,
             dry_run=False,
