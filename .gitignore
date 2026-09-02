@@ -34,3 +34,6 @@ terraform-provider-homeassistant/terraform-provider-homeassistant
 
 # Very-early / idea-stage projects — not runnable, kept locally only
 info_hub/
+
+# zigbee2mqtt MCP runtime DB (created by zigbee2mqtt-mcp on first scan, regenerated)
+zigbee2mqtt.db
