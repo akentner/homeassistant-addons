@@ -44,7 +44,7 @@ See [DOCS.md][docs] for all configuration options.
 
 [authentik]: https://goauthentik.io
 [docs]: https://github.com/akentner/homeassistant-addons/blob/main/authentik/DOCS.md
-[release-shield]: https://img.shields.io/badge/version-v2026.8.0-blue.svg
+[release-shield]: https://img.shields.io/badge/version-v2026.8.1-blue.svg
 [release]: https://github.com/goauthentik/authentik/releases/tag/version%2F2026.5.3
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
