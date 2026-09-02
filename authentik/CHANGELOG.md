@@ -1,4 +1,4 @@
-See https://docs.goauthentik.io/docs/releases/2026.8#fixed-in-202681
+See <https://docs.goauthentik.io/docs/releases/2026.8#fixed-in-202681>
 
 See <https://docs.goauthentik.io/docs/releases/2026.8>
 
