@@ -218,13 +218,30 @@ def create_and_push_tag(version: str, addon_name: str, push: bool = True, dry_ru
             print(f"   [DRY RUN] Would push: git push origin {tag}")
         return True
 
-    existing = subprocess.run(
+    existing_local = subprocess.run(
         ["git", "rev-parse", "--verify", f"refs/tags/{tag}"],
         capture_output=True, text=True
     )
-    if existing.returncode == 0:
-        print(f"⚠️  Tag {tag} already exists locally — skipping create (will push if --tag)")
-        if push:
+    # Check origin for the tag. refs/remotes/origin/<tag> is only populated after
+    # `git fetch --tags`, so fall back to ls-remote which queries the registry.
+    existing_remote_ref = subprocess.run(
+        ["git", "rev-parse", "--verify", f"refs/remotes/origin/{tag}"],
+        capture_output=True, text=True
+    )
+    existing_remote_ls = subprocess.run(
+        ["git", "ls-remote", "--exit-code", "--tags", "origin", f"refs/tags/{tag}"],
+        capture_output=True, text=True
+    )
+    remote_exists = existing_remote_ref.returncode == 0 or existing_remote_ls.returncode == 0
+    if existing_local.returncode == 0 or remote_exists:
+        source = "locally" if existing_local.returncode == 0 else "on origin"
+        print(f"⚠️  Tag {tag} already exists {source} — skipping create (won't force-push)")
+        # If the tag exists locally but not on origin, push it; if it's only on
+        # origin there's nothing to do. Force-push is intentionally avoided —
+        # it would re-associate an existing SemVer tag with a subpatch commit,
+        # which is wrong (the build workflow fires on tag push and would publish
+        # the wrong image).
+        if push and existing_local.returncode == 0 and not remote_exists:
             push_result = subprocess.run(
                 ["git", "push", "origin", tag],
                 capture_output=True, text=True
@@ -366,41 +383,42 @@ Examples:
     print()
     print(f"📊 {'Would update' if args.dry_run else 'Updated'} {success_count}/{total_files} files")
 
-    if success_count == total_files:
-        print("🎉 All files updated successfully!" if not args.dry_run else "🎉 All files would be updated!")
-
-        if args.dry_run:
-            if not args.no_tag:
-                print(f"\n🏷️  Would also create and push tag {args.addon_name}/v{new_v}")
-            return 0
-
+    # Tag creation is independent of how many files needed updating. Subpatch-only
+    # bumps only touch config.yaml (build.yaml/README stay on the same SemVer), and
+    # no-op confirmations shouldn't silently drop the tag request.
+    if args.dry_run:
         if not args.no_tag:
-            print()
-            print("🏷️  Creating and pushing git tag...")
-            tag_ok = create_and_push_tag(
-                new_v,
-                args.addon_name,
-                push=not args.no_push,
-                dry_run=False,
-            )
-            if not tag_ok:
-                print()
-                print("⚠️  Files updated but tag push failed — push manually:")
-                print(f"   git push origin {args.addon_name}/v{new_v}")
-                return 1
+            print(f"\n🏷️  Would also create and push tag {args.addon_name}/v{new_v}")
+        return 0
 
-        print(f"\n💡 Next steps:")
-        print(f"   • Run 'make validate-versions' to verify")
-        print(f"   • Run 'make check-all' for full validation")
-        print(f"   • Commit: git add {args.addon_name} && git commit -m 'chore: update {args.addon_name} to v{args.new_version}'")
-        print(f"   • Push:  git push origin main {args.addon_name}/v{new_v}")
-        return 0
+    if success_count == total_files:
+        print("🎉 All files updated successfully!")
     elif success_count == 0:
-        print("⚠️  No files needed updating (already at target version?)")
-        return 0
+        print("✅ Already at target version — confirming tag")
     else:
-        print("⚠️  Some files could not be updated")
-        return 1
+        print(f"ℹ️  {success_count}/{total_files} files needed updating (others already matched target)")
+
+    if not args.no_tag:
+        print()
+        print("🏷️  Creating and pushing git tag...")
+        tag_ok = create_and_push_tag(
+            new_v,
+            args.addon_name,
+            push=not args.no_push,
+            dry_run=False,
+        )
+        if not tag_ok:
+            print()
+            print("⚠️  Tag push failed — push manually:")
+            print(f"   git push origin {args.addon_name}/v{new_v}")
+            return 1
+
+    print(f"\n💡 Next steps:")
+    print(f"   • Run 'make validate-versions' to verify")
+    print(f"   • Run 'make check-all' for full validation")
+    print(f"   • Commit: git add {args.addon_name} && git commit -m 'chore: update {args.addon_name} to v{args.new_version}'")
+    print(f"   • Push:  git push origin main {args.addon_name}/v{new_v}")
+    return 0
 
 
 if __name__ == '__main__':
