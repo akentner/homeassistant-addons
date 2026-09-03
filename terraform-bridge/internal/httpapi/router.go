@@ -80,7 +80,10 @@ func NewRouter(bridgeVersion string, store *auth.TokenStore, supClient *supervis
 		r.Get("/state/index", handlers.StateIndex(dataDir))
 		r.Post("/auth/nonce", handlers.Nonce(nonceMgr))
 		r.Post("/addons/{slug}/install", handlers.Install(supClient, mutexMgr, criticalAddons, installJobTimeout))
+		r.Post("/addons/{slug}/start", handlers.Start(supClient, mutexMgr))
+		r.Post("/addons/{slug}/stop", handlers.Stop(supClient, mutexMgr))
 		r.Post("/addons/{slug}/uninstall", handlers.Uninstall(supClient, mutexMgr, nonceMgr, criticalAddons))
+		r.Post("/addons/{slug}/options", handlers.Options(supClient, mutexMgr, nonceMgr, criticalAddons))
 		r.Post("/auth/rotate", handlers.AuthRotate(store))
 	})
 
