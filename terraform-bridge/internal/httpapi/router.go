@@ -33,13 +33,19 @@ import (
 // dependency is misconfigured (fail-fast at startup in
 // production). Tests pass stub values.
 //
-// tryLockTimeout is wired via middleware.TryLockTimeout inside the
-// /v1 auth subrouter BEFORE auth.RequireBearer (Plan 03). This
-// gives mutexMgr.TryAcquire(r.Context(), slug) inside the
-// destructive handlers a deadline-bounded context so a contended
-// slug returns 423 + locked within a predictable window instead of
-// waiting indefinitely (Pitfall 12-13: chi request contexts have
-// no deadline by default).
+// tryLockTimeout is wired via middleware.TryLockTimeout on the
+// /v1 auth subrouter for every route EXCEPT /v1/addons/{slug}/install
+// (Plan 03). The middleware wraps r.Context() with a deadline so the
+// mutexMgr.TryAcquire(r.Context(), slug) calls inside the destructive
+// handlers can time out (Pitfall 12-13: chi request contexts have no
+// deadline by default). The /install route is exempted because its
+// handler creates its own outerCtx with installJobTimeout (D-03 / D-17)
+// via context.WithTimeout(r.Context(), installJobTimeout) — inheriting
+// a 5s tryLockTimeout deadline would cap install polling at 5s
+// regardless of the configured 300s budget. The operator MUST configure
+// try_lock_timeout_seconds >= install_job_timeout_seconds if they want
+// the two timeouts to be independently tunable; today the install route
+// is the only one whose ctx outlives a TryLockTimeout.
 //
 // installJobTimeout IS used by handlers.Install (Plan 02) — the
 // per-install polling loop's outer ctx.
@@ -49,7 +55,9 @@ import (
 //
 //	/version, /whoami, /addons, /addons/{slug}/info, /state/index,
 //	/auth/nonce (mutation: issuance),
-//	/addons/{slug}/install (Plan 02 Task 1; non-destructive),
+//	/addons/{slug}/install (Plan 02 Task 1; non-destructive — exempt
+//	  from TryLockTimeout middleware; carries its own
+//	  installJobTimeout-derived ctx),
 //	/addons/{slug}/start (Plan 02 Task 2; non-destructive),
 //	/addons/{slug}/stop (Plan 02 Task 2; non-destructive),
 //	/addons/{slug}/uninstall (Plan 01; destructive),
@@ -76,26 +84,37 @@ func NewRouter(bridgeVersion string, store *auth.TokenStore, supClient *supervis
 
 	// Auth-protected /v1/*. Order inside the subrouter:
 	//
-	//	1. TryLockTimeout — wraps r.Context() with a deadline so the
-	//	   mutex.TryAcquire(r.Context(), slug) calls inside the
-	//	   destructive handlers can time out (Plan 03 wiring).
-	//	2. RequireBearer — short-circuits anonymous requests with
-	//	   401 BEFORE they consume a try-lock slot.
+	//	1. RequireBearer — short-circuits anonymous requests with
+	//	   401 BEFORE they consume any route-specific middleware.
 	r.Route("/v1", func(r chi.Router) {
-		r.Use(reqlog.TryLockTimeout(tryLockTimeout))
 		r.Use(auth.RequireBearer(store))
 		r.Get("/version", handlers.Version(bridgeVersion))
 		r.Get("/whoami", handlers.Whoami())
-		r.Get("/addons", handlers.Addons(supClient))
-		r.Get("/addons/{slug}/info", handlers.AddonInfo(supClient))
 		r.Get("/state/index", handlers.StateIndex(dataDir))
 		r.Post("/auth/nonce", handlers.Nonce(nonceMgr))
-		r.Post("/addons/{slug}/install", handlers.Install(supClient, mutexMgr, criticalAddons, installJobTimeout))
-		r.Post("/addons/{slug}/start", handlers.Start(supClient, mutexMgr))
-		r.Post("/addons/{slug}/stop", handlers.Stop(supClient, mutexMgr))
-		r.Post("/addons/{slug}/uninstall", handlers.Uninstall(supClient, mutexMgr, nonceMgr, criticalAddons))
-		r.Post("/addons/{slug}/options", handlers.Options(supClient, mutexMgr, nonceMgr, criticalAddons))
 		r.Post("/auth/rotate", handlers.AuthRotate(store))
+
+		// Install route: /install wraps its own ctx with
+		// installJobTimeout; it MUST NOT inherit a tryLockTimeout
+		// deadline or the install polling loop would be capped at
+		// tryLockTimeout (typically 5s) regardless of the
+		// configured install_job_timeout_seconds (300s default).
+		// Mounted without the TryLockTimeout middleware.
+		r.Post("/addons/{slug}/install", handlers.Install(supClient, mutexMgr, criticalAddons, installJobTimeout))
+
+		// Mutex-using routes: require a deadline-bounded ctx so
+		// mutexMgr.TryAcquire(r.Context(), slug) returns
+		// ErrLockedTimeout within tryLockTimeout instead of
+		// waiting indefinitely.
+		r.Group(func(r chi.Router) {
+			r.Use(reqlog.TryLockTimeout(tryLockTimeout))
+			r.Get("/addons", handlers.Addons(supClient))
+			r.Get("/addons/{slug}/info", handlers.AddonInfo(supClient))
+			r.Post("/addons/{slug}/start", handlers.Start(supClient, mutexMgr))
+			r.Post("/addons/{slug}/stop", handlers.Stop(supClient, mutexMgr))
+			r.Post("/addons/{slug}/uninstall", handlers.Uninstall(supClient, mutexMgr, nonceMgr, criticalAddons))
+			r.Post("/addons/{slug}/options", handlers.Options(supClient, mutexMgr, nonceMgr, criticalAddons))
+		})
 	})
 
 	return r
