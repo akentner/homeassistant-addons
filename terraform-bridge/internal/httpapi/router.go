@@ -35,6 +35,8 @@ func NewRouter(bridgeVersion string, store *auth.TokenStore, supClient *supervis
 		r.Use(auth.RequireBearer(store))
 		r.Get("/version", handlers.Version(bridgeVersion))
 		r.Get("/whoami", handlers.Whoami())
+		r.Get("/addons", handlers.Addons(supClient))
+		r.Get("/addons/{slug}/info", handlers.AddonInfo(supClient))
 		r.Post("/auth/rotate", handlers.AuthRotate(store))
 	})
 
