@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: opentofu-bridge
-status: Phase 11 complete (code + tests + 3 atomic commits; live-HA verification deferred to Phase 14)
-last_updated: "2026-09-02T20:00:00.000Z"
+status: Phase 11 VERIFIED; Phase 12 next
+last_updated: "2026-09-02T20:30:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 4
@@ -234,9 +234,10 @@ coverage (11 supervisor + 7 handlers + 1 router-level test); build/vet/gofmt cle
 
 ## Session Continuity
 
-Last session: 2026-09-02T20:00:00.000Z (Phase 11 SHIPPED — 3 atomic commits on main: docs(STATE), feat(11-01),
-feat(11-02); 25 files committed total; tests green; STATE.md doc-sync pending user approval as 4th commit) Next
-step: optional 4th commit for STATE.md doc-sync, then Phase 12 planning Resume file: None
+Last session: 2026-09-02T20:30:00.000Z (Phase 11 VERIFIED — 5 atomic commits on main: docs(STATE),
+feat(11-01), feat(11-02), docs(STATE)-postship, docs(11)-VERIFICATION; 26 files; VERIFICATION.md canonical; live-HA
+deferred to Phase 14) Next step: /gsd-discuss-phase 12 (Bridge Write API + Critical-Addon Safety + Concurrency +
+State Index; 10 Requirements: BRIDGE-04..09, STATE-02..03, LIFE-01, LIFE-03) Resume file: None
 
 ---
 
