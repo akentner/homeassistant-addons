@@ -16,6 +16,14 @@ import (
 	"terraform-bridge/internal/supervisor"
 )
 
+// stateFilePath is the absolute filesystem path of the OpenTofu state
+// file the Bridge manages. Phase 1 hardcodes /data/terraform.tfstate
+// per PROJECT.md architecture decision; BRIDGE-10 surfaces this in the
+// /v1/info response body so operator automation can locate it without
+// out-of-band configuration. Phase 12 may add a state index endpoint
+// that uses the same path.
+const stateFilePath = "/data/terraform.tfstate"
+
 // options is the subset of /data/options.json the Bridge reads at
 // startup. BindAddress defaults to "auto" (Tailscale detection);
 // BindAllowedSubnets defaults to [] (strict refusal of non-Tailscale
@@ -40,6 +48,17 @@ func main() {
 		fmt.Fprintln(os.Stdout, bridgeVersion) //nolint:forbidigo // intentional stdout write for CLI
 		return
 	}
+
+	// Capture process-startup time as the FIRST executable line of
+	// func main() so uptime_seconds in /v1/info reflects the Bridge
+	// process lifetime. The few microseconds of Go runtime
+	// initialization before this line execute are negligible at
+	// second-resolution granularity consumed by humans and
+	// lifecycle.precondition blocks. Captured here (rather than
+	// immediately before srv.ListenAndServe) so NewRouter can take
+	// it as a constructor parameter without a setter or
+	// package-level variable.
+	startTime := time.Now()
 
 	// Structured JSON logging via stdlib log/slog (Phase 9 baseline).
 	// Plan 02 wraps this with a scrubbingHandler that masks sensitive
@@ -115,7 +134,8 @@ func main() {
 	)
 
 	// Build the router — pass store so the auth middleware can validate.
-	router := httpapi.NewRouter(bridgeVersion, store, supClient)
+	logger.Info("listening", "bind_address", bindIP+":8124", "state_file_path", stateFilePath)
+	router := httpapi.NewRouter(bridgeVersion, store, supClient, startTime, stateFilePath)
 
 	srv := &http.Server{
 		Addr:              bindIP + ":8124",

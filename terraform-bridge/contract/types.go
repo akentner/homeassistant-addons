@@ -86,3 +86,16 @@ type HealthResponse struct {
 	SupervisorReachable bool   `json:"supervisor_reachable"`
 	BridgeVersion       string `json:"bridge_version"`
 }
+
+// BridgeInfo is the body of GET /v1/info (BRIDGE-10, no auth).
+// uptime_seconds is int64 (Terraform parses integers without coercion
+// in lifecycle.precondition blocks); state_file_path is the absolute
+// filesystem path of the bridge's OpenTofu state file - Phase 1
+// hardcodes /data/terraform.tfstate per PROJECT.md architecture
+// decision.
+type BridgeInfo struct {
+	BridgeVersion     string `json:"bridge_version"`
+	SupervisorVersion string `json:"supervisor_version"`
+	UptimeSeconds     int64  `json:"uptime_seconds"`
+	StateFilePath     string `json:"state_file_path"`
+}

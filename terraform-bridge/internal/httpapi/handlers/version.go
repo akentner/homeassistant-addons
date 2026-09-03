@@ -1,3 +1,8 @@
+// Package handlers: GET /v1/version is the BRIDGE-01 handshake
+// endpoint. The Providers PROV-03 Configure flow calls this at
+// startup and refuses to operate if the schema_version is outside
+// [min_provider_version, max_provider_version]. The endpoint requires
+// a valid bearer (mounted inside the /v1 auth subrouter).
 package handlers
 
 import (
@@ -5,19 +10,24 @@ import (
 	"net/http"
 
 	"terraform-bridge/contract"
+	"terraform-bridge/internal/version"
 )
 
-// NewVersionHandler returns the GET /v1/version handler. The returned JSON
-// carries the Bridge's compile-time BridgeVersion so the OpenTofu Provider
-// can perform the schema-version handshake (PROV-03). Phase 11 extends this
-// with Supervisor reachability + addon schema info; Phase 15 just needs the
-// bridge_version field for the E2E CI verification.
-func NewVersionHandler(bridgeVersion string) http.HandlerFunc {
+// Version returns the handler mounted at GET /v1/version (router.go).
+// The response body carries the Bridges compile-time bridgeVersion
+// (cmd/bridge/version.go) plus the three semver constants from
+// internal/version. SchemaVersion follows semver; bump the MAJOR
+// segment on every breaking Bridge API change per the policy in
+// internal/version/version.go.
+func Version(bridgeVersion string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(contract.VersionHandshake{
-			BridgeVersion: bridgeVersion,
+			BridgeVersion:      bridgeVersion,
+			SchemaVersion:      version.SchemaVersion,
+			MinProviderVersion: version.MinProviderVersion,
+			MaxProviderVersion: version.MaxProviderVersion,
 		})
 	}
 }
