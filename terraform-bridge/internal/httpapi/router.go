@@ -33,10 +33,16 @@ import (
 // dependency is misconfigured (fail-fast at startup in
 // production). Tests pass stub values.
 //
-// tryLockTimeout is accepted now so Plan 03 can wire it through
-// cmd/bridge/main.go without another signature churn. installJobTimeout
-// IS used by handlers.Install (Plan 02) — the per-install polling
-// loop's outer ctx.
+// tryLockTimeout is wired via middleware.TryLockTimeout inside the
+// /v1 auth subrouter BEFORE auth.RequireBearer (Plan 03). This
+// gives mutexMgr.TryAcquire(r.Context(), slug) inside the
+// destructive handlers a deadline-bounded context so a contended
+// slug returns 423 + locked within a predictable window instead of
+// waiting indefinitely (Pitfall 12-13: chi request contexts have
+// no deadline by default).
+//
+// installJobTimeout IS used by handlers.Install (Plan 02) — the
+// per-install polling loop's outer ctx.
 //
 // Auth subrouter order (read-only-first-then-mutation, then by
 // destructive-ness):
@@ -52,8 +58,6 @@ import (
 func NewRouter(bridgeVersion string, store *auth.TokenStore, supClient *supervisor.Client,
 	mutexMgr *mutex.Manager, nonceMgr *nonce.Manager, criticalAddons []string,
 	startTime time.Time, stateFilePath string, tryLockTimeout time.Duration, installJobTimeout time.Duration) http.Handler {
-	_ = tryLockTimeout // reserved for Plan 03 wiring
-
 	r := chi.NewRouter()
 
 	// D-09 / CF-06 order: RequestID -> Recoverer -> RequestLogger
@@ -70,8 +74,15 @@ func NewRouter(bridgeVersion string, store *auth.TokenStore, supClient *supervis
 	// Production: /data (stateFilePath = /data/terraform.tfstate).
 	dataDir := filepath.Dir(stateFilePath)
 
-	// Auth-protected /v1/*.
+	// Auth-protected /v1/*. Order inside the subrouter:
+	//
+	//	1. TryLockTimeout — wraps r.Context() with a deadline so the
+	//	   mutex.TryAcquire(r.Context(), slug) calls inside the
+	//	   destructive handlers can time out (Plan 03 wiring).
+	//	2. RequireBearer — short-circuits anonymous requests with
+	//	   401 BEFORE they consume a try-lock slot.
 	r.Route("/v1", func(r chi.Router) {
+		r.Use(reqlog.TryLockTimeout(tryLockTimeout))
 		r.Use(auth.RequireBearer(store))
 		r.Get("/version", handlers.Version(bridgeVersion))
 		r.Get("/whoami", handlers.Whoami())

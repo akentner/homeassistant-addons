@@ -26,10 +26,21 @@ import (
 // that uses the same path.
 const stateFilePath = "/data/terraform.tfstate"
 
+// defaultCriticalAddons mirrors REQUIREMENTS.md LIFE-01 — the
+// recommended slugs that the Bridge refuses to mutate without the
+// X-Force-Destroy nonce. Operator-editable via the HA Options UI;
+// the schema-validated field lands in /data/options.json.
+var defaultCriticalAddons = []string{
+	"core_mosquitto",
+	"core_zigbee2mqtt",
+	"core_esphome",
+}
+
 // options is the subset of /data/options.json the Bridge reads at
 // startup. BindAddress defaults to "auto" (Tailscale detection);
 // BindAllowedSubnets defaults to [] (strict refusal of non-Tailscale
-// IPs).
+// IPs). Phase 12 Plan 03 extends with the three BRIDGE-04..09 /
+// STATE-03 / LIFE-01 tunables.
 //
 // BindAllowedSubnets is a []string — the HA Supervisor schema DSL uses
 // the YAML-list form (`- "str?"`) for lists of arbitrary strings, NOT
@@ -38,8 +49,11 @@ const stateFilePath = "/data/terraform.tfstate"
 // → _nested_validate_list branch) vs :163 (string `list(<inner>)`
 // → vol.In(<inner>.split("|")) enum branch).
 type options struct {
-	BindAddress        string   `json:"bind_address"`
-	BindAllowedSubnets []string `json:"bind_allowed_subnets"`
+	BindAddress          string   `json:"bind_address"`
+	BindAllowedSubnets   []string `json:"bind_allowed_subnets"`
+	CriticalAddons       []string `json:"critical_addons"`
+	InstallJobTimeoutSec int      `json:"install_job_timeout_seconds"`
+	TryLockTimeoutSec    int      `json:"try_lock_timeout_seconds"`
 }
 
 func main() {
@@ -69,7 +83,13 @@ func main() {
 	slog.SetDefault(logger)
 
 	// Read add-on options from /data/options.json (HA add-on store).
-	opts := options{BindAddress: "auto", BindAllowedSubnets: []string{}}
+	opts := options{
+		BindAddress:          "auto",
+		BindAllowedSubnets:   []string{},
+		CriticalAddons:       defaultCriticalAddons,
+		InstallJobTimeoutSec: 300,
+		TryLockTimeoutSec:    5,
+	}
 	if b, err := os.ReadFile("/data/options.json"); err == nil {
 		_ = json.Unmarshal(b, &opts) // fall back to defaults on parse failure
 	} else if !os.IsNotExist(err) {
@@ -91,6 +111,20 @@ func main() {
 		"bind_ip", bindIP,
 		"allowed_subnets", opts.BindAllowedSubnets,
 	)
+
+	// Critical-addons startup audit (Pitfall 10 — defensive operator
+	// visibility). Empty list disables protection per D-09; emit
+	// slog.Warn so operators see the unprotected state in their log
+	// stream. Non-empty: slog.Info with the count + slugs so the
+	// audit record is greppable.
+	if len(opts.CriticalAddons) == 0 {
+		slog.Warn("bridge_critical_addons_empty", "count", 0)
+	} else {
+		slog.Info("bridge_critical_addons_loaded",
+			"count", len(opts.CriticalAddons),
+			"slugs", opts.CriticalAddons,
+		)
+	}
 
 	// TokenStore — load from /data or generate on first start.
 	store, err := auth.NewFileTokenStore("/data")
@@ -130,27 +164,48 @@ func main() {
 	// Supervisor HTTP client (Plan 02's /healthz uses it).
 	supClient := supervisor.NewClient(supervisor.ReadSupervisorToken)
 
-	// Phase 12 wiring: build the per-slug mutex + nonce
-	// managers. critical_addons hardcoded for Plan 01 (Plan 03
-	// will read from add-on options). Defaults match CONTEXT
-	// D-09/D-12.
+	// Phase 12 Plan 03 wiring: build the per-slug mutex + nonce
+	// managers. The nonce Manager's TTL is 60s (CONTEXT D-06 / LIFE-03
+	// default). The Bridge refuses to start without a writable
+	// nonce journal — nonce.NewManager is the gate (T-12-20).
 	mutexMgr := mutex.NewManager()
 	nonceMgr, err := nonce.NewManager("/data", nonce.DefaultTTL)
 	if err != nil {
 		slog.Error("nonce_manager_init_failed", "err", err.Error())
 		os.Exit(1)
 	}
-	defer nonceMgr.Close()
-	criticalAddons := []string{"core_mosquitto", "core_zigbee2mqtt", "core_esphome"}
+
+	// Nonce GC goroutine (Pitfall 9 — must respect SIGTERM so the
+	// process exits promptly on shutdown). The deferred
+	// nonceMgr.Close() from the previous iteration leaked across
+	// restarts because defer runs in LIFO order AFTER main returns,
+	// AFTER srv.ListenAndServe, AFTER HandleSignals — but the GC
+	// goroutine had no cancellation signal of its own and would
+	// keep ticking until process exit. Plan 03 wires the proper
+	// pattern: explicit nonceCtx + nonceCancel; the goroutine
+	// blocks on <-ctx.Done() and exits within 1s of cancellation
+	// (covered by TestNonceGCRespectsContextCancellation).
+	nonceCtx, nonceCancel := context.WithCancel(context.Background())
+	go nonceMgr.StartGC(nonceCtx)
+
+	// Convert /data/options.json seconds fields to time.Duration so
+	// the handlers receive a typed value. Defaults above already
+	// match Plan 02's hardcoded 5s/300s values; an empty
+	// /data/options.json therefore produces no behavior change
+	// for new installs (Plan 03 must_haves).
+	installJobTimeout := time.Duration(opts.InstallJobTimeoutSec) * time.Second
+	tryLockTimeout := time.Duration(opts.TryLockTimeoutSec) * time.Second
 
 	logger.Info("starting",
 		"bridge_version", bridgeVersion,
 		"pid", os.Getpid(),
+		"install_job_timeout_seconds", int(installJobTimeout.Seconds()),
+		"try_lock_timeout_seconds", int(tryLockTimeout.Seconds()),
 	)
 
 	// Build the router — pass store so the auth middleware can validate.
 	logger.Info("listening", "bind_address", bindIP+":8124", "state_file_path", stateFilePath)
-	router := httpapi.NewRouter(bridgeVersion, store, supClient, mutexMgr, nonceMgr, criticalAddons, startTime, stateFilePath, 5*time.Second, 300*time.Second)
+	router := httpapi.NewRouter(bridgeVersion, store, supClient, mutexMgr, nonceMgr, opts.CriticalAddons, startTime, stateFilePath, tryLockTimeout, installJobTimeout)
 
 	srv := &http.Server{
 		Addr:              bindIP + ":8124",
@@ -171,4 +226,10 @@ func main() {
 	}
 
 	<-signalsDone
+
+	// Stop the nonce GC goroutine now that HandleSignals has
+	// drained the HTTP server (Pitfall 9). Close the journal after
+	// the GC exits so the GC pass cannot race against fd teardown.
+	nonceCancel()
+	_ = nonceMgr.Close()
 }

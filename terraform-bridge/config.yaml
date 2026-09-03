@@ -22,7 +22,17 @@ map:
 options:
   bind_address: "auto"
   bind_allowed_subnets: []
+  critical_addons:
+    - "core_mosquitto"
+    - "core_zigbee2mqtt"
+    - "core_esphome"
+  install_job_timeout_seconds: 300
+  try_lock_timeout_seconds: 5
 schema:
   bind_address: "match(^auto$|^(([0-9]{1,3}\\.){3}[0-9]{1,3})$)?"
   bind_allowed_subnets:
     - "str?"
+  critical_addons:
+    - "str?"
+  install_job_timeout_seconds: "match(^[0-9]+$)?"
+  try_lock_timeout_seconds: "match(^[0-9]+$)?"
