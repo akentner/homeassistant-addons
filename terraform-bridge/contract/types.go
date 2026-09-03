@@ -99,3 +99,35 @@ type BridgeInfo struct {
 	UptimeSeconds     int64  `json:"uptime_seconds"`
 	StateFilePath     string `json:"state_file_path"`
 }
+
+// NonceResponse is the body of POST /v1/auth/nonce (LIFE-03 +
+// CONTEXT D-05/D-06). The plaintext nonce is returned exactly
+// once (X-Force-Destroy header on the next destructive call);
+// expires_at is the RFC3339 instant after which the nonce is
+// rejected as nonce_expired. The nonce value never enters a log
+// path (PITFALLS S-1 + audit.go fingerprints).
+type NonceResponse struct {
+	Nonce     string `json:"nonce"`
+	ExpiresAt string `json:"expires_at"`
+}
+
+// StateIndexResponse is the body of GET /v1/state/index
+// (STATE-02 + CONTEXT D-20..D-23). Files enumerates every
+// *.tfstate + *.tfstate.backup with size + sha256; Skipped
+// accumulates per-file errors so a single unreadable file
+// does not abort the index call (D-23). omitempty on Skipped
+// keeps the wire clean when no errors occurred.
+type StateIndexResponse struct {
+	Files   []StateFileEntry `json:"files"`
+	Skipped []string         `json:"skipped,omitempty"`
+}
+
+// StateFileEntry is one row of the StateIndexResponse.Files
+// array. Name is the basename (no directory); SizeBytes is
+// the file size on disk; SHA256 is the hex-encoded SHA-256
+// digest of the file contents at Index() time.
+type StateFileEntry struct {
+	Name      string `json:"name"`
+	SizeBytes int64  `json:"size_bytes"`
+	SHA256    string `json:"sha256"`
+}

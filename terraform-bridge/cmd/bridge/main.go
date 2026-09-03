@@ -13,6 +13,8 @@ import (
 	"terraform-bridge/internal/auth"
 	"terraform-bridge/internal/httpapi"
 	"terraform-bridge/internal/logging"
+	"terraform-bridge/internal/mutex"
+	"terraform-bridge/internal/nonce"
 	"terraform-bridge/internal/supervisor"
 )
 
@@ -128,6 +130,19 @@ func main() {
 	// Supervisor HTTP client (Plan 02's /healthz uses it).
 	supClient := supervisor.NewClient(supervisor.ReadSupervisorToken)
 
+	// Phase 12 wiring: build the per-slug mutex + nonce
+	// managers. critical_addons hardcoded for Plan 01 (Plan 03
+	// will read from add-on options). Defaults match CONTEXT
+	// D-09/D-12.
+	mutexMgr := mutex.NewManager()
+	nonceMgr, err := nonce.NewManager("/data", nonce.DefaultTTL)
+	if err != nil {
+		slog.Error("nonce_manager_init_failed", "err", err.Error())
+		os.Exit(1)
+	}
+	defer nonceMgr.Close()
+	criticalAddons := []string{"core_mosquitto", "core_zigbee2mqtt", "core_esphome"}
+
 	logger.Info("starting",
 		"bridge_version", bridgeVersion,
 		"pid", os.Getpid(),
@@ -135,7 +150,7 @@ func main() {
 
 	// Build the router — pass store so the auth middleware can validate.
 	logger.Info("listening", "bind_address", bindIP+":8124", "state_file_path", stateFilePath)
-	router := httpapi.NewRouter(bridgeVersion, store, supClient, startTime, stateFilePath)
+	router := httpapi.NewRouter(bridgeVersion, store, supClient, mutexMgr, nonceMgr, criticalAddons, startTime, stateFilePath, 5*time.Second, 300*time.Second)
 
 	srv := &http.Server{
 		Addr:              bindIP + ":8124",
