@@ -2,7 +2,10 @@
 // endpoint under RequireBearer; RequestLogger globally mounted for
 // OPS-01. Phase 11+ adds /v1/version, /v1/addons, /v1/info under the
 // same /v1/* auth subrouter. Phase 12 adds /v1/auth/nonce +
-// /v1/state/index + /v1/addons/{slug}/uninstall (all require bearer).
+// /v1/state/index + /v1/addons/{slug}/uninstall + (Plan 02)
+// /v1/addons/{slug}/install + /v1/addons/{slug}/start +
+// /v1/addons/{slug}/stop + /v1/addons/{slug}/options (all require
+// bearer).
 package httpapi
 
 import (
@@ -30,20 +33,26 @@ import (
 // dependency is misconfigured (fail-fast at startup in
 // production). Tests pass stub values.
 //
-// tryLockTimeout + installJobTimeout are accepted now so Plan 03
-// can wire them through cmd/bridge/main.go without another
-// signature churn; Plan 01's handler tests pass zero values.
+// tryLockTimeout is accepted now so Plan 03 can wire it through
+// cmd/bridge/main.go without another signature churn. installJobTimeout
+// IS used by handlers.Install (Plan 02) — the per-install polling
+// loop's outer ctx.
 //
-// Auth subrouter order (read-only-first-then-mutation):
+// Auth subrouter order (read-only-first-then-mutation, then by
+// destructive-ness):
 //
 //	/version, /whoami, /addons, /addons/{slug}/info, /state/index,
-//	/auth/nonce (mutation: issuance), /addons/{slug}/uninstall
-//	(mutation: destructive), /auth/rotate (mutation: rotate).
+//	/auth/nonce (mutation: issuance),
+//	/addons/{slug}/install (Plan 02 Task 1; non-destructive),
+//	/addons/{slug}/start (Plan 02 Task 2; non-destructive),
+//	/addons/{slug}/stop (Plan 02 Task 2; non-destructive),
+//	/addons/{slug}/uninstall (Plan 01; destructive),
+//	/addons/{slug}/options (Plan 02 Task 2; destructive),
+//	/auth/rotate (mutation: rotate).
 func NewRouter(bridgeVersion string, store *auth.TokenStore, supClient *supervisor.Client,
 	mutexMgr *mutex.Manager, nonceMgr *nonce.Manager, criticalAddons []string,
 	startTime time.Time, stateFilePath string, tryLockTimeout time.Duration, installJobTimeout time.Duration) http.Handler {
-	_ = tryLockTimeout    // reserved for Plan 03 wiring
-	_ = installJobTimeout // reserved for Plan 03 wiring
+	_ = tryLockTimeout // reserved for Plan 03 wiring
 
 	r := chi.NewRouter()
 
@@ -70,6 +79,7 @@ func NewRouter(bridgeVersion string, store *auth.TokenStore, supClient *supervis
 		r.Get("/addons/{slug}/info", handlers.AddonInfo(supClient))
 		r.Get("/state/index", handlers.StateIndex(dataDir))
 		r.Post("/auth/nonce", handlers.Nonce(nonceMgr))
+		r.Post("/addons/{slug}/install", handlers.Install(supClient, mutexMgr, criticalAddons, installJobTimeout))
 		r.Post("/addons/{slug}/uninstall", handlers.Uninstall(supClient, mutexMgr, nonceMgr, criticalAddons))
 		r.Post("/auth/rotate", handlers.AuthRotate(store))
 	})
