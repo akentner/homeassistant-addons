@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: opentofu-bridge
-status: Phase 12 in-progress (12-01 landed)
-last_updated: "2026-09-04T00:10:00.000Z"
+status: Phase 12 in-progress (12-01 + 12-02 landed)
+last_updated: "2026-09-04T00:40:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 13
-  completed_plans: 9
-  percent: 60
+  completed_plans: 10
+  percent: 62
 ---
 
 # Project State
@@ -70,7 +70,7 @@ approved; Phase 9 ready to plan. v1.3 runs in parallel with v1.2 Phase 8 gap-clo
 | 9     | Bridge Foundation + Token Rotation Spike               | Complete                               | 2026-08-31 (plans 01-04; H-1 + §10 transcripts in `spike-transcripts/`) |
 | 10    | Auth Layer + Structured Logging + Healthcheck          | Complete                               | 2026-08-31 (plans 01-03; live-HA verify deferred to Phase 14) |
 | 11    | Bridge Read API                                        | Complete (code + unit tests)           | 2026-09-02 (plans 01-02; 16 new tests; live-HA verification deferred to Phase 14) |
-| 12    | Bridge Write API + Critical-Addon Safety + Concurrency | In Progress (12-01 landed)             | —                                                             |
+| 12    | Bridge Write API + Critical-Addon Safety + Concurrency | In Progress (12-01 + 12-02 landed)     | —                                                             |
 | 13    | Provider + Resource + Data Sources + Schema Handshake  | Not started                            | —                                                             |
 | 14    | Real-HA End-to-End Verification + Operator Docs        | Not started                            | —                                                             |
 | 15    | CI Hardening + Provider Install Workflow               | Not started                            | —                                                             |
