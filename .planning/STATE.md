@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: opentofu-bridge
-status: Phase 11 complete (code + unit tests; live-HA verification deferred to Phase 14)
-last_updated: "2026-09-02T19:30:00.000Z"
+status: Phase 11 complete (code + tests + 3 atomic commits; live-HA verification deferred to Phase 14)
+last_updated: "2026-09-02T20:00:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 4
@@ -83,11 +83,10 @@ outbound request). D-18 RESOLVED with defensive design; conservative re-verifica
 
 ## Current Position
 
-Phase: 11 of 3 (ci-hardening-provider-install-workflow) (Bridge Read API) Last activity: 2026-09-02 -- Phase 11 executed:
-plans 01+02 ran via gsd-executor; 11 new + 8 modified files; 16 new tests passing (6 supervisor + 6 handlers + 4 router
-+ 0 misc); build/vet/gofmt clean; all changes STAGED but NOT committed (per AGENTS.md Live Systems rule, awaiting user
-review). Next: user review of staged diff → atomic commits per plan → optional local rebuild + live curl smoke test
-on 192.168.178.3:8124 → push + tag for Phase 14 evidence.
+Phase: 11 of 3 (ci-hardening-provider-install-workflow) (Bridge Read API) Last activity: 2026-09-02 -- Phase 11 SHIPPED:
+3 atomic commits landed on main (docs(STATE), feat(11-01), feat(11-02)); 14+9 file changes with full canary-test
+coverage (11 supervisor + 7 handlers + 1 router-level test); build/vet/gofmt clean; live-HA curl verification against
+192.168.178.3:8124 still deferred to Phase 14 (requires Bridge image rebuild + redeploy + token recovery).
 
 ## Accumulated Context
 
@@ -183,6 +182,18 @@ on 192.168.178.3:8124 → push + tag for Phase 14 evidence.
       Live curl tests against 192.168.178.3:8124 require rebuilding the Bridge image + redeploying on the HA host.
       Pre-commit `validate-versions.sh` is not impacted (Bridge version unchanged).
 
+- [x] Phase 11: **3 atomic commits landed** — a6f1c36 docs(STATE): Phase 9 sync + Phase 11 in-progress tracking
+      (1 file, 62+/18-); 9158869 feat(11-01): GET /v1/info + /v1/version + planning docs (14 files, 1684+/10-);
+      40548c4 feat(11-02): V1/V2 fallback + /v1/addons + /v1/addons/{slug}/info + planning docs (9 files,
+      1921+/0-). Build + vet + gofmt clean. Branch main is at 40548c4. Pre-commit validate-versions.sh did not
+      fire (Bridge version unchanged).
+
+- [ ] **STATE.md stale-on-deliverable (post-commit sync pending user approval)** — Phase 11 is shipped but the
+      STATE.md update reflecting "Phase 11 complete" is unstaged in the working tree. Per user instruction "3
+      Commits: state + feat(11-01) + feat(11-02)" we did not add a 4th commit for the doc-sync; it remains for
+      the user to commit or amend. Until then STATE.md still reports "Phase 11 in-progress" on the committed
+      HEAD, which is inaccurate.
+
 ### Blockers
 
 - **Phase 8 gap-closure (`08-05-GAP-PLAN.md`) remains blocked** on user Cloudflare setup (Q-02 from 08-CONTEXT). v1.3
@@ -223,9 +234,9 @@ on 192.168.178.3:8124 → push + tag for Phase 14 evidence.
 
 ## Session Continuity
 
-Last session: 2026-09-02T19:30:00.000Z (Phase 11 executed — both plans ran via gsd-executor, all green, staged but
-uncommitted per AGENTS.md Live Systems rule) Next step: user review of 19-file staged diff + two atomic commits per
-plan (or combined if preferred), then optional local live test against 192.168.178.3:8124 Resume file: None
+Last session: 2026-09-02T20:00:00.000Z (Phase 11 SHIPPED — 3 atomic commits on main: docs(STATE), feat(11-01),
+feat(11-02); 25 files committed total; tests green; STATE.md doc-sync pending user approval as 4th commit) Next
+step: optional 4th commit for STATE.md doc-sync, then Phase 12 planning Resume file: None
 
 ---
 
