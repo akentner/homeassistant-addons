@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -416,5 +417,321 @@ func TestClient_HTTPClientTimeout_Bounded(t *testing.T) {
 	}
 	if c.Timeout() <= 0 {
 		t.Errorf("Client.Timeout = %v, want a positive duration (5s default)", c.Timeout())
+	}
+}
+
+// ============================================================================
+// Plan 02 — POST method tests
+// ============================================================================
+
+// TestClient_PostAuthNonce_Success drives a happy-path
+// /v1/auth/nonce round-trip. The fake server returns a
+// contract.NonceResponse; the Client decodes it verbatim and the
+// caller receives the nonce + expires_at pair.
+func TestClient_PostAuthNonce_Success(t *testing.T) {
+	want := contract.NonceResponse{
+		Nonce:     "nonce-abc-123",
+		ExpiresAt: "2026-09-04T12:00:00Z",
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/auth/nonce" {
+			t.Errorf("server: %s %s, want POST /v1/auth/nonce", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(want)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	got, err := c.PostAuthNonce(context.Background())
+	if err != nil {
+		t.Fatalf("PostAuthNonce: %v", err)
+	}
+	if *got != want {
+		t.Errorf("PostAuthNonce: got %+v, want %+v", *got, want)
+	}
+}
+
+// TestClient_PostAddonInstall_Success covers the happy-path
+// fresh install: server returns 200 + AddOnInfo; Client returns
+// nil error and the caller's context is preserved.
+func TestClient_PostAddonInstall_Success(t *testing.T) {
+	slug := "a0d7c6b6_install"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/addons/"+slug+"/install" {
+			t.Errorf("server: %s %s, want POST /v1/addons/%s/install", r.Method, r.URL.Path, slug)
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(contract.AddOnInfo{
+			Slug:    slug,
+			Version: "1.0.0",
+			State:   "stopped",
+			Boot:    "auto",
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	if err := c.PostAddonInstall(context.Background(), slug); err != nil {
+		t.Fatalf("PostAddonInstall(200): %v", err)
+	}
+}
+
+// TestClient_PostAddonInstall_409ReturnsAdoption covers CF-07:
+// 409 + already_installed translates to ErrAlreadyInstalled via
+// errors.Is. The BridgeError's ErrorCode field is preserved so
+// callers can inspect both shapes.
+func TestClient_PostAddonInstall_409ReturnsAdoption(t *testing.T) {
+	slug := "a0d7c6b6_race"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(contract.ErrorResponse{
+			ErrorCode: "already_installed",
+			RequestID: "rid-409",
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	err := c.PostAddonInstall(context.Background(), slug)
+	if err == nil {
+		t.Fatalf("PostAddonInstall(409): err = nil, want ErrAlreadyInstalled")
+	}
+	if !errors.Is(err, client.ErrAlreadyInstalled) {
+		t.Errorf("PostAddonInstall(409): errors.Is(err, ErrAlreadyInstalled) = false; err = %v", err)
+	}
+	// The BridgeError shape is preserved via the structured
+	// InstallAlreadyInstalledError — callers can errors.As to
+	// read the request_id for diagnostics.
+	var installErr *client.InstallAlreadyInstalledError
+	if errors.As(err, &installErr) {
+		if installErr.Bridge.StatusCode != http.StatusConflict {
+			t.Errorf("BridgeError.StatusCode = %d, want 409", installErr.Bridge.StatusCode)
+		}
+		if installErr.Bridge.Err.ErrorCode != "already_installed" {
+			t.Errorf("BridgeError.Err.ErrorCode = %q, want %q", installErr.Bridge.Err.ErrorCode, "already_installed")
+		}
+		if installErr.Bridge.Err.RequestID != "rid-409" {
+			t.Errorf("BridgeError.Err.RequestID = %q, want %q", installErr.Bridge.Err.RequestID, "rid-409")
+		}
+	} else {
+		t.Errorf("PostAddonInstall(409): err %T is not *InstallAlreadyInstalledError", err)
+	}
+}
+
+// TestClient_PostAddonStart_Success covers the happy-path start:
+// server returns 200; Client returns nil.
+func TestClient_PostAddonStart_Success(t *testing.T) {
+	slug := "a0d7c6b6_start"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/addons/"+slug+"/start" {
+			t.Errorf("server: %s %s, want POST /v1/addons/%s/start", r.Method, r.URL.Path, slug)
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(contract.AddOnInfo{Slug: slug, State: "started", Started: true})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	if err := c.PostAddonStart(context.Background(), slug); err != nil {
+		t.Fatalf("PostAddonStart(200): %v", err)
+	}
+}
+
+// TestClient_PostAddonStop_Success covers the symmetric stop
+// endpoint (same shape as start).
+func TestClient_PostAddonStop_Success(t *testing.T) {
+	slug := "a0d7c6b6_stop"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/addons/"+slug+"/stop" {
+			t.Errorf("server: %s %s, want POST /v1/addons/%s/stop", r.Method, r.URL.Path, slug)
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(contract.AddOnInfo{Slug: slug, State: "stopped"})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	if err := c.PostAddonStop(context.Background(), slug); err != nil {
+		t.Fatalf("PostAddonStop(200): %v", err)
+	}
+}
+
+// TestClient_PostAddonOptions_Success drives a happy-path
+// /v1/addons/{slug}/options round-trip. The Client must marshal
+// the body to JSON and decode the response. We assert the
+// outgoing body shape (echoed by the test handler) AND the
+// returned decoded response body.
+func TestClient_PostAddonOptions_Success(t *testing.T) {
+	slug := "a0d7c6b6_opts"
+	inBody := map[string]any{
+		"options": map[string]any{
+			"log_level": "debug",
+		},
+		"boot": "manual",
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/addons/"+slug+"/options" {
+			t.Errorf("server: %s %s, want POST /v1/addons/%s/options", r.Method, r.URL.Path, slug)
+			http.NotFound(w, r)
+			return
+		}
+		// Echo the body back so the client can decode it.
+		var sent map[string]any
+		body, _ := io.ReadAll(r.Body)
+		if err := json.Unmarshal(body, &sent); err != nil {
+			t.Errorf("server: decode body: %v", err)
+		}
+		if sent["boot"] != "manual" {
+			t.Errorf("server: body[boot] = %v, want 'manual'", sent["boot"])
+		}
+		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
+			t.Errorf("server: Content-Type = %q, want application/json", ct)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"result":"ok","options":{"log_level":"debug"}}`))
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	respBody, err := c.PostAddonOptions(context.Background(), slug, inBody)
+	if err != nil {
+		t.Fatalf("PostAddonOptions(200): %v", err)
+	}
+	if respBody["result"] != "ok" {
+		t.Errorf("PostAddonOptions: respBody[result] = %v, want 'ok'", respBody["result"])
+	}
+}
+
+// TestClient_PostAddonUninstall_Success_204 covers CF-09: server
+// returns 204 No Content on successful uninstall; Client returns
+// nil error. There is no response body to decode.
+func TestClient_PostAddonUninstall_Success_204(t *testing.T) {
+	slug := "a0d7c6b6_uninstall"
+	const nonce = "nonce-deadbeef"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/addons/"+slug+"/uninstall" {
+			t.Errorf("server: %s %s, want POST /v1/addons/%s/uninstall", r.Method, r.URL.Path, slug)
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("X-Force-Destroy"); got != nonce {
+			t.Errorf("server: X-Force-Destroy = %q, want %q", got, nonce)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	if err := c.PostAddonUninstall(context.Background(), slug, nonce); err != nil {
+		t.Fatalf("PostAddonUninstall(204): %v", err)
+	}
+}
+
+// TestClient_PostAddonUninstall_NotFound_204 covers CF-06: Delete
+// on a missing add-on is a no-op. Server returns 404; Client
+// returns nil (NOT a BridgeError).
+func TestClient_PostAddonUninstall_NotFound_204(t *testing.T) {
+	slug := "a0d7c6b6_missing"
+	const nonce = "nonce-xyz"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(contract.ErrorResponse{
+			ErrorCode: "not_found",
+			RequestID: "rid-404",
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	if err := c.PostAddonUninstall(context.Background(), slug, nonce); err != nil {
+		t.Fatalf("PostAddonUninstall(404): %v, want nil (CF-06 idempotency)", err)
+	}
+}
+
+// TestClient_PostAddonUninstall_SendsXForceDestroyHeader is the
+// dedicated regression for the X-Force-Destroy header plumbing.
+// The test handler records the inbound header so the assertion is
+// exact: the nonce the Client passed in must reach the server
+// under X-Force-Destroy.
+func TestClient_PostAddonUninstall_SendsXForceDestroyHeader(t *testing.T) {
+	slug := "a0d7c6b6_header"
+	const nonce = "nonce-plumbing-test-1234"
+	var echoedNonce string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		echoedNonce = r.Header.Get("X-Force-Destroy")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	if err := c.PostAddonUninstall(context.Background(), slug, nonce); err != nil {
+		t.Fatalf("PostAddonUninstall: %v", err)
+	}
+	if echoedNonce != nonce {
+		t.Errorf("server saw X-Force-Destroy = %q, want %q", echoedNonce, nonce)
+	}
+}
+
+// TestClient_PostAddonUninstall_BearerTokenNotInHeader is the
+// PITFALLS S-1 + T-13-04 + T-13-10 regression for the Uninstall
+// flow: the Bearer token must NEVER appear in any header
+// (especially X-Force-Destroy, which carries the nonce — a
+// distinct secret, not a derivation of the bearer). The test
+// captures all inbound headers and asserts the bearer substring
+// appears ONLY in Authorization (where the Client legitimately
+// injects it) and never anywhere else.
+func TestClient_PostAddonUninstall_BearerTokenNotInHeader(t *testing.T) {
+	slug := "a0d7c6b6_bearersafe"
+	const nonce = "nonce-bearersafe-9999"
+	var capturedHeaders http.Header
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	if err := c.PostAddonUninstall(context.Background(), slug, nonce); err != nil {
+		t.Fatalf("PostAddonUninstall: %v", err)
+	}
+
+	// Authorization header should carry the Bearer token
+	// verbatim (legitimate injection).
+	if got := capturedHeaders.Get("Authorization"); got != "Bearer "+testBearer {
+		t.Errorf("Authorization = %q, want %q", got, "Bearer "+testBearer)
+	}
+	// X-Force-Destroy must be the nonce ONLY — no Bearer substring.
+	if got := capturedHeaders.Get("X-Force-Destroy"); got != nonce {
+		t.Errorf("X-Force-Destroy = %q, want %q", got, nonce)
+	}
+	// Defensive: the test bearer substring must NOT appear
+	// anywhere else in the captured header set.
+	for k, vs := range capturedHeaders {
+		if k == "Authorization" {
+			continue // legitimate
+		}
+		for _, v := range vs {
+			if strings.Contains(v, testBearer) {
+				t.Errorf("PITFALLS S-1: bearer token leaked into header %s: %q", k, v)
+			}
+		}
 	}
 }

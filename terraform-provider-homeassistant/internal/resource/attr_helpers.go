@@ -2,9 +2,11 @@ package resource
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 // timeoutsBlock returns the per-operation timeouts Block used by
@@ -31,4 +33,38 @@ func timeoutsBlock() schema.Block {
 		Update: true,
 		Delete: true,
 	})
+}
+
+// stringOneOfValidator is the closed-enum string validator used by
+// the `boot` attribute on homeassistant_addon (CF-10). The
+// framework's schema/validator package exposes stringvalidator.OneOf
+// from a separate module — we replicate it inline to keep the
+// dependency surface tight (one use-site). Case-sensitive match;
+// null / unknown values pass through (the framework treats those
+// as "not yet known" and surfaces them as plan-time unknowns).
+type stringOneOfValidator []string
+
+func (v stringOneOfValidator) Description(_ context.Context) string {
+	return fmt.Sprintf("value must be one of: %v", []string(v))
+}
+
+func (v stringOneOfValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v stringOneOfValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	got := req.ConfigValue.ValueString()
+	for _, allowed := range v {
+		if got == allowed {
+			return
+		}
+	}
+	resp.Diagnostics.AddAttributeError(
+		req.Path,
+		"Invalid boot value",
+		fmt.Sprintf("boot must be one of %v, got %q", []string(v), got),
+	)
 }

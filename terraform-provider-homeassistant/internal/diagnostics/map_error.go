@@ -132,3 +132,45 @@ func summaryForCode(code string) (string, bool) {
 		return "", false
 	}
 }
+
+// AddPwnedWarning appends a Warning-severity Diagnostic to diags
+// describing a Bridge-surfaced pwned advisory. PROV-06 + CF-08 +
+// D-09: pwned is the ONLY condition that surfaces as Warning
+// severity (every other 4xx/5xx is Error per D-09). The apply
+// proceeds; the operator sees the warning in tofu output.
+//
+// The Diagnostic shape:
+//
+//   - Summary: PwnedWarningText (the canonical user-action text
+//     from doc.go).
+//   - Detail: pwnedInfo verbatim — the raw `pwned` payload from
+//     the Bridge so operators can grep Supervisor logs for the
+//     underlying credential-leak signal (D-11 extended).
+//   - Severity: Warning.
+//
+// The function mutates diags in place (the canonical
+// terraform-plugin-framework idiom for in-handler diagnostic
+// accumulation) and returns nothing — callers Append via:
+//
+//	resp.Diagnostics.Append(diagnostics.AddPwnedWarning(...))
+//
+// Wait — Append is not on diag.Diagnostics directly for single
+// diagnostic construction. Callers use the helper as a side-effect
+// mutator: AddPwnedWarning(diags, info) → diags now contains the
+// warning.
+//
+// The terraform-plugin-framework diag package's WarningDiagnostic
+// constructor does NOT carry a Link field (only the tfprotov5/v6
+// Diagnostic does); D-10's DOCS.md anchor URL is therefore not
+// carried here — operators see the Summary text + the Detail
+// payload. Future framework versions may add a Link field; the
+// helper can be extended then without changing call sites.
+func AddPwnedWarning(diags *diag.Diagnostics, pwnedInfo string) {
+	if diags == nil {
+		return
+	}
+	*diags = append(*diags, diag.NewWarningDiagnostic(
+		PwnedWarningText,
+		pwnedInfo,
+	))
+}

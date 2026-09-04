@@ -99,6 +99,16 @@ const (
 	// codes in a future Phase; the diagnostic surfaces the raw code
 	// rather than panicking.
 	ErrUnknownText = "Bridge returned an unrecognized error_code."
+
+	// PwnedWarningText covers the Warning-severity branch per
+	// PROV-06 + CF-08 + D-09. The Bridge surfaces the `pwned`
+	// advisory when an add-on's options payload contains known
+	// compromised-credentials leaks; the Provider surfaces this
+	// as a Warning (NOT an Error) so the apply proceeds while the
+	// operator is informed of the leaked credentials. The raw
+	// pwned payload (D-11 extended) is carried in the Detail
+	// field for grep-ability against the Supervisor logs.
+	PwnedWarningText = "This add-on has a known compromised credentials leak (pwned): review the supervisor warning and rotate the add-on credentials before continuing."
 )
 
 // DocAnchor returns the kebab-case DOCS.md URL fragment for the given

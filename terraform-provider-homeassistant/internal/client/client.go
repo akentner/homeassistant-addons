@@ -15,6 +15,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -32,6 +33,15 @@ import (
 // of the Bridge's supervisor.ErrNotFound sentinel — Resource.Read
 // compares via errors.Is so 404 → empty state (CF-06 idempotency).
 var ErrAddonNotFound = errors.New("client: addon not found")
+
+// ErrAlreadyInstalled is returned by PostAddonInstall when Bridge
+// returns HTTP 409 + {error_code: "already_installed"}. The Create
+// handler compares via errors.Is so a 409 falls through to the
+// adoption path (re-fetch via GetAddonInfo) per CF-07. The Create
+// handler's D-04 GET-first adoption preemptively avoids 409 in the
+// common case; this sentinel exists for the concurrent-race fallback
+// where two Providers race to install the same slug.
+var ErrAlreadyInstalled = errors.New("client: addon already installed")
 
 // httpClientTimeout bounds every outbound request at the transport
 // layer (independent of any per-call context timeout the caller
@@ -216,6 +226,230 @@ func (c *Client) GetInfo(ctx context.Context) (*contract.BridgeInfo, error) {
 	return &info, nil
 }
 
+// PostAuthNonce calls POST /v1/auth/nonce and returns the freshly
+// minted NonceResponse. The nonce is a single-use, 60s-TTL secret
+// (Phase 12 D-05..D-08); the Provider never persists or caches it
+// (every Delete re-fetches). PITFALLS S-1 + T-13-10: the nonce
+// value never enters any log path; it only flows through the
+// X-Force-Destroy header on the immediate next destructive call.
+func (c *Client) PostAuthNonce(ctx context.Context) (*contract.NonceResponse, error) {
+	const path = "/v1/auth/nonce"
+	resp, err := c.doRequest(ctx, http.MethodPost, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.decodeError(http.MethodPost, path, resp)
+	}
+
+	var nonce contract.NonceResponse
+	if err := json.NewDecoder(resp.Body).Decode(&nonce); err != nil {
+		return nil, fmt.Errorf("client: decode nonce: %w", err)
+	}
+	return &nonce, nil
+}
+
+// PostAddonInstall calls POST /v1/addons/{slug}/install. The
+// request body is empty — the Bridge drives the install lifecycle
+// (Supervisor /store/apps/{slug}/install with background:true +
+// 1s polling per Phase 12 D-17). The Provider does not poll; the
+// Bridge's response on 200 carries the post-install AddOnInfo
+// payload verbatim.
+//
+// On 409 + {error_code: "already_installed"} the method returns
+// an InstallAlreadyInstalledError (CF-07 adoption signal). The
+// error BOTH wraps ErrAlreadyInstalled (so callers can use
+// errors.Is(err, ErrAlreadyInstalled)) AND carries the decoded
+// *BridgeError (so callers can use errors.As to read the
+// error_code / request_id). On any other non-200 the method
+// returns a *BridgeError.
+func (c *Client) PostAddonInstall(ctx context.Context, slug string) error {
+	if slug == "" {
+		return fmt.Errorf("client: PostAddonInstall requires non-empty slug")
+	}
+	path := "/v1/addons/" + slug + "/install"
+	resp, err := c.doRequest(ctx, http.MethodPost, path, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusConflict {
+		body, _ := io.ReadAll(resp.Body)
+		var errResp contract.ErrorResponse
+		if json.Unmarshal(body, &errResp) == nil && errResp.ErrorCode == "already_installed" {
+			return &InstallAlreadyInstalledError{
+				Path:   path,
+				Bridge: &BridgeError{StatusCode: resp.StatusCode, Err: errResp, Method: http.MethodPost, Path: path},
+			}
+		}
+		// 409 with a different error_code is a real error, not an
+		// adoption signal — fall through to parseErrorResponse.
+		return c.parseErrorResponse(http.MethodPost, path, resp, body)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return c.decodeError(http.MethodPost, path, resp)
+	}
+	drainBody(resp)
+	return nil
+}
+
+// InstallAlreadyInstalledError is the structured error returned
+// by PostAddonInstall on 409 + already_installed. The error wraps
+// ErrAlreadyInstalled (so errors.Is works for the adoption
+// sentinel) AND carries the decoded *BridgeError so callers can
+// inspect the request_id for diagnostics. The Error() string
+// never contains the bearer token (PITFALLS S-1).
+type InstallAlreadyInstalledError struct {
+	Path   string
+	Bridge *BridgeError
+}
+
+func (e *InstallAlreadyInstalledError) Error() string {
+	return fmt.Sprintf("bridge: POST %s status 409: error_code=already_installed (adoption signal): %s", e.Path, ErrAlreadyInstalled.Error())
+}
+
+// Is satisfies errors.Is for the sentinel match.
+func (e *InstallAlreadyInstalledError) Is(target error) bool {
+	return target == ErrAlreadyInstalled
+}
+
+// PostAddonStart calls POST /v1/addons/{slug}/start. Start is NOT
+// destructive (Phase 12 D-10) so no critical_addons check and no
+// X-Force-Destroy nonce are required by the Bridge. The Bridge
+// re-fetches the AddOnInfo and returns 200 + the payload; the
+// Provider ignores the response body (state is refreshed by the
+// framework's post-operation Read).
+func (c *Client) PostAddonStart(ctx context.Context, slug string) error {
+	return c.postAddonNoBody(ctx, slug, "start")
+}
+
+// PostAddonStop calls POST /v1/addons/{slug}/stop. Symmetric to
+// PostAddonStart (Phase 12 D-19: no nonce, sync Supervisor call).
+func (c *Client) PostAddonStop(ctx context.Context, slug string) error {
+	return c.postAddonNoBody(ctx, slug, "stop")
+}
+
+// postAddonNoBody is the shared body-less POST helper for start + stop
+// (and any future symmetric write endpoints). On 200 returns nil;
+// on non-200 returns *BridgeError.
+func (c *Client) postAddonNoBody(ctx context.Context, slug, op string) error {
+	if slug == "" {
+		return fmt.Errorf("client: PostAddon%s requires non-empty slug", op)
+	}
+	path := "/v1/addons/" + slug + "/" + op
+	resp, err := c.doRequest(ctx, http.MethodPost, path, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return c.decodeError(http.MethodPost, path, resp)
+	}
+	drainBody(resp)
+	return nil
+}
+
+// PostAddonOptions calls POST /v1/addons/{slug}/options with the
+// given options body. The body is marshaled as JSON; nested maps /
+// arrays / scalars flow through verbatim (Phase 12 BRIDGE-08
+// re-validates against Supervisor's apps.options schema on the
+// Bridge side). The Provider sends the user's *.tf options body
+// verbatim per CF-08 + PROV-06.
+//
+// Returns the decoded response body as a map[string]any so the
+// caller can inspect top-level fields like `pwned` (CF-08 +
+// PROV-06 + D-09: the Bridge may surface a `pwned: true` field
+// in the apply response per Phase 14 verification; until the
+// typed OptionsValidateDiagnostic envelope is wired end-to-end
+// the Provider treats any top-level `pwned` field as a Warning).
+// On non-200 returns *BridgeError.
+func (c *Client) PostAddonOptions(ctx context.Context, slug string, body map[string]any) (map[string]any, error) {
+	if slug == "" {
+		return nil, fmt.Errorf("client: PostAddonOptions requires non-empty slug")
+	}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("client: marshal options body: %w", err)
+	}
+	path := "/v1/addons/" + slug + "/options"
+	resp, err := c.doRequest(ctx, http.MethodPost, path, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.decodeError(http.MethodPost, path, resp)
+	}
+	// Decode the response body so the caller can inspect
+	// top-level fields (notably `pwned`). Empty body is valid
+	// (the Bridge's current 200 response is the AddOnInfo
+	// payload, which has no top-level `pwned` — Phase 13
+	// surfaces no Warning; Phase 14 wires the typed envelope).
+	body2, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("client: read options response body: %w", err)
+	}
+	if len(body2) == 0 {
+		return map[string]any{}, nil
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(body2, &decoded); err != nil {
+		// Body present but not JSON: surface as decode error so
+		// the resource handler can map it (rare; usually means
+		// the Bridge changed shape).
+		return nil, fmt.Errorf("client: decode options response body: %w", err)
+	}
+	return decoded, nil
+}
+
+// PostAddonUninstall calls POST /v1/addons/{slug}/uninstall with the
+// supplied nonce passed via the X-Force-Destroy header. The nonce is
+// the Bridge's anti-CSRF guard for destructive operations (LIFE-03 +
+// Phase 12 D-05..D-08); it MUST be fresh (60s TTL) and presented as
+// the only header (no Bearer conflict — Bearer is on Authorization).
+//
+// The plaintext nonce NEVER enters any log path (PITFALLS S-1 +
+// T-13-10). The Provider passes it through the request header
+// directly; the http.Client.Transport machinery does not log it.
+//
+// On 204 No Content returns nil (CF-09 success). On 404 returns
+// nil (CF-06 idempotency — Delete on a missing add-on is a no-op).
+// On other non-200 returns *BridgeError. The non-200 path is where
+// MapError surfaces `nonce_expired` / `nonce_used` as typed Error
+// diagnostics, prompting the Resource.Delete handler to retry once
+// with a fresh nonce (CF-09 + D-07).
+func (c *Client) PostAddonUninstall(ctx context.Context, slug, nonce string) error {
+	if slug == "" {
+		return fmt.Errorf("client: PostAddonUninstall requires non-empty slug")
+	}
+	if nonce == "" {
+		return fmt.Errorf("client: PostAddonUninstall requires non-empty nonce")
+	}
+	path := "/v1/addons/" + slug + "/uninstall"
+	resp, err := c.doRequestWithHeader(ctx, http.MethodPost, path, nil, map[string]string{
+		"X-Force-Destroy": nonce,
+	})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNoContent {
+		return nil
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		// CF-06 idempotency: Delete on missing add-on is a no-op.
+		drainBody(resp)
+		return nil
+	}
+	return c.decodeError(http.MethodPost, path, resp)
+}
+
 // doRequest is the internal helper that builds the request, executes
 // it, and returns the response. The caller is responsible for
 // draining / decoding / closing the body per the Phase 11 Rule-1
@@ -227,6 +461,31 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body io.Rea
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("client: %s %s: %w", method, path, err)
+	}
+	return resp, nil
+}
+
+// doRequestWithHeader is the doRequest variant for endpoints that
+// require extra headers (Plan 02: X-Force-Destroy on
+// /v1/addons/{slug}/uninstall). The headers map is shallow — the
+// caller passes one entry per custom header; Content-Type /
+// Authorization are NOT in this map (Content-Type is set by
+// doRequest based on body presence; Authorization is injected by
+// the tokenInjectingTransport on every outbound request).
+func (c *Client) doRequestWithHeader(ctx context.Context, method, path string, body io.Reader, headers map[string]string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
+	if err != nil {
+		return nil, fmt.Errorf("client: build %s %s: %w", method, path, err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -266,6 +525,28 @@ func (c *Client) decodeError(method, path string, resp *http.Response) error {
 		Path:       path,
 	}
 	return be
+}
+
+// parseErrorResponse is the variant of decodeError for callers that
+// already read the body themselves (e.g. PostAddonInstall peeks at
+// the 409 body to detect `already_installed`). The caller passes
+// the already-read body bytes; the helper decodes the
+// contract.ErrorResponse and constructs the *BridgeError.
+//
+// The body is NOT re-read — the caller's pre-read consumed it; the
+// helper does not touch resp.Body (callers continue to own its
+// lifecycle). Used by PostAddonInstall for the 409-not-already-installed
+// branch where we have the body but no error_code match.
+func (c *Client) parseErrorResponse(method, path string, resp *http.Response, body []byte) error {
+	var errResp contract.ErrorResponse
+	_ = json.Unmarshal(body, &errResp) // best-effort
+
+	return &BridgeError{
+		StatusCode: resp.StatusCode,
+		Err:        errResp,
+		Method:     method,
+		Path:       path,
+	}
 }
 
 // drainBody discards the response body so the underlying TCP
