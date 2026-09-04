@@ -1,31 +1,37 @@
 // Package main is the entrypoint for the terraform-provider-homeassistant
-// OpenTofu/Terraform provider. Phase 9 ships a stub that imports the
-// shared contract types from terraform-bridge/contract (via the `replace`
-// directive in go.mod); Phase 13 fills in the resource and data-source
-// bodies without changing this file's structure or the package layout.
+// OpenTofu/Terraform provider. Phase 13 Plan 01 replaces the Phase 9
+// stub with a real providerserver.Serve wired to the Provider in
+// internal/provider/.
 package main
 
 import (
 	"context"
 	"log"
 
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
-	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 
-	"terraform-bridge/contract"
+	tfprovider "terraform-provider-homeassistant/internal/provider"
 )
 
-// Version is the Provider version. In Phase 9 it is a compile-time
-// constant; the Bridge/Provider version sync enforced by
-// internal/validate-versions.sh guarantees it matches the Bridge X.Y.Z.
+// Version is the Provider version. In Phase 13 Plan 01 this is a
+// compile-time constant; Phase 14 wires the 3-file versioning sync
+// (CF-14) so this constant tracks the same value as Bridge's
+// build.yaml.
 const Version = "0.0.0"
 
 func main() {
 	err := providerserver.Serve(
 		context.Background(),
-		newStubProvider,
+		newProvider,
 		providerserver.ServeOpts{
+			// Address must follow hostname/namespace/type form
+			// (validated by ServeOpts.validate). The Provider's
+			// Metadata returns TypeName = "homeassistant" which
+			// becomes the `type` segment; the namespace is
+			// `akentner` matching the GitHub org that publishes
+			// the provider; the host `registry.terraform.io` is
+			// the public HashiCorp registry.
 			Address: "registry.terraform.io/akentner/homeassistant",
 		},
 	)
@@ -34,32 +40,12 @@ func main() {
 	}
 }
 
-// newStubProvider constructs the Phase 9 placeholder. Phase 13 replaces
-// this with a real provider that calls Bridge /v1/version (PROV-03) and
-// registers the homeassistant_addon resource plus the two data sources
-// (PROV-02/11/12).
-func newStubProvider() provider.Provider {
-	return &stubProvider{}
+// newProvider returns a fresh Provider implementation on every
+// invocation. The framework calls this constructor for each
+// Provider RPC; constructing on every call keeps state out of the
+// Provider instance (the Configure handshake re-creates the
+// configured Client each time, so a stale instance cannot leak
+// across RPCs).
+func newProvider() provider.Provider {
+	return tfprovider.New()
 }
-
-// stubProvider is the Phase 9 placeholder. Embedding provider.Provider
-// satisfies the interface's Metadata/Configure/DataSources/Resources
-// methods at compile time (the embedded nil interface would panic if any
-// were called at runtime, but Phase 9 only serves the schema). Phase 13
-// replaces the embedding with explicit implementations.
-type stubProvider struct {
-	provider.Provider
-}
-
-// Schema satisfies provider.Provider. Phase 9 returns an empty schema
-// because no resource types have been declared yet — the Provider is a
-// no-op that the protocol layer requires only to be loadable. Phase 13
-// fills this in.
-func (p *stubProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
-	resp.Schema = schema.Schema{}
-}
-
-// References one of the shared contract types so the `replace` directive's
-// drift-detection is exercised at build time. Phase 13 replaces this with
-// a real Configure handshake consuming contract.VersionHandshake.
-var _ contract.VersionHandshake
