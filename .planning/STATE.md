@@ -2,14 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: opentofu-bridge
+current_phase: 11
+current_phase_name: ci-hardening-provider-install-workflow
 status: Phase 12 SHIPPED (12-01 + 12-02 + 12-03 landed)
-last_updated: "2026-09-04T01:00:00.000Z"
+stopped_at: Phase 13 context gathered
+last_updated: "2026-09-04T11:09:55.166Z"
+state_head: 159861520e391648fa30d25e63ccb42f30ff965d
 progress:
   total_phases: 7
-  completed_phases: 5
-  total_plans: 13
-  completed_plans: 11
-  percent: 65
+  completed_phases: 2
+  total_plans: 15
+  completed_plans: 12
+  percent: 29
 ---
 
 # Project State
@@ -234,7 +238,10 @@ coverage (11 supervisor + 7 handlers + 1 router-level test); build/vet/gofmt cle
 
 ## Session Continuity
 
-Last session: 2026-09-02T20:30:00.000Z (Phase 11 VERIFIED — 5 atomic commits on main: docs(STATE),
+**Stopped at:** Phase 13 context gathered
+**Resume file:** .planning/phases/13-provider-resource-data-sources-schema-handshake/13-CONTEXT.md
+
+Last session: 2026-09-04T11:09:54.701Z
 feat(11-01), feat(11-02), docs(STATE)-postship, docs(11)-VERIFICATION; 26 files; VERIFICATION.md canonical; live-HA
 deferred to Phase 14) Next step: /gsd-discuss-phase 12 (Bridge Write API + Critical-Addon Safety + Concurrency +
 State Index; 10 Requirements: BRIDGE-04..09, STATE-02..03, LIFE-01, LIFE-03) Resume file: None
