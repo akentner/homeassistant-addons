@@ -14,15 +14,29 @@ package contract
 // follow Supervisor's existing schema; JSON tags use snake_case for the wire
 // format. Field names are the agent's discretion per CONTEXT §the agent's
 // Discretion — but the same import path must be used from Plan 02.
+//
+// Phase 13 Plan 03 (D-01) appends the five Supervisor fields the Phase 9/11
+// struct dropped: Hostname, DNS, IngressURL, IngressEntry, WebUIURL. All five
+// carry `omitempty` so a Supervisor payload that omits them decodes cleanly to
+// the Go zero value (empty string / nil slice) — per D-02 the Bridge passes
+// Supervisor's payload through unmodified and the Provider surfaces the zero
+// value verbatim, with no fallback synthesis. The extension is purely
+// additive, so SchemaVersion stays at "1.0.0" per D-03 and the
+// [min_provider_version, max_provider_version] window is unchanged.
 type AddOnInfo struct {
-	Slug       string            `json:"slug"`
-	Name       string            `json:"name"`
-	Version    string            `json:"version"`
-	State      string            `json:"state"`
-	Started    bool              `json:"started"`
-	Options    map[string]string `json:"options,omitempty"`
-	Boot       string            `json:"boot"`
-	Repository string            `json:"repository"`
+	Slug         string            `json:"slug"`
+	Name         string            `json:"name"`
+	Version      string            `json:"version"`
+	State        string            `json:"state"`
+	Started      bool              `json:"started"`
+	Options      map[string]string `json:"options,omitempty"`
+	Boot         string            `json:"boot"`
+	Repository   string            `json:"repository"`
+	Hostname     string            `json:"hostname,omitempty"`
+	DNS          []string          `json:"dns,omitempty"`
+	IngressURL   string            `json:"ingress_url,omitempty"`
+	IngressEntry string            `json:"ingress_entry,omitempty"`
+	WebUIURL     string            `json:"webui_url,omitempty"`
 }
 
 // JobStatus wraps a Supervisor job_id round-trip. The Bridge's write API

@@ -41,17 +41,21 @@ type tfsdkSchema = fwresource.Schema
 // targets with a "mismatch between struct and object" diagnostic,
 // and rejects plain Go types where types.String etc. is required.
 type addonImportModel struct {
-	Slug       types.String            `tfsdk:"slug"`
-	Repository types.String            `tfsdk:"repository"`
-	URL        types.String            `tfsdk:"url"`
-	Options    map[string]types.String `tfsdk:"options"`
-	Start      types.Bool              `tfsdk:"start"`
-	Boot       types.String            `tfsdk:"boot"`
-	Version    types.String            `tfsdk:"version"`
-	State      types.String            `tfsdk:"state"`
-	Started    types.Bool              `tfsdk:"started"`
-	Hostname   types.String            `tfsdk:"hostname"`
-	Timeouts   timeouts.Value          `tfsdk:"timeouts"`
+	Slug         types.String            `tfsdk:"slug"`
+	Repository   types.String            `tfsdk:"repository"`
+	URL          types.String            `tfsdk:"url"`
+	Options      map[string]types.String `tfsdk:"options"`
+	Start        types.Bool              `tfsdk:"start"`
+	Boot         types.String            `tfsdk:"boot"`
+	Version      types.String            `tfsdk:"version"`
+	State        types.String            `tfsdk:"state"`
+	Started      types.Bool              `tfsdk:"started"`
+	Hostname     types.String            `tfsdk:"hostname"`
+	DNS          types.List              `tfsdk:"dns"`
+	IngressURL   types.String            `tfsdk:"ingress_url"`
+	IngressEntry types.String            `tfsdk:"ingress_entry"`
+	WebUIURL     types.String            `tfsdk:"webui_url"`
+	Timeouts     timeouts.Value          `tfsdk:"timeouts"`
 }
 
 // schemaResponseFor invokes the resource's Schema method and
@@ -81,34 +85,14 @@ func newAddonResourceWithClient(t *testing.T, c *client.Client) *tfresource.Addo
 
 // buildState constructs a tfsdk.State with the supplied slug +
 // repository populated. Used as the prior-state input to Read /
-// Import. The state's Raw is built from a tftypes.Object whose
-// shape matches the schema exactly (including the timeouts block);
-// SetAttribute against this State succeeds because the framework
-// can transform the value into the expected ObjectValue.
+// Import. The state's Raw is built from addonModelType() so the
+// shape matches the schema exactly (including the timeouts block
+// and the five D-01 Computed attributes); SetAttribute against
+// this State succeeds because the framework can transform the
+// value into the expected ObjectValue.
 func buildState(t *testing.T, schema tfsdkSchema, slug, repository string) tfsdk.State {
 	t.Helper()
-	rawType := tftypes.Object{
-		AttributeTypes: map[string]tftypes.Type{
-			"slug":       tftypes.String,
-			"repository": tftypes.String,
-			"url":        tftypes.String,
-			"options":    tftypes.Map{ElementType: tftypes.String},
-			"start":      tftypes.Bool,
-			"boot":       tftypes.String,
-			"version":    tftypes.String,
-			"state":      tftypes.String,
-			"started":    tftypes.Bool,
-			"hostname":   tftypes.String,
-			"timeouts": tftypes.Object{
-				AttributeTypes: map[string]tftypes.Type{
-					"create": tftypes.String,
-					"read":   tftypes.String,
-					"update": tftypes.String,
-					"delete": tftypes.String,
-				},
-			},
-		},
-	}
+	rawType := addonModelType()
 	raw := tftypes.NewValue(rawType, map[string]tftypes.Value{
 		"slug":       tftypes.NewValue(tftypes.String, slug),
 		"repository": tftypes.NewValue(tftypes.String, repository),
@@ -116,13 +100,17 @@ func buildState(t *testing.T, schema tfsdkSchema, slug, repository string) tfsdk
 		"options": tftypes.NewValue(tftypes.Map{ElementType: tftypes.String}, map[string]tftypes.Value{
 			"log_level": tftypes.NewValue(tftypes.String, "info"),
 		}),
-		"start":    tftypes.NewValue(tftypes.Bool, true),
-		"boot":     tftypes.NewValue(tftypes.String, "auto"),
-		"version":  tftypes.NewValue(tftypes.String, "0.0.0"),
-		"state":    tftypes.NewValue(tftypes.String, "started"),
-		"started":  tftypes.NewValue(tftypes.Bool, true),
-		"hostname": tftypes.NewValue(tftypes.String, ""),
-		"timeouts": tftypes.NewValue(rawType.AttributeTypes["timeouts"].(tftypes.Object), nil),
+		"start":         tftypes.NewValue(tftypes.Bool, true),
+		"boot":          tftypes.NewValue(tftypes.String, "auto"),
+		"version":       tftypes.NewValue(tftypes.String, "0.0.0"),
+		"state":         tftypes.NewValue(tftypes.String, "started"),
+		"started":       tftypes.NewValue(tftypes.Bool, true),
+		"hostname":      tftypes.NewValue(tftypes.String, ""),
+		"dns":           tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+		"ingress_url":   tftypes.NewValue(tftypes.String, ""),
+		"ingress_entry": tftypes.NewValue(tftypes.String, ""),
+		"webui_url":     tftypes.NewValue(tftypes.String, ""),
+		"timeouts":      tftypes.NewValue(rawType.AttributeTypes["timeouts"].(tftypes.Object), nil),
 	})
 	return tfsdk.State{Raw: raw, Schema: schema}
 }
@@ -131,20 +119,25 @@ func buildState(t *testing.T, schema tfsdkSchema, slug, repository string) tfsdk
 // Resource's schema (with all attribute types + the timeouts
 // block's nested Object). Used by ImportState tests so the
 // State.SetAttribute call can transform the value into the
-// expected shape.
+// expected shape. Plan 03 extends it with the four remaining D-01
+// Computed attributes (dns, ingress_url, ingress_entry, webui_url).
 func addonModelType() tftypes.Object {
 	return tftypes.Object{
 		AttributeTypes: map[string]tftypes.Type{
-			"slug":       tftypes.String,
-			"repository": tftypes.String,
-			"url":        tftypes.String,
-			"options":    tftypes.Map{ElementType: tftypes.String},
-			"start":      tftypes.Bool,
-			"boot":       tftypes.String,
-			"version":    tftypes.String,
-			"state":      tftypes.String,
-			"started":    tftypes.Bool,
-			"hostname":   tftypes.String,
+			"slug":          tftypes.String,
+			"repository":    tftypes.String,
+			"url":           tftypes.String,
+			"options":       tftypes.Map{ElementType: tftypes.String},
+			"start":         tftypes.Bool,
+			"boot":          tftypes.String,
+			"version":       tftypes.String,
+			"state":         tftypes.String,
+			"started":       tftypes.Bool,
+			"hostname":      tftypes.String,
+			"dns":           tftypes.List{ElementType: tftypes.String},
+			"ingress_url":   tftypes.String,
+			"ingress_entry": tftypes.String,
+			"webui_url":     tftypes.String,
 			"timeouts": tftypes.Object{
 				AttributeTypes: map[string]tftypes.Type{
 					"create": tftypes.String,
@@ -478,16 +471,20 @@ func buildPlanFromModel(t *testing.T, schema tfsdkSchema, m addonImportModel) tf
 	t.Helper()
 	rawType := addonModelType()
 	attrs := map[string]tftypes.Value{
-		"slug":       tftypes.NewValue(tftypes.String, m.Slug.ValueString()),
-		"repository": tftypes.NewValue(tftypes.String, m.Repository.ValueString()),
-		"url":        tftypes.NewValue(tftypes.String, m.URL.ValueString()),
-		"start":      tftypes.NewValue(tftypes.Bool, m.Start.ValueBool()),
-		"boot":       tftypes.NewValue(tftypes.String, m.Boot.ValueString()),
-		"version":    tftypes.NewValue(tftypes.String, m.Version.ValueString()),
-		"state":      tftypes.NewValue(tftypes.String, m.State.ValueString()),
-		"started":    tftypes.NewValue(tftypes.Bool, m.Started.ValueBool()),
-		"hostname":   tftypes.NewValue(tftypes.String, m.Hostname.ValueString()),
-		"timeouts":   tftypes.NewValue(rawType.AttributeTypes["timeouts"].(tftypes.Object), nil),
+		"slug":          tftypes.NewValue(tftypes.String, m.Slug.ValueString()),
+		"repository":    tftypes.NewValue(tftypes.String, m.Repository.ValueString()),
+		"url":           tftypes.NewValue(tftypes.String, m.URL.ValueString()),
+		"start":         tftypes.NewValue(tftypes.Bool, m.Start.ValueBool()),
+		"boot":          tftypes.NewValue(tftypes.String, m.Boot.ValueString()),
+		"version":       tftypes.NewValue(tftypes.String, m.Version.ValueString()),
+		"state":         tftypes.NewValue(tftypes.String, m.State.ValueString()),
+		"started":       tftypes.NewValue(tftypes.Bool, m.Started.ValueBool()),
+		"hostname":      tftypes.NewValue(tftypes.String, m.Hostname.ValueString()),
+		"dns":           tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+		"ingress_url":   tftypes.NewValue(tftypes.String, m.IngressURL.ValueString()),
+		"ingress_entry": tftypes.NewValue(tftypes.String, m.IngressEntry.ValueString()),
+		"webui_url":     tftypes.NewValue(tftypes.String, m.WebUIURL.ValueString()),
+		"timeouts":      tftypes.NewValue(rawType.AttributeTypes["timeouts"].(tftypes.Object), nil),
 	}
 	if m.Options != nil {
 		optVals := make(map[string]tftypes.Value, len(m.Options))
@@ -1535,16 +1532,20 @@ func TestResourceTimeouts_Override(t *testing.T) {
 	timeoutsType := rawType.AttributeTypes["timeouts"].(tftypes.Object)
 	plan := tfsdk.Plan{
 		Raw: tftypes.NewValue(rawType, map[string]tftypes.Value{
-			"slug":       tftypes.NewValue(tftypes.String, "a0d7c6b6_test"),
-			"repository": tftypes.NewValue(tftypes.String, "core"),
-			"url":        tftypes.NewValue(tftypes.String, ""),
-			"options":    tftypes.NewValue(tftypes.Map{ElementType: tftypes.String}, nil),
-			"start":      tftypes.NewValue(tftypes.Bool, true),
-			"boot":       tftypes.NewValue(tftypes.String, "auto"),
-			"version":    tftypes.NewValue(tftypes.String, ""),
-			"state":      tftypes.NewValue(tftypes.String, ""),
-			"started":    tftypes.NewValue(tftypes.Bool, false),
-			"hostname":   tftypes.NewValue(tftypes.String, ""),
+			"slug":          tftypes.NewValue(tftypes.String, "a0d7c6b6_test"),
+			"repository":    tftypes.NewValue(tftypes.String, "core"),
+			"url":           tftypes.NewValue(tftypes.String, ""),
+			"options":       tftypes.NewValue(tftypes.Map{ElementType: tftypes.String}, nil),
+			"start":         tftypes.NewValue(tftypes.Bool, true),
+			"boot":          tftypes.NewValue(tftypes.String, "auto"),
+			"version":       tftypes.NewValue(tftypes.String, ""),
+			"state":         tftypes.NewValue(tftypes.String, ""),
+			"started":       tftypes.NewValue(tftypes.Bool, false),
+			"hostname":      tftypes.NewValue(tftypes.String, ""),
+			"dns":           tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+			"ingress_url":   tftypes.NewValue(tftypes.String, ""),
+			"ingress_entry": tftypes.NewValue(tftypes.String, ""),
+			"webui_url":     tftypes.NewValue(tftypes.String, ""),
 			"timeouts": tftypes.NewValue(timeoutsType, map[string]tftypes.Value{
 				"create": tftypes.NewValue(tftypes.String, "2m"),
 				"read":   tftypes.NewValue(tftypes.String, "1m"),
@@ -1634,6 +1635,164 @@ func TestResourceConfigure_WrongClientType(t *testing.T) {
 	r.Configure(context.Background(), resource.ConfigureRequest{ProviderData: "not-a-client"}, &resp)
 	if !resp.Diagnostics.HasError() {
 		t.Errorf("Configure(string): expected Error diagnostics, got none")
+	}
+}
+
+// TestResourceSchema_Has5NewComputedAttributes asserts the five
+// D-01 Supervisor pass-through attributes are declared Computed on
+// the resource schema: hostname, dns, ingress_url, ingress_entry,
+// webui_url. `dns` is additionally asserted to be a ListAttribute
+// of String elements (D-01: DNS is a []string on the wire).
+func TestResourceSchema_Has5NewComputedAttributes(t *testing.T) {
+	r := tfresource.NewAddonResource()
+	schema := schemaResponseFor(t, r)
+
+	for _, name := range []string{"hostname", "dns", "ingress_url", "ingress_entry", "webui_url"} {
+		attr, ok := schema.Attributes[name]
+		if !ok {
+			t.Errorf("Schema.Attributes has no %q key (D-01)", name)
+			continue
+		}
+		if !attr.IsComputed() {
+			t.Errorf("%s attribute is not Computed (Computed = %v)", name, attr.IsComputed())
+		}
+		if attr.IsRequired() {
+			t.Errorf("%s attribute must not be Required (D-01: pass-through only)", name)
+		}
+	}
+
+	dnsAttr, ok := schema.Attributes["dns"].(fwresource.ListAttribute)
+	if !ok {
+		t.Fatalf("dns attribute is not a ListAttribute (got %T)", schema.Attributes["dns"])
+	}
+	if dnsAttr.ElementType != types.StringType {
+		t.Errorf("dns ElementType = %v, want types.StringType", dnsAttr.ElementType)
+	}
+}
+
+// TestResourceRead_Populates5NewAttributes drives Read against a
+// server whose AddOnInfo carries all five D-01 fields populated,
+// and asserts each one lands in resp.State verbatim (D-02: no
+// fallback synthesis, no normalization).
+func TestResourceRead_Populates5NewAttributes(t *testing.T) {
+	want := contract.AddOnInfo{
+		Slug:         "a0d7c6b6_my_addon",
+		Name:         "My Add-on",
+		Version:      "1.2.3",
+		State:        "started",
+		Started:      true,
+		Boot:         "auto",
+		Repository:   "core",
+		Hostname:     "a0d7c6b6-my-addon",
+		DNS:          []string{"a0d7c6b6-my-addon.local.hass.io"},
+		IngressURL:   "/api/hassio_ingress/abc123/",
+		IngressEntry: "/api/hassio_ingress/abc123",
+		WebUIURL:     "http://homeassistant.local:8099/",
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		wantPath := "/v1/addons/" + want.Slug + "/info"
+		if r.URL.Path != wantPath {
+			t.Errorf("server: path = %q, want %q", r.URL.Path, wantPath)
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(want)
+	}))
+	defer srv.Close()
+
+	c, err := client.NewClient(srv.URL, "test-bearer-token")
+	if err != nil {
+		t.Fatalf("client.NewClient: %v", err)
+	}
+	r := newAddonResourceWithClient(t, c)
+	schema := schemaResponseFor(t, r)
+	prior := buildState(t, schema, want.Slug, "core")
+
+	var resp resource.ReadResponse
+	resp.State = tfsdk.State{Schema: schema}
+	r.Read(context.Background(), resource.ReadRequest{State: prior}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read: diagnostics = %v", resp.Diagnostics)
+	}
+
+	var state addonImportModel
+	diags := resp.State.Get(context.Background(), &state)
+	if diags.HasError() {
+		t.Fatalf("State.Get: %v", diags)
+	}
+	if got := state.Hostname.ValueString(); got != want.Hostname {
+		t.Errorf("Hostname = %q, want %q", got, want.Hostname)
+	}
+	if got := state.IngressURL.ValueString(); got != want.IngressURL {
+		t.Errorf("IngressURL = %q, want %q", got, want.IngressURL)
+	}
+	if got := state.IngressEntry.ValueString(); got != want.IngressEntry {
+		t.Errorf("IngressEntry = %q, want %q", got, want.IngressEntry)
+	}
+	if got := state.WebUIURL.ValueString(); got != want.WebUIURL {
+		t.Errorf("WebUIURL = %q, want %q", got, want.WebUIURL)
+	}
+
+	var dns []string
+	dnsDiags := state.DNS.ElementsAs(context.Background(), &dns, false)
+	if dnsDiags.HasError() {
+		t.Fatalf("DNS.ElementsAs: %v", dnsDiags)
+	}
+	if len(dns) != 1 || dns[0] != want.DNS[0] {
+		t.Errorf("DNS = %v, want %v", dns, want.DNS)
+	}
+}
+
+// TestResourceRead_OmittedD01FieldsStayEmpty is the D-02
+// pass-through guard: a Supervisor payload that omits the five new
+// fields (the legacy-Supervisor case the `omitempty` tags exist
+// for) must decode to empty strings and a null DNS list — the
+// Provider must NOT synthesize a fallback hostname or URL.
+func TestResourceRead_OmittedD01FieldsStayEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Deliberately hand-rolled JSON with none of the five
+		// D-01 keys present — mirrors a Supervisor that predates
+		// the fields.
+		_, _ = w.Write([]byte(`{"slug":"legacy","name":"Legacy","version":"0.1.0",` +
+			`"state":"stopped","started":false,"boot":"manual","repository":"core"}`))
+	}))
+	defer srv.Close()
+
+	c, err := client.NewClient(srv.URL, "test-bearer-token")
+	if err != nil {
+		t.Fatalf("client.NewClient: %v", err)
+	}
+	r := newAddonResourceWithClient(t, c)
+	schema := schemaResponseFor(t, r)
+	prior := buildState(t, schema, "legacy", "core")
+
+	var resp resource.ReadResponse
+	resp.State = tfsdk.State{Schema: schema}
+	r.Read(context.Background(), resource.ReadRequest{State: prior}, &resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read: diagnostics = %v", resp.Diagnostics)
+	}
+
+	var state addonImportModel
+	if diags := resp.State.Get(context.Background(), &state); diags.HasError() {
+		t.Fatalf("State.Get: %v", diags)
+	}
+	for name, got := range map[string]string{
+		"hostname":      state.Hostname.ValueString(),
+		"ingress_url":   state.IngressURL.ValueString(),
+		"ingress_entry": state.IngressEntry.ValueString(),
+		"webui_url":     state.WebUIURL.ValueString(),
+	} {
+		if got != "" {
+			t.Errorf("%s = %q, want empty string (D-02 pass-through, no synthesis)", name, got)
+		}
+	}
+	if !state.DNS.IsNull() {
+		t.Errorf("DNS = %v, want null list when Supervisor omits the field", state.DNS)
 	}
 }
 

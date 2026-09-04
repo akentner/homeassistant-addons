@@ -121,9 +121,11 @@ func (p *Provider) Schema(_ context.Context, _ provider.SchemaRequest, resp *pro
 //     [min_provider_version, max_provider_version] window. An
 //     out-of-window Provider returns a typed Error diagnostic per
 //     D-08 + D-11.
-//  5. On success stashes the configured Client in resp.ClientData so
-//     every Resource and DataSource can retrieve it via their own
-//     Configure callback.
+//  5. On success stashes the configured Client in BOTH
+//     resp.ResourceData and resp.DataSourceData so every Resource
+//     and DataSource can retrieve it via their own Configure
+//     callback (the framework keeps the two handoff channels
+//     separate).
 //
 // Failure paths return Error-severity Diagnostics; success leaves
 // resp.Diagnostics empty and resp.ClientData populated.
@@ -188,7 +190,13 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		return
 	}
 
+	// The framework hands ResourceData to every Resource's
+	// Configure and DataSourceData to every DataSource's Configure
+	// — they are two separate channels, so both must be populated
+	// or the data sources added in Plan 03 receive a nil
+	// ProviderData and can never reach the Bridge.
 	resp.ResourceData = c
+	resp.DataSourceData = c
 }
 
 // Resources returns the slice of Resource constructors the Provider
@@ -203,8 +211,9 @@ func (p *Provider) Resources(_ context.Context) []func() fwresource.Resource {
 }
 
 // DataSources returns the slice of DataSource constructors the
-// Provider exposes. Plan 01 ships both data sources as thin stubs
-// (PROV-11 + PROV-12); Plan 03 fills in the schemas + Read bodies.
+// Provider exposes: `homeassistant_addon` (PROV-11) and
+// `homeassistant_supervisor_info` (PROV-12). Plan 01 shipped both as
+// thin stubs; Plan 03 fills in the schemas + Read bodies.
 func (p *Provider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		func() datasource.DataSource { return datasrc.NewAddonDataSource() },

@@ -48,17 +48,21 @@ import (
 // Plan 02 wires Create / Update / Delete to read from this struct
 // and apply the configured deadlines.
 type addonResourceModel struct {
-	Slug       types.String            `tfsdk:"slug"`
-	Repository types.String            `tfsdk:"repository"`
-	URL        types.String            `tfsdk:"url"`
-	Options    map[string]types.String `tfsdk:"options"`
-	Start      types.Bool              `tfsdk:"start"`
-	Boot       types.String            `tfsdk:"boot"`
-	Version    types.String            `tfsdk:"version"`
-	State      types.String            `tfsdk:"state"`
-	Started    types.Bool              `tfsdk:"started"`
-	Hostname   types.String            `tfsdk:"hostname"`
-	Timeouts   timeouts.Value          `tfsdk:"timeouts"`
+	Slug         types.String            `tfsdk:"slug"`
+	Repository   types.String            `tfsdk:"repository"`
+	URL          types.String            `tfsdk:"url"`
+	Options      map[string]types.String `tfsdk:"options"`
+	Start        types.Bool              `tfsdk:"start"`
+	Boot         types.String            `tfsdk:"boot"`
+	Version      types.String            `tfsdk:"version"`
+	State        types.String            `tfsdk:"state"`
+	Started      types.Bool              `tfsdk:"started"`
+	Hostname     types.String            `tfsdk:"hostname"`
+	DNS          types.List              `tfsdk:"dns"`
+	IngressURL   types.String            `tfsdk:"ingress_url"`
+	IngressEntry types.String            `tfsdk:"ingress_entry"`
+	WebUIURL     types.String            `tfsdk:"webui_url"`
+	Timeouts     timeouts.Value          `tfsdk:"timeouts"`
 }
 
 // AddonResource implements resource.Resource + resource.ResourceWithImportState
@@ -93,11 +97,14 @@ func (r *AddonResource) Metadata(_ context.Context, req resource.MetadataRequest
 	resp.TypeName = req.ProviderTypeName + "_addon"
 }
 
-// Schema declares the homeassistant_addon schema. Plan 01 ships the
+// Schema declares the homeassistant_addon schema. Plan 01 shipped the
 // minimum-viable subset (slug + Computed version/state/started per
-// CF-10); Plan 02 expands with options/start/boot full semantics,
-// Plan 03 adds the hostname / dns / ingress_url / ingress_entry /
-// webui_url Computed attributes per D-01.
+// CF-10); Plan 02 expanded it with options/start/boot full semantics;
+// Plan 03 adds the four remaining D-01 Computed attributes (dns,
+// ingress_url, ingress_entry, webui_url) alongside the `hostname`
+// attribute Plan 02 declared as a placeholder — so the schema now
+// carries eight Computed attributes mirroring the extended
+// contract.AddOnInfo.
 //
 // The `state` Computed attribute carries UseStateForUnknown()
 // (PROV-10 + CF-04) so refreshes don't show spurious diffs.
@@ -160,7 +167,24 @@ func (r *AddonResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			},
 			"hostname": schema.StringAttribute{
 				Computed:    true,
-				Description: "Supervisor-reported hostname for the add-on. Plan 03 widens the AddOnInfo struct per D-01 — populated once the Bridge's /info endpoint exposes the hostname field.",
+				Description: "Supervisor-reported hostname for the add-on (D-01). Empty when Supervisor does not set it — the value is passed through verbatim with no fallback synthesis (D-02).",
+			},
+			"dns": schema.ListAttribute{
+				Computed:    true,
+				ElementType: types.StringType,
+				Description: "Supervisor-reported DNS names for the add-on container (D-01). Null when Supervisor omits the field.",
+			},
+			"ingress_url": schema.StringAttribute{
+				Computed:    true,
+				Description: "Supervisor-reported Ingress URL for the add-on (D-01). Empty when the add-on does not expose Ingress.",
+			},
+			"ingress_entry": schema.StringAttribute{
+				Computed:    true,
+				Description: "Supervisor-reported Ingress entry path for the add-on (D-01). Empty when the add-on does not expose Ingress.",
+			},
+			"webui_url": schema.StringAttribute{
+				Computed:    true,
+				Description: "Supervisor-reported Web UI URL for the add-on (D-01). Empty when the add-on does not publish a Web UI.",
 			},
 		},
 		// Plan 02 declares the per-operation timeouts block via
@@ -343,7 +367,10 @@ func (r *AddonResource) Create(ctx context.Context, req resource.CreateRequest, 
 	// preserve the user's plan-time slug + repository + start +
 	// boot (they are Config-level attributes, not Refresh-driven)
 	// and overwrite the Computed fields.
-	r.applyInfoToState(&plan, finalInfo)
+	r.applyInfoToState(ctx, &plan, finalInfo, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -394,30 +421,16 @@ func (r *AddonResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	// Populate the model from the AddOnInfo payload. Optional /
-	// Computed attributes that the Bridge did not populate (e.g.
-	// `hostname` when the supervisor omits it) stay at the zero
-	// value, which the framework renders as `null`.
-	state.Version = types.StringValue(info.Version)
-	state.State = types.StringValue(info.State)
-	state.Started = types.BoolValue(info.Started)
-	if info.Repository != "" {
-		state.Repository = types.StringValue(info.Repository)
+	// Populate the model from the AddOnInfo payload via the shared
+	// applyInfoToState helper so Read, Create, and Update cannot
+	// drift on which Computed attributes get refreshed. Optional /
+	// Computed attributes the Bridge did not populate (e.g.
+	// `hostname` when Supervisor omits it) stay at the zero value,
+	// which the framework renders as `null` / `""` per D-02.
+	r.applyInfoToState(ctx, &state, info, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	if info.Boot != "" {
-		state.Boot = types.StringValue(info.Boot)
-	}
-	if info.Options != nil {
-		opts := make(map[string]types.String, len(info.Options))
-		for k, v := range info.Options {
-			opts[k] = types.StringValue(v)
-		}
-		state.Options = opts
-	}
-	// hostname is part of the schema (forward-compat with Plan 03
-	// D-01) but the Bridge's AddOnInfo does not populate it in
-	// Plan 01 — we leave it at the zero value (null) so the
-	// framework does not echo a stale string.
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -481,7 +494,10 @@ func (r *AddonResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.Append(diagnostics.MapError(err)...)
 		return
 	}
-	r.applyInfoToState(&plan, finalInfo)
+	r.applyInfoToState(ctx, &plan, finalInfo, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -672,9 +688,17 @@ func mapStringEqual(a, b map[string]types.String) bool {
 // AddOnInfo payload. The slug + repository + start + boot + url
 // attributes are Config-level and are preserved from the input
 // plan; only the Computed fields + options are overwritten. This
-// is the shared helper used by Create + Update to keep the
+// is the shared helper used by Read + Create + Update to keep the
 // state-finalization code in one place.
-func (r *AddonResource) applyInfoToState(model *addonResourceModel, info *contract.AddOnInfo) {
+//
+// Plan 03 (D-01) extends the helper with the five Supervisor
+// fields added to contract.AddOnInfo: Hostname, DNS, IngressURL,
+// IngressEntry, WebUIURL. Per D-02 the values are passed through
+// verbatim — an empty string from Supervisor becomes an empty
+// string in state, and a nil DNS slice becomes a null List (no
+// fallback synthesis). ctx + diags are required because
+// types.ListValueFrom reports conversion diagnostics.
+func (r *AddonResource) applyInfoToState(ctx context.Context, model *addonResourceModel, info *contract.AddOnInfo, diags *diag.Diagnostics) {
 	if info == nil {
 		return
 	}
@@ -694,10 +718,29 @@ func (r *AddonResource) applyInfoToState(model *addonResourceModel, info *contra
 		}
 		model.Options = opts
 	}
-	// hostname + url are forward-compat placeholders. hostname
-	// stays null until Plan 03 widens AddOnInfo per D-01; url is
-	// never repopulated from /info (the Bridge does not echo it
-	// back — the user's *.tf is the source of truth).
+
+	// D-01 pass-through fields. Supervisor payloads that omit any
+	// of these decode to the Go zero value (omitempty on the
+	// contract struct); we surface that verbatim per D-02.
+	model.Hostname = types.StringValue(info.Hostname)
+	model.IngressURL = types.StringValue(info.IngressURL)
+	model.IngressEntry = types.StringValue(info.IngressEntry)
+	model.WebUIURL = types.StringValue(info.WebUIURL)
+	if info.DNS == nil {
+		model.DNS = types.ListNull(types.StringType)
+	} else {
+		dnsList, listDiags := types.ListValueFrom(ctx, types.StringType, info.DNS)
+		if diags != nil {
+			diags.Append(listDiags...)
+		}
+		if listDiags.HasError() {
+			model.DNS = types.ListNull(types.StringType)
+		} else {
+			model.DNS = dnsList
+		}
+	}
+	// url is never repopulated from /info (the Bridge does not
+	// echo it back — the user's *.tf is the source of truth).
 }
 
 // ImportState implements PROV-08 (CF-05). The ImportState ID
