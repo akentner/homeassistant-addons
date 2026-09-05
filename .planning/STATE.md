@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: opentofu-bridge
-current_phase: 11
-current_phase_name: Bridge Read API
+current_phase: 14
+current_phase_name: Real-HA End-to-End Verification + Operator Documentation
 status: Phase 12 SHIPPED (12-01 + 12-02 + 12-03 landed)
 stopped_at: Phase 14 context gathered
-last_updated: "2026-09-05T11:36:31.176Z"
-state_head: fa1408df222a73637d4cfd90e3fffc1ab96a4c60
+last_updated: "2026-09-05T14:56:38.944Z"
+state_head: 70f5f0771f48f44003012f6af273600fd671be57
 progress:
   total_phases: 7
   completed_phases: 3
-  total_plans: 18
+  total_plans: 21
   completed_plans: 15
   percent: 43
 ---
@@ -23,7 +23,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-31)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Phase 13 — Provider + Resource + Data Sources + Schema Handshake
+tracking. **Current focus:** Phase 14 — Real-HA End-to-End Verification + Operator Documentation
 whenever Cloudflare setup lands.
 
 ## Milestone v1.0 — COMPLETE
@@ -87,7 +87,7 @@ outbound request). D-18 RESOLVED with defensive design; conservative re-verifica
 
 ## Current Position
 
-Phase: 11 — Bridge Read API
+Phase: 14 (Real-HA End-to-End Verification + Operator Documentation) — EXECUTING
 3 atomic commits landed on main (docs(STATE), feat(11-01), feat(11-02)); 14+9 file changes with full canary-test
 coverage (11 supervisor + 7 handlers + 1 router-level test); build/vet/gofmt clean; live-HA curl verification against
 192.168.178.3:8124 still deferred to Phase 14 (requires Bridge image rebuild + redeploy + token recovery).
