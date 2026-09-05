@@ -80,13 +80,21 @@ validate_addon() {
     GLOBAL_ERRORS+=("${ERRORS[@]}")
 }
 
+# Auto-discover any directory containing config.yaml + build.yaml. Scan
+# recurses 2 levels deep so nested add-ons under `tools/` (e.g.
+# `tools/test-addon/`, the Phase 14 verify suite's live test target) are
+# picked up alongside top-level add-on directories. Depth 2 covers every
+# nesting pattern used in this repo (top-level + tools/<name>/).
 ADDON_DIRS=()
-for dir in */; do
-    dir="${dir%/}"
-    if [[ -f "$dir/config.yaml" ]] && [[ -f "$dir/build.yaml" ]]; then
-        ADDON_DIRS+=("$dir")
-    fi
-done
+mapfile -t ADDON_DIRS < <(find . -mindepth 1 -maxdepth 2 -type d \
+    \( -name .git -o -name node_modules \) -prune -o \
+    -type d -print 2>/dev/null \
+    | while read -r dir; do
+        if [[ -f "$dir/config.yaml" ]] && [[ -f "$dir/build.yaml" ]]; then
+            # strip leading "./" for cosmetic consistency with the old glob
+            printf '%s\n' "${dir#./}"
+        fi
+    done | sort)
 
 if [[ ${#ADDON_DIRS[@]} -eq 0 ]]; then
     echo -e "${YELLOW}No add-on directories found, skipping version validation${NC}"

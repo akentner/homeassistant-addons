@@ -1,0 +1,12 @@
+build_from:
+  amd64: "ghcr.io/home-assistant/amd64-base:3.24"
+labels:
+  org.opencontainers.image.title: "Test Add-on"
+  org.opencontainers.image.description: >-
+    Live test target for the Phase 14 verify suite. The Provider can install,
+    configure, start, stop, and uninstall this add-on without touching any
+    real add-on on the host.
+  org.opencontainers.image.source: "https://github.com/akentner/homeassistant-addons"
+  org.opencontainers.image.licenses: "MIT"
+args:
+  VERSION: "0.1.0"

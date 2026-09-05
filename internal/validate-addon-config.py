@@ -99,11 +99,20 @@ def main() -> int:
     if args.dirs:
         config_files = [Path(d) / "config.yaml" for d in args.dirs]
     else:
-        config_files = [
+        # Recursive scan to depth 2 so nested add-ons under `tools/`
+        # (e.g. `tools/test-addon/`, the Phase 14 verify suite's live
+        # test target) are auto-discovered alongside top-level add-ons.
+        config_files = sorted(
             d / "config.yaml"
             for d in Path(".").iterdir()
             if d.is_dir() and (d / "config.yaml").exists() and (d / "build.yaml").exists()
-        ]
+        ) + sorted(
+            nested / "config.yaml"
+            for top in Path(".").iterdir()
+            if top.is_dir() and top.name == "tools"
+            for nested in top.iterdir()
+            if nested.is_dir() and (nested / "config.yaml").exists() and (nested / "build.yaml").exists()
+        )
 
     if not config_files:
         print("No add-on config.yaml files found, skipping.", flush=True)

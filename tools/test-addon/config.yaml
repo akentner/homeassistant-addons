@@ -1,0 +1,23 @@
+name: "Test Add-on"
+version: "0.1.0-0"
+slug: "local_test-addon"
+description: >-
+  Live test target for the Phase 14 verify suite. The Provider can install,
+  configure, start, stop, and uninstall this add-on without touching any real
+  add-on on the host. The container runs a no-op sleep infinity so Supervisor
+  observes `started: true`; the schema's two string options exist so Update
+  and pwned-warning scenarios have something to vary.
+url: "https://github.com/akentner/homeassistant-addons"
+arch:
+  - amd64
+init: false
+startup: application
+boot: manual
+host_network: false
+hassio_api: false
+options:
+  log_level: info
+  dummy_setting: default
+schema:
+  log_level: str
+  dummy_setting: str
