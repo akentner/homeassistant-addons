@@ -80,29 +80,29 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
 
 ### PROV — Provider
 
-- [ ] **PROV-01**: Provider is `terraform-provider-homeassistant`, uses `terraform-plugin-framework` v1.19.0 (protocol
+- [x] **PROV-01**: Provider is `terraform-provider-homeassistant`, uses `terraform-plugin-framework` v1.19.0 (protocol
       v6), supports OpenTofu ≥ 1.12 and Terraform ≥ 1.5; serves via `providerserver.Serve()`
-- [ ] **PROV-02**: Resource `homeassistant_addon` schema: `slug` (Required, String), `repository` (Optional, String,
+- [x] **PROV-02**: Resource `homeassistant_addon` schema: `slug` (Required, String), `repository` (Optional, String,
       default `"core"`), `url` (Optional, String — explicit repository URL), `options` (Optional, `TypeMap<String>` —
       see Open Question 2), `start` (Optional, Bool, default `true` — see Open Question 5), `boot` (Optional,
       `["auto", "manual", "manual_only"]`); Computed: `version`, `state`, `started`, `hostname`
-- [ ] **PROV-03**: Provider `Configure` calls Bridge `GET /v1/version` at startup and refuses to operate if
+- [x] **PROV-03**: Provider `Configure` calls Bridge `GET /v1/version` at startup and refuses to operate if
       `schema_version < min_provider_version` or `schema_version > max_provider_version` (typed diagnostic)
-- [ ] **PROV-04**: Resource Read is idempotent — called after every operation; calls Bridge
+- [x] **PROV-04**: Resource Read is idempotent — called after every operation; calls Bridge
       `GET /v1/addons/{slug}/info`; returns empty state when 404 (so Delete on missing add-on is a no-op)
-- [ ] **PROV-05**: Resource Create: calls Bridge `POST /v1/addons/{slug}/install`; on `409 already_installed` treats it
+- [x] **PROV-05**: Resource Create: calls Bridge `POST /v1/addons/{slug}/install`; on `409 already_installed` treats it
       as success (adoption); follows up with `/start` when `start = true`; handles async `job_id` polling via Bridge
-- [ ] **PROV-06**: Resource Update: computes the `options` diff and calls Bridge `POST /v1/addons/{slug}/options`;
+- [x] **PROV-06**: Resource Update: computes the `options` diff and calls Bridge `POST /v1/addons/{slug}/options`;
       surfaces `pwned` warnings as Provider warning diagnostics (not errors) — see Open Question 4
-- [ ] **PROV-07**: Resource Delete: calls Bridge `POST /v1/addons/{slug}/uninstall`; returns success on `204` and treats
+- [x] **PROV-07**: Resource Delete: calls Bridge `POST /v1/addons/{slug}/uninstall`; returns success on `204` and treats
       `404` as already-gone (idempotent)
-- [ ] **PROV-08**: Resource implements `ResourceWithImportState` with `ImportStatePassthroughID`; accepted ID formats:
+- [x] **PROV-08**: Resource implements `ResourceWithImportState` with `ImportStatePassthroughID`; accepted ID formats:
       `{slug}` (assumes `repository = "core"`) and `{repository}/{slug}` (any repo)
-- [ ] **PROV-09**: Resource supports per-operation timeouts via `terraform-plugin-framework-timeouts`; defaults in
+- [x] **PROV-09**: Resource supports per-operation timeouts via `terraform-plugin-framework-timeouts`; defaults in
       DOCS.md: `create = 10m`, `update = 2m`, `delete = 5m`
-- [ ] **PROV-10**: Resource applies `UseStateForUnknown()` plan modifier to the `state` attribute so plan output does
+- [x] **PROV-10**: Resource applies `UseStateForUnknown()` plan modifier to the `state` attribute so plan output does
       not show spurious diffs on every refresh (see Open Question 8)
-- [ ] **PROV-11**: Data source `homeassistant_addon` (read-only by slug, returns full info) for use in `terraform_data`
+- [x] **PROV-11**: Data source `homeassistant_addon` (read-only by slug, returns full info) for use in `terraform_data`
       and other resources' attribute references without managing the add-on
 - [ ] **PROV-12**: Data source `homeassistant_supervisor_info` (read-only) for use in `lifecycle.precondition` blocks
 

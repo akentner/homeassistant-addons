@@ -61,7 +61,7 @@ SUPERVISOR_TOKEN-rotation-across-restart — empirical spike required in Phase 9
 - [ ] **Phase 11: Bridge Read API** — /v1/version, /v1/addons, /v1/addons/{slug}/info, /v1/info
 - [ ] **Phase 12: Bridge Write API + Critical-Addon Safety + Concurrency + State Index** — install/uninstall/start/stop/
       options, critical-addon guard, per-slug mutex, /v1/state/index, force-destroy nonce
-- [ ] **Phase 13: Provider + Resource + Data Sources + Schema Handshake** — Provider compiles; version handshake;
+- [x] **Phase 13: Provider + Resource + Data Sources + Schema Handshake** — Provider compiles; version handshake; (completed 2026-09-05)
       `homeassistant_addon` CRUD round-trips against Bridge; data sources; prevent_destroy default; typed diagnostics
 - [ ] **Phase 14: Real-HA End-to-End Verification + Operator Documentation** — Empirical apply/destroy cycle against
       ha-nextgen (or haos-op3050-1); idempotency + drift observed; operator docs based on observed behavior
@@ -270,6 +270,10 @@ PROV-12, LIFE-02, LIFE-04, STATE-01
 
 **Plans**: TBD
 
+- [x] 13-01-PLAN.md
+- [x] 13-02-PLAN.md
+- [x] 13-03-PLAN.md
+
 **UI hint**: no
 
 ### Phase 14: Real-HA End-to-End Verification + Operator Documentation
@@ -354,7 +358,7 @@ Plans:
 | 10. Auth + Logging + Healthcheck    | v1.3      | 3/3                                     | Complete            | 2026-08-31 |
 | 11. Bridge Read API                 | v1.3      | 0/TBD                                   | Not started         | —          |
 | 12. Bridge Write API + Safety       | v1.3      | 0/TBD                                   | Not started         | —          |
-| 13. Provider + Resource + Data      | v1.3      | 0/TBD                                   | Not started         | —          |
+| 13. Provider + Resource + Data      | v1.3      | 3/3 | Complete    | 2026-09-05 |
 | 14. Real-HA E2E + Docs              | v1.3      | 0/TBD                                   | Not started         | —          |
 | 15. CI + Provider Install           | v1.3      | 0/3                                     | Complete            | 2026-08-31 |
 
