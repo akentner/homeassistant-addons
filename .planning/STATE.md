@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: opentofu-bridge
-current_phase: 14
-current_phase_name: Real-HA End-to-End Verification + Operator Documentation
-status: Phase 12 SHIPPED (12-01 + 12-02 + 12-03 landed)
-stopped_at: Phase 14 context gathered
-last_updated: "2026-09-05T14:56:38.944Z"
-state_head: 70f5f0771f48f44003012f6af273600fd671be57
+current_phase: 15
+status: Phase 14 SHIPPED (14-01 + 14-02 + 14-03 landed; live-HA empirical exercise deferred to operator runtime)
+stopped_at: Phase 14 SHIPPED; advancing to Phase 15
+last_updated: "2026-09-05T15:56:45.384Z"
+state_head: d0a6e5d091d5c0ab9c369ab0633c0ed6bf782f14
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 21
-  completed_plans: 15
+  completed_plans: 18
   percent: 43
+current_phase_name: CI Hardening + Provider Install Workflow
 ---
 
 # Project State
@@ -23,7 +23,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-31)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Phase 14 — Real-HA End-to-End Verification + Operator Documentation
+tracking. **Current focus:** Phase 15 — CI Hardening + Provider Install Workflow
 whenever Cloudflare setup lands.
 
 ## Milestone v1.0 — COMPLETE
@@ -87,10 +87,16 @@ outbound request). D-18 RESOLVED with defensive design; conservative re-verifica
 
 ## Current Position
 
-Phase: 14 (Real-HA End-to-End Verification + Operator Documentation) — EXECUTING
-3 atomic commits landed on main (docs(STATE), feat(11-01), feat(11-02)); 14+9 file changes with full canary-test
-coverage (11 supervisor + 7 handlers + 1 router-level test); build/vet/gofmt clean; live-HA curl verification against
-192.168.178.3:8124 still deferred to Phase 14 (requires Bridge image rebuild + redeploy + token recovery).
+Phase: 14 (Real-HA End-to-End Verification + Operator Documentation) — COMPLETE
+7 atomic commits landed on main: docs(state) pre-cleanup, docs(state) begin-phase, feat(14-01) test add-on + verify
+foundation, docs(14-01) summary, feat(14-02) 12 per-error_code verify scenarios, docs(14-02) summary,
+feat(14-03) README + DOCS expansion + 99-cleanup, docs(14-03) summary, docs(roadmap) Phase 14 complete.
+OPS-04 surface delivered: tools/test-addon/ (5 files) + internal/verify-bridge-e2e/ (_lib.sh + 00-happy-path.sh +
+12 error-code scenarios + 99-cleanup) + terraform-bridge/{README.md, DOCS.md} rewrite. Live-HA empirical
+exercise remains operator-runtime (preflight returns 1 in this env: no tofu, no Provider binary, /healthz
+unreachable); every scenario follows the D-10 skip-when-unsafe pattern and exits 0 with `skipped — <reason>`
+on missing prerequisites. validate-versions PASS, validate-addon-config PASS, validate-dockerfile-args PASS,
+shellcheck PASS for all 16 shell files. Bridge 0.2.0 == Provider 0.2.0 (TOFU-05 unchanged — CF-11 honored).
 
 ## Accumulated Context
 
