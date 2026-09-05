@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: opentofu-bridge
 current_phase: 15
+current_phase_name: CI Hardening + Provider Install Workflow
 status: Phase 14 SHIPPED (14-01 + 14-02 + 14-03 landed; live-HA empirical exercise deferred to operator runtime)
-stopped_at: Phase 14 SHIPPED; advancing to Phase 15
-last_updated: "2026-09-05T15:56:45.384Z"
-state_head: d0a6e5d091d5c0ab9c369ab0633c0ed6bf782f14
+stopped_at: Phase 15 context gathered (audit trail; phase work shipped in prior session)
+last_updated: "2026-09-05T19:09:28.732Z"
+state_head: 499b224ea231c81a6da357cb7ad0e10cd53a53b9
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 21
   completed_plans: 18
   percent: 43
-current_phase_name: CI Hardening + Provider Install Workflow
 ---
 
 # Project State
@@ -244,10 +244,10 @@ shellcheck PASS for all 16 shell files. Bridge 0.2.0 == Provider 0.2.0 (TOFU-05 
 
 ## Session Continuity
 
-**Stopped at:** Phase 14 context gathered
-**Resume file:** .planning/phases/14-real-ha-end-to-end-verification-operator-documentation/14-CONTEXT.md
+**Stopped at:** Phase 15 context gathered (audit trail; phase work shipped in prior session)
+**Resume file:** .planning/phases/15-ci-hardening-provider-install-workflow/15-CONTEXT.md
 
-Last session: 2026-09-05T11:36:30.492Z
+Last session: 2026-09-05T19:09:28.159Z
 feat(11-01), feat(11-02), docs(STATE)-postship, docs(11)-VERIFICATION; 26 files; VERIFICATION.md canonical; live-HA
 deferred to Phase 14) Next step: /gsd-discuss-phase 12 (Bridge Write API + Critical-Addon Safety + Concurrency +
 State Index; 10 Requirements: BRIDGE-04..09, STATE-02..03, LIFE-01, LIFE-03) Resume file: None
