@@ -1,0 +1,83 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": "v1.3 \u2014 opentofu-bridge",
+  "next": {
+    "command": "/gsd:progress",
+    "label": "Show progress",
+    "reason": "Unsure of state \u2014 showing progress"
+  },
+  "phases": [
+    {
+      "name": "Quality Fixes",
+      "number": "1",
+      "status": "complete"
+    },
+    {
+      "name": "Auto-Update Workflow",
+      "number": "2",
+      "status": "complete"
+    },
+    {
+      "name": "Meridian Add-on",
+      "number": "3",
+      "status": "complete"
+    },
+    {
+      "name": "Scaffold + Ingress Validation",
+      "number": "4",
+      "status": "complete"
+    },
+    {
+      "name": "Multi-Namespace + Dynamic Config",
+      "number": "5",
+      "status": "complete"
+    },
+    {
+      "name": "Git Integration",
+      "number": "6",
+      "status": "complete"
+    },
+    {
+      "name": "CI/CD Hardening",
+      "number": "8",
+      "status": "pending"
+    },
+    {
+      "name": "Bridge Foundation + Token Spike",
+      "number": "9",
+      "status": "complete"
+    },
+    {
+      "name": "Auth + Logging + Healthcheck",
+      "number": "10",
+      "status": "complete"
+    },
+    {
+      "name": "Bridge Read API",
+      "number": "11",
+      "status": "pending"
+    },
+    {
+      "name": "Bridge Write API + Safety",
+      "number": "12",
+      "status": "pending"
+    },
+    {
+      "name": "Provider + Resource + Data",
+      "number": "13",
+      "status": "complete"
+    },
+    {
+      "name": "Real-HA E2E + Docs",
+      "number": "14",
+      "status": "complete"
+    },
+    {
+      "name": "CI + Provider Install",
+      "number": "15",
+      "status": "complete"
+    }
+  ],
+  "updated_at": "2026-09-05T23:33:11.764Z"
+}
