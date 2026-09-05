@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: opentofu-bridge
 current_phase: 11
-current_phase_name: ci-hardening-provider-install-workflow
+current_phase_name: Bridge Read API
 status: Phase 12 SHIPPED (12-01 + 12-02 + 12-03 landed)
-stopped_at: Phase 13 context gathered
-last_updated: "2026-09-04T11:09:55.166Z"
-state_head: 159861520e391648fa30d25e63ccb42f30ff965d
+stopped_at: Phase 14 context gathered
+last_updated: "2026-09-05T11:36:31.176Z"
+state_head: fa1408df222a73637d4cfd90e3fffc1ab96a4c60
 progress:
   total_phases: 7
-  completed_phases: 2
-  total_plans: 15
-  completed_plans: 12
-  percent: 29
+  completed_phases: 3
+  total_plans: 18
+  completed_plans: 15
+  percent: 43
 ---
 
 # Project State
@@ -23,7 +23,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-31)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Phase 15 — ci-hardening-provider-install-workflow `08-05-GAP-PLAN.md` remains ready to run
+tracking. **Current focus:** Phase 13 — Provider + Resource + Data Sources + Schema Handshake
 whenever Cloudflare setup lands.
 
 ## Milestone v1.0 — COMPLETE
@@ -87,7 +87,7 @@ outbound request). D-18 RESOLVED with defensive design; conservative re-verifica
 
 ## Current Position
 
-Phase: 11 of 3 (ci-hardening-provider-install-workflow) (Bridge Read API) Last activity: 2026-09-02 -- Phase 11 SHIPPED:
+Phase: 11 — Bridge Read API
 3 atomic commits landed on main (docs(STATE), feat(11-01), feat(11-02)); 14+9 file changes with full canary-test
 coverage (11 supervisor + 7 handlers + 1 router-level test); build/vet/gofmt clean; live-HA curl verification against
 192.168.178.3:8124 still deferred to Phase 14 (requires Bridge image rebuild + redeploy + token recovery).
@@ -238,10 +238,10 @@ coverage (11 supervisor + 7 handlers + 1 router-level test); build/vet/gofmt cle
 
 ## Session Continuity
 
-**Stopped at:** Phase 13 context gathered
-**Resume file:** .planning/phases/13-provider-resource-data-sources-schema-handshake/13-CONTEXT.md
+**Stopped at:** Phase 14 context gathered
+**Resume file:** .planning/phases/14-real-ha-end-to-end-verification-operator-documentation/14-CONTEXT.md
 
-Last session: 2026-09-04T11:09:54.701Z
+Last session: 2026-09-05T11:36:30.492Z
 feat(11-01), feat(11-02), docs(STATE)-postship, docs(11)-VERIFICATION; 26 files; VERIFICATION.md canonical; live-HA
 deferred to Phase 14) Next step: /gsd-discuss-phase 12 (Bridge Write API + Critical-Addon Safety + Concurrency +
 State Index; 10 Requirements: BRIDGE-04..09, STATE-02..03, LIFE-01, LIFE-03) Resume file: None
