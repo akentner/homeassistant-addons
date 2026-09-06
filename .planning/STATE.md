@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: opentofu-bridge
-status: Phase complete — ready for verification
-last_updated: "2026-09-06T16:56:54.966Z"
+status: Milestone complete
+last_updated: "2026-09-06T17:03:28.248Z"
 progress:
   total_phases: 15
   completed_phases: 12
@@ -100,7 +100,7 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Phase: 16 (iac-runner Scaffold + Auth + State Backends + Healthcheck) — EXECUTING Plan: 3 of 3 **v1.3 Phase 14** is
+Phase: 16 of 3 (iac-runner Scaffold + Auth + State Backends + Healthcheck)
 COMPLETE (7 atomic commits landed on main; live-HA empirical exercise deferred to operator runtime as documented in
 14-VERIFICATION.md — preflight returns 1 in this env: no tofu, no Provider binary, /healthz unreachable). OPS-04 surface
 delivered: `tools/test-addon/` (5 files) + `internal/verify-bridge-e2e/` (_lib.sh + 00-happy-path.sh + 12 error-code

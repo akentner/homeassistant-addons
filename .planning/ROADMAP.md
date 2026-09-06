@@ -566,7 +566,7 @@ exercised. Operator documentation (`README.md` + `DOCS.md`) is written from obse
 | 13. Provider + Resource + Data      | v1.3      | 3/3                                                           | Complete            | 2026-09-05 |
 | 14. Real-HA E2E + Docs              | v1.3      | 3/3                                                           | Complete            | 2026-09-05 |
 | 15. CI + Provider Install           | v1.3      | 0/3 (mechanically ready, blocked on v1.2 Phase 8 gap-closure) | Mechanically Ready  | —          |
-| 16. iac-runner Scaffold + Auth      | v1.4      | 3/3                                                           | Complete            | 2026-09-06 |
+| 16. iac-runner Scaffold + Auth      | v1.4      | 3/3                                                           | Complete    | 2026-09-06 |
 | 17. Git + Apply Jobs                | v1.4      | 0/TBD                                                         | Planned             | —          |
 | 18. MQTT + HA Entities              | v1.4      | 0/TBD                                                         | Planned             | —          |
 | 19. E2E + DOCS                      | v1.4      | 0/TBD                                                         | Planned             | —          |
