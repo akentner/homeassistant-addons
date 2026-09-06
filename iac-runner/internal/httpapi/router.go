@@ -43,6 +43,7 @@ func NewRouter(runnerVersion string, store *auth.TokenStore, validator *keys.Val
 	// Auth-protected /v1/*.
 	r.Route("/v1", func(r chi.Router) {
 		r.Use(auth.RequireBearer(store))
+		r.Get("/version", handlers.Version(runnerVersion))
 		r.Post("/auth/rotate", handlers.AuthRotate(store))
 	})
 
