@@ -4,16 +4,15 @@ milestone: v1.4
 milestone_name: iac-runner
 current_phase: 16
 current_phase_name: iac-runner Scaffold + Auth + State Backends + Healthcheck
-status: planning
-stopped_at: v1.4 planning initialized; Phase 16 ready to plan
-last_updated: "2026-09-06T00:00:00.000Z"
-state_head: 9f45b96482a29e6f3929641b407c455f915fc88f
+status: Executing Phase 16
+last_updated: "2026-09-06T16:36:26.260Z"
+state_head: 4df2d95ba29e6f3929641b407c455f915fc88f
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 3
+  completed_plans: 1
+  percent: 33
 ---
 
 # Project State
@@ -23,7 +22,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-31)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Phase 15 — CI Hardening + Provider Install Workflow whenever Cloudflare setup lands.
+tracking. **Current focus:** Phase 16 — iac-runner Scaffold + Auth + State Backends + Healthcheck
 
 ## Milestone v1.0 — COMPLETE
 
@@ -105,6 +104,8 @@ conceptually independent and may parallelize after Phase 16 stabilises the contr
 
 ## Current Position
 
+Phase: 16 (iac-runner Scaffold + Auth + State Backends + Healthcheck) — EXECUTING
+Plan: 2 of 3
 **v1.3 Phase 14** is COMPLETE (7 atomic commits landed on main; live-HA empirical exercise deferred to operator
 runtime as documented in 14-VERIFICATION.md — preflight returns 1 in this env: no tofu, no Provider binary,
 /healthz unreachable). OPS-04 surface delivered: `tools/test-addon/` (5 files) + `internal/verify-bridge-e2e/`
@@ -112,8 +113,14 @@ runtime as documented in 14-VERIFICATION.md — preflight returns 1 in this env:
 Bridge 0.2.0 == Provider 0.2.0 (TOFU-05 unchanged — CF-11 honored). **v1.3 Phase 15** (CI hardening + provider
 install workflow) is mechanically ready but blocked on v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite.
 
-**v1.4 Phase 16** (iac-runner Scaffold + Auth + State Backends + Healthcheck) is ready to plan. Status: Defining
-requirements. Last activity: 2026-09-06 — Milestone v1.4 iac-runner started.
+**v1.4 Phase 16** Plan 01 (iac-runner Scaffold + Auth) is COMPLETE (3 atomic commits: 0fa09fb scaffold,
+bb00c4f auth package + version + contract, 4df2d95 main.go + signals + handlers + router). 24 files (5 scaffold +
+18 Go source + 1 root README). All Phase 16 acceptance criteria pass:
+`go build / vet / test ./...` exit 0 from `iac-runner/`; 20 unit tests pass (11 token + 9 bind);
+`python3 internal/validate-addon-config.py iac-runner` exits 0; binary prints `dev` for `-version`;
+root `README.md` updated with iac-runner entry between `network-tools` and `gatus`.
+AUTHR-01..04 + OBS-01 marked complete in `.planning/REQUIREMENTS.md`. Live-HA empirical verification
+(token issuance + rotation + bind gate + /healthz against a real HA host) deferred to Phase 19.
 
 ## Accumulated Context
 
@@ -157,6 +164,7 @@ requirements. Last activity: 2026-09-06 — Milestone v1.4 iac-runner started.
   with 403). Output: spike result documented in `16-SUMMARY.md`. If R2 lockfile does not behave as expected, fall
   back to: (a) use only the local backend by default and offer R2 as a sync-only (no-lock) backend, or (b) add an
   external lock service. **Do not** silently drop locking.
+
 - **IRUN-H-2: MQTT Discovery button-press semantics for `button.*` entities in HA Core 2026.x** — LOW confidence; HA
   Core has been deprecating/reworking `button.*` entities across releases. **Verify in Phase 18 spike** that
   `button.iac_runner_run_apply` published via MQTT Discovery actually surfaces in the HA UI and that pressing it
@@ -281,6 +289,7 @@ requirements. Last activity: 2026-09-06 — Milestone v1.4 iac-runner started.
 | Phase 10 P02                                           | 25min | 3 tasks  | 11 files |
 | Phase 10-auth-layer-structured-logging-healthcheck P03 | 4 min | 3 tasks  | 6 files  |
 | Quick 260902-sa1 (State Sync)                          | ~5min | 1 task   | 1 file   |
+| Phase 16 P01 | 17 min | 3 tasks | 24 files |
 
 ## Quick Tasks Completed
 
@@ -298,7 +307,7 @@ requirements. Last activity: 2026-09-06 — Milestone v1.4 iac-runner started.
 
 ## Session Continuity
 
-Last session: 2026-09-06T00:00:00.000Z Stopped at: Milestone v1.4 iac-runner planning initialized (after origin/main
+Last session: 2026-09-06T16:36:26.254Z
 rebase cleanup — local main was 81 commits behind origin; reset --hard to origin/main, dropped stale v1.3 working
 tree, re-applied v1.4 setup commits on clean base).
 Next step: `/gsd-plan-phase 16` (iac-runner Scaffold + Auth + State Backends + Healthcheck — AUTHR-01..04,

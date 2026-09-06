@@ -243,19 +243,19 @@ Phase 18 = MQTT Discovery + HA entities. Phase 19 = E2E verification + operator 
 
 ### AUTHR — iac-runner Bearer-Auth (no SUPERVISOR_TOKEN)
 
-- [ ] **AUTHR-01**: Add-on does NOT declare `hassio_api: true` in `config.yaml`; the add-on does not need Supervisor
+- [x] **AUTHR-01**: Add-on does NOT declare `hassio_api: true` in `config.yaml`; the add-on does not need Supervisor
       access (`iac-runner` calls `tofu`/`git`/`aws` itself; no Supervisor calls). Only `homeassistant_api: true`
       is set, solely for the MQTT service connection
-- [ ] **AUTHR-02**: Bearer-token auth follows the proven `terraform-bridge` pattern: 256-bit token via `crypto/rand`;
+- [x] **AUTHR-02**: Bearer-token auth follows the proven `terraform-bridge` pattern: 256-bit token via `crypto/rand`;
       SHA-256 hash stored at `/data/iac-runner-token` with `chmod 600`; validation via
       `crypto/subtle.ConstantTimeCompare`; plaintext surfaced exactly once via add-on log line + Options UI on first
       start (and on subsequent rotation); restart does NOT re-emit the plaintext
-- [ ] **AUTHR-03**: Add-on listener binds to `0.0.0.0:8125` (separate from `terraform-bridge`'s 8124); startup
+- [x] **AUTHR-03**: Add-on listener binds to `0.0.0.0:8125` (separate from `terraform-bridge`'s 8124); startup
       auto-detects the first `tailscale*` interface in `/sys/class/net` and binds to its IPv4 address; an explicit
       IP is accepted only if it belongs to a Tailscale interface OR falls inside one of `bind_allowed_subnets`;
       `bind_address: "0.0.0.0"` is always refused regardless of `bind_allowed_subnets` (per
       `terraform-bridge` AUTH-07 pattern)
-- [ ] **AUTHR-04**: Add-on exposes `POST /v1/auth/rotate` with the same 24-hour grace semantics as `terraform-bridge`;
+- [x] **AUTHR-04**: Add-on exposes `POST /v1/auth/rotate` with the same 24-hour grace semantics as `terraform-bridge`;
       for 24 hours both the old and the new token authenticate successfully; grace state persisted in
       `/data/iac-runner-token.grace` and survives restart
 
@@ -349,7 +349,7 @@ Phase 18 = MQTT Discovery + HA entities. Phase 19 = E2E verification + operator 
 
 ### OBS — Observability (Logs, Output, Run History)
 
-- [ ] **OBS-01**: Add-on emits one structured JSON log record per HTTP request with fields `ts`, `level`, `msg`,
+- [x] **OBS-01**: Add-on emits one structured JSON log record per HTTP request with fields `ts`, `level`, `msg`,
       `request_id`, `route`, `method`, `status`, `duration_ms` — same pattern as `terraform-bridge` OPS-01;
       `Authorization` header is stripped before request-log snapshot (chi middleware)
 - [ ] **OBS-02**: `tofu` stdout/stderr for each run is captured line-by-line to

@@ -82,6 +82,26 @@ Assistant via a REST sensor.
 - `host_network: true` for full Layer-2 access (raw ARP packets)
 - REST endpoint at `/arping_scan.json` consumable by the [REST integration][ha-rest-integration]
 
+### [IaC Runner](./iac-runner)
+
+![Supports amd64 Architecture][amd64-shield]
+
+_Bearer-authenticated OpenTofu/Terraform runner for homelab IaC against R2/S3/local state backends._
+
+A Go HTTP service on port 8125 (distinct from `terraform-bridge`'s 8124) that clones a Git repo (e.g.
+`homelab-infra`), runs `tofu plan`/`apply` against Tailscale-reachable homelab servers, and persists state in Cloudflare
+R2 (default), any S3-compatible backend, or a local file. Manual REST trigger only (`POST /v1/plan`,
+`POST /v1/apply` → `GET /v1/runs/{id}`); concurrent applies on the same repo are serialized by an in-process mutex.
+
+**Features:**
+
+- Bearer-auth on `0.0.0.0:8125` with Tailscale-bind gate (`bind_address: 0.0.0.0` always refused) — no
+  `hassio_api`, no `SUPERVISOR_TOKEN`
+- Three state backends (`r2` default, `s3`, `local`) with `use_lockfile = true` for R2/S3 + file-based lock for local
+- SHA-256 hashed bearer at `/data/iac-runner-token` (chmod 600, atomic rename) + 24h grace rotation
+- `homeassistant_api: true` + `mqtt:need` service for the Phase 18 MQTT Discovery wiring (sensors + buttons)
+- `host_network: true` for SSH to homelab servers via Tailscale IPs
+
 ### [Gatus](./gatus)
 
 ![Supports amd64 Architecture][amd64-shield]
