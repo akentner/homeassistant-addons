@@ -46,8 +46,8 @@ Subsequent restarts do not re-emit the token. If the file is lost, see the recov
 See [DOCS.md](DOCS.md) for the full operator reference: every option, every `/v1/*` endpoint, the per-`error_code`
 troubleshooting cross-link table, the state-management surface, and the HA backup integration notes.
 
-[release-shield]: https://img.shields.io/badge/version-v0.2.0-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v0.2.0
+[release-shield]: https://img.shields.io/badge/version-v0.3.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v0.3.0
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [license-shield]: https://img.shields.io/badge/license-MIT-green.svg

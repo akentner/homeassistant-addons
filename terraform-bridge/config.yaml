@@ -1,6 +1,6 @@
 name: "Terraform Bridge"
 description: "Bearer-authenticated JSON proxy of the HA Supervisor HTTP API for OpenTofu/Terraform management."
-version: "0.2.0-0"
+version: "0.3.0-0"
 slug: "terraform-bridge"
 init: false
 arch:
