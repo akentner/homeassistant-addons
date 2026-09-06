@@ -1,19 +1,19 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: opentofu-bridge
-current_phase: 15
-current_phase_name: CI Hardening + Provider Install Workflow
-status: Phase 14 SHIPPED (14-01 + 14-02 + 14-03 landed; live-HA empirical exercise deferred to operator runtime)
-stopped_at: Phase 15 context gathered (audit trail; phase work shipped in prior session)
-last_updated: "2026-09-05T19:09:28.732Z"
-state_head: 499b224ea231c81a6da357cb7ad0e10cd53a53b9
+milestone: v1.4
+milestone_name: iac-runner
+current_phase: 16
+current_phase_name: iac-runner Scaffold + Auth + State Backends + Healthcheck
+status: planning
+stopped_at: v1.4 planning initialized; Phase 16 ready to plan
+last_updated: "2026-09-06T00:00:00.000Z"
+state_head: 9f45b96482a29e6f3929641b407c455f915fc88f
 progress:
-  total_phases: 7
-  completed_phases: 3
-  total_plans: 21
-  completed_plans: 18
-  percent: 43
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -84,18 +84,36 @@ rest. Spike ran 2026-08-31 → `token_unchanged`; Phase 10 auth already implemen
 `internal/supervisor/client.go:84-91` — `RoundTrip → t.tokenFn()` reads `os.Getenv("SUPERVISOR_TOKEN")` on every
 outbound request). D-18 RESOLVED with defensive design; conservative re-verification deferred (see Todos).
 
+**v1.3 closure status:** 6 of 7 phases shipped end-to-end (`terraform-bridge/v0.3.0` + Provider `v0.3.0`). Phase 15
+release cut pending v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite (mechanically ready). Milestone closure
+call: `gsd-complete-milestone v1.3` after Phase 15 release.
+
+## Milestone v1.4 iac-runner — PLANNING
+
+Roadmap: 4 phases (16-19), ~32 requirements. Source: conversation 2026-09-06 (research skipped). Continues in
+parallel with v1.3 (Phase 15 release) and v1.2 (Phase 8 gap-closure).
+
+| Phase | Name                                                          | Status   | Completed |
+| ----- | ------------------------------------------------------------- | -------- | --------- |
+| 16    | iac-runner Scaffold + Auth + State Backends + Healthcheck     | Planned  | —         |
+| 17    | Git Integration + Apply Job System                            | Planned  | —         |
+| 18    | MQTT Discovery + HA Sensoren + Buttons                        | Planned  | —         |
+| 19    | E2E Verification + DOCS + Operator Runbook                    | Planned  | —         |
+
+Phase dependency graph: 16 → 17 → 18 → 19 (strictly serial in initial plan; 17 + 18 are
+conceptually independent and may parallelize after Phase 16 stabilises the contracts).
+
 ## Current Position
 
-Phase: 14 (Real-HA End-to-End Verification + Operator Documentation) — COMPLETE 7 atomic commits landed on main:
-docs(state) pre-cleanup, docs(state) begin-phase, feat(14-01) test add-on + verify foundation, docs(14-01) summary,
-feat(14-02) 12 per-error_code verify scenarios, docs(14-02) summary, feat(14-03) README + DOCS expansion + 99-cleanup,
-docs(14-03) summary, docs(roadmap) Phase 14 complete. OPS-04 surface delivered: tools/test-addon/ (5 files) +
-internal/verify-bridge-e2e/ (_lib.sh + 00-happy-path.sh + 12 error-code scenarios + 99-cleanup) +
-terraform-bridge/{README.md, DOCS.md} rewrite. Live-HA empirical exercise remains operator-runtime (preflight returns 1
-in this env: no tofu, no Provider binary, /healthz unreachable); every scenario follows the D-10 skip-when-unsafe
-pattern and exits 0 with `skipped — <reason>` on missing prerequisites. validate-versions PASS, validate-addon-config
-PASS, validate-dockerfile-args PASS, shellcheck PASS for all 16 shell files. Bridge 0.2.0 == Provider 0.2.0 (TOFU-05
-unchanged — CF-11 honored).
+**v1.3 Phase 14** is COMPLETE (7 atomic commits landed on main; live-HA empirical exercise deferred to operator
+runtime as documented in 14-VERIFICATION.md — preflight returns 1 in this env: no tofu, no Provider binary,
+/healthz unreachable). OPS-04 surface delivered: `tools/test-addon/` (5 files) + `internal/verify-bridge-e2e/`
+(_lib.sh + 00-happy-path.sh + 12 error-code scenarios + 99-cleanup) + `terraform-bridge/{README.md, DOCS.md}` rewrite.
+Bridge 0.2.0 == Provider 0.2.0 (TOFU-05 unchanged — CF-11 honored). **v1.3 Phase 15** (CI hardening + provider
+install workflow) is mechanically ready but blocked on v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite.
+
+**v1.4 Phase 16** (iac-runner Scaffold + Auth + State Backends + Healthcheck) is ready to plan. Status: Defining
+requirements. Last activity: 2026-09-06 — Milestone v1.4 iac-runner started.
 
 ## Accumulated Context
 
@@ -117,6 +135,33 @@ unchanged — CF-11 honored).
 | **AUTH-04 grace file format (Plan 03):** /data/bridge-token.grace is a 2-line plaintext format (hex64 + RFC3339) instead of JSON — keeps Plan 01's readGraceFile parser unchanged; D-13 per-request expiry semantics means the file becomes inert without background goroutines                                                                                | Plan-adaptation choice. JSON would have been equally correct on disk but required rewiring the reader AND adding a JSON-path through Plan 01's already-committed code. Text format respects the existing reader and locks the security invariant (no plaintext ever) more defensively.                                                                                                                                                       |
 | **AUTH-04 rotate write order (Plan 03):** TokenStore.Rotate writes the new primary hash BEFORE writing the grace file. If the grace write fails, the old token still authenticates against the new hash; on-disk primary state is always consistent                                                                                                            | Failure-mode lockdown. Reversing the order would leave a window where the new token authenticates against /data/bridge-token but the old token does not — exactly the scenario D-02/D-12 are designed to prevent. Cost of writing primary first is one extra renamed file; cost of reversal is a window of forced 401s on a still-valid token.                                                                                               |
 | **D-03 timestamp pair (Plan 03):** RotateResponse.GraceExpiresAt and OldTokenValidUntil are byte-identical RFC3339 strings — duplicated on purpose so Provider consumers can pick whichever schema field name they prefer without an extra hop                                                                                                                 | Provider-side ergonomics. PROV-03 / PROV-05 reference these fields from Phase 13's resource shape; duplication costs zero on the wire (~70 bytes) and removes a constant from the Provider's schema mapping table.                                                                                                                                                                                                                           |
+
+### Key Decisions (v1.4)
+
+| Decision                                                                                                  | Rationale                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| New milestone v1.4, not Phase 16 in v1.3                                                                  | v1.3 = "opentofu-bridge" (manage HA add-ons declaratively); v1.4 = "iac-runner" (apply IaC to homelab servers). Different runtime semantics (HTTP service vs long-running executor), different auth needs, different state model. Name + scope don't fit a single milestone. |
+| Bearer-auth pattern reused from `terraform-bridge` (crypto/rand + SHA-256 + ConstantTimeCompare + chmod 600) | Already proven and validated in v1.3 Phase 10. Two HA add-ons can share an auth primitive; only the listener port and the Tailscale-bind config differ.                                                       |
+| Multi-backend state (r2 default + s3 + local) instead of single backend                                  | User already has Cloudflare R2 in use; R2's S3-compatible API supports `use_lockfile = true` (no DynamoDB required). User explicitly asked for "R2 als Default, aber S3 und lokal trotzdem unterstützen".        |
+| SSH deploy keys in `/data/keys/{repo}.key` (chmod 600 enforced at startup) instead of Options-Field base64 | Personal/private deployment; per-repo SSH keys are too long for the HA Options UI; matches `terraform-bridge`'s `/data/initial-token` pattern (file-on-volume instead of config).                                |
+| Manual REST trigger only (`POST /v1/plan`, `POST /v1/apply`), no webhook in v1.4                          | Webhook-Auto-Rollout deferred to v1.5. Manual trigger = implicit human approval gate; auto-rollout needs a deliberate design pass (approval flow, secrets-in-CI, etc.).                                          |
+| HA entities via MQTT Discovery (`homeassistant_api: true` + `services: ["mqtt:need"]`) instead of WebSocket-Custom-Component | MQTT Discovery is the standard HA add-on integration path; no custom integration install needed. WebSocket-based approach would require a Custom-Component in HA Core (more setup, less portable).            |
+| 4 phases (16–19), not 7 like v1.3                                                                        | Concerns group more naturally: scaffold/auth/state → git/apply-jobs → MQTT/HA → E2E/docs. 17 + 18 are independent and may parallelize after Phase 16 stabilises the contracts.                              |
+| RESEARCH skipped for v1.4                                                                                 | Scope clear from conversation; patterns reused from existing repo add-ons (`terraform-bridge` for HTTP/auth/Go, `markdown-renderer` for git integration). Research would re-validate what is already decided. |
+
+### Research Flags (v1.4 — open questions for implementation)
+
+- **IRUN-H-1: OpenTofu S3-backend lockfile semantics on Cloudflare R2** — MEDIUM confidence; R2 supports S3-compatible
+  PUT/GET/DELETE but native object-lock semantics are non-standard. **Verify empirically in Phase 16 spike** by running
+  `tofu apply` against R2 with `use_lockfile = true` and observing that a second concurrent apply blocks (not errors
+  with 403). Output: spike result documented in `16-SUMMARY.md`. If R2 lockfile does not behave as expected, fall
+  back to: (a) use only the local backend by default and offer R2 as a sync-only (no-lock) backend, or (b) add an
+  external lock service. **Do not** silently drop locking.
+- **IRUN-H-2: MQTT Discovery button-press semantics for `button.*` entities in HA Core 2026.x** — LOW confidence; HA
+  Core has been deprecating/reworking `button.*` entities across releases. **Verify in Phase 18 spike** that
+  `button.iac_runner_run_apply` published via MQTT Discovery actually surfaces in the HA UI and that pressing it
+  invokes the Add-on's subscribed MQTT command topic. If button.* is unavailable, fall back to `switch.*` or expose
+  the trigger as a `rest_command` automation that calls `POST /v1/apply`.
 
 ### Research Flags (open questions for implementation — must resolve before/during Phase 9)
 
@@ -141,6 +186,16 @@ unchanged — CF-11 honored).
 - **Open Q-8 (resolved): `UseStateForUnknown()` default** — applied to `state` attribute in Phase 13.
 
 ### Todos
+
+#### v1.4 (new)
+
+- [ ] Phase 16: **Capture IRUN-H-1 spike transcript** — verify OpenTofu S3-backend lockfile semantics on Cloudflare R2
+      before designing STBK-05
+
+- [ ] Phase 18: **Capture IRUN-H-2 spike transcript** — verify `button.*` MQTT-Discovery semantics in HA Core 2026.x
+      before designing MQTT-05/06
+
+#### v1.3 (carried forward)
 
 - [ ] **Conservative H-1 re-verification** — Empirical spike (2026-08-31) showed `SUPERVISOR_TOKEN` unchanged across
       Supervisor restart. Per user decision 2026-09-02 we now ASSUME the token MAY rotate. Phase 10's design is already
@@ -243,17 +298,18 @@ unchanged — CF-11 honored).
 
 ## Session Continuity
 
-**Stopped at:** Phase 15 context gathered (audit trail; phase work shipped in prior session) **Resume file:**
-.planning/phases/15-ci-hardening-provider-install-workflow/15-CONTEXT.md
-
-Last session: 2026-09-05T19:09:28.159Z feat(11-01), feat(11-02), docs(STATE)-postship, docs(11)-VERIFICATION; 26 files;
-VERIFICATION.md canonical; live-HA deferred to Phase 14) Next step: /gsd-discuss-phase 12 (Bridge Write API +
-Critical-Addon Safety + Concurrency + State Index; 10 Requirements: BRIDGE-04..09, STATE-02..03, LIFE-01, LIFE-03)
-Resume file: None
+Last session: 2026-09-06T00:00:00.000Z Stopped at: Milestone v1.4 iac-runner planning initialized (after origin/main
+rebase cleanup — local main was 81 commits behind origin; reset --hard to origin/main, dropped stale v1.3 working
+tree, re-applied v1.4 setup commits on clean base).
+Next step: `/gsd-plan-phase 16` (iac-runner Scaffold + Auth + State Backends + Healthcheck — AUTHR-01..04,
+STBK-01..05, SEC-01..02, OBS-01) Resume file: None
 
 ---
 
 _State initialized: 2026-04-04_ _Milestone v1.0 archived: 2026-04-04_ _Milestone v1.1 roadmap written: 2026-06-27_
 _Milestone v1.2 (Phase 8, CI/CD Hardening) planned: 2026-08-30 from a GitHub Actions audit — 4 plans, requirements
 CI-01..CI-10, nothing executed yet_ _Milestone v1.3 opentofu-bridge roadmap written: 2026-08-31 — 7 phases (9-15), 46
-requirements mapped across TOFU/ AUTH/BRIDGE/PROV/STATE/LIFE/OPS — Phase 9 ready to plan_
+requirements mapped across TOFU/AUTH/BRIDGE/PROV/STATE/LIFE/OPS — 6 of 7 phases shipped (9, 10, 11, 12, 13, 14);
+Phase 15 mechanically ready, blocked on v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite_ _Milestone v1.4
+iac-runner roadmap planned: 2026-09-06 — 4 phases (16-19), ~32 requirements across AUTHR/STBK/SEC/GIT/RUN/MQTT/OBS —
+research skipped; Phase 16 ready to plan_
