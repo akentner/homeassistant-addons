@@ -469,9 +469,19 @@ is captured and secret-redacted.
 10. Output redaction covers R2 access keys `^[A-Z0-9]{20}$`, AWS secret keys `^[A-Za-z0-9/+=]{40}$`, SSH private-key
     headers `-----BEGIN`; a `redaction.audit` log record counts redactions per-run
 11. `runs_retention_hours` Options field (default 24) controls run-output rotation; old run files are deleted by a
-    background ticker that runs every `runs_retention_hours / 4` (default 6h)
+     background ticker that runs every `runs_retention_hours / 4` (default 6h)
 
-**Plans**: TBD
+**Plans**: 8 plans in 6 waves
+
+Plans:
+- [ ] 17-01-PLAN.md — Options schema + tofu/git/ssh runtime binaries
+- [ ] 17-02-PLAN.md — contract types + run-id/dir primitives
+- [ ] 17-03-PLAN.md — internal/git: clone, pull, git_* taxonomy
+- [ ] 17-04-PLAN.md — internal/runs: store, JSONL output, redaction, retention
+- [ ] 17-05-PLAN.md — internal/jobq: semaphore, per-repo mutex, tofu exec
+- [ ] 17-06-PLAN.md — pull + plan/apply handlers
+- [ ] 17-08-PLAN.md — runs handlers + router mount
+- [ ] 17-07-PLAN.md — main.go wiring + DOCS/README + version bump
 
 **UI hint**: no
 
