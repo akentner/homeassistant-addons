@@ -111,21 +111,32 @@ Ingress, with extensible diagram rendering and optional Git sync.
     `terraform-provider-homeassistant/v0.3.0`. Phase 15 (CI hardening + provider install workflow) mechanically ready,
     blocked only on v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite — Validated in Phases 11–14; Phase 15 partial
     (CI workflows + install target landed; full release pending user Cloudflare setup)
+- ✓ `iac-runner` add-on scaffold + Bearer-auth + Tailscale-bind + three State-Backends (r2/s3/local) + `/healthz` +
+  `/v1/version` + `/data/keys/` chmod-600 enforcement + log-scrubbing all landed. 4-file pattern (port 8125, no
+  `hassio_api`, `homeassistant_api` for `mqtt:need`); TokenStore with crypto/rand + SHA-256 + chmod 600 atomic rename +
+  ConstantTimeCompare + 24h grace (AUTHR-02); Tailscale-bind with 0.0.0.0 refusal (AUTHR-03); POST /v1/auth/rotate with
+  grace persistence (AUTHR-04); Backend interface + r2/s3/local with use_lockfile=true for cloud + file-lock for local
+  (STBK-01..05); slog.Handler scrubber redacts Authorization/Bearer/token/password/key/secret (SEC-02); /data/keys/
+  chmod-600 validator with os.Exit(1) on failure (SEC-01); per-request slog record with Authorization strip (OBS-01). 44
+  unit tests across 5 packages. Live-HA empirical exercise deferred to Phase 19 — Validated in Phase 16:
+  iac-runner-scaffold-auth-state-backends-healthcheck
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-### v1.4 iac-runner (planning)
+### v1.4 iac-runner (Phase 16 complete; Phases 17–19 pending)
 
-- `iac-runner` add-on — Go HTTP service on port 8125, Tailscale-bind, Bearer-auth (no `SUPERVISOR_TOKEN`)
+**Phase 16 (complete 2026-09-06):** Scaffold + Bearer-auth + Tailscale-bind + three State-Backends (r2/s3/local) +
+`/healthz` + `/v1/version` + `/data/keys/` chmod-600 enforcement + log-scrubbing. See Validated entry above.
+
+- Git integration: clone configured repos at startup; SSH deploy keys from `/data/keys/` (Phase 17)
 - Manual REST triggers: `POST /v1/plan`, `POST /v1/apply` → `GET /v1/runs/{id}` for status; per-repo mutex for serial
-  applies
-- Multi-backend state: R2 (default, S3-compatible), S3, local; `use_lockfile = true` for R2/S3 locking
-- Git integration: clone configured repos at startup; SSH deploy keys from `/data/keys/`
+  applies (Phase 17)
 - HA entities via MQTT Discovery: 3 sensors (last_run_status, last_apply_at, last_error) + 2 buttons (run_plan,
-  run_apply) with 30s debounce
-- Secrets in `/data/keys/` (chmod 600 enforced); log scrubbing + output redaction
+  run_apply) with 30s debounce (Phase 18)
+- Output redaction (SEC-03) + paginated `GET /v1/runs/{id}` (OBS-02, OBS-03) (Phase 17)
+- Live-HA empirical exercise + operator runbook (Phase 19)
 
 ### Out of Scope
 
@@ -213,8 +224,5 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-09-06 — Milestone v1.4 iac-runner planning initialized. v1.3 essentially complete (6 of 7 phases
-shipped: 9–14; Phase 15 CI hardening mechanically ready, blocked on v1.2 Phase 8 gap-closure Cloudflare-setup
-prerequisite — `/gsd-execute-phase 8 --gaps-only` when ready). v1.4 runs in parallel to v1.3 Phase 15 by user decision
-2026-09-06. v1.4 roadmap: 4 phases (16–19), ~32 requirements across AUTHR/STBK/SEC/GIT/RUN/MQTT/OBS categories. RESEARCH
+_Last updated: 2026-09-06 — Phase 16 (iac-runner Scaffold + Auth + State Backends + Healthcheck) COMPLETE 12/12 requirements validated. v1.4 Phases 17–19 remain. v1.3 essentially complete (6 of 7 phases shipped: 9–14; Phase 15 CI hardening mechanically ready, blocked on v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite — `/gsd-execute-phase 8 --gaps-only` when ready). v1.4 runs in parallel to v1.3 Phase 15 by user decision 2026-09-06. v1.4 roadmap: 4 phases (16–19), ~32 requirements across AUTHR/STBK/SEC/GIT/RUN/MQTT/OBS categories. RESEARCH
 skipped by explicit decision (scope clear from conversation). Phase 16 ready to plan via `/gsd-plan-phase 16`._
