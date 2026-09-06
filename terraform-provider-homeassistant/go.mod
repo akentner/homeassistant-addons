@@ -4,7 +4,7 @@ go 1.25.0
 
 require github.com/hashicorp/terraform-plugin-framework v1.19.0
 
-require github.com/hashicorp/terraform-plugin-framework-timeouts v0.5.0
+require github.com/hashicorp/terraform-plugin-framework-timeouts v0.7.0
 
 require (
 	github.com/fatih/color v1.18.0 // indirect
