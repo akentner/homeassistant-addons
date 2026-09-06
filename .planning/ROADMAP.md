@@ -384,6 +384,14 @@ pattern; the three state backends (r2 default, s3, local) are wired and selectab
 **Requirements**: AUTHR-01, AUTHR-02, AUTHR-03, AUTHR-04, STBK-01, STBK-02, STBK-03, STBK-04, STBK-05, SEC-01,
 SEC-02, OBS-01
 
+**Plans**: 3 plans in 3 waves
+
+Plans:
+- [ ] 16-01-PLAN.md — Scaffold + Auth + Bind + Signal + /v1/auth/rotate (AUTHR-01..04, OBS-01 layer 2)
+- [ ] 16-02-PLAN.md — Log scrubbing + /data/keys/ validator + state backends r2/s3/local + real /healthz
+  (SEC-01, SEC-02, STBK-01..05)
+- [ ] 16-03-PLAN.md — GET /v1/version + operator DOCS.md + README + pre-commit config
+
 **Success Criteria** (what must be TRUE):
 
 1. The `iac-runner/` directory contains `config.yaml` (with `host_network: true`, `homeassistant_api: true`,
