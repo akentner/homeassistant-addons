@@ -5,6 +5,7 @@
 # pattern).
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.24
 ARG RUNNER_VERSION=dev
+ARG TOFU_VERSION=1.10.6
 
 # Stage 1: Go build — produces a static binary that runs on Alpine/musl with
 # no libc/glibc mismatch (CGO_ENABLED=0). Multi-stage keeps the runtime image
@@ -30,11 +31,38 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags "-s -w -X main.runnerVersion=${RUNNER_VERSION}" \
     -o runner ./cmd/runner
 
-# Stage 2: HA base — minimal Alpine 3.24 image. The binary is the only thing
+# Stage 2: OpenTofu download — pinned version + upstream SHA256 verification. Kept in its own
+# alpine stage so curl/unzip never land in the runtime image (mirror gatus/Dockerfile stage 2).
+FROM alpine:3.22 AS tofu
+
+ARG TOFU_VERSION
+
+RUN apk add --no-cache curl unzip && \
+    curl -fsSL -o /tmp/tofu.zip \
+        "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.zip" && \
+    curl -fsSL -o /tmp/SHA256SUMS \
+        "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" && \
+    cd /tmp && \
+    grep " tofu_${TOFU_VERSION}_linux_amd64.zip\$" SHA256SUMS | sha256sum -c - && \
+    unzip -j /tmp/tofu.zip tofu -d /usr/local/bin && \
+    chmod +x /usr/local/bin/tofu && \
+    /usr/local/bin/tofu version
+
+# Stage 3: HA base — minimal Alpine 3.24 image. The binary is the only thing
 # we ship from the builder stage; everything else stays behind.
 FROM ${BUILD_FROM}
 
 ARG RUNNER_VERSION
+
+# Phase 17 runtime dependencies:
+#   git + openssh-client — GIT-02/GIT-03 clone + `git pull --ff-only` over SSH using the deploy key at
+#     /data/keys/<name>.key with /data/keys/known_hosts (invoked via GIT_SSH_COMMAND).
+#   tofu — RUN-02/RUN-03 `tofu init/plan/apply`. handlers/healthz.go probes exec.LookPath("tofu") and returns
+#     503 without it, so this COPY is what makes Phase 16 SC#7 satisfiable.
+RUN apk add --no-cache git openssh-client
+
+COPY --from=tofu /usr/local/bin/tofu /usr/bin/tofu
+RUN chmod +x /usr/bin/tofu
 
 COPY --from=builder /workspace/runner /usr/bin/runner
 RUN chmod +x /usr/bin/runner
