@@ -2,7 +2,7 @@
 phase: 16-iac-runner-scaffold-auth-state-backends-healthcheck
 plan: 01
 subsystem: auth,httpapi,add-on-scaffold
-tags: [go, chi, slog, crypto, ha-addon, bearer-auth, tailscale, sigterm-drain, otelfu, r2, s3, mqtt]
+tags: [go, chi, slog, crypto, ha-addon, bearer-auth, tailscale, sigterm-drain, opentofu, r2, s3, mqtt]
 
 # Dependency graph
 requires:
@@ -293,3 +293,37 @@ deferred to Phase 19 (E2E + DOCS + Operator Runbook).
 
 *Phase: 16-iac-runner-scaffold-auth-state-backends-healthcheck*
 *Completed: 2026-09-06*
+
+## Self-Check: PASSED
+
+- iac-runner/config.yaml exists, non-empty
+- iac-runner/build.yaml exists, non-empty
+- iac-runner/Dockerfile exists, non-empty
+- iac-runner/run.sh exists, non-empty, executable
+- iac-runner/go.mod exists, non-empty
+- iac-runner/go.sum exists, non-empty
+- iac-runner/README.md exists, non-empty
+- iac-runner/.gitignore exists, non-empty
+- iac-runner/internal/version/version.go exists, non-empty
+- iac-runner/internal/auth/token.go + token_test.go exist, non-empty
+- iac-runner/internal/auth/bind.go + bind_test.go exist, non-empty
+- iac-runner/internal/auth/middleware.go exists, non-empty
+- iac-runner/internal/contract/types.go exists, non-empty
+- iac-runner/cmd/runner/main.go + signals.go + version.go exist, non-empty
+- iac-runner/internal/httpapi/handlers/auth_rotate.go + healthz.go exist, non-empty
+- iac-runner/internal/httpapi/get_root.go exists, non-empty
+- iac-runner/internal/httpapi/middleware/request_log.go + route_ctx.go exist, non-empty
+- iac-runner/internal/httpapi/router.go exists, non-empty
+- `cd iac-runner && go build ./...` exits 0
+- `cd iac-runner && go vet ./...` exits 0
+- `cd iac-runner && go test ./internal/auth/...` passes (11 token + 9 bind tests = 20 tests)
+- `cd iac-runner && go build -o /tmp/iac-runner-test ./cmd/runner && /tmp/iac-runner-test -version` prints `dev` and exits 0
+- `python3 internal/validate-addon-config.py iac-runner` exits 0
+- AUTH package is slog-free: `! grep -RIn 'slog\.' iac-runner/internal/auth/` returns nothing
+- healthz + get_root are slog-free: `! grep -RIn 'slog\.' iac-runner/internal/httpapi/handlers/healthz.go iac-runner/internal/httpapi/get_root.go` returns nothing
+- No sensitive log keys in any slog call across iac-runner/cmd + iac-runner/internal
+- `git log --oneline --grep="16-01"` returns 4 commits (3 task commits + 1 docs metadata commit)
+- AUTHR-01..04 + OBS-01 marked complete in `.planning/REQUIREMENTS.md`
+- Phase 16 plan 01 marked complete (1/3) in `.planning/ROADMAP.md`
+- Root `README.md` iac-runner entry added between network-tools and gatus
+- `.planning/phases/16-iac-runner-scaffold-auth-state-backends-healthcheck/16-01-SUMMARY.md` exists with all required frontmatter fields (phase, plan, subsystem, tags, requires, provides, affects, tech-stack, key-files, key-decisions, patterns-established, requirements-completed, duration, completed)
