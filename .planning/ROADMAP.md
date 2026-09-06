@@ -5,7 +5,8 @@
 - ✅ **v1.0 MVP** — Phases 1-3 (shipped 2026-04-04)
 - ✅ **v1.1 markdown-renderer** — Phases 4-6 (complete 2026-06-28)
 - 📋 **v1.2 CI/CD Hardening** — Phase 8 (planned 2026-08-30; gap-closure `08-05-GAP-PLAN.md` awaiting Cloudflare setup)
-- 🚧 **v1.3 opentofu-bridge** — Phases 9-15 (planning 2026-08-31)
+- 🚧 **v1.3 opentofu-bridge** — Phases 9-15 (essentially complete 2026-09-05; Phase 15 release pending v1.2 Cloudflare-setup prerequisite)
+- 📋 **v1.4 iac-runner** — Phases 16-19 (planning 2026-09-06)
 
 ## Phases
 
@@ -66,8 +67,31 @@ SUPERVISOR_TOKEN-rotation-across-restart — empirical spike required in Phase 9
       default; typed diagnostics
 - [x] **Phase 14: Real-HA End-to-End Verification + Operator Documentation** — (completed 2026-09-05) Empirical
       apply/destroy cycle foundation; 12 per-error_code verify scenarios; operator docs based on captured diagnostics
-- [x] **Phase 15: CI Hardening + Provider Install Workflow** — GitHub Actions build Bridge + test Provider workflows;
-      (completed 2026-08-31) `make install-provider` verified in CI; release-cycle end-to-end
+- [x] **Phase 15: CI Hardening + Provider Install Workflow** — GitHub Actions build Bridge + test Provider workflows; (completed 2026-08-31)
+      `make install-provider` verified in CI; release-cycle end-to-end
+
+### 📋 v1.4 iac-runner (Phases 16-19) — PLANNING
+
+**Milestone Goal:** Ship a Home Assistant Supervisor add-on (`iac-runner/`) that clones a Git repo (e.g.
+`homelab-infra`), runs OpenTofu/Terraform `plan`/`apply` against homelab servers (Tailscale-reachable), persists
+state in R2 (default), S3-compatible, or local backend, and surfaces run status + manual triggers as Home Assistant
+entities via MQTT Discovery. Manual REST trigger only — webhook-Auto-Rollout deferred to v1.5.
+
+**Source:** Conversation 2026-09-06. RESEARCH skipped by explicit decision (scope clear from conversation; patterns
+reused from `terraform-bridge` and `markdown-renderer`). 32 requirements mapped across AUTHR/STBK/SEC/GIT/RUN/MQTT/OBS.
+
+- [ ] **Phase 16: iac-runner Scaffold + Auth + State Backends + Healthcheck** — 4-file pattern, Go module
+      (`golang:1.25-alpine` → HA base 3.24, multi-stage), Bearer-auth without `SUPERVISOR_TOKEN`,
+      Tailscale-bind-gate, three state backends (r2/s3/local) with `use_lockfile` where applicable, `/healthz`,
+      `/v1/version`, `/data/keys/` chmod-600 enforcement, log-scrubbing
+- [ ] **Phase 17: Git Integration + Apply Job System** — repo clone at startup, SSH deploy-key pull endpoint,
+      `POST /v1/plan` + `POST /v1/apply` with per-repo mutex, `GET /v1/runs/{id}` with paginated output,
+      `tofu` output redaction, run-history rotation
+- [ ] **Phase 18: MQTT Discovery + HA Sensoren + Buttons** — `mqtt:need` service connection, three sensors
+      (`last_run_status`, `last_apply_at`, `last_error`) + two buttons (`run_plan`, `run_apply`) with 30s
+      debounce; verified by IRUN-H-2 spike
+- [ ] **Phase 19: E2E Verification + DOCS + Operator Runbook** — live-HA E2E with `local_file`-provider fixture,
+      drift-test, idempotency, all three state backends verified, DOCS.md + README.md from observed behavior
 
 ## Phase Details
 
@@ -348,6 +372,176 @@ Plans:
 
 **UI hint**: no
 
+### Phase 16: iac-runner Scaffold + Auth + State Backends + Healthcheck
+
+**Goal**: The `iac-runner/` add-on scaffolds into the repo following the 4-file pattern with a multi-stage Go
+Dockerfile (no `SUPERVISOR_TOKEN` needed); Bearer-auth and Tailscale-bind-gate mirror the proven `terraform-bridge`
+pattern; the three state backends (r2 default, s3, local) are wired and selectable from Options; `/healthz` and
+`/v1/version` are exposed; secrets under `/data/keys/` are validated at startup.
+
+**Depends on**: Nothing (first phase of milestone)
+
+**Requirements**: AUTHR-01, AUTHR-02, AUTHR-03, AUTHR-04, STBK-01, STBK-02, STBK-03, STBK-04, STBK-05, SEC-01,
+SEC-02, OBS-01
+
+**Success Criteria** (what must be TRUE):
+
+1. The `iac-runner/` directory contains `config.yaml` (with `host_network: true`, `homeassistant_api: true`,
+   `services: ["mqtt:need"]`, `ports: 8125/tcp: 8125`, **no** `hassio_api: true`, **no** `ingress: true`),
+   `build.yaml` (semver `X.Y.Z`), `Dockerfile` (multi-stage: `golang:1.25-alpine` → HA amd64-base 3.24), and
+   `run.sh`; no `.upstream.yaml` exists; the 4-file pattern matches every other add-on in the repo
+2. Bearer-token auth follows the `terraform-bridge` pattern: 256-bit token via `crypto/rand`, SHA-256 hash stored at
+   `/data/iac-runner-token` (chmod 600), validation via `crypto/subtle.ConstantTimeCompare`, plaintext surfaced
+   exactly once via add-on log line + Options UI on first start; restart does NOT re-emit the plaintext
+3. The add-on binds to `0.0.0.0:8125`; startup auto-detects the first `tailscale*` interface in `/sys/class/net` and
+   binds to its IPv4 address; explicit IP accepted only if Tailscale- or `bind_allowed_subnets`-allowed;
+   `bind_address: "0.0.0.0"` always refused
+4. Options schema exposes `state_backend: list(match(^(r2|s3|local)$))` defaulting to `r2`; backend-specific
+   options (`r2_bucket`, `s3_endpoint`, etc.) are validated against the chosen backend at startup; wrong/missing
+   credentials cause startup failure with a clear error message (no degraded mode)
+5. State-backend Go interface has three implementations (`r2`, `s3`, `local`); for `r2`/`s3` the add-on is
+   configured to invoke `tofu` with `use_lockfile = true`; for `local` the lock is file-based via
+   `/data/terraform.tfstate.lock`. R2 lockfile semantics verified empirically (IRUN-H-1 spike result documented in
+   `16-SUMMARY.md`)
+6. `POST /v1/auth/rotate` returns a new token; for 24 hours both old and new authenticate; grace state persists in
+   `/data/iac-runner-token.grace` (chmod 600) across restart
+7. `GET /healthz` (no auth) returns HTTP 200 OK when `tofu` binary is on PATH and `/data/keys/` chmod-600 check
+   passes; HTTP 503 otherwise
+8. `GET /v1/version` returns JSON `{runner_version, schema_version, min_supported_opentofu, max_supported_opentofu}`;
+   `schema_version` follows semver and is reserved for future cross-version compatibility
+9. `run.sh` installs a SIGTERM trap that drains in-flight requests for up to 30s then exits, and a SIGHUP trap
+   that reopens logs without restart; both behaviors verified by running the container and sending the signals
+10. Every credential file under `/data/keys/` is validated for `chmod 600` ownership at startup; non-conforming
+    files cause startup failure with a clear error message (no degraded mode)
+11. `slog.Handler` wrapper scrubs every log record (case-insensitive key-name mask for `Authorization`, `Bearer`,
+    `token`, `password`, `key`, `secret` → `<redacted>`); a unit test asserts the invariant; chi middleware strips
+    `Authorization` from request-log snapshot
+
+**Plans**: TBD
+
+**UI hint**: no
+
+### Phase 17: Git Integration + Apply Job System
+
+**Goal**: The add-on clones configured Git repos at startup, exposes `POST /v1/repos/{name}/pull` for SSH-keyed
+git-pull, and provides `POST /v1/plan`, `POST /v1/apply`, `GET /v1/runs/{id}`, `GET /v1/runs` for OpenTofu job
+lifecycle. Concurrent applies on the same repo are serialized; cross-repo applies run in parallel. `tofu`
+stdout/stderr is captured and secret-redacted.
+
+**Depends on**: Phase 16
+
+**Requirements**: GIT-01, GIT-02, GIT-03, GIT-04, RUN-01, RUN-02, RUN-03, RUN-04, RUN-05, RUN-06, SEC-03, OBS-02,
+OBS-03
+
+**Success Criteria** (what must be TRUE):
+
+1. Options schema accepts a list of `repos` entries; each entry has `name` (URI-safe identifier), `url` (SSH URL
+   like `git@github.com:akentner/homelab-infra.git`), `branch` (default `main`), `ref` (optional commit/tag pin);
+   schema validation rejects malformed entries with a typed diagnostic
+2. At startup, for each configured repo, the add-on clones into `/data/repos/<name>/` if absent; existing
+   directories are left untouched (caller triggers `/v1/repos/{name}/pull` to refresh); clone failures are logged
+   but do not prevent startup
+3. `POST /v1/repos/{name}/pull` runs `git pull --ff-only` (or the configured ref) using the SSH deploy key
+   `/data/keys/<name>.key` and `known_hosts` from `/data/keys/known_hosts`; non-fast-forward pulls and auth
+   failures surface as typed HTTP 409 / 403 errors with actionable messages
+4. Git errors (SSH handshake, DNS failure, ref not found) surface as typed HTTP responses with
+   `error_code: "git_*"` and a hint pointing at the relevant Options field; no stack traces in the response body
+5. `POST /v1/plan` starts `tofu init -input=false && tofu plan -no-color -out=/data/runs/{run_id}/plan.tfplan` as a
+   background job; returns HTTP 202 with `{run_id, status: "queued"}` and a `Location: /v1/runs/{run_id}` header
+6. `POST /v1/apply` starts `tofu apply -no-color -auto-approve` (with or without prior plan file); returns HTTP 202
+   with `{run_id, status: "queued"}`
+7. `GET /v1/runs/{id}` returns JSON with status (`queued|running|succeeded|failed`), `exit_code`, `started_at`,
+   `finished_at`, and paginated `output_lines` (default 100, max 1000); `tofu` stdout/stderr captured per-run to
+   `/data/runs/{run_id}/output.log` is secret-redacted before surfacing (SEC-03)
+8. `GET /v1/runs` returns the last N runs (default 20, max 100) ordered by `started_at desc`; supports
+   `?repo=<name>` and `?status=<status>` filters
+9. Two concurrent `POST /v1/apply` calls targeting the same repo are serialized by an in-process per-repo mutex;
+   the second call returns HTTP 202 with `status: "queued"` but waits in line until the first finishes;
+   cross-repo applies proceed in parallel; mutex released on job exit (success, failure, or crash recovery)
+10. Output redaction covers R2 access keys `^[A-Z0-9]{20}$`, AWS secret keys `^[A-Za-z0-9/+=]{40}$`, SSH
+    private-key headers `-----BEGIN`; a `redaction.audit` log record counts redactions per-run
+11. `runs_retention_hours` Options field (default 24) controls run-output rotation; old run files are deleted by
+    a background ticker that runs every `runs_retention_hours / 4` (default 6h)
+
+**Plans**: TBD
+
+**UI hint**: no
+
+### Phase 18: MQTT Discovery + HA Sensoren + Buttons
+
+**Goal**: The add-on publishes MQTT Discovery for three sensors and two buttons (verified by IRUN-H-2 spike);
+button presses are debounced (30s) and trigger internal `POST /v1/plan` / `POST /v1/apply` calls. Job-status
+changes publish MQTT state updates so HA entities stay current without polling.
+
+**Depends on**: Phase 17
+
+**Requirements**: MQTT-01, MQTT-02, MQTT-03, MQTT-04, MQTT-05, MQTT-06, MQTT-07
+
+**Success Criteria** (what must be TRUE):
+
+1. `config.yaml` declares `homeassistant_api: true` and lists `mqtt:need` in `services`; on startup the add-on
+   reads broker URL + credentials from the Supervisor-provided MQTT service object (via `bashio::services`); if
+   the MQTT service is not available, the add-on logs a warning and continues without entities (apply endpoints
+   still work — apply is decoupled from entity visibility)
+2. MQTT Discovery config for `sensor.iac_runner_last_run_status` is published on startup with
+   `state_topic: <prefix>/status`, `value_template: "{{ value_json.status }}"`, and
+   `options: ["idle", "running", "success", "failed"]`; icon is `mdi:terraform`; sensor appears in HA UI within
+   one polling cycle after add-on start
+3. MQTT Discovery config for `sensor.iac_runner_last_apply_at` is published with
+   `device_class: timestamp`, `state_topic: <prefix>/last_apply_at`; value is the ISO 8601 timestamp of the last
+   completed apply (success or failure)
+4. MQTT Discovery config for `sensor.iac_runner_last_error` is published with `state_topic: <prefix>/last_error`;
+   value is the truncated (≤ 255 chars) last error message; cleared on next successful apply
+5. MQTT Discovery config for `button.iac_runner_run_plan` is published with
+   `command_topic: <prefix>/run_plan/command`, `payload_press: "PRESS"`; the add-on subscribes to this topic
+   and internally calls `POST /v1/plan` on receipt (verified by IRUN-H-2 spike in `18-SUMMARY.md`)
+6. MQTT Discovery config for `button.iac_runner_run_apply` is published with
+   `command_topic: <prefix>/run_apply/command`, `payload_press: "PRESS"`; subscribed by the add-on; debounced
+   to one press per 30 seconds (subsequent presses within the window are logged and ignored)
+7. After every job-status change (`queued` → `running` → `succeeded`/`failed`), the add-on publishes the new
+   status to `<prefix>/status`, `<prefix>/last_apply_at` (only on `succeeded`/`failed`), and
+   `<prefix>/last_error` (only on `failed`); the three sensors stay current in HA without polling
+
+**Plans**: TBD
+
+**UI hint**: no (entities appear in HA automatically; no add-on Ingress panel)
+
+### Phase 19: E2E Verification + DOCS + Operator Runbook
+
+**Goal**: Every v1.4 requirement is empirically verified against a live HA host (`ha-nextgen` or `haos-op3050-1`)
+with a `local_file`-provider fixture (no real homelab servers destroyed). Drift, idempotency, and all three state
+backends are exercised. Operator documentation (`README.md` + `DOCS.md`) is written from observed behavior, not
+theory.
+
+**Depends on**: Phase 18
+
+**Requirements**: (validates all v1.4 requirements; introduces no new REQ-IDs)
+
+**Success Criteria** (what must be TRUE):
+
+1. `make install-runner`-equivalent (or direct `docker run` against the built image) installs the add-on in a
+   real HA host; `/v1/version` returns 200; `/healthz` returns 200 within 2s
+2. End-to-end plan + apply + drift + idempotency cycle against a `local_file`-provider fixture: apply succeeds,
+   re-apply shows "No changes", in-place modification triggers a diff, manual drift introduction (state edit)
+   triggers recreate plan, destroy succeeds
+3. State-backend matrix: all three backends (r2, s3, local) verified end-to-end against a real R2 bucket (test
+   bucket, not the production homelab state), a real S3-compatible endpoint (can use R2 again with different
+   bucket name), and a local file. Lockfile semantics exercised: a manual second `tofu apply` against the same
+   backend returns HTTP 423 (`locked`) — proven for all three backends
+4. MQTT entities empirically verified in HA UI: three sensors + two buttons appear; pressing `run_apply` triggers
+   a `tofu apply` end-to-end; `last_apply_at` updates after the apply completes; debounce works (second press
+   within 30s is ignored)
+5. Token rotation end-to-end: `POST /v1/auth/rotate` returns new token, old token still authenticates within
+   24h grace, new token works, old token stops working after grace (or grace file is deletable for instant
+   revocation)
+6. `README.md` and `DOCS.md` are complete: install steps via HA add-on store, SSH-Deploy-Key-Setup, R2-Bucket-
+   Konfig, MQTT-Service-Konfig, an example workflow covering every Option field, every error code with documented
+   remediation, troubleshooting section with at least three real observed issues
+
+**Plans**: TBD
+
+**UI hint**: no
+
 ## Progress
 
 | Phase                               | Milestone | Plans Complete                          | Status              | Completed  |
@@ -359,16 +553,24 @@ Plans:
 | 5. Multi-Namespace + Dynamic Config | v1.1      | 1/1                                     | Complete            | 2026-06-27 |
 | 6. Git Integration                  | v1.1      | 2/2                                     | Complete            | 2026-06-28 |
 | 8. CI/CD Hardening                  | v1.2      | 3/4 (1 partial + 1 gap-closure pending) | Gap closure pending | —          |
-| 9. Bridge Foundation + Token Spike  | v1.3      | 3/4                                     | In Progress         |            |
+| 9. Bridge Foundation + Token Spike  | v1.3      | 4/4                                     | Complete            | 2026-08-31 |
 | 10. Auth + Logging + Healthcheck    | v1.3      | 3/3                                     | Complete            | 2026-08-31 |
-| 11. Bridge Read API                 | v1.3      | 0/TBD                                   | Not started         | —          |
-| 12. Bridge Write API + Safety       | v1.3      | 0/TBD                                   | Not started         | —          |
+| 11. Bridge Read API                 | v1.3      | 2/2                                     | Complete            | 2026-09-02 |
+| 12. Bridge Write API + Safety       | v1.3      | 3/3                                     | SHIPPED             | 2026-09-04 |
 | 13. Provider + Resource + Data      | v1.3      | 3/3                                     | Complete            | 2026-09-05 |
 | 14. Real-HA E2E + Docs              | v1.3      | 3/3                                     | Complete            | 2026-09-05 |
-| 15. CI + Provider Install           | v1.3      | 0/3                                     | Complete            | 2026-08-31 |
+| 15. CI + Provider Install           | v1.3      | 0/3 (mechanically ready, blocked on v1.2 Phase 8 gap-closure) | Mechanically Ready | — |
+| 16. iac-runner Scaffold + Auth      | v1.4      | 0/TBD                                   | Planned             | —          |
+| 17. Git + Apply Jobs                | v1.4      | 0/TBD                                   | Planned             | —          |
+| 18. MQTT + HA Entities              | v1.4      | 0/TBD                                   | Planned             | —          |
+| 19. E2E + DOCS                      | v1.4      | 0/TBD                                   | Planned             | —          |
 
 ---
 
-_Last updated: 2026-08-31 — Milestone v1.3 opentofu-bridge roadmap written (Phases 9-15, 46 requirements mapped, 7
-phases). Phase 8 (CI/CD Hardening) continues in parallel; resume via `/gsd-execute-phase 8 --gaps-only` whenever the
-Cloudflare service token + GitHub secrets are in place._
+_Last updated: 2026-09-06 — Milestone v1.4 iac-runner roadmap written (Phases 16-19, 32 requirements mapped across
+AUTHR/STBK/SEC/GIT/RUN/MQTT/OBS, 4 phases). RESEARCH skipped by explicit decision; patterns reused from
+`terraform-bridge` (HTTP/auth/Go) and `markdown-renderer` (git integration). v1.3 essentially complete (6 of 7
+phases shipped: 9, 10, 11, 12, 13, 14; Phase 15 mechanically ready, blocked on v1.2 Phase 8 gap-closure Cloudflare-
+setup prerequisite). Phase 8 gap-closure (`08-05-GAP-PLAN.md`) continues in parallel; resume via
+`/gsd-execute-phase 8 --gaps-only` whenever the Cloudflare service token + GitHub secrets are in place. Phase 16
+ready to plan via `/gsd-plan-phase 16`._
