@@ -12,6 +12,9 @@ import (
 
 	"iac-runner/internal/auth"
 	"iac-runner/internal/httpapi"
+	"iac-runner/internal/keys"
+	"iac-runner/internal/logging"
+	"iac-runner/internal/statebackend"
 )
 
 // defaultStateBackend mirrors REQUIREMENTS.md STBK-01 — the
@@ -21,15 +24,30 @@ import (
 // with state_backend: list(match(^(r2|s3|local)$)).
 var defaultStateBackend = "r2"
 
+// defaultDataDir is the HA Supervisor bind-mounted data volume that
+// holds the token file, /data/keys/, and the local-backend state
+// file. Hard-coded to match the v1.4 PROJECT.md decisions
+// (file-on-volume instead of config) and the v1.3
+// terraform-bridge's /data/initial-token pattern.
+const defaultDataDir = "/data"
+
+// defaultKeysDir is the secrets directory inside the HA Supervisor
+// data volume. Every credential file the runner uses (R2/S3 access
+// keys, SSH deploy keys for git, known_hosts) MUST live here with
+// chmod 600 — the keys validator (SEC-01) enforces this at startup.
+const defaultKeysDir = defaultDataDir + "/keys"
+
 // options is the subset of /data/options.json the runner reads at
 // startup. BindAddress defaults to "auto" (Tailscale detection);
 // BindAllowedSubnets defaults to [] (strict refusal of non-Tailscale
-// IPs). Plan 02 extends with the state-backend credentials fields.
+// IPs). StateBackend defaults to "r2" (per PROJECT.md locked
+// decision); the r2_bucket / s3_endpoint / s3_bucket / s3_region
+// fields are read when their respective backend is selected.
 //
-// BindAllowedSubnets is a []string — the HA Supervisor schema DSL uses
-// the YAML-list form (`- "str?"`) for lists of arbitrary strings, NOT
-// the string `list(str)?` form, which Supervisor parses as a one-value
-// enum.
+// BindAllowedSubnets is a []string — the HA Supervisor schema DSL
+// uses the YAML-list form (`- "str?"`) for lists of arbitrary
+// strings, NOT the string `list(str)?` form, which Supervisor parses
+// as a one-value enum.
 type options struct {
 	BindAddress        string   `json:"bind_address"`
 	BindAllowedSubnets []string `json:"bind_allowed_subnets"`
@@ -49,10 +67,15 @@ func main() {
 		return
 	}
 
-	// Structured JSON logging via stdlib log/slog. Phase 16 ships
-	// the unwrapped baseline; Plan 02 wraps slog.NewJSONHandler with
-	// the scrubbingHandler (SEC-02).
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	// Structured JSON logging via stdlib log/slog. SEC-02 layer 1:
+	// wrap slog.NewJSONHandler with the scrubbing handler so every
+	// record's values for sensitive keys (Authorization, Bearer,
+	// token, password, key, secret — case-insensitive) are replaced
+	// with "<redacted>" before the JSON handler serializes. The
+	// scrubbing wrapper preserves the slog.Handler contract
+	// (Handle / WithAttrs / WithGroup), so downstream .With() and
+	// .WithGroup() chains keep scrubbing.
+	logger := slog.New(logging.NewScrubbingHandler(slog.NewJSONHandler(os.Stdout, nil)))
 	slog.SetDefault(logger)
 
 	// Read add-on options from /data/options.json (HA add-on store).
@@ -87,8 +110,56 @@ func main() {
 		"allowed_subnets", opts.BindAllowedSubnets,
 	)
 
+	// Construct the state backend via the factory. The factory reads
+	// r2-account-id from /data/keys/ at construction time (r2 only);
+	// a missing file fails fast here. The endpoint + bucket +
+	// use_lockfile bits are logged for operator visibility — a
+	// wrong bucket name in Options surfaces as `homelab-tfstate`
+	// (or whatever the operator typed) in the bootstrap log line.
+	backend, err := statebackend.New(opts.StateBackend, statebackend.Options{
+		R2Bucket:   opts.R2Bucket,
+		S3Endpoint: opts.S3Endpoint,
+		S3Bucket:   opts.S3Bucket,
+		S3Region:   opts.S3Region,
+		DataDir:    defaultDataDir,
+	})
+	if err != nil {
+		slog.Error("state_backend_init_failed",
+			"state_backend", opts.StateBackend,
+			"err", err.Error(),
+		)
+		os.Exit(1)
+	}
+	slog.Info("state_backend_ready",
+		"backend", backend.Name(),
+		"endpoint", backend.Endpoint(),
+		"bucket", backend.Bucket(),
+		"region", backend.Region(),
+		"use_lockfile", backend.UseLockfile(),
+	)
+
+	// SEC-01: validate /data/keys/ against the configured backend's
+	// required credential file list. Every required file must
+	// exist + be chmod 600 + be owned by the current process UID.
+	// Failures wrap ErrKeysNotChmod600 or ErrKeysMissing with the
+	// offending filename so the operator can `chmod 600 <file>` and
+	// restart. Refusal is fatal — no degraded mode.
+	keysValidator := keys.NewValidator(defaultKeysDir, backend)
+	if err := keysValidator.Validate(); err != nil {
+		slog.Error("keys_validation_failed",
+			"keys_dir", defaultKeysDir,
+			"required_files", keysValidator.RequiredFiles(),
+			"err", err.Error(),
+		)
+		os.Exit(1)
+	}
+	slog.Info("keys_validated",
+		"keys_dir", defaultKeysDir,
+		"required_files", keysValidator.RequiredFiles(),
+	)
+
 	// TokenStore — load from /data or generate on first start.
-	store, err := auth.NewFileTokenStore("/data")
+	store, err := auth.NewFileTokenStore(defaultDataDir)
 	if err != nil {
 		slog.Error("token_store_init_failed", "err", err.Error())
 		os.Exit(1)
@@ -126,12 +197,12 @@ func main() {
 	logger.Info("starting",
 		"runner_version", runnerVersion,
 		"pid", os.Getpid(),
-		"state_backend", opts.StateBackend,
+		"state_backend", backend.Name(),
 	)
 
 	// Build the router — pass store so the auth middleware can
-	// validate.
-	router := httpapi.NewRouter(runnerVersion, store)
+	// validate; pass keysValidator so /healthz can probe /data/keys/.
+	router := httpapi.NewRouter(runnerVersion, store, keysValidator)
 
 	srv := &http.Server{
 		Addr:              bindIP + ":8125",
