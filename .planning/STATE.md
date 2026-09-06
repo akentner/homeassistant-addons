@@ -1,18 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: iac-runner
-current_phase: 16
-current_phase_name: iac-runner Scaffold + Auth + State Backends + Healthcheck
+milestone: v1.3
+milestone_name: opentofu-bridge
 status: Executing Phase 16
-last_updated: "2026-09-06T16:36:26.260Z"
-state_head: 4df2d95ba29e6f3929641b407c455f915fc88f
+last_updated: "2026-09-06T16:48:09.867Z"
 progress:
-  total_phases: 4
-  completed_phases: 0
-  total_plans: 3
-  completed_plans: 1
-  percent: 33
+  total_phases: 11
+  completed_phases: 5
+  total_plans: 18
+  completed_plans: 21
 ---
 
 # Project State
@@ -94,7 +90,7 @@ parallel with v1.3 (Phase 15 release) and v1.2 (Phase 8 gap-closure).
 
 | Phase | Name                                                          | Status   | Completed |
 | ----- | ------------------------------------------------------------- | -------- | --------- |
-| 16    | iac-runner Scaffold + Auth + State Backends + Healthcheck     | Planned  | —         |
+| 16    | iac-runner Scaffold + Auth + State Backends + Healthcheck     | In Progress | — |
 | 17    | Git Integration + Apply Job System                            | Planned  | —         |
 | 18    | MQTT Discovery + HA Sensoren + Buttons                        | Planned  | —         |
 | 19    | E2E Verification + DOCS + Operator Runbook                    | Planned  | —         |
@@ -105,7 +101,7 @@ conceptually independent and may parallelize after Phase 16 stabilises the contr
 ## Current Position
 
 Phase: 16 (iac-runner Scaffold + Auth + State Backends + Healthcheck) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 **v1.3 Phase 14** is COMPLETE (7 atomic commits landed on main; live-HA empirical exercise deferred to operator
 runtime as documented in 14-VERIFICATION.md — preflight returns 1 in this env: no tofu, no Provider binary,
 /healthz unreachable). OPS-04 surface delivered: `tools/test-addon/` (5 files) + `internal/verify-bridge-e2e/`
@@ -121,6 +117,20 @@ bb00c4f auth package + version + contract, 4df2d95 main.go + signals + handlers 
 root `README.md` updated with iac-runner entry between `network-tools` and `gatus`.
 AUTHR-01..04 + OBS-01 marked complete in `.planning/REQUIREMENTS.md`. Live-HA empirical verification
 (token issuance + rotation + bind gate + /healthz against a real HA host) deferred to Phase 19.
+
+**v1.4 Phase 16** Plan 02 (Log scrubbing + /data/keys/ validator + state backends r2/s3/local + real /healthz)
+is COMPLETE (2 atomic commits: 10e5dd2 SEC-02 slog.Handler scrubber + SEC-01 keys validator + STBK-01..05
+backend interface + r2/s3/local impls + factory, 96a4a12 main.go wiring + real /healthz + router signature
+extension). 14 files (3 new packages logging/keys/statebackend + healthz handler/test + main.go + router).
+All Plan 02 acceptance criteria pass: 21 new unit tests (6 scrubbing + 7 validator + 5 factory + 3 healthz)
+on top of Plan 01's 20 = 41 total tests passing; `go build / vet / test ./...` exit 0;
+SEC-01 + SEC-02 + STBK-01..05 marked complete in `.planning/REQUIREMENTS.md`. The Plan 01 /healthz stub
+with `tofu_on_path:true + keys_chmod_600:true` placeholders is replaced with real `exec.LookPath("tofu")`
+
++ `validator.Validate()` probes; 200 + HealthResponse on both-pass, 503 + empty body (Content-Length: 0)
+
+on either fail. `statebackend.Factory.New` returns ErrUnsupported for any value outside r2/s3/local.
+Live-HA empirical verification deferred to Phase 19.
 
 ## Accumulated Context
 
@@ -155,6 +165,11 @@ AUTHR-01..04 + OBS-01 marked complete in `.planning/REQUIREMENTS.md`. Live-HA em
 | HA entities via MQTT Discovery (`homeassistant_api: true` + `services: ["mqtt:need"]`) instead of WebSocket-Custom-Component | MQTT Discovery is the standard HA add-on integration path; no custom integration install needed. WebSocket-based approach would require a Custom-Component in HA Core (more setup, less portable).            |
 | 4 phases (16–19), not 7 like v1.3                                                                        | Concerns group more naturally: scaffold/auth/state → git/apply-jobs → MQTT/HA → E2E/docs. 17 + 18 are independent and may parallelize after Phase 16 stabilises the contracts.                              |
 | RESEARCH skipped for v1.4                                                                                 | Scope clear from conversation; patterns reused from existing repo add-ons (`terraform-bridge` for HTTP/auth/Go, `markdown-renderer` for git integration). Research would re-validate what is already decided. |
+| **Two-layer SEC-02 masking (Plan 02):** slog.Handler scrubber (Authorization, Bearer, token, password, key, secret) + chi middleware stripping Authorization from r.Header.Clone() before slog                  | Same D-10 layered-defense pattern as terraform-bridge Phase 10 AUTH-05. If either layer regresses, the other still prevents credential leakage. Both proven by unit tests.                                                                                            |
+| **/healthz 2s probe budget (Plan 02):** real exec.LookPath("tofu") + validator.Validate() under context.WithTimeout; 503 body always empty (Content-Length: 0); failure reason slog.Warn'd server-side only          | Same D-07/D-08 pattern as terraform-bridge Phase 10 OPS-03. Future per-request probes (Phase 17 may add tofu version probe + remote-state reachability) plug into the 2s budget slot without changing the handler signature.                       |
+| **`keys` package independent of `auth`/`statebackend`'s `Backend`:** validator imports statebackend.Backend (read CredentialFiles()) but statebackend has NO inbound dependency on auth or keys                  | Defense-in-depth layering — the credential validator stands alone, can't accidentally couple into the bearer-auth flow, and is unit-tested with a fakeBackend without dragging in any of auth's state.                                                       |
+| **SEC-01 fail-fast on missing / wrong-mode keys at startup (Plan 02):** validator.Validate() called in main.go BEFORE token store init; failure → os.Exit(1) with 'keys_validation_failed' audit record               | AGENTS.md "Live Systems" rule: no degraded mode for credential safety. Restart + `chmod 600 <file>` is the only remediation; the operator sees the failing path in the startup log line.                                                                       |
+| **Plan 02 `r2-account-id` file (not Options field):** the Cloudflare account ID is plaintext (non-sensitive), but its file-on-volume location still gets chmod-600-validated by the keys validator for defense-in-depth | Same pattern as `/data/keys/{repo}.key` for SSH deploy keys (Phase 17 will reuse this). File-on-volume matches terraform-bridge's `/data/initial-token` precedent; HA Options UI is too narrow for the account ID string.                              |
 
 ### Research Flags (v1.4 — open questions for implementation)
 
@@ -290,6 +305,7 @@ AUTHR-01..04 + OBS-01 marked complete in `.planning/REQUIREMENTS.md`. Live-HA em
 | Phase 10-auth-layer-structured-logging-healthcheck P03 | 4 min | 3 tasks  | 6 files  |
 | Quick 260902-sa1 (State Sync)                          | ~5min | 1 task   | 1 file   |
 | Phase 16 P01 | 17 min | 3 tasks | 24 files |
+| Phase 16 P02 | 18 | 2 tasks | 14 files |
 
 ## Quick Tasks Completed
 
@@ -307,11 +323,11 @@ AUTHR-01..04 + OBS-01 marked complete in `.planning/REQUIREMENTS.md`. Live-HA em
 
 ## Session Continuity
 
-Last session: 2026-09-06T16:36:26.254Z
+Last session: 2026-09-06T16:48:09.861Z
 rebase cleanup — local main was 81 commits behind origin; reset --hard to origin/main, dropped stale v1.3 working
 tree, re-applied v1.4 setup commits on clean base).
-Next step: `/gsd-plan-phase 16` (iac-runner Scaffold + Auth + State Backends + Healthcheck — AUTHR-01..04,
-STBK-01..05, SEC-01..02, OBS-01) Resume file: None
+Next step: `/gsd-execute-phase 16 --plan 03` (GET /v1/version + DOCS.md + README + pre-commit config) Resume
+file: None
 
 ---
 

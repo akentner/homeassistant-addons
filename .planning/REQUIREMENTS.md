@@ -261,25 +261,25 @@ Phase 18 = MQTT Discovery + HA entities. Phase 19 = E2E verification + operator 
 
 ### STBK — State Backend (R2 / S3 / local)
 
-- [ ] **STBK-01**: Add-on options schema exposes `state_backend: list(match(^(r2|s3|local)$))` defaulting to `r2`;
+- [x] **STBK-01**: Add-on options schema exposes `state_backend: list(match(^(r2|s3|local)$))` defaulting to `r2`;
       selected backend drives which credentials are required at startup
-- [ ] **STBK-02**: When `state_backend = r2`: add-on reads R2 access key from `/data/keys/r2-access.key`,
+- [x] **STBK-02**: When `state_backend = r2`: add-on reads R2 access key from `/data/keys/r2-access.key`,
       secret key from `/data/keys/r2-secret.key`, account ID from `/data/keys/r2-account-id` (plaintext, non-sensitive),
       bucket from Options (`r2_bucket`); endpoint constructed as `https://<account_id>.r2.cloudflarestorage.com`
-- [ ] **STBK-03**: When `state_backend = s3`: add-on reads credentials from `/data/keys/s3-access.key` +
+- [x] **STBK-03**: When `state_backend = s3`: add-on reads credentials from `/data/keys/s3-access.key` +
       `/data/keys/s3-secret.key`, endpoint from Options (`s3_endpoint`), bucket + region from Options
-- [ ] **STBK-04**: When `state_backend = local`: add-on writes/reads state from `/data/terraform.tfstate`; no
+- [x] **STBK-04**: When `state_backend = local`: add-on writes/reads state from `/data/terraform.tfstate`; no
       external credentials required; HA backup covers the state file automatically
-- [ ] **STBK-05**: For R2 and S3 backends, OpenTofu is invoked with `use_lockfile = true` so locking uses the
+- [x] **STBK-05**: For R2 and S3 backends, OpenTofu is invoked with `use_lockfile = true` so locking uses the
       native S3 object-lock semantics (no DynamoDB required). For local backend, locking is file-based via
       `/data/terraform.tfstate.lock`. Apply fails fast with HTTP 423 (`locked`) when another apply holds the lock
 
 ### SEC — Secrets / Credentials Handling
 
-- [ ] **SEC-01**: All credential files under `/data/keys/` are validated at startup for `chmod 600` ownership
+- [x] **SEC-01**: All credential files under `/data/keys/` are validated at startup for `chmod 600` ownership
       (current process UID); non-conforming files cause startup failure with a clear error message (no degraded
       mode); missing files cause startup failure per `STBK-01..04` requirements
-- [ ] **SEC-02**: Add-on emits structured JSON logs with a scrubbing `slog.Handler` wrapper (case-insensitive
+- [x] **SEC-02**: Add-on emits structured JSON logs with a scrubbing `slog.Handler` wrapper (case-insensitive
       key-name mask for `Authorization`, `Bearer`, `token`, `password`, `key`, `secret` → `<redacted>`) — same
       pattern as `terraform-bridge` AUTH-05; a unit test asserts no credential field ever survives the handler
 - [ ] **SEC-03**: `tofu` stdout/stderr captured per-run to `/data/runs/{run_id}/output.log` is redacted for

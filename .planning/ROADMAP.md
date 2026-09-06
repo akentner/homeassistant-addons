@@ -388,7 +388,7 @@ SEC-02, OBS-01
 
 Plans:
 - [x] 16-01-PLAN.md — Scaffold + Auth + Bind + Signal + /v1/auth/rotate (AUTHR-01..04, OBS-01 layer 2)
-- [ ] 16-02-PLAN.md — Log scrubbing + /data/keys/ validator + state backends r2/s3/local + real /healthz
+- [x] 16-02-PLAN.md — Log scrubbing + /data/keys/ validator + state backends r2/s3/local + real /healthz
   (SEC-01, SEC-02, STBK-01..05)
 - [ ] 16-03-PLAN.md — GET /v1/version + operator DOCS.md + README + pre-commit config
 
@@ -568,7 +568,7 @@ theory.
 | 13. Provider + Resource + Data      | v1.3      | 3/3                                     | Complete            | 2026-09-05 |
 | 14. Real-HA E2E + Docs              | v1.3      | 3/3                                     | Complete            | 2026-09-05 |
 | 15. CI + Provider Install           | v1.3      | 0/3 (mechanically ready, blocked on v1.2 Phase 8 gap-closure) | Mechanically Ready | — |
-| 16. iac-runner Scaffold + Auth      | v1.4      | 1/3 | In Progress|  |
+| 16. iac-runner Scaffold + Auth      | v1.4      | 2/3 | In Progress|  |
 | 17. Git + Apply Jobs                | v1.4      | 0/TBD                                   | Planned             | —          |
 | 18. MQTT + HA Entities              | v1.4      | 0/TBD                                   | Planned             | —          |
 | 19. E2E + DOCS                      | v1.4      | 0/TBD                                   | Planned             | —          |
