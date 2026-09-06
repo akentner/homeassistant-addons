@@ -82,7 +82,7 @@ repos:
         name: Validate Dockerfile ARG-before-FROM scope
         entry: ./internal/validate-dockerfile-args.sh
         language: script
-        files: ^(phone-logger|meridian)/Dockerfile$
+        files: ^(phone-logger|meridian|iac-runner)/Dockerfile$
         pass_filenames: true
       - id: validate-versions
         name: Validate Add-on Versioning
