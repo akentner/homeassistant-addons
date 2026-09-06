@@ -23,8 +23,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-31)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Phase 15 — CI Hardening + Provider Install Workflow
-whenever Cloudflare setup lands.
+tracking. **Current focus:** Phase 15 — CI Hardening + Provider Install Workflow whenever Cloudflare setup lands.
 
 ## Milestone v1.0 — COMPLETE
 
@@ -69,15 +68,15 @@ write per wave. 08-04 documents the end state and therefore runs last.
 Roadmap: 7 phases (9-15), 46 requirements mapped. Source: `research/SUMMARY.md` + `REQUIREMENTS.md`. Status: roadmap
 approved; Phase 9 ready to plan. v1.3 runs in parallel with v1.2 Phase 8 gap-closure by explicit user decision.
 
-| Phase | Name                                                   | Status                                 | Completed                                                     |
-| ----- | ------------------------------------------------------ | -------------------------------------- | ------------------------------------------------------------- |
-| 9     | Bridge Foundation + Token Rotation Spike               | Complete                               | 2026-08-31 (plans 01-04; H-1 + §10 transcripts in `spike-transcripts/`) |
-| 10    | Auth Layer + Structured Logging + Healthcheck          | Complete                               | 2026-08-31 (plans 01-03; live-HA verify deferred to Phase 14) |
-| 11    | Bridge Read API                                        | Complete (code + unit tests)           | 2026-09-02 (plans 01-02; 16 new tests; live-HA verification deferred to Phase 14) |
+| Phase | Name                                                   | Status                                 | Completed                                                                                                                                                 |
+| ----- | ------------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 9     | Bridge Foundation + Token Rotation Spike               | Complete                               | 2026-08-31 (plans 01-04; H-1 + §10 transcripts in `spike-transcripts/`)                                                                                   |
+| 10    | Auth Layer + Structured Logging + Healthcheck          | Complete                               | 2026-08-31 (plans 01-03; live-HA verify deferred to Phase 14)                                                                                             |
+| 11    | Bridge Read API                                        | Complete (code + unit tests)           | 2026-09-02 (plans 01-02; 16 new tests; live-HA verification deferred to Phase 14)                                                                         |
 | 12    | Bridge Write API + Critical-Addon Safety + Concurrency | SHIPPED (12-01 + 12-02 + 12-03 landed) | 2026-09-04 (5 atomic commits: feat(12-01), feat(12-02)×2, feat(12-03), test(12-03); all 10 reqs operational end-to-end; race-clean; build/vet/gofmt pass) |
-| 13    | Provider + Resource + Data Sources + Schema Handshake  | Not started                            | —                                                             |
-| 14    | Real-HA End-to-End Verification + Operator Docs        | Not started                            | —                                                             |
-| 15    | CI Hardening + Provider Install Workflow               | Not started                            | —                                                             |
+| 13    | Provider + Resource + Data Sources + Schema Handshake  | Not started                            | —                                                                                                                                                         |
+| 14    | Real-HA End-to-End Verification + Operator Docs        | Not started                            | —                                                                                                                                                         |
+| 15    | CI Hardening + Provider Install Workflow               | Not started                            | —                                                                                                                                                         |
 
 Phase dependency graph enforces: 9 → 10 → 11 → 12 → 13 → 14 → 15 (strictly serial). The empirical SUPERVISOR_TOKEN
 rotation spike (H-1 from PITFALLS) was the first deliverable of Phase 9; it is the lowest-confidence item blocking the
@@ -87,37 +86,37 @@ outbound request). D-18 RESOLVED with defensive design; conservative re-verifica
 
 ## Current Position
 
-Phase: 14 (Real-HA End-to-End Verification + Operator Documentation) — COMPLETE
-7 atomic commits landed on main: docs(state) pre-cleanup, docs(state) begin-phase, feat(14-01) test add-on + verify
-foundation, docs(14-01) summary, feat(14-02) 12 per-error_code verify scenarios, docs(14-02) summary,
-feat(14-03) README + DOCS expansion + 99-cleanup, docs(14-03) summary, docs(roadmap) Phase 14 complete.
-OPS-04 surface delivered: tools/test-addon/ (5 files) + internal/verify-bridge-e2e/ (_lib.sh + 00-happy-path.sh +
-12 error-code scenarios + 99-cleanup) + terraform-bridge/{README.md, DOCS.md} rewrite. Live-HA empirical
-exercise remains operator-runtime (preflight returns 1 in this env: no tofu, no Provider binary, /healthz
-unreachable); every scenario follows the D-10 skip-when-unsafe pattern and exits 0 with `skipped — <reason>`
-on missing prerequisites. validate-versions PASS, validate-addon-config PASS, validate-dockerfile-args PASS,
-shellcheck PASS for all 16 shell files. Bridge 0.2.0 == Provider 0.2.0 (TOFU-05 unchanged — CF-11 honored).
+Phase: 14 (Real-HA End-to-End Verification + Operator Documentation) — COMPLETE 7 atomic commits landed on main:
+docs(state) pre-cleanup, docs(state) begin-phase, feat(14-01) test add-on + verify foundation, docs(14-01) summary,
+feat(14-02) 12 per-error_code verify scenarios, docs(14-02) summary, feat(14-03) README + DOCS expansion + 99-cleanup,
+docs(14-03) summary, docs(roadmap) Phase 14 complete. OPS-04 surface delivered: tools/test-addon/ (5 files) +
+internal/verify-bridge-e2e/ (_lib.sh + 00-happy-path.sh + 12 error-code scenarios + 99-cleanup) +
+terraform-bridge/{README.md, DOCS.md} rewrite. Live-HA empirical exercise remains operator-runtime (preflight returns 1
+in this env: no tofu, no Provider binary, /healthz unreachable); every scenario follows the D-10 skip-when-unsafe
+pattern and exits 0 with `skipped — <reason>` on missing prerequisites. validate-versions PASS, validate-addon-config
+PASS, validate-dockerfile-args PASS, shellcheck PASS for all 16 shell files. Bridge 0.2.0 == Provider 0.2.0 (TOFU-05
+unchanged — CF-11 honored).
 
 ## Accumulated Context
 
 ### Key Decisions (v1.3)
 
-| Decision                                                                                                                                                                                                                                                                        | Rationale                                                                                                                                                                                                                                                                                                                                      |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 7 phases, not 10 — vertical slices, not horizontal layers                                                                                                                                                                                                                       | Each phase produces a deployable, verifiable artifact; collapse read+write API into one phase was rejected (loses safety gate before write)                                                                                                                                                                                                    |
-| Empirical SUPERVISOR_TOKEN rotation spike is Phase 9, not later                                                                                                                                                                                                                 | H-1 is the lowest-confidence item; designing auth on top of unverified token behavior risks rework (per PITFALLS research)                                                                                                                                                                                                                     |
-| Per-slug mutex goes in Phase 12, not Phase 13                                                                                                                                                                                                                                   | Defense-in-depth for cross-host concurrent applies must exist BEFORE Provider surfaces destructive ops; STATE-03 paired with write endpoints                                                                                                                                                                                                   |
-| Real-HA E2E gets its own phase (14), not folded into Provider (13)                                                                                                                                                                                                              | Phase-8 pattern: empirical verification against live HA host deserves its own validation gate; docs written from observed behavior, not theory                                                                                                                                                                                                 |
-| Phase 15 (CI + install-provider) is intentionally thin                                                                                                                                                                                                                          | The CI work is substantial (new build workflow, new test workflow, install verification); TOFU-04 is the single REQ-ID; non-req deliverables carry the weight                                                                                                                                                                                  |
-| `homeassistant_addon_repository` deferred to v1.4 (per existing decision)                                                                                                                                                                                                       | PROJECT.md + REQUIREMENTS.md both record this; do NOT re-add in any v1.3 phase                                                                                                                                                                                                                                                                 |
-| **Two-layer AUTH-05 masking (Plan 02):** slog.Handler wrapper scrubs every record + chi middleware strips Authorization from r.Header before request-log snapshot                                                                                                               | D-10 layered defense — if the slog scrubber ever regresses, the chi middleware still prevents leakage. Both proven by unit tests. Phase 10 plan 02 commits.                                                                                                                                                                                    |
-| **/healthz probe (Plan 02):** real /supervisor/ping call with 2s context deadline, no caching. 503 body always empty (Content-Length: 0)                                                                                                                                        | D-07 freshness > p99 reduction at this poll cadence. D-08 prevents internal-state leak on health-check failure. Phase 10 plan 02 commits.                                                                                                                                                                                                      |
-| **verify-script adaptation (Plan 02):** positive-control assertions rewritten to parse `bridge.token.issued` JSON and assert actor_token_fp == SHA-256[8](plaintext) instead of comparing against FAKE_TOKEN (the supervisor token the bridge never logs)                       | Plan-adaptation deviation. Adding a BRIDGE_TOKEN env override to TokenStore would be an out-of-scope architectural change; same invariants proven without it. Documented in 10-02-SUMMARY §Deviations.                                                                                                                                         |
+| Decision                                                                                                                                                                                                                                                                                                                                                       | Rationale                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 7 phases, not 10 — vertical slices, not horizontal layers                                                                                                                                                                                                                                                                                                      | Each phase produces a deployable, verifiable artifact; collapse read+write API into one phase was rejected (loses safety gate before write)                                                                                                                                                                                                                                                                                                  |
+| Empirical SUPERVISOR_TOKEN rotation spike is Phase 9, not later                                                                                                                                                                                                                                                                                                | H-1 is the lowest-confidence item; designing auth on top of unverified token behavior risks rework (per PITFALLS research)                                                                                                                                                                                                                                                                                                                   |
+| Per-slug mutex goes in Phase 12, not Phase 13                                                                                                                                                                                                                                                                                                                  | Defense-in-depth for cross-host concurrent applies must exist BEFORE Provider surfaces destructive ops; STATE-03 paired with write endpoints                                                                                                                                                                                                                                                                                                 |
+| Real-HA E2E gets its own phase (14), not folded into Provider (13)                                                                                                                                                                                                                                                                                             | Phase-8 pattern: empirical verification against live HA host deserves its own validation gate; docs written from observed behavior, not theory                                                                                                                                                                                                                                                                                               |
+| Phase 15 (CI + install-provider) is intentionally thin                                                                                                                                                                                                                                                                                                         | The CI work is substantial (new build workflow, new test workflow, install verification); TOFU-04 is the single REQ-ID; non-req deliverables carry the weight                                                                                                                                                                                                                                                                                |
+| `homeassistant_addon_repository` deferred to v1.4 (per existing decision)                                                                                                                                                                                                                                                                                      | PROJECT.md + REQUIREMENTS.md both record this; do NOT re-add in any v1.3 phase                                                                                                                                                                                                                                                                                                                                                               |
+| **Two-layer AUTH-05 masking (Plan 02):** slog.Handler wrapper scrubs every record + chi middleware strips Authorization from r.Header before request-log snapshot                                                                                                                                                                                              | D-10 layered defense — if the slog scrubber ever regresses, the chi middleware still prevents leakage. Both proven by unit tests. Phase 10 plan 02 commits.                                                                                                                                                                                                                                                                                  |
+| **/healthz probe (Plan 02):** real /supervisor/ping call with 2s context deadline, no caching. 503 body always empty (Content-Length: 0)                                                                                                                                                                                                                       | D-07 freshness > p99 reduction at this poll cadence. D-08 prevents internal-state leak on health-check failure. Phase 10 plan 02 commits.                                                                                                                                                                                                                                                                                                    |
+| **verify-script adaptation (Plan 02):** positive-control assertions rewritten to parse `bridge.token.issued` JSON and assert actor_token_fp == SHA-256[8](plaintext) instead of comparing against FAKE_TOKEN (the supervisor token the bridge never logs)                                                                                                      | Plan-adaptation deviation. Adding a BRIDGE_TOKEN env override to TokenStore would be an out-of-scope architectural change; same invariants proven without it. Documented in 10-02-SUMMARY §Deviations.                                                                                                                                                                                                                                       |
 | **Phase 10 H-1 implementation: re-read-per-call, NOT cache-at-startup (Plan 02 → client.go)** — `internal/supervisor/client.go:84-91` `RoundTrip → t.tokenFn()` reads `os.Getenv("SUPERVISOR_TOKEN")` on every outbound request. Empirical spike (2026-08-31) showed token unchanged; per-call re-read is the defensive default for unknown rotation behavior. | Earlier 09-SUMMARY.md text said "Phase 10 may cache at startup (cheap default)" — that was an aspirational design note, NOT what shipped. The shipped Phase 10 RoundTrip pattern is already conservative: re-read per call costs O(1) and makes the design robust to a future Supervisor change that introduces per-add-on token rotation. Plan 03's signals.go SIGHUP handler remains the natural hook for explicit force-re-read commands. |
-| **2026-09-02 conservative decision: ASSUME SUPERVISOR_TOKEN MAY rotate** — empirically verified unchanged 2026-08-31 on haos-op3050-1, but the live system is now treated as if the token could rotate at any restart. Re-verification deferred to a low-risk window.                                                                                | User decision 2026-09-02: live-system conservatism wins over empirical single-shot result. Phase 10 design (re-read per call) already meets the assumption; no code change required. To be re-verified later via `internal/spike-h1-token-rotation.sh` against a maintenance-window host. |
-| **AUTH-04 grace file format (Plan 03):** /data/bridge-token.grace is a 2-line plaintext format (hex64 + RFC3339) instead of JSON — keeps Plan 01's readGraceFile parser unchanged; D-13 per-request expiry semantics means the file becomes inert without background goroutines | Plan-adaptation choice. JSON would have been equally correct on disk but required rewiring the reader AND adding a JSON-path through Plan 01's already-committed code. Text format respects the existing reader and locks the security invariant (no plaintext ever) more defensively.                                                         |
-| **AUTH-04 rotate write order (Plan 03):** TokenStore.Rotate writes the new primary hash BEFORE writing the grace file. If the grace write fails, the old token still authenticates against the new hash; on-disk primary state is always consistent                             | Failure-mode lockdown. Reversing the order would leave a window where the new token authenticates against /data/bridge-token but the old token does not — exactly the scenario D-02/D-12 are designed to prevent. Cost of writing primary first is one extra renamed file; cost of reversal is a window of forced 401s on a still-valid token. |
-| **D-03 timestamp pair (Plan 03):** RotateResponse.GraceExpiresAt and OldTokenValidUntil are byte-identical RFC3339 strings — duplicated on purpose so Provider consumers can pick whichever schema field name they prefer without an extra hop                                  | Provider-side ergonomics. PROV-03 / PROV-05 reference these fields from Phase 13's resource shape; duplication costs zero on the wire (~70 bytes) and removes a constant from the Provider's schema mapping table.                                                                                                                             |
+| **2026-09-02 conservative decision: ASSUME SUPERVISOR_TOKEN MAY rotate** — empirically verified unchanged 2026-08-31 on haos-op3050-1, but the live system is now treated as if the token could rotate at any restart. Re-verification deferred to a low-risk window.                                                                                          | User decision 2026-09-02: live-system conservatism wins over empirical single-shot result. Phase 10 design (re-read per call) already meets the assumption; no code change required. To be re-verified later via `internal/spike-h1-token-rotation.sh` against a maintenance-window host.                                                                                                                                                    |
+| **AUTH-04 grace file format (Plan 03):** /data/bridge-token.grace is a 2-line plaintext format (hex64 + RFC3339) instead of JSON — keeps Plan 01's readGraceFile parser unchanged; D-13 per-request expiry semantics means the file becomes inert without background goroutines                                                                                | Plan-adaptation choice. JSON would have been equally correct on disk but required rewiring the reader AND adding a JSON-path through Plan 01's already-committed code. Text format respects the existing reader and locks the security invariant (no plaintext ever) more defensively.                                                                                                                                                       |
+| **AUTH-04 rotate write order (Plan 03):** TokenStore.Rotate writes the new primary hash BEFORE writing the grace file. If the grace write fails, the old token still authenticates against the new hash; on-disk primary state is always consistent                                                                                                            | Failure-mode lockdown. Reversing the order would leave a window where the new token authenticates against /data/bridge-token but the old token does not — exactly the scenario D-02/D-12 are designed to prevent. Cost of writing primary first is one extra renamed file; cost of reversal is a window of forced 401s on a still-valid token.                                                                                               |
+| **D-03 timestamp pair (Plan 03):** RotateResponse.GraceExpiresAt and OldTokenValidUntil are byte-identical RFC3339 strings — duplicated on purpose so Provider consumers can pick whichever schema field name they prefer without an extra hop                                                                                                                 | Provider-side ergonomics. PROV-03 / PROV-05 reference these fields from Phase 13's resource shape; duplication costs zero on the wire (~70 bytes) and removes a constant from the Provider's schema mapping table.                                                                                                                                                                                                                           |
 
 ### Research Flags (open questions for implementation — must resolve before/during Phase 9)
 
@@ -151,12 +150,13 @@ shellcheck PASS for all 16 shell files. Bridge 0.2.0 == Provider 0.2.0 (TOFU-05 
 
 - [x] Phase 9: **Capture H-1 spike transcript** — `internal/spike-h1-token-rotation.sh` committed (e29f5cd); executed
       against haos-op3050-1 on 2026-08-31 with explicit per-call authorization for Supervisor restart; transcript at
-      `spike-transcripts/h1-20260831T153943Z.log`; pasted verbatim into `09-SUMMARY.md`; D-18 RESOLVED (`token_unchanged`)
+      `spike-transcripts/h1-20260831T153943Z.log`; pasted verbatim into `09-SUMMARY.md`; D-18 RESOLVED
+      (`token_unchanged`)
 
 - [x] Phase 9: **Capture §10 spike transcript** — `internal/spike-pitfalls10-backup-addon-config.sh` committed
       (6f254d5); executed against haos-op3050-1 on 2026-08-31 with explicit per-call authorization for `ha backups new`;
-      transcript at `spike-transcripts/pitfalls10-20260831T153403Z.log`; pasted verbatim into `09-SUMMARY.md`;
-      D-19 RESOLVED (`addon_config_backed_up`)
+      transcript at `spike-transcripts/pitfalls10-20260831T153403Z.log`; pasted verbatim into `09-SUMMARY.md`; D-19
+      RESOLVED (`addon_config_backed_up`)
 
 - [x] Phase 9: Extend `internal/validate-versions.sh` to enforce Bridge `build.yaml` == Provider `build.yaml` semver —
       done in 09-02 (`d0d516d`)
@@ -166,21 +166,21 @@ shellcheck PASS for all 16 shell files. Bridge 0.2.0 == Provider 0.2.0 (TOFU-05 
 
 - [x] Phase 11: **Plan 11-01 drafted + verified** — `/.planning/phases/11-bridge-read-api/11-01-PLAN.md` (899 lines):
       tracer-first task builds `/v1/info` (BRIDGE-10, no-auth, `uptime_seconds` since `func main()` start) +
-      `/v1/version` (BRIDGE-01, auth-required handshake for PROV-03); introduces `internal/version` package for
-      shared semver constants; adds `terraform-bridge/internal/supervisor/testing.go` (NOT `_test.go`) so
-      cross-package handler tests can use `WithBaseURLForTest` / `TokenFnForTest` helpers; 11 files touched
+      `/v1/version` (BRIDGE-01, auth-required handshake for PROV-03); introduces `internal/version` package for shared
+      semver constants; adds `terraform-bridge/internal/supervisor/testing.go` (NOT `_test.go`) so cross-package handler
+      tests can use `WithBaseURLForTest` / `TokenFnForTest` helpers; 11 files touched
 
 - [x] Phase 11: **Plan 11-02 drafted + verified** — `/.planning/phases/11-bridge-read-api/11-02-PLAN.md` (1059 lines):
-      V1/V2 fallback machinery in `supervisor.Client` + `/v1/addons` (BRIDGE-02) + `/v1/addons/{slug}/info`
-      (BRIDGE-03); `ErrNotFound` sentinel mapped to literal `{"error_code":"not_found"}` per BRIDGE-03; relaxed
-      fallback treats V2-403+V1-404 as `ErrNotFound` too; 4 new tests (V2-success, V2-403-then-V1-200, V2/V1
-      happy-path 200, V2-403-then-V1-404); 7 files touched
+      V1/V2 fallback machinery in `supervisor.Client` + `/v1/addons` (BRIDGE-02) + `/v1/addons/{slug}/info` (BRIDGE-03);
+      `ErrNotFound` sentinel mapped to literal `{"error_code":"not_found"}` per BRIDGE-03; relaxed fallback treats
+      V2-403+V1-404 as `ErrNotFound` too; 4 new tests (V2-success, V2-403-then-V1-200, V2/V1 happy-path 200,
+      V2-403-then-V1-404); 7 files touched
 
 - [x] Phase 11: **Plan 11-01 executed** — 7 files created (supervisor/client_test.go, supervisor/testing.go,
       version/version.go, handlers/info.go + info_test.go, handlers/version_test.go, router_test.go) + 5 modified
-      (supervisor/client.go, contract/types.go, handlers/version.go, router.go, cmd/bridge/main.go); 6 new tests +
-      go build / vet / test / gofmt all green; 1 Rule-1 auto-fix (body-drain order in GetSupervisorInfo); `11-01-SUMMARY.md`
-      written (328 lines). Staged but uncommitted.
+      (supervisor/client.go, contract/types.go, handlers/version.go, router.go, cmd/bridge/main.go); 6 new tests + go
+      build / vet / test / gofmt all green; 1 Rule-1 auto-fix (body-drain order in GetSupervisorInfo);
+      `11-01-SUMMARY.md` written (328 lines). Staged but uncommitted.
 
 - [x] Phase 11: **Plan 11-02 executed** — 4 files created (handlers/addons.go + addons_test.go, handlers/addon_info.go +
       addon_info_test.go) + 3 modified (supervisor/client.go, supervisor/client_test.go, router.go); 10 new tests +
@@ -188,21 +188,20 @@ shellcheck PASS for all 16 shell files. Bridge 0.2.0 == Provider 0.2.0 (TOFU-05 
 
 - [ ] **Phase 11 commit + push (awaiting user approval)** — staged set: 16 new files + 8 modified. Two atomic commits
       planned per plan (`feat(11-01): GET /v1/info + /v1/version (BRIDGE-10, BRIDGE-01)` and
-      `feat(11-02): supervisor V1/V2 fallback + GET /v1/addons + /v1/addons/{slug}/info (BRIDGE-02, BRIDGE-03)`).
-      Live curl tests against 192.168.178.3:8124 require rebuilding the Bridge image + redeploying on the HA host.
-      Pre-commit `validate-versions.sh` is not impacted (Bridge version unchanged).
+      `feat(11-02): supervisor V1/V2 fallback + GET /v1/addons + /v1/addons/{slug}/info (BRIDGE-02, BRIDGE-03)`). Live
+      curl tests against 192.168.178.3:8124 require rebuilding the Bridge image + redeploying on the HA host. Pre-commit
+      `validate-versions.sh` is not impacted (Bridge version unchanged).
 
-- [x] Phase 11: **3 atomic commits landed** — a6f1c36 docs(STATE): Phase 9 sync + Phase 11 in-progress tracking
-      (1 file, 62+/18-); 9158869 feat(11-01): GET /v1/info + /v1/version + planning docs (14 files, 1684+/10-);
-      40548c4 feat(11-02): V1/V2 fallback + /v1/addons + /v1/addons/{slug}/info + planning docs (9 files,
-      1921+/0-). Build + vet + gofmt clean. Branch main is at 40548c4. Pre-commit validate-versions.sh did not
-      fire (Bridge version unchanged).
+- [x] Phase 11: **3 atomic commits landed** — a6f1c36 docs(STATE): Phase 9 sync + Phase 11 in-progress tracking (1 file,
+      62+/18-); 9158869 feat(11-01): GET /v1/info + /v1/version + planning docs (14 files, 1684+/10-); 40548c4
+      feat(11-02): V1/V2 fallback + /v1/addons + /v1/addons/{slug}/info + planning docs (9 files, 1921+/0-). Build +
+      vet + gofmt clean. Branch main is at 40548c4. Pre-commit validate-versions.sh did not fire (Bridge version
+      unchanged).
 
-- [ ] **STATE.md stale-on-deliverable (post-commit sync pending user approval)** — Phase 11 is shipped but the
-      STATE.md update reflecting "Phase 11 complete" is unstaged in the working tree. Per user instruction "3
-      Commits: state + feat(11-01) + feat(11-02)" we did not add a 4th commit for the doc-sync; it remains for
-      the user to commit or amend. Until then STATE.md still reports "Phase 11 in-progress" on the committed
-      HEAD, which is inaccurate.
+- [ ] **STATE.md stale-on-deliverable (post-commit sync pending user approval)** — Phase 11 is shipped but the STATE.md
+      update reflecting "Phase 11 complete" is unstaged in the working tree. Per user instruction "3 Commits: state +
+      feat(11-01) + feat(11-02)" we did not add a 4th commit for the doc-sync; it remains for the user to commit or
+      amend. Until then STATE.md still reports "Phase 11 in-progress" on the committed HEAD, which is inaccurate.
 
 ### Blockers
 
@@ -226,7 +225,7 @@ shellcheck PASS for all 16 shell files. Bridge 0.2.0 == Provider 0.2.0 (TOFU-05 
 | Phase 10 P02                                           | 25min | 3 tasks  | 11 files |
 | Phase 10 P02                                           | 25min | 3 tasks  | 11 files |
 | Phase 10-auth-layer-structured-logging-healthcheck P03 | 4 min | 3 tasks  | 6 files  |
-| Quick 260902-sa1 (State Sync)                           | ~5min | 1 task   | 1 file   |
+| Quick 260902-sa1 (State Sync)                          | ~5min | 1 task   | 1 file   |
 
 ## Quick Tasks Completed
 
@@ -244,13 +243,13 @@ shellcheck PASS for all 16 shell files. Bridge 0.2.0 == Provider 0.2.0 (TOFU-05 
 
 ## Session Continuity
 
-**Stopped at:** Phase 15 context gathered (audit trail; phase work shipped in prior session)
-**Resume file:** .planning/phases/15-ci-hardening-provider-install-workflow/15-CONTEXT.md
+**Stopped at:** Phase 15 context gathered (audit trail; phase work shipped in prior session) **Resume file:**
+.planning/phases/15-ci-hardening-provider-install-workflow/15-CONTEXT.md
 
-Last session: 2026-09-05T19:09:28.159Z
-feat(11-01), feat(11-02), docs(STATE)-postship, docs(11)-VERIFICATION; 26 files; VERIFICATION.md canonical; live-HA
-deferred to Phase 14) Next step: /gsd-discuss-phase 12 (Bridge Write API + Critical-Addon Safety + Concurrency +
-State Index; 10 Requirements: BRIDGE-04..09, STATE-02..03, LIFE-01, LIFE-03) Resume file: None
+Last session: 2026-09-05T19:09:28.159Z feat(11-01), feat(11-02), docs(STATE)-postship, docs(11)-VERIFICATION; 26 files;
+VERIFICATION.md canonical; live-HA deferred to Phase 14) Next step: /gsd-discuss-phase 12 (Bridge Write API +
+Critical-Addon Safety + Concurrency + State Index; 10 Requirements: BRIDGE-04..09, STATE-02..03, LIFE-01, LIFE-03)
+Resume file: None
 
 ---
 

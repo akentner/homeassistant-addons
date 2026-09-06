@@ -1,8 +1,6 @@
 # Phase 12: Discussion Log
 
-**Phase:** 12-bridge-write-api-safety-concurrency-index
-**Gathered:** 2026-09-02
-**Milestone:** v1.3 opentofu-bridge
+**Phase:** 12-bridge-write-api-safety-concurrency-index **Gathered:** 2026-09-02 **Milestone:** v1.3 opentofu-bridge
 
 ## Areas discussed
 
@@ -14,14 +12,14 @@
 
 1. **In-Memory (lost on restart)** — simple, no I/O on hot path, GC in 30s
 2. **/data/bridge-nonce.json (survives restart)** — survives Bridge restart, costs file-rotation
-3. **Hybrid: in-memory cache + /data audit journal (append-only)** — two layers, single-use tracking in memory + forensics via append journal
+3. **Hybrid: in-memory cache + /data audit journal (append-only)** — two layers, single-use tracking in memory +
+   forensics via append journal
 
 **User choice:** Option 3 — Hybrid
 
-**Notes:** Practical compromise. Single-use tracking stays in-memory (clean, no race with filesystem); journal
-captures `nonce_fp`, `actor_token_fp`, `request_id`, `issued_at`, `used_at` for forensics. Nonce lost on restart
-= caller sees `401 nonce_expired` and re-requests via `POST /v1/auth/nonce`. With 60-second TTL the cost is
-negligible.
+**Notes:** Practical compromise. Single-use tracking stays in-memory (clean, no race with filesystem); journal captures
+`nonce_fp`, `actor_token_fp`, `request_id`, `issued_at`, `used_at` for forensics. Nonce lost on restart = caller sees
+`401 nonce_expired` and re-requests via `POST /v1/auth/nonce`. With 60-second TTL the cost is negligible.
 
 **Captured decisions:** 12-CONTEXT.md §D-05 (storage), §D-06 (lifecycle), §D-07 (GC), §D-08 (restart-loss rationale)
 
@@ -35,14 +33,14 @@ negligible.
 
 1. **Konservativ: uninstall + options-change** — middle-ground; start/stop/info bleiben offen
 2. **Aggressiv: alle mutating ops** (incl. stop) — strikter, weniger operativer Freiraum
-3. **Whitelist + Ops-Granularität als schema option** — Operator konfigurierbar; default `["core_mosquitto",
-   "core_zigbee2mqtt", "core_esphome"]`
+3. **Whitelist + Ops-Granularität als schema option** — Operator konfigurierbar; default
+   `["core_mosquitto", "core_zigbee2mqtt", "core_esphome"]`
 
 **User choice:** Option 3 — Whitelist + schema option
 
-**Notes:** `critical_addons` als list-schema-field im add-on options. Operator kann die Liste anpassen oder leeren
-(leer = Schutz disabled). Blockierte Ops: uninstall + options-change (per Phase-12 ROADMAP.md SC-3). Start/Stop/Reads/
-Install bleiben offen. Trade-off: mehr Konfiguration-Komplexität gegen Operator-Flexibilität.
+**Notes:** `critical_addons` als list-schema-field im add-on options. Operator kann die Liste anpassen oder leeren (leer
+= Schutz disabled). Blockierte Ops: uninstall + options-change (per Phase-12 ROADMAP.md SC-3). Start/Stop/Reads/ Install
+bleiben offen. Trade-off: mehr Konfiguration-Komplexität gegen Operator-Flexibilität.
 
 **Captured decisions:** 12-CONTEXT.md §D-09 (schema), §D-10 (blockierte Ops), §D-11 (Hander-Placement)
 
@@ -97,7 +95,7 @@ polls; uninstall/start/stop are sync)
 **Options presented:**
 
 1. **terraform.tfstate (+ backup immer)** — single-workflow default; minimal
-2. **Glob *.tfstate + *.tfstate.backup** — multi-state-workflow support
+2. **Glob _.tfstate + *.tfstate.backup*_ — multi-state-workflow support
 3. ***.tfstate (ohne backup)** — Phase 1 minimal; defer backup listing
 
 **User choice:** Option 2 — Glob *.tfstate + *.tfstate.backup
@@ -105,31 +103,31 @@ polls; uninstall/start/stop are sync)
 **Notes:** Multi-state-workflow support out of the box. SHA-256 über alle files. Skip `*.tfstate.lock` (ephemeral).
 Trade-off: etwas mehr SHA-256 compute, aber für HA-Backup-coverage-Beweis ist das Minimum.
 
-**Captured decisions:** 12-CONTEXT.md §D-20 (scope), §D-21 (response shape), §D-22 (`internal/state/` package),
-§D-23 (per-file error handling), §D-24 (GET only)
+**Captured decisions:** 12-CONTEXT.md §D-20 (scope), §D-21 (response shape), §D-22 (`internal/state/` package), §D-23
+(per-file error handling), §D-24 (GET only)
 
 ---
 
 ## Deferred Ideas
 
-- **CSRF / OPTIONS preflight (PITFALLS S-3):** The `X-Force-Destroy` nonce + strict Tailscale-bind gate cover the
-  threat surfaces. CORS preflight deferred to Phase 16 / Phase 2. Captured in 12-CONTEXT.md §"Deferred Ideas".
+- **CSRF / OPTIONS preflight (PITFALLS S-3):** The `X-Force-Destroy` nonce + strict Tailscale-bind gate cover the threat
+  surfaces. CORS preflight deferred to Phase 16 / Phase 2. Captured in 12-CONTEXT.md §"Deferred Ideas".
 - **Per-add-on install-timeout overrides:** Single global for Phase 12; Phase 13+ if needed.
 
 ## Cross-Phase Coordination
 
-- **Reuse from Phase 11:** `supervisor.Client` pattern, contract type conventions, chi `/v1` auth subrouter,
-  slog key convention, error body shape. Documented in 12-CONTEXT.md §CF-01..CF-11.
+- **Reuse from Phase 11:** `supervisor.Client` pattern, contract type conventions, chi `/v1` auth subrouter, slog key
+  convention, error body shape. Documented in 12-CONTEXT.md §CF-01..CF-11.
 - **Reuse from Phase 10:** atomic-write + chmod-600 + per-request-expiry pattern (for the nonce audit journal).
 - **Reuse from Phase 9:** supervisor_api_v2 fallback machinery + the empirical H-1 / §10 spike results.
 
 ## Open items for downstream agents
 
-- Phase 12 **planner** must place `critical_addons` check BEFORE mutex acquisition (per CF-explicit section +
-  Specifics item).
-- Phase 12 **executor** must commit the journal entry to disk atomically (not with deferred fsync that loses data
-  on crash).
+- Phase 12 **planner** must place `critical_addons` check BEFORE mutex acquisition (per CF-explicit section + Specifics
+  item).
+- Phase 12 **executor** must commit the journal entry to disk atomically (not with deferred fsync that loses data on
+  crash).
 - Phase 12 **planner** must verify that `/v1/auth/nonce` is itself auth-required (otherwise anon nonce issuance =
   trivial CSRF bypass).
 - Phase 13 **planner** (next phase) will reference 12-CONTEXT.md §"the agent's Discretion" for adopt_409 semantics
-  + provider-side installation flow integration.
+  - provider-side installation flow integration.
