@@ -97,13 +97,13 @@ jobs:
           }
           EOF
 
-      - name: tofu init (verifies dev_overrides + schema handshake)
-        env:
-          TF_CLI_CONFIG_FILE: ${{ env.PLUGIN_DEST }}/cli-config.tfrc
-        run: |
-          tofu init -input=false
-
-      - name: tofu plan (verifies schema handshake succeeds)
+      - name: tofu plan (verifies dev_overrides + schema handshake)
+        # `tofu init` is intentionally skipped: with dev_overrides set,
+        # OpenTofu loads the provider directly from the local path and
+        # `tofu init` errors with "Could not resolve provider packages
+        # (no available releases match the given constraints)" because
+        # it tries to resolve the registry source instead. The schema
+        # handshake is exercised by `tofu plan` instead.
         env:
           TF_CLI_CONFIG_FILE: ${{ env.PLUGIN_DEST }}/cli-config.tfrc
         run: |
