@@ -231,30 +231,30 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
 
 **Milestone:** v1.4 iac-runner
 
-**Goal:** Ship a Home Assistant Supervisor add-on (`iac-runner/`) that clones a Git repo (e.g. `homelab-infra`),
-runs OpenTofu/Terraform `plan`/`apply` against homelab servers (Tailscale-reachable), persists state in R2 (default),
+**Goal:** Ship a Home Assistant Supervisor add-on (`iac-runner/`) that clones a Git repo (e.g. `homelab-infra`), runs
+OpenTofu/Terraform `plan`/`apply` against homelab servers (Tailscale-reachable), persists state in R2 (default),
 S3-compatible, or local backend, and surfaces run status + manual triggers as Home Assistant entities via MQTT
 Discovery.
 
-**Scope:** Phase 16 = scaffold + auth + state backends + healthz. Phase 17 = git integration + apply job system.
-Phase 18 = MQTT Discovery + HA entities. Phase 19 = E2E verification + operator docs.
+**Scope:** Phase 16 = scaffold + auth + state backends + healthz. Phase 17 = git integration + apply job system. Phase
+18 = MQTT Discovery + HA entities. Phase 19 = E2E verification + operator docs.
 
 ---
 
 ### AUTHR — iac-runner Bearer-Auth (no SUPERVISOR_TOKEN)
 
 - [x] **AUTHR-01**: Add-on does NOT declare `hassio_api: true` in `config.yaml`; the add-on does not need Supervisor
-      access (`iac-runner` calls `tofu`/`git`/`aws` itself; no Supervisor calls). Only `homeassistant_api: true`
-      is set, solely for the MQTT service connection
+      access (`iac-runner` calls `tofu`/`git`/`aws` itself; no Supervisor calls). Only `homeassistant_api: true` is set,
+      solely for the MQTT service connection
 - [x] **AUTHR-02**: Bearer-token auth follows the proven `terraform-bridge` pattern: 256-bit token via `crypto/rand`;
       SHA-256 hash stored at `/data/iac-runner-token` with `chmod 600`; validation via
       `crypto/subtle.ConstantTimeCompare`; plaintext surfaced exactly once via add-on log line + Options UI on first
       start (and on subsequent rotation); restart does NOT re-emit the plaintext
 - [x] **AUTHR-03**: Add-on listener binds to `0.0.0.0:8125` (separate from `terraform-bridge`'s 8124); startup
-      auto-detects the first `tailscale*` interface in `/sys/class/net` and binds to its IPv4 address; an explicit
-      IP is accepted only if it belongs to a Tailscale interface OR falls inside one of `bind_allowed_subnets`;
-      `bind_address: "0.0.0.0"` is always refused regardless of `bind_allowed_subnets` (per
-      `terraform-bridge` AUTH-07 pattern)
+      auto-detects the first `tailscale*` interface in `/sys/class/net` and binds to its IPv4 address; an explicit IP is
+      accepted only if it belongs to a Tailscale interface OR falls inside one of `bind_allowed_subnets`;
+      `bind_address: "0.0.0.0"` is always refused regardless of `bind_allowed_subnets` (per `terraform-bridge` AUTH-07
+      pattern)
 - [x] **AUTHR-04**: Add-on exposes `POST /v1/auth/rotate` with the same 24-hour grace semantics as `terraform-bridge`;
       for 24 hours both the old and the new token authenticate successfully; grace state persisted in
       `/data/iac-runner-token.grace` and survives restart
@@ -263,101 +263,98 @@ Phase 18 = MQTT Discovery + HA entities. Phase 19 = E2E verification + operator 
 
 - [x] **STBK-01**: Add-on options schema exposes `state_backend: list(match(^(r2|s3|local)$))` defaulting to `r2`;
       selected backend drives which credentials are required at startup
-- [x] **STBK-02**: When `state_backend = r2`: add-on reads R2 access key from `/data/keys/r2-access.key`,
-      secret key from `/data/keys/r2-secret.key`, account ID from `/data/keys/r2-account-id` (plaintext, non-sensitive),
-      bucket from Options (`r2_bucket`); endpoint constructed as `https://<account_id>.r2.cloudflarestorage.com`
+- [x] **STBK-02**: When `state_backend = r2`: add-on reads R2 access key from `/data/keys/r2-access.key`, secret key
+      from `/data/keys/r2-secret.key`, account ID from `/data/keys/r2-account-id` (plaintext, non-sensitive), bucket
+      from Options (`r2_bucket`); endpoint constructed as `https://<account_id>.r2.cloudflarestorage.com`
 - [x] **STBK-03**: When `state_backend = s3`: add-on reads credentials from `/data/keys/s3-access.key` +
       `/data/keys/s3-secret.key`, endpoint from Options (`s3_endpoint`), bucket + region from Options
-- [x] **STBK-04**: When `state_backend = local`: add-on writes/reads state from `/data/terraform.tfstate`; no
-      external credentials required; HA backup covers the state file automatically
-- [x] **STBK-05**: For R2 and S3 backends, OpenTofu is invoked with `use_lockfile = true` so locking uses the
-      native S3 object-lock semantics (no DynamoDB required). For local backend, locking is file-based via
+- [x] **STBK-04**: When `state_backend = local`: add-on writes/reads state from `/data/terraform.tfstate`; no external
+      credentials required; HA backup covers the state file automatically
+- [x] **STBK-05**: For R2 and S3 backends, OpenTofu is invoked with `use_lockfile = true` so locking uses the native S3
+      object-lock semantics (no DynamoDB required). For local backend, locking is file-based via
       `/data/terraform.tfstate.lock`. Apply fails fast with HTTP 423 (`locked`) when another apply holds the lock
 
 ### SEC — Secrets / Credentials Handling
 
-- [x] **SEC-01**: All credential files under `/data/keys/` are validated at startup for `chmod 600` ownership
-      (current process UID); non-conforming files cause startup failure with a clear error message (no degraded
-      mode); missing files cause startup failure per `STBK-01..04` requirements
-- [x] **SEC-02**: Add-on emits structured JSON logs with a scrubbing `slog.Handler` wrapper (case-insensitive
-      key-name mask for `Authorization`, `Bearer`, `token`, `password`, `key`, `secret` → `<redacted>`) — same
-      pattern as `terraform-bridge` AUTH-05; a unit test asserts no credential field ever survives the handler
+- [x] **SEC-01**: All credential files under `/data/keys/` are validated at startup for `chmod 600` ownership (current
+      process UID); non-conforming files cause startup failure with a clear error message (no degraded mode); missing
+      files cause startup failure per `STBK-01..04` requirements
+- [x] **SEC-02**: Add-on emits structured JSON logs with a scrubbing `slog.Handler` wrapper (case-insensitive key-name
+      mask for `Authorization`, `Bearer`, `token`, `password`, `key`, `secret` → `<redacted>`) — same pattern as
+      `terraform-bridge` AUTH-05; a unit test asserts no credential field ever survives the handler
 - [ ] **SEC-03**: `tofu` stdout/stderr captured per-run to `/data/runs/{run_id}/output.log` is redacted for
-      credential-like patterns before being surfaced via `GET /v1/runs/{id}` (e.g. R2 access keys
-      `^[A-Z0-9]{20}$`, AWS secret keys `^[A-Za-z0-9/+=]{40}$`, SSH private-key headers `-----BEGIN`); a
-      `redaction.audit` log record counts redactions per-run
+      credential-like patterns before being surfaced via `GET /v1/runs/{id}` (e.g. R2 access keys `^[A-Z0-9]{20}$`, AWS
+      secret keys `^[A-Za-z0-9/+=]{40}$`, SSH private-key headers `-----BEGIN`); a `redaction.audit` log record counts
+      redactions per-run
 
 ### GIT — Git Integration
 
-- [ ] **GIT-01**: Add-on options schema accepts a list of `repos` entries; each entry has `name` (URI-safe
-      identifier), `url` (SSH URL like `git@github.com:akentner/homelab-infra.git`), `branch` (default `main`),
-      `ref` (optional commit/tag pin)
-- [ ] **GIT-02**: At startup, for each configured repo, the add-on clones into `/data/repos/<name>/` if absent;
-      existing directories are left untouched (caller is responsible for triggering `POST /v1/repos/{name}/pull`)
-- [ ] **GIT-03**: `POST /v1/repos/{name}/pull` runs `git pull --ff-only` (or the configured ref) using the SSH
-      deploy key `/data/keys/<name>.key` and `known_hosts` from `/data/keys/known_hosts`; non-fast-forward pulls
-      and auth failures surface as typed HTTP 409 / 403 errors with actionable messages
-- [ ] **GIT-04**: Git errors (SSH handshake, DNS failure, ref not found) are surfaced as typed HTTP responses
-      with `error_code: "git_*"` and a hint pointing at the relevant Options field; no stack traces in the
-      response body
+- [ ] **GIT-01**: Add-on options schema accepts a list of `repos` entries; each entry has `name` (URI-safe identifier),
+      `url` (SSH URL like `git@github.com:akentner/homelab-infra.git`), `branch` (default `main`), `ref` (optional
+      commit/tag pin)
+- [ ] **GIT-02**: At startup, for each configured repo, the add-on clones into `/data/repos/<name>/` if absent; existing
+      directories are left untouched (caller is responsible for triggering `POST /v1/repos/{name}/pull`)
+- [ ] **GIT-03**: `POST /v1/repos/{name}/pull` runs `git pull --ff-only` (or the configured ref) using the SSH deploy
+      key `/data/keys/<name>.key` and `known_hosts` from `/data/keys/known_hosts`; non-fast-forward pulls and auth
+      failures surface as typed HTTP 409 / 403 errors with actionable messages
+- [ ] **GIT-04**: Git errors (SSH handshake, DNS failure, ref not found) are surfaced as typed HTTP responses with
+      `error_code: "git_*"` and a hint pointing at the relevant Options field; no stack traces in the response body
 
 ### RUN — Runner HTTP API
 
 - [ ] **RUN-01**: Add-on exposes `GET /v1/version` returning JSON
-      `{runner_version, schema_version, min_supported_opentofu, max_supported_opentofu}` — no provider handshake
-      (no external Provider binary consumes this API in v1.4; schema_version reserved for future use)
+      `{runner_version, schema_version, min_supported_opentofu, max_supported_opentofu}` — no provider handshake (no
+      external Provider binary consumes this API in v1.4; schema_version reserved for future use)
 - [ ] **RUN-02**: Add-on exposes `POST /v1/plan` accepting JSON `{repo: "<name>", dir: "<subpath>"}`; starts
-      `tofu init -input=false && tofu plan -no-color -out=/data/runs/{run_id}/plan.tfplan` as a background job;
-      returns HTTP 202 with `{run_id, status: "queued"}` and a `Location: /v1/runs/{run_id}` header
+      `tofu init -input=false && tofu plan -no-color -out=/data/runs/{run_id}/plan.tfplan` as a background job; returns
+      HTTP 202 with `{run_id, status: "queued"}` and a `Location: /v1/runs/{run_id}` header
 - [ ] **RUN-03**: Add-on exposes `POST /v1/apply` accepting the same body as `/v1/plan`; starts
       `tofu apply -no-color -auto-approve /data/runs/{run_id}/plan.tfplan` (or `tofu apply -no-color -auto-approve`
       inline when no plan was provided); returns HTTP 202 with `{run_id, status: "queued"}`
-- [ ] **RUN-04**: Add-on exposes `GET /v1/runs/{id}` returning JSON `{run_id, repo, kind: "plan|apply", status:
-      "queued|running|succeeded|failed", exit_code, started_at, finished_at, output_lines: [...], page, page_size}`;
+- [ ] **RUN-04**: Add-on exposes `GET /v1/runs/{id}` returning JSON
+      `{run_id, repo, kind: "plan|apply", status:     "queued|running|succeeded|failed", exit_code, started_at, finished_at, output_lines: [...], page, page_size}`;
       `output_lines` are paginated (default 100 lines, max 1000); secret-redacted per SEC-03
 - [ ] **RUN-05**: Add-on exposes `GET /v1/runs` returning the last N runs (default 20, max 100) ordered by
       `started_at desc`; supports `?repo=<name>` and `?status=<status>` filters
-- [ ] **RUN-06**: Two concurrent `POST /v1/apply` calls targeting the same repo are serialized by an in-process
-      per-repo mutex; the second call returns HTTP 202 with `status: "queued"` but waits in line until the first
-      finishes; cross-repo applies proceed in parallel; mutex is released on job exit (success, failure, or
-      crash recovery)
+- [ ] **RUN-06**: Two concurrent `POST /v1/apply` calls targeting the same repo are serialized by an in-process per-repo
+      mutex; the second call returns HTTP 202 with `status: "queued"` but waits in line until the first finishes;
+      cross-repo applies proceed in parallel; mutex is released on job exit (success, failure, or crash recovery)
 
 ### MQTT — HA MQTT Discovery (Sensors + Buttons)
 
-- [ ] **MQTT-01**: Add-on `config.yaml` declares `homeassistant_api: true` and lists `mqtt:need` in the
-      `services` array; on startup the add-on reads the broker URL + credentials from the Supervisor-provided
-      MQTT service object (via `bashio::services`); if the MQTT service is not available, the add-on
-      logs a warning and continues without entities (apply endpoints still work)
-- [ ] **MQTT-02**: On startup, the add-on publishes MQTT Discovery config for `sensor.iac_runner_last_run_status`
-      with `state_topic: <prefix>/status`, `value_template: "{{ value_json.status }}"`, and
+- [ ] **MQTT-01**: Add-on `config.yaml` declares `homeassistant_api: true` and lists `mqtt:need` in the `services`
+      array; on startup the add-on reads the broker URL + credentials from the Supervisor-provided MQTT service object
+      (via `bashio::services`); if the MQTT service is not available, the add-on logs a warning and continues without
+      entities (apply endpoints still work)
+- [ ] **MQTT-02**: On startup, the add-on publishes MQTT Discovery config for `sensor.iac_runner_last_run_status` with
+      `state_topic: <prefix>/status`, `value_template: "{{ value_json.status }}"`, and
       `options: ["idle", "running", "success", "failed"]`; the sensor's icon is `mdi:terraform`
-- [ ] **MQTT-03**: On startup, the add-on publishes MQTT Discovery config for `sensor.iac_runner_last_apply_at`
-      with `device_class: timestamp`, `state_topic: <prefix>/last_apply_at`; value is the ISO 8601 timestamp of
-      the last completed apply (success or failure)
-- [ ] **MQTT-04**: On startup, the add-on publishes MQTT Discovery config for `sensor.iac_runner_last_error`
-      with `state_topic: <prefix>/last_error`; value is the truncated (≤ 255 chars) last error message; cleared
-      on next successful apply
-- [ ] **MQTT-05**: On startup, the add-on publishes MQTT Discovery config for `button.iac_runner_run_plan`
-      with `command_topic: <prefix>/run_plan/command`, `payload_press: "PRESS"`; the add-on subscribes to this
-      topic and internally calls `POST /v1/plan` on receipt (verified by IRUN-H-2 spike in Phase 18)
-- [ ] **MQTT-06**: On startup, the add-on publishes MQTT Discovery config for `button.iac_runner_run_apply`
-      with `command_topic: <prefix>/run_apply/command`, `payload_press: "PRESS"`; subscribed by the add-on;
-      debounced to one press per 30 seconds (subsequent presses within the window are logged and ignored)
-- [ ] **MQTT-07**: After every job-status change (`queued` → `running` → `succeeded`/`failed`), the add-on
-      publishes the new status to `<prefix>/status`, `<prefix>/last_apply_at` (only on `succeeded`/`failed`),
-      and `<prefix>/last_error` (only on `failed`); the three sensors stay current in HA without polling
+- [ ] **MQTT-03**: On startup, the add-on publishes MQTT Discovery config for `sensor.iac_runner_last_apply_at` with
+      `device_class: timestamp`, `state_topic: <prefix>/last_apply_at`; value is the ISO 8601 timestamp of the last
+      completed apply (success or failure)
+- [ ] **MQTT-04**: On startup, the add-on publishes MQTT Discovery config for `sensor.iac_runner_last_error` with
+      `state_topic: <prefix>/last_error`; value is the truncated (≤ 255 chars) last error message; cleared on next
+      successful apply
+- [ ] **MQTT-05**: On startup, the add-on publishes MQTT Discovery config for `button.iac_runner_run_plan` with
+      `command_topic: <prefix>/run_plan/command`, `payload_press: "PRESS"`; the add-on subscribes to this topic and
+      internally calls `POST /v1/plan` on receipt (verified by IRUN-H-2 spike in Phase 18)
+- [ ] **MQTT-06**: On startup, the add-on publishes MQTT Discovery config for `button.iac_runner_run_apply` with
+      `command_topic: <prefix>/run_apply/command`, `payload_press: "PRESS"`; subscribed by the add-on; debounced to one
+      press per 30 seconds (subsequent presses within the window are logged and ignored)
+- [ ] **MQTT-07**: After every job-status change (`queued` → `running` → `succeeded`/`failed`), the add-on publishes the
+      new status to `<prefix>/status`, `<prefix>/last_apply_at` (only on `succeeded`/`failed`), and
+      `<prefix>/last_error` (only on `failed`); the three sensors stay current in HA without polling
 
 ### OBS — Observability (Logs, Output, Run History)
 
 - [x] **OBS-01**: Add-on emits one structured JSON log record per HTTP request with fields `ts`, `level`, `msg`,
       `request_id`, `route`, `method`, `status`, `duration_ms` — same pattern as `terraform-bridge` OPS-01;
       `Authorization` header is stripped before request-log snapshot (chi middleware)
-- [ ] **OBS-02**: `tofu` stdout/stderr for each run is captured line-by-line to
-      `/data/runs/{run_id}/output.log` (one line per capture, prefixed with `ts`); the file is rotated/deleted
-      24 hours after the run completes (configurable via `runs_retention_hours`, default 24)
-- [ ] **OBS-03**: `GET /v1/runs/{id}` returns paginated `output_lines`; `page` and `page_size` query parameters
-      allow incremental fetching for long apply outputs; the file-on-disk is the source of truth, not an
-      in-memory buffer
+- [ ] **OBS-02**: `tofu` stdout/stderr for each run is captured line-by-line to `/data/runs/{run_id}/output.log` (one
+      line per capture, prefixed with `ts`); the file is rotated/deleted 24 hours after the run completes (configurable
+      via `runs_retention_hours`, default 24)
+- [ ] **OBS-03**: `GET /v1/runs/{id}` returns paginated `output_lines`; `page` and `page_size` query parameters allow
+      incremental fetching for long apply outputs; the file-on-disk is the source of truth, not an in-memory buffer
 
 ---
 
@@ -365,57 +362,57 @@ Phase 18 = MQTT Discovery + HA entities. Phase 19 = E2E verification + operator 
 
 **Coverage:** 32/32 v1.4 requirements mapped ✓ — no orphans, no duplicates.
 
-| Phase                                                                | Requirements                                                                                                                                                                | Count |
-| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| **Phase 16: Scaffold + Auth + State Backends + Healthcheck**         | AUTHR-01, AUTHR-02, AUTHR-03, AUTHR-04, STBK-01, STBK-02, STBK-03, STBK-04, STBK-05, SEC-01, SEC-02, OBS-01                                                                  | 12    |
-| **Phase 17: Git Integration + Apply Job System**                     | GIT-01, GIT-02, GIT-03, GIT-04, RUN-01, RUN-02, RUN-03, RUN-04, RUN-05, RUN-06, SEC-03, OBS-02, OBS-03                                                                        | 13    |
-| **Phase 18: MQTT Discovery + HA Sensoren + Buttons**                 | MQTT-01, MQTT-02, MQTT-03, MQTT-04, MQTT-05, MQTT-06, MQTT-07                                                                                                               | 7     |
-| **Phase 19: E2E Verification + DOCS + Operator Runbook**             | (validates all v1.4 requirements against a live HA host with a `local_file`-provider fixture; writes operator docs from observed behavior)                                  | 0     |
+| Phase                                                        | Requirements                                                                                                                               | Count |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
+| **Phase 16: Scaffold + Auth + State Backends + Healthcheck** | AUTHR-01, AUTHR-02, AUTHR-03, AUTHR-04, STBK-01, STBK-02, STBK-03, STBK-04, STBK-05, SEC-01, SEC-02, OBS-01                                | 12    |
+| **Phase 17: Git Integration + Apply Job System**             | GIT-01, GIT-02, GIT-03, GIT-04, RUN-01, RUN-02, RUN-03, RUN-04, RUN-05, RUN-06, SEC-03, OBS-02, OBS-03                                     | 13    |
+| **Phase 18: MQTT Discovery + HA Sensoren + Buttons**         | MQTT-01, MQTT-02, MQTT-03, MQTT-04, MQTT-05, MQTT-06, MQTT-07                                                                              | 7     |
+| **Phase 19: E2E Verification + DOCS + Operator Runbook**     | (validates all v1.4 requirements against a live HA host with a `local_file`-provider fixture; writes operator docs from observed behavior) | 0     |
 
 ### Per-requirement mapping
 
-| REQ-ID    | Phase                                                                |
-| --------- | -------------------------------------------------------------------- |
-| AUTHR-01  | Phase 16: Scaffold + Auth + State Backends + Healthcheck             |
-| AUTHR-02  | Phase 16: Scaffold + Auth + State Backends + Healthcheck             |
-| AUTHR-03  | Phase 16: Scaffold + Auth + State Backends + Healthcheck             |
-| AUTHR-04  | Phase 16: Scaffold + Auth + State Backends + Healthcheck             |
-| GIT-01    | Phase 17: Git Integration + Apply Job System                         |
-| GIT-02    | Phase 17: Git Integration + Apply Job System                         |
-| GIT-03    | Phase 17: Git Integration + Apply Job System                         |
-| GIT-04    | Phase 17: Git Integration + Apply Job System                         |
-| MQTT-01   | Phase 18: MQTT Discovery + HA Sensoren + Buttons                     |
-| MQTT-02   | Phase 18: MQTT Discovery + HA Sensoren + Buttons                     |
-| MQTT-03   | Phase 18: MQTT Discovery + HA Sensoren + Buttons                     |
-| MQTT-04   | Phase 18: MQTT Discovery + HA Sensoren + Buttons                     |
-| MQTT-05   | Phase 18: MQTT Discovery + HA Sensoren + Buttons                     |
-| MQTT-06   | Phase 18: MQTT Discovery + HA Sensoren + Buttons                     |
-| MQTT-07   | Phase 18: MQTT Discovery + HA Sensoren + Buttons                     |
-| OBS-01    | Phase 16: Scaffold + Auth + State Backends + Healthcheck             |
-| OBS-02    | Phase 17: Git Integration + Apply Job System                         |
-| OBS-03    | Phase 17: Git Integration + Apply Job System                         |
-| RUN-01    | Phase 17: Git Integration + Apply Job System                         |
-| RUN-02    | Phase 17: Git Integration + Apply Job System                         |
-| RUN-03    | Phase 17: Git Integration + Apply Job System                         |
-| RUN-04    | Phase 17: Git Integration + Apply Job System                         |
-| RUN-05    | Phase 17: Git Integration + Apply Job System                         |
-| RUN-06    | Phase 17: Git Integration + Apply Job System                         |
-| SEC-01    | Phase 16: Scaffold + Auth + State Backends + Healthcheck             |
-| SEC-02    | Phase 16: Scaffold + Auth + State Backends + Healthcheck             |
-| SEC-03    | Phase 17: Git Integration + Apply Job System                         |
-| STBK-01   | Phase 16: Scaffold + Auth + State Backends + Healthcheck             |
-| STBK-02   | Phase 16: Scaffold + Auth + State Backends + Healthcheck             |
-| STBK-03   | Phase 16: Scaffold + Auth + State Backends + Healthcheck             |
-| STBK-04   | Phase 16: Scaffold + Auth + State Backends + Healthcheck             |
-| STBK-05   | Phase 16: Scaffold + Auth + State Backends + Healthcheck             |
+| REQ-ID   | Phase                                                    |
+| -------- | -------------------------------------------------------- |
+| AUTHR-01 | Phase 16: Scaffold + Auth + State Backends + Healthcheck |
+| AUTHR-02 | Phase 16: Scaffold + Auth + State Backends + Healthcheck |
+| AUTHR-03 | Phase 16: Scaffold + Auth + State Backends + Healthcheck |
+| AUTHR-04 | Phase 16: Scaffold + Auth + State Backends + Healthcheck |
+| GIT-01   | Phase 17: Git Integration + Apply Job System             |
+| GIT-02   | Phase 17: Git Integration + Apply Job System             |
+| GIT-03   | Phase 17: Git Integration + Apply Job System             |
+| GIT-04   | Phase 17: Git Integration + Apply Job System             |
+| MQTT-01  | Phase 18: MQTT Discovery + HA Sensoren + Buttons         |
+| MQTT-02  | Phase 18: MQTT Discovery + HA Sensoren + Buttons         |
+| MQTT-03  | Phase 18: MQTT Discovery + HA Sensoren + Buttons         |
+| MQTT-04  | Phase 18: MQTT Discovery + HA Sensoren + Buttons         |
+| MQTT-05  | Phase 18: MQTT Discovery + HA Sensoren + Buttons         |
+| MQTT-06  | Phase 18: MQTT Discovery + HA Sensoren + Buttons         |
+| MQTT-07  | Phase 18: MQTT Discovery + HA Sensoren + Buttons         |
+| OBS-01   | Phase 16: Scaffold + Auth + State Backends + Healthcheck |
+| OBS-02   | Phase 17: Git Integration + Apply Job System             |
+| OBS-03   | Phase 17: Git Integration + Apply Job System             |
+| RUN-01   | Phase 17: Git Integration + Apply Job System             |
+| RUN-02   | Phase 17: Git Integration + Apply Job System             |
+| RUN-03   | Phase 17: Git Integration + Apply Job System             |
+| RUN-04   | Phase 17: Git Integration + Apply Job System             |
+| RUN-05   | Phase 17: Git Integration + Apply Job System             |
+| RUN-06   | Phase 17: Git Integration + Apply Job System             |
+| SEC-01   | Phase 16: Scaffold + Auth + State Backends + Healthcheck |
+| SEC-02   | Phase 16: Scaffold + Auth + State Backends + Healthcheck |
+| SEC-03   | Phase 17: Git Integration + Apply Job System             |
+| STBK-01  | Phase 16: Scaffold + Auth + State Backends + Healthcheck |
+| STBK-02  | Phase 16: Scaffold + Auth + State Backends + Healthcheck |
+| STBK-03  | Phase 16: Scaffold + Auth + State Backends + Healthcheck |
+| STBK-04  | Phase 16: Scaffold + Auth + State Backends + Healthcheck |
+| STBK-05  | Phase 16: Scaffold + Auth + State Backends + Healthcheck |
 
 ### Coverage gaps and resolutions
 
 **None.** All 32 v1.4 requirements are mapped to exactly one phase. Two structural decisions taken during mapping:
 
 - **SEC-03 (output redaction) assigned to Phase 17**, not Phase 16 — there is no per-run output to redact until
-  `/v1/plan`/`/v1/apply` exist (Phase 17). The Phase 16 log-scrubbing (SEC-02) covers the static credential paths;
-  Phase 17 extends the scrubbing to dynamically captured `tofu` output.
+  `/v1/plan`/`/v1/apply` exist (Phase 17). The Phase 16 log-scrubbing (SEC-02) covers the static credential paths; Phase
+  17 extends the scrubbing to dynamically captured `tofu` output.
 - **Phase 19 has zero new requirements** — it validates every prior requirement against a live HA host and writes
   operator documentation from observed behavior (same pattern as v1.3 Phase 14).
 

@@ -21,26 +21,24 @@ Discovery. Manual REST trigger only — webhook-Auto-Rollout deferred to v1.5.
 
 **Architecture (decided 2026-09-06):**
 
-- **`iac-runner/`** — Go HTTP service on port 8125 (separate from `terraform-bridge`'s 8124). Tailscale-bind-gate
-  (same pattern as `terraform-bridge`, but no `SUPERVISOR_TOKEN` — `iac-runner` does not need Supervisor access;
-  `hassio_api: true` is NOT set; only `homeassistant_api: true` for the MQTT service connection). Follows the
-  standard 4-file pattern. No `.upstream.yaml`. `host_network: true` for SSH access to homelab servers via
-  Tailscale IPs.
+- **`iac-runner/`** — Go HTTP service on port 8125 (separate from `terraform-bridge`'s 8124). Tailscale-bind-gate (same
+  pattern as `terraform-bridge`, but no `SUPERVISOR_TOKEN` — `iac-runner` does not need Supervisor access;
+  `hassio_api: true` is NOT set; only `homeassistant_api: true` for the MQTT service connection). Follows the standard
+  4-file pattern. No `.upstream.yaml`. `host_network: true` for SSH access to homelab servers via Tailscale IPs.
 - **Multi-backend state** — Options-driven: `r2` (Cloudflare R2 via S3-compatible API, default), `s3` (any
-  S3-compatible), `local` (`/data/terraform.tfstate`). Locking via `use_lockfile = true` for R2/S3, file-based lock
-  for local. R2 lockfile semantics verified empirically in Phase 16 spike (IRUN-H-1).
+  S3-compatible), `local` (`/data/terraform.tfstate`). Locking via `use_lockfile = true` for R2/S3, file-based lock for
+  local. R2 lockfile semantics verified empirically in Phase 16 spike (IRUN-H-1).
 - **Git integration** — At startup, clones configured repos into `/data/repos/<name>/`. `POST /v1/repos/{name}/pull`
-  runs `git pull` using SSH deploy keys from `/data/keys/<name>.key` (chmod 600, validated at startup) and
-  `known_hosts` from `/data/keys/known_hosts`.
+  runs `git pull` using SSH deploy keys from `/data/keys/<name>.key` (chmod 600, validated at startup) and `known_hosts`
+  from `/data/keys/known_hosts`.
 - **Apply workflow** — `POST /v1/plan` and `POST /v1/apply` start jobs (in-process serial per-repo mutex); returns
-  `run_id`; status polled via `GET /v1/runs/{id}`. Stdout/stderr captured to `/data/runs/{run_id}/output.log`;
-  secrets redacted from output before surfacing via API.
+  `run_id`; status polled via `GET /v1/runs/{id}`. Stdout/stderr captured to `/data/runs/{run_id}/output.log`; secrets
+  redacted from output before surfacing via API.
 - **HA entities** — `services: ["mqtt:need"]` + MQTT Discovery for three sensors (`iac_runner_last_run_status`,
-  `iac_runner_last_apply_at`, `iac_runner_last_error`) and two buttons (`iac_runner_run_plan`,
-  `iac_runner_run_apply`). Button presses debounced (30s). MQTT button semantics verified in Phase 18 spike
-  (IRUN-H-2).
-- **Secrets** — SSH deploy keys, R2/S3 credentials stored as files under `/data/keys/` (chmod 600 enforced at
-  startup); never logged; redacted from `tofu` output before API surfacing.
+  `iac_runner_last_apply_at`, `iac_runner_last_error`) and two buttons (`iac_runner_run_plan`, `iac_runner_run_apply`).
+  Button presses debounced (30s). MQTT button semantics verified in Phase 18 spike (IRUN-H-2).
+- **Secrets** — SSH deploy keys, R2/S3 credentials stored as files under `/data/keys/` (chmod 600 enforced at startup);
+  never logged; redacted from `tofu` output before API surfacing.
 
 **Phase 16 scope (decided):** Scaffold + Bearer-auth + Tailscale-bind + three State-Backends (r2/s3/local) +
 `/healthz` + `/v1/version` + `/data/keys/` chmod-600 enforcement + log-scrubbing.
@@ -61,8 +59,8 @@ custom OpenTofu provider living in this repo, so that Apps (and eventually other
 declarative `*.tf` configuration.
 
 **Status:** Phases 9–14 SHIPPED (commit `b44f478 terraform-bridge 0.3.0 + provider 0.3.0 (Phase 11-14 program logic)`,
-plus later phase commits). `terraform-bridge/v0.3.0` and `terraform-provider-homeassistant/v0.3.0` released. Only
-Phase 15 (CI hardening + provider install workflow) remains pending because of the v1.2 Phase 8 gap-closure blocker
+plus later phase commits). `terraform-bridge/v0.3.0` and `terraform-provider-homeassistant/v0.3.0` released. Only Phase
+15 (CI hardening + provider install workflow) remains pending because of the v1.2 Phase 8 gap-closure blocker
 (Cloudflare service token + 2 GitHub secrets needed); the phase itself is mechanically ready, just blocked.
 
 ## Previous Milestone: v1.1 markdown-renderer (COMPLETE 2026-06-28)
@@ -107,12 +105,12 @@ Ingress, with extensible diagram rendering and optional Git sync.
   file (AUTH-04), two-layer log masking (AUTH-05), Tailscale-interface bind-address gate with 0.0.0.0 refusal (AUTH-07),
   per-request slog records with OPS-01 mandatory fields (OPS-01), GET /healthz probing Supervisor via 2s timeout
   SupervisorClient (OPS-03) — Validated in Phase 10: auth-layer-structured-logging-healthcheck
-- ✓ `terraform-bridge` Bridge Read API (Phase 11) + Write API + Critical-Addon Safety + Concurrency + State Index
-  (Phase 12, 12-01+12-02+12-03) + Provider Resource + Data Sources + Schema Handshake (Phase 13, 13-01+13-02+13-03)
-  + Real-HA E2E + Operator Docs (Phase 14, 14-01+14-02+14-03) all shipped end-to-end as
-  `terraform-bridge/v0.3.0` + `terraform-provider-homeassistant/v0.3.0`. Phase 15 (CI hardening + provider install
-  workflow) mechanically ready, blocked only on v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite — Validated
-  in Phases 11–14; Phase 15 partial (CI workflows + install target landed; full release pending user Cloudflare setup)
+- ✓ `terraform-bridge` Bridge Read API (Phase 11) + Write API + Critical-Addon Safety + Concurrency + State Index (Phase
+  12, 12-01+12-02+12-03) + Provider Resource + Data Sources + Schema Handshake (Phase 13, 13-01+13-02+13-03)
+  - Real-HA E2E + Operator Docs (Phase 14, 14-01+14-02+14-03) all shipped end-to-end as `terraform-bridge/v0.3.0` +
+    `terraform-provider-homeassistant/v0.3.0`. Phase 15 (CI hardening + provider install workflow) mechanically ready,
+    blocked only on v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite — Validated in Phases 11–14; Phase 15 partial
+    (CI workflows + install target landed; full release pending user Cloudflare setup)
 
 ### Active
 
@@ -121,10 +119,12 @@ Ingress, with extensible diagram rendering and optional Git sync.
 ### v1.4 iac-runner (planning)
 
 - `iac-runner` add-on — Go HTTP service on port 8125, Tailscale-bind, Bearer-auth (no `SUPERVISOR_TOKEN`)
-- Manual REST triggers: `POST /v1/plan`, `POST /v1/apply` → `GET /v1/runs/{id}` for status; per-repo mutex for serial applies
+- Manual REST triggers: `POST /v1/plan`, `POST /v1/apply` → `GET /v1/runs/{id}` for status; per-repo mutex for serial
+  applies
 - Multi-backend state: R2 (default, S3-compatible), S3, local; `use_lockfile = true` for R2/S3 locking
 - Git integration: clone configured repos at startup; SSH deploy keys from `/data/keys/`
-- HA entities via MQTT Discovery: 3 sensors (last_run_status, last_apply_at, last_error) + 2 buttons (run_plan, run_apply) with 30s debounce
+- HA entities via MQTT Discovery: 3 sensors (last_run_status, last_apply_at, last_error) + 2 buttons (run_plan,
+  run_apply) with 30s debounce
 - Secrets in `/data/keys/` (chmod 600 enforced); log scrubbing + output redaction
 
 ### Out of Scope
@@ -137,13 +137,14 @@ Ingress, with extensible diagram rendering and optional Git sync.
 - PDF Export für markdown-renderer — out of scope v1.1; HTML-Rendering priorisiert
 - Unit tests for `generate_config.py` / `update-version.py` — low risk, infrequent changes, no framework chosen
 - Binary integrity verification (SHA checksums) — trusted GitHub Releases source, personal/private deployment
-- Git-Webhook-Auto-Rollout für iac-runner — deferred to v1.5; auto-apply needs an approval-gate + secrets-in-CI design pass
-- Ansible-Support für iac-runner — deferred to v1.5 or v1.6 (separate add-on `iac-runner-ansible` or second mode in
-  same add-on; design decision deferred)
+- Git-Webhook-Auto-Rollout für iac-runner — deferred to v1.5; auto-apply needs an approval-gate + secrets-in-CI design
+  pass
+- Ansible-Support für iac-runner — deferred to v1.5 or v1.6 (separate add-on `iac-runner-ansible` or second mode in same
+  add-on; design decision deferred)
 - Multi-Repo UI für iac-runner — v1.4 supports one configured repo via Options; multi-repo as field exists but no UI
 - Approval-Gate vor `tofu apply` — manual trigger IS the approval gate; explicit approval flow deferred to v1.5+
-- HA WebSocket-basierte Custom-Integration für iac-runner — MQTT Discovery covers the use case; WebSocket would
-  require a Custom-Component in HA Core
+- HA WebSocket-basierte Custom-Integration für iac-runner — MQTT Discovery covers the use case; WebSocket would require
+  a Custom-Component in HA Core
 
 ## Context
 
@@ -172,22 +173,22 @@ Ingress, with extensible diagram rendering and optional Git sync.
 
 ## Key Decisions
 
-| Decision                                               | Rationale                                                                                                              | Outcome |
-| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ------- |
-| Download upstream at build time, no bundled source     | Keeps repo lean; version updates are a Dockerfile ARG change                                                           | ✓ Good  |
-| `claude login` via HA terminal for Meridian            | Avoids OAuth token in plaintext config; simpler setup                                                                  | ✓ Good  |
-| Meridian source from GitHub (not npm) at build time    | Consistent with existing add-on pattern; no node_modules bloat                                                         | ✓ Good  |
-| Fully automatic auto-update merge (no manual PR step)  | Upstream releases are trusted (own projects + meridian)                                                                | ✓ Good  |
-| v1.3: Bridge add-on + Provider co-located in this repo | Provider and Bridge must evolve together; cross-repo versioning overhead is unjustified for a private tool             | ✓ Good  |
-| v1.3: Bearer token for Provider → Bridge auth          | mTLS needs a CA inside the container; OAuth adds a UI surface for one client. Bearer is the smallest correct primitive | ✓ Good  |
-| v1.3: Local state backend in `/data/terraform.tfstate` | Single-user / single-host setup today; remote backend only worth the complexity when CI or multi-host applies arrive   | ✓ Good  |
-| v1.4: New milestone, not Phase 16 in v1.3               | Different runtime semantics (HTTP service vs long-running executor), different auth needs (SSH keys vs Supervisor-Token), different state model. Name + scope don't fit a single milestone. | ✓ Good  |
-| v1.4: Multi-backend state (r2 default + s3 + local)     | User already has Cloudflare R2; R2 supports `use_lockfile = true` (no DynamoDB). User explicitly requested all three backends. | ✓ Good  |
-| v1.4: SSH deploy keys in `/data/keys/{repo}.key`        | Personal/private deployment; per-repo SSH keys too long for HA Options UI; matches `terraform-bridge`'s `/data/initial-token` pattern (file-on-volume instead of config). | ✓ Good  |
-| v1.4: Manual REST trigger only, no webhook              | Manual trigger = implicit human approval gate; auto-rollout needs an approval flow + secrets-in-CI design pass (deferred to v1.5). | ✓ Good  |
-| v1.4: HA entities via MQTT Discovery (not WebSocket)    | MQTT Discovery is the standard HA add-on integration path; no custom integration install needed. WebSocket would require a Custom-Component in HA Core (more setup, less portable). | ✓ Good  |
-| v1.4: 4 phases (16–19), not 7 like v1.3                  | Concerns group more naturally: scaffold/auth/state → git/apply-jobs → MQTT/HA → E2E/docs. 17 + 18 may parallelize after Phase 16 stabilises the contracts. | ✓ Good  |
-| v1.4: RESEARCH skipped                                  | Scope clear from conversation; patterns reused from `terraform-bridge` (HTTP/auth/Go) and `markdown-renderer` (git integration). Research would re-validate what is already decided. | ✓ Good  |
+| Decision                                               | Rationale                                                                                                                                                                                   | Outcome |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Download upstream at build time, no bundled source     | Keeps repo lean; version updates are a Dockerfile ARG change                                                                                                                                | ✓ Good  |
+| `claude login` via HA terminal for Meridian            | Avoids OAuth token in plaintext config; simpler setup                                                                                                                                       | ✓ Good  |
+| Meridian source from GitHub (not npm) at build time    | Consistent with existing add-on pattern; no node_modules bloat                                                                                                                              | ✓ Good  |
+| Fully automatic auto-update merge (no manual PR step)  | Upstream releases are trusted (own projects + meridian)                                                                                                                                     | ✓ Good  |
+| v1.3: Bridge add-on + Provider co-located in this repo | Provider and Bridge must evolve together; cross-repo versioning overhead is unjustified for a private tool                                                                                  | ✓ Good  |
+| v1.3: Bearer token for Provider → Bridge auth          | mTLS needs a CA inside the container; OAuth adds a UI surface for one client. Bearer is the smallest correct primitive                                                                      | ✓ Good  |
+| v1.3: Local state backend in `/data/terraform.tfstate` | Single-user / single-host setup today; remote backend only worth the complexity when CI or multi-host applies arrive                                                                        | ✓ Good  |
+| v1.4: New milestone, not Phase 16 in v1.3              | Different runtime semantics (HTTP service vs long-running executor), different auth needs (SSH keys vs Supervisor-Token), different state model. Name + scope don't fit a single milestone. | ✓ Good  |
+| v1.4: Multi-backend state (r2 default + s3 + local)    | User already has Cloudflare R2; R2 supports `use_lockfile = true` (no DynamoDB). User explicitly requested all three backends.                                                              | ✓ Good  |
+| v1.4: SSH deploy keys in `/data/keys/{repo}.key`       | Personal/private deployment; per-repo SSH keys too long for HA Options UI; matches `terraform-bridge`'s `/data/initial-token` pattern (file-on-volume instead of config).                   | ✓ Good  |
+| v1.4: Manual REST trigger only, no webhook             | Manual trigger = implicit human approval gate; auto-rollout needs an approval flow + secrets-in-CI design pass (deferred to v1.5).                                                          | ✓ Good  |
+| v1.4: HA entities via MQTT Discovery (not WebSocket)   | MQTT Discovery is the standard HA add-on integration path; no custom integration install needed. WebSocket would require a Custom-Component in HA Core (more setup, less portable).         | ✓ Good  |
+| v1.4: 4 phases (16–19), not 7 like v1.3                | Concerns group more naturally: scaffold/auth/state → git/apply-jobs → MQTT/HA → E2E/docs. 17 + 18 may parallelize after Phase 16 stabilises the contracts.                                  | ✓ Good  |
+| v1.4: RESEARCH skipped                                 | Scope clear from conversation; patterns reused from `terraform-bridge` (HTTP/auth/Go) and `markdown-renderer` (git integration). Research would re-validate what is already decided.        | ✓ Good  |
 
 ## Evolution
 
@@ -214,7 +215,6 @@ This document evolves at phase transitions and milestone boundaries.
 
 _Last updated: 2026-09-06 — Milestone v1.4 iac-runner planning initialized. v1.3 essentially complete (6 of 7 phases
 shipped: 9–14; Phase 15 CI hardening mechanically ready, blocked on v1.2 Phase 8 gap-closure Cloudflare-setup
-prerequisite — `/gsd-execute-phase 8 --gaps-only` when ready). v1.4 runs in parallel to v1.3 Phase 15 by user
-decision 2026-09-06. v1.4 roadmap: 4 phases (16–19), ~32 requirements across AUTHR/STBK/SEC/GIT/RUN/MQTT/OBS
-categories. RESEARCH skipped by explicit decision (scope clear from conversation). Phase 16 ready to plan via
-`/gsd-plan-phase 16`._
+prerequisite — `/gsd-execute-phase 8 --gaps-only` when ready). v1.4 runs in parallel to v1.3 Phase 15 by user decision
+2026-09-06. v1.4 roadmap: 4 phases (16–19), ~32 requirements across AUTHR/STBK/SEC/GIT/RUN/MQTT/OBS categories. RESEARCH
+skipped by explicit decision (scope clear from conversation). Phase 16 ready to plan via `/gsd-plan-phase 16`._

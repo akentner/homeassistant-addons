@@ -3,8 +3,8 @@
 [![Release][release-shield]][release] ![Project Stage][project-stage-shield]
 ![Supports amd64 Architecture][amd64-shield]
 
-Bearer-authenticated OpenTofu/Terraform runner for homelab IaC against R2/S3/local state backends.
-Tailscale-bind-gated, no `SUPERVISOR_TOKEN` required.
+Bearer-authenticated OpenTofu/Terraform runner for homelab IaC against R2/S3/local state backends. Tailscale-bind-gated,
+no `SUPERVISOR_TOKEN` required.
 
 ## About
 
@@ -35,9 +35,9 @@ Plain HTTP; TLS termination is out of scope (network-layer access control via Ta
 ## First-time setup
 
 1. On the HA host shell, retrieve the freshly generated bearer from the add-on log:
-   `sudo ha addons logs iac-runner | grep iac_runner.token.issued`
-   The log line carries a 3+3-char preview (`preview`) and the `actor_token_fp` (SHA-256[8] hex).
-   **The plaintext token itself appears ONLY in this single log line** — subsequent restarts do NOT re-emit it.
+   `sudo ha addons logs iac-runner | grep iac_runner.token.issued` The log line carries a 3+3-char preview (`preview`)
+   and the `actor_token_fp` (SHA-256[8] hex). **The plaintext token itself appears ONLY in this single log line** —
+   subsequent restarts do NOT re-emit it.
 2. Copy the value into your CI's `IAC_RUNNER_BEARER` secret (or the equivalent for your orchestrator).
 3. Optionally delete the `/data/initial-iac-runner-token` file to minimize on-disk exposure.
 

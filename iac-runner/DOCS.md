@@ -4,8 +4,8 @@
 
 Bearer-authenticated OpenTofu/Terraform runner for homelab IaC against R2/S3/local state backends. The runner exposes a
 JSON-over-HTTP API on port 8125 (distinct from `terraform-bridge`'s 8124) for plan/apply jobs in Phase 17+. Phase 16
-ships the authentication, state-backend configuration, and healthcheck surface; `/v1/plan` + `/v1/apply` land in Phase
-17.
+ships the authentication, state-backend configuration, and healthcheck surface; `/v1/plan` + `/v1/apply` land in
+Phase 17.
 
 ## Install
 
@@ -17,9 +17,9 @@ ships the authentication, state-backend configuration, and healthcheck surface; 
 ## First-time setup
 
 1. On the HA host shell, retrieve the freshly generated bearer from the add-on log:
-   `sudo ha addons logs iac-runner | grep iac_runner.token.issued`
-   The log line carries a 3+3-char preview (`preview`) and the `actor_token_fp` (SHA-256[8] hex) for correlation.
-   **The plaintext token itself appears ONLY in this single log line** — subsequent restarts do NOT re-emit it.
+   `sudo ha addons logs iac-runner | grep iac_runner.token.issued` The log line carries a 3+3-char preview (`preview`)
+   and the `actor_token_fp` (SHA-256[8] hex) for correlation. **The plaintext token itself appears ONLY in this single
+   log line** — subsequent restarts do NOT re-emit it.
 2. For production use, copy the value into your CI's `IAC_RUNNER_BEARER` secret. The token file
    `/data/initial-iac-runner-token` (chmod 600) is written exactly once and contains the plaintext; operators SHOULD
    delete this file after configuring CI so the plaintext is not stored on disk any longer than necessary.
@@ -34,10 +34,10 @@ Default: `"auto"`. The address the runner binds to.
 
 - `"auto"` (default): auto-detect the first `tailscale*` interface in `/sys/class/net` and bind to its IPv4 address.
   Recommended for Tailscale-only deployments.
-- Explicit IP (e.g. `"100.64.0.1"`): bind to this specific IP. Accepted only if it belongs to a `tailscale*`
-  interface OR falls inside one of the configured `bind_allowed_subnets`.
-- `"0.0.0.0"`: **ALWAYS REFUSED** at startup regardless of `bind_allowed_subnets`. The runner exits with status 1 and
-  a clear error message naming the refused value.
+- Explicit IP (e.g. `"100.64.0.1"`): bind to this specific IP. Accepted only if it belongs to a `tailscale*` interface
+  OR falls inside one of the configured `bind_allowed_subnets`.
+- `"0.0.0.0"`: **ALWAYS REFUSED** at startup regardless of `bind_allowed_subnets`. The runner exits with status 1 and a
+  clear error message naming the refused value.
 
 ### `bind_allowed_subnets`
 
@@ -51,19 +51,18 @@ Default: `"r2"`. Selects the Terraform state backend. One of `"r2"`, `"s3"`, `"l
 
 - `state_backend: "r2"` (default): Cloudflare R2 via the S3-compatible API. Endpoint is constructed from
   `/data/keys/r2-account-id`. Uses `use_lockfile = true` (no DynamoDB required).
-- `state_backend: "s3"`: any S3-compatible endpoint supplied via `s3_endpoint`. Uses `use_lockfile = true` (no
-  DynamoDB required).
+- `state_backend: "s3"`: any S3-compatible endpoint supplied via `s3_endpoint`. Uses `use_lockfile = true` (no DynamoDB
+  required).
 - `state_backend: "local"`: state stored at `/data/terraform.tfstate`. No external credentials required. Lock is
   file-based at `/data/terraform.tfstate.lock` (HA backup covers both files automatically).
 
-Any other value is rejected at the HA Supervisor UI level (the `config.yaml` schema uses
-`list(match(^(r2|s3|local)$))`) AND at runtime by `statebackend.New` (returns `ErrUnsupported`).
+Any other value is rejected at the HA Supervisor UI level (the `config.yaml` schema uses `list(match(^(r2|s3|local)$))`)
+AND at runtime by `statebackend.New` (returns `ErrUnsupported`).
 
 ### `r2_bucket`
 
-Required when `state_backend: "r2"`. The R2 bucket name (e.g. `"homelab-iac-state"`). The runner constructs the
-endpoint as `https://<account_id>.r2.cloudflarestorage.com`; `<account_id>` is read from
-`/data/keys/r2-account-id`.
+Required when `state_backend: "r2"`. The R2 bucket name (e.g. `"homelab-iac-state"`). The runner constructs the endpoint
+as `https://<account_id>.r2.cloudflarestorage.com`; `<account_id>` is read from `/data/keys/r2-account-id`.
 
 ### `s3_endpoint`, `s3_bucket`, `s3_region`
 
@@ -78,17 +77,17 @@ there is no degraded mode.
 
 ### R2 backend required files
 
-| File | Mode | Notes |
-| ------ | ------ | ------- |
-| `/data/keys/r2-access.key` | 0600 | R2 access key ID (e.g. `AKIAEXAMPLE`) |
-| `/data/keys/r2-secret.key` | 0600 | R2 secret access key (40+ chars base64) |
+| File                       | Mode | Notes                                                        |
+| -------------------------- | ---- | ------------------------------------------------------------ |
+| `/data/keys/r2-access.key` | 0600 | R2 access key ID (e.g. `AKIAEXAMPLE`)                        |
+| `/data/keys/r2-secret.key` | 0600 | R2 secret access key (40+ chars base64)                      |
 | `/data/keys/r2-account-id` | 0600 | Cloudflare account ID (32-char hex, plaintext non-sensitive) |
 
 ### S3 backend required files
 
-| File | Mode | Notes |
-| ------ | ------ | ------- |
-| `/data/keys/s3-access.key` | 0600 | S3 access key ID |
+| File                       | Mode | Notes                |
+| -------------------------- | ---- | -------------------- |
+| `/data/keys/s3-access.key` | 0600 | S3 access key ID     |
 | `/data/keys/s3-secret.key` | 0600 | S3 secret access key |
 
 ### Local backend required files
@@ -99,12 +98,12 @@ None. The local backend uses `/data/terraform.tfstate` (no external credentials)
 
 The runner exposes the following endpoints on port 8125:
 
-| Method | Path | Auth | Description |
-| -------- | ------ | ------ | ------------- |
-| GET | `/` | none | Placeholder JSON with `runner_version`, `status`, `msg` |
-| GET | `/healthz` | none | 200 + JSON when tofu on PATH AND `/data/keys/` chmod-600 passes; 503 empty body otherwise |
-| POST | `/v1/auth/rotate` | Bearer | Issue a new bearer token; for 24h both old and new authenticate |
-| GET | `/v1/version` | Bearer | Returns runner + schema + min/max supported OpenTofu versions |
+| Method | Path              | Auth   | Description                                                                               |
+| ------ | ----------------- | ------ | ----------------------------------------------------------------------------------------- |
+| GET    | `/`               | none   | Placeholder JSON with `runner_version`, `status`, `msg`                                   |
+| GET    | `/healthz`        | none   | 200 + JSON when tofu on PATH AND `/data/keys/` chmod-600 passes; 503 empty body otherwise |
+| POST   | `/v1/auth/rotate` | Bearer | Issue a new bearer token; for 24h both old and new authenticate                           |
+| GET    | `/v1/version`     | Bearer | Returns runner + schema + min/max supported OpenTofu versions                             |
 
 ### `/healthz` (no auth)
 
