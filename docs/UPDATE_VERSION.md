@@ -75,7 +75,12 @@ and push the tag later — without it, the HA supervisor refresh sees the new ve
 A pre-push hook (`internal/check-version-tags.sh`, installed by `make init`) verifies that any addon whose
 `config.yaml`/`build.yaml` is being pushed has a matching `<addon>/v<config_version>` tag locally or on origin. For
 backwards compatibility the hook also accepts the legacy `<addon>/v<build_version>` format (no subpatch) so older addons
-don't break their pushes during the transition. Bypass with `git push --no-verify` only in emergencies.
+don't break their pushes during the transition. Add-ons on the explicit `LOCAL_BUILD_ADDONS` allowlist in the script —
+currently `iac-runner` and `terraform-bridge` — are exempt: they are built locally by the Supervisor from their
+Dockerfile and never pulled from ghcr.io, so the 404-on-update the hook guards against cannot occur. An entry is removed
+from the allowlist once its add-on declares a top-level `image:` key; if an allowlisted add-on declares `image:` anyway,
+the hook prints a warning naming `LOCAL_BUILD_ADDONS` and enforces the tag requirement regardless instead of skipping
+it. Bypass with `git push --no-verify` only in emergencies.
 
 Tag lookup chain (in order):
 

@@ -103,7 +103,9 @@ Critical points:
 
 - `VERSION=X.Y.Z` resets subpatch to `-0`. To preserve an existing `-N`, pass the full `X.Y.Z-N`.
 - Git tags use `<addon>/v<config_version>` (subpatch-suffixed, matches OCI image tag). The pre-push hook also accepts
-  the legacy `v<build_version>` form for older addons.
+  the legacy `v<build_version>` form for older addons, and skips the tag requirement entirely for add-ons on the
+  `LOCAL_BUILD_ADDONS` allowlist in `internal/check-version-tags.sh` — those are built locally by the Supervisor and
+  never pulled from ghcr.io. Do not reinstate an unconditional tag requirement; check that allowlist first.
 - `make update-version ADDON=… VERSION=…` creates and pushes the tag by default. Use `NO_TAG=yes NO_PUSH=yes` for local
   iteration; create+push the tag later when shipping.
 - For dry-run, invoke the script directly (`./internal/update-version.py <addon> <ver> --dry-run`) — `make --dry-run`
