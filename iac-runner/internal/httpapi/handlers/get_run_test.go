@@ -415,3 +415,22 @@ func auditRecords(t *testing.T, buf *bytes.Buffer) []map[string]any {
 	}
 	return out
 }
+
+// TestGetRunPageClamped is the handler half of WR-03: ?page= is now
+// bounded where every other pagination parameter already was, so an
+// absurd page number cannot reach the store's window arithmetic.
+func TestGetRunPageClamped(t *testing.T) {
+	f := queuedRun()
+
+	rec := serveGetRun(t, f, validRunID, "page=184467440737095517")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", rec.Code, rec.Body.String())
+	}
+	if len(f.reads) != 1 {
+		t.Fatalf("ReadOutput called %d times, want 1", len(f.reads))
+	}
+	if f.reads[0].page != maxOutputPage {
+		t.Errorf("page = %d, want the clamp %d", f.reads[0].page, maxOutputPage)
+	}
+}

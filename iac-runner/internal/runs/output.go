@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,6 +152,16 @@ func (s *Store) ReadOutput(runID string, page, pageSize int) (OutputPage, error)
 	}
 	if pageSize > contract.MaxOutputPageSize {
 		pageSize = contract.MaxOutputPageSize
+	}
+	// Overflow guard. The window offsets below are plain int
+	// multiplications: a large enough page wraps them, and the wrong
+	// pair of signs (lo negative, hi positive) makes the whole file
+	// look like it is inside the window — so a client paging to
+	// termination gets page 1's content back under a page number it
+	// will never revisit. No such page exists, so an empty window is
+	// the honest answer.
+	if page > math.MaxInt/pageSize {
+		return OutputPage{Lines: []string{}, Page: page, PageSize: pageSize}, nil
 	}
 
 	c := &windowCollector{lo: (page - 1) * pageSize, hi: page * pageSize}

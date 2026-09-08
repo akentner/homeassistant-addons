@@ -3,6 +3,7 @@ package runs
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -445,5 +446,54 @@ func TestReadOutputRedactsPEMBodyOnALaterPage(t *testing.T) {
 	}
 	if page.Redactions != 1 {
 		t.Errorf("Redactions on page 2 = %d, want 1", page.Redactions)
+	}
+}
+
+// TestReadOutputRejectsOverflowingPage is the WR-03 regression: ?page=
+// accepted any positive int and the window offsets are plain int
+// multiplications, so the right absurd page number wrapped lo negative
+// and hi positive — and the whole file came back as if it were page 1,
+// reported under the caller's page number.
+func TestReadOutputRejectsOverflowingPage(t *testing.T) {
+	s := newTestStore(t)
+	id := seedRun(t, s)
+
+	w, err := s.OpenOutput(id)
+	if err != nil {
+		t.Fatalf("OpenOutput: %v", err)
+	}
+	for i := 0; i < 10; i++ {
+		if err := w.WriteLine("stdout", fmt.Sprintf("line %d", i)); err != nil {
+			t.Fatalf("WriteLine: %v", err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	const pageSize = 100
+	// math.MaxInt/pageSize + 1 is the smallest page whose hi offset
+	// overflows; the second value is the one that wrapped both
+	// offsets into the "serve everything" shape.
+	for _, page := range []int{math.MaxInt/pageSize + 1, 184467440737095517, math.MaxInt} {
+		got, err := s.ReadOutput(id, page, pageSize)
+		if err != nil {
+			t.Fatalf("ReadOutput(page=%d): %v", page, err)
+		}
+		if len(got.Lines) != 0 {
+			t.Errorf("page %d served %d lines, want none", page, len(got.Lines))
+		}
+		if got.Page != page || got.PageSize != pageSize {
+			t.Errorf("page %d echo = page %d size %d", page, got.Page, got.PageSize)
+		}
+	}
+
+	// Sanity: the guard must not affect a reachable page.
+	first, err := s.ReadOutput(id, 1, pageSize)
+	if err != nil {
+		t.Fatalf("ReadOutput(page=1): %v", err)
+	}
+	if len(first.Lines) != 10 || first.TotalLines != 10 {
+		t.Errorf("page 1 = %d lines (total %d), want 10/10", len(first.Lines), first.TotalLines)
 	}
 }

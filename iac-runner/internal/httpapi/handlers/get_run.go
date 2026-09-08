@@ -34,6 +34,16 @@ import (
 	"iac-runner/internal/runs"
 )
 
+// maxOutputPage bounds ?page=. page_size was already capped here and
+// page was not, and the window offsets are plain int arithmetic in the
+// store: (page-1)*pageSize and page*pageSize both wrap for a large
+// enough page, and the wrong pair of signs serves page 1's content
+// under the caller's absurd page number. One million pages of the
+// maximum 1000 lines covers a billion-line log, so nothing reachable
+// is lost by clamping here — and the store carries its own overflow
+// guard for callers that do not come through this handler.
+const maxOutputPage = 1 << 20
+
 // runReader is the seam the handler depends on: the two runs.Store
 // methods it actually calls. The exported GetRun keeps the concrete
 // *runs.Store (that is what router.go has), so the unexported core is
@@ -94,6 +104,9 @@ func getRunHandler(rd runReader) http.HandlerFunc {
 		// clamps again on its own.
 		q := r.URL.Query()
 		page := parsePositiveInt(q.Get("page"), 1)
+		if page > maxOutputPage {
+			page = maxOutputPage
+		}
 		pageSize := parsePositiveInt(q.Get("page_size"), contract.DefaultOutputPageSize)
 		if pageSize > contract.MaxOutputPageSize {
 			pageSize = contract.MaxOutputPageSize
