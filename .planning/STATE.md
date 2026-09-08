@@ -7,8 +7,8 @@ current_phase_name: Git Integration + Apply Job System
 current_plan: 7
 status: Ready to plan
 stopped_at: "Completed 17-07-PLAN.md (Phase 17 code-complete: 8/8 plans)"
-last_updated: "2026-09-08T12:38:01.334Z"
-state_head: 07e57280353a3cfd42a227fe7e63a9d870b72ec6
+last_updated: "2026-09-08T20:33:37.811Z"
+state_head: 1bcdd9aeb7b5418decca114a6dda29aafed9937a
 progress:
   total_phases: 7
   completed_phases: 2
@@ -351,6 +351,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260901-na1    | Fix 6 pre-existing lint failures on main (EOF, shellcheck, prettier, actionlint, 2 real bugs) | 2026-09-01 | 87dc714 | [quick/260901-na1-fix-6-pre-existing-lint-failures-on-main](./quick/260901-na1-fix-6-pre-existing-lint-failures-on-main/) |
 | 260908-pfp    | Add .github/workflows/build-iac-runner.yml via _build-template.yml                            | 2026-09-08 | a4ca23f | /home/akentner/Projects/homeassistant-addons/.planning/quick/add-a-build-workflow-for-the-iac-runner-add-on-there-is-curr |
 | 260908-pfq    | Scope the pre-push release-tag check to non-allowlisted add-ons                               | 2026-09-08 | 812f028 | /home/akentner/Projects/homeassistant-addons/.planning/quick/make-the-pre-push-version-tag-hook-stop-demanding-a-release  |
+| 12            | Stop prettier breaking the broken-windows ledger (.prettierignore + canonical table)          | 2026-09-08 | 1bcdd9a | —                                                                                                                         |
 
 ## Session Continuity
 
