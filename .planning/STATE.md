@@ -5,9 +5,9 @@ milestone_name: opentofu-bridge
 current_phase: 17
 current_phase_name: Git Integration + Apply Job System
 status: Ready to plan
-stopped_at: Completed 17-05-PLAN.md (internal/jobq queue/exec/serialization)
-last_updated: "2026-09-08T11:32:03.273Z"
-state_head: 6e2681afc353edf8105a0f3414fc40b15b373ed3
+stopped_at: Completed 17-06-PLAN.md
+last_updated: "2026-09-08T11:54:18.241Z"
+state_head: dad051b1d62d375821d558f63b473e0603f096ea
 progress:
   total_phases: 7
   completed_phases: 2
@@ -329,6 +329,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | Phase 17 P03 | 21 min   | 3 tasks | 6 files |
 | Phase 17 P04 | 12 min   | 3 tasks | 8 files |
 | Phase 17 P05 | 25 min | 3 tasks | 5 files |
+| Phase 17 P06 | 19 min | 3 tasks | 8 files |
 
 ## Quick Tasks Completed
 
@@ -346,9 +347,9 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 
 ## Session Continuity
 
-**Stopped at:** Completed 17-05-PLAN.md (internal/jobq queue/exec/serialization)
+**Stopped at:** Completed 17-06-PLAN.md
 
-Last session: 2026-09-08T11:32:03.071Z
+Last session: 2026-09-08T11:53:53.821Z
 clean base). Next step: `/gsd-execute-phase 16 --plan 03` (GET /v1/version + DOCS.md + README + pre-commit config)
 Resume file: None
 
@@ -377,3 +378,7 @@ skipped; Phase 16 ready to plan_
 - [Phase 17]: git.allow_default_branch_commits enabled in .planning/config.json — Sequential-mode dispatch instructed
   staying on main and the project already uses git.branching_strategy none with 17-01/17-02 committed directly on main;
   the flag is the documented escape hatch for the executor protected-branch assertion.
+- [Phase 17]: GIT-03/SC-3 statuses override the plan sample: git_ssh_handshake + git_unauthorized are 403 and git_non_fast_forward is 409, not a blanket 502
+- [Phase 17]: The optional ff_only request body defaults to false, implementing 17-03's D-10/D-12 resolution: a bare pull on a pinned repo re-lands on its ref; only an explicit true triggers the 400 refusal
+- [Phase 17]: handlers.statusForCode is the single error_code to HTTP status table for all five Phase 17 endpoints; 17-08 must call writeError/writeGitError instead of choosing a status
+- [Phase 17]: auditRedactions is the single emission point for the SEC-03 redaction.audit record and is silent on a zero-redaction page; 17-08's GetRun calls it exactly once per response

@@ -471,7 +471,7 @@ is captured and secret-redacted.
 11. `runs_retention_hours` Options field (default 24) controls run-output rotation; old run files are deleted by a
     background ticker that runs every `runs_retention_hours / 4` (default 6h)
 
-**Plans**: 5/8 plans executed in 6 waves
+**Plans**: 6/8 plans executed in 6 waves
 
 Plans:
 
@@ -480,7 +480,7 @@ Plans:
 - [x] 17-03-PLAN.md — internal/git: clone, pull, git_* taxonomy
 - [x] 17-04-PLAN.md — internal/runs: store, JSONL output, redaction, retention
 - [x] 17-05-PLAN.md — internal/jobq: semaphore, per-repo mutex, tofu exec
-- [ ] 17-06-PLAN.md — pull + plan/apply handlers
+- [x] 17-06-PLAN.md — pull + plan/apply handlers
 - [ ] 17-08-PLAN.md — runs handlers + router mount
 - [ ] 17-07-PLAN.md — main.go wiring + DOCS/README + version bump
 
@@ -578,7 +578,7 @@ exercised. Operator documentation (`README.md` + `DOCS.md`) is written from obse
 | 14. Real-HA E2E + Docs              | v1.3      | 3/3                                                           | Complete            | 2026-09-05 |
 | 15. CI + Provider Install           | v1.3      | 0/3 (mechanically ready, blocked on v1.2 Phase 8 gap-closure) | Mechanically Ready  | —          |
 | 16. iac-runner Scaffold + Auth      | v1.4      | 3/3                                                           | Complete            | 2026-09-06 |
-| 17. Git + Apply Jobs                | v1.4      | 5/8 | In Progress|  |
+| 17. Git + Apply Jobs                | v1.4      | 6/8 | In Progress|  |
 | 18. MQTT + HA Entities              | v1.4      | 0/TBD                                                         | Planned             | —          |
 | 19. E2E + DOCS                      | v1.4      | 0/TBD                                                         | Planned             | —          |
 
