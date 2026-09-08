@@ -37,6 +37,104 @@ var (
 // key is still a leak.
 const pemHeaderPrefix = "-----BEGIN"
 
+// pemFooterPrefix closes a PEM block. It is the ONLY marker that ends
+// the redactor's latch cleanly — see redactor.line.
+const pemFooterPrefix = "-----END"
+
+// maxPEMBodyLines bounds the latch. A 4096-bit RSA key wraps to ~50
+// lines and a certificate chain to a few hundred; past this ceiling the
+// latch is assumed stuck (a BEGIN whose END never arrived) and is
+// dropped, so a single malformed header cannot mask the rest of an
+// apply log.
+const maxPEMBodyLines = 256
+
+var (
+	// pemBodyRe matches a base64 body line of a PEM block: no
+	// whitespace, only the base64 alphabet.
+	pemBodyRe = regexp.MustCompile(`^[A-Za-z0-9+/=]+$`)
+	// pemHeaderLineRe matches the two RFC 1421 header lines an
+	// encrypted PEM block carries before its body. They are part of
+	// the block, so they must not break the latch. The keywords are
+	// spelled out rather than matched as a generic `Word: value`
+	// shape, which would also match ordinary tofu output
+	// ("Plan: 1 to add, 0 to change, 0 to destroy.") and keep the
+	// latch alive past the end of the key.
+	pemHeaderLineRe = regexp.MustCompile(`^(Proc-Type|DEK-Info):`)
+)
+
+// isPEMBodyLine reports whether line can plausibly belong to the
+// inside of a PEM block. A blank line counts: an encrypted PEM has one
+// between its headers and its body.
+func isPEMBodyLine(line string) bool {
+	t := strings.TrimSpace(line)
+	if t == "" {
+		return true
+	}
+	return pemBodyRe.MatchString(t) || pemHeaderLineRe.MatchString(t)
+}
+
+// redactor is the STATEFUL redaction front end, and the reason
+// Redact alone is not enough (SEC-03).
+//
+// A PEM private key is a multi-line artifact: the `-----BEGIN` marker
+// says nothing about its own line, it says that the NEXT lines are key
+// material. A per-line function cannot know that, so a stateless
+// redactor masks the header and serves the base64 body untouched —
+// which is the whole key. The latch below is what makes the PEM rule
+// mean what its comment claims.
+//
+// Callers that read a file top to bottom (runs.Store.ReadOutput) drive
+// one redactor across every physical line, including the ones outside
+// the requested page: a page that STARTS in the middle of a key body
+// must still mask it, so the latch is fed by observe() for skipped
+// lines.
+type redactor struct {
+	inPEM    bool
+	pemLines int
+}
+
+// line redacts one physical line, carrying PEM state forward.
+func (rd *redactor) line(s string) (string, int) {
+	switch {
+	case strings.Contains(s, pemHeaderPrefix):
+		rd.inPEM = true
+		rd.pemLines = 0
+		return redactedMarker, 1
+	case rd.inPEM:
+		rd.pemLines++
+		if strings.Contains(s, pemFooterPrefix) {
+			rd.inPEM = false
+			return redactedMarker, 1
+		}
+		if isPEMBodyLine(s) && rd.pemLines <= maxPEMBodyLines {
+			return redactedMarker, 1
+		}
+		// The block ended without a footer — interleaved stderr, a
+		// truncated log, or a stuck latch. Drop the latch and judge
+		// this line on its own shape rather than masking everything
+		// that follows.
+		rd.inPEM = false
+	}
+	return redactTokens(s)
+}
+
+// observe advances the latch for a line the caller is NOT redacting
+// (one outside the requested page). It deliberately does the cheap
+// substring test only: the expensive work — JSON decode plus the token
+// scan — stays proportional to the page, not to the file.
+func (rd *redactor) observe(raw string) {
+	switch {
+	case strings.Contains(raw, pemHeaderPrefix):
+		rd.inPEM = true
+		rd.pemLines = 0
+	case rd.inPEM:
+		rd.pemLines++
+		if strings.Contains(raw, pemFooterPrefix) || rd.pemLines > maxPEMBodyLines {
+			rd.inPEM = false
+		}
+	}
+}
+
 // tokenDelimiters are the characters that end a token. They are the
 // punctuation tofu and shell-style output put around values —
 // `key = "VALUE"`, `[id=VALUE]`, `{VALUE, VALUE}` — so a credential
@@ -62,14 +160,20 @@ const tokenDelimiters = " \t\"'=,()[]{}:;"
 //
 // Reassembly is lossless: a line with no credential-shaped token is
 // returned byte-identical, delimiters and runs of whitespace included.
+//
+// This is the SINGLE-LINE entry point: it starts from a clean state, so
+// it masks a PEM header line but cannot know that the lines after it
+// are the key body. A caller that walks a whole file must drive a
+// redactor instead (that is what runs.Store.ReadOutput does) — see the
+// type comment on redactor for why.
 func Redact(line string) (string, int) {
-	// A PEM header means everything around it is key material. There
-	// is no safe partial redaction of a private key, so the line goes
-	// as a whole.
-	if strings.Contains(line, pemHeaderPrefix) {
-		return redactedMarker, 1
-	}
+	rd := redactor{}
+	return rd.line(line)
+}
 
+// redactTokens is the per-line, stateless half of the redaction: the
+// token scan. Multi-line artifacts are the redactor's job.
+func redactTokens(line string) (string, int) {
 	segs := splitTokens(line)
 	count := 0
 	var b strings.Builder

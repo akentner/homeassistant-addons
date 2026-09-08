@@ -200,6 +200,13 @@ type windowCollector struct {
 	lines      []string
 	total      int
 	redactions int
+	// red carries redaction state ACROSS lines. A PEM private key is a
+	// multi-line artifact, so a per-line redactor masks the header and
+	// serves the base64 body intact (SEC-03). The collector already
+	// visits every physical line in file order, which is exactly the
+	// scan the latch needs — including for lines outside the window,
+	// so a page that starts inside a key body is still masked.
+	red redactor
 }
 
 // add ingests one raw physical line.
@@ -207,6 +214,10 @@ func (c *windowCollector) add(raw string) {
 	i := c.total
 	c.total++
 	if i < c.lo || i >= c.hi {
+		// Outside the window: feed the PEM latch the cheap way and
+		// skip the JSON decode plus the token scan, so the expensive
+		// work stays proportional to the page rather than to the file.
+		c.red.observe(raw)
 		return
 	}
 	text := raw
@@ -217,17 +228,20 @@ func (c *windowCollector) add(raw string) {
 	// A record that does not parse is surfaced as its raw text: the
 	// final line of a RUNNING job is routinely half-flushed, and
 	// dropping it would look to the operator like missing output.
-	redacted, n := Redact(text)
+	redacted, n := c.red.line(text)
 	c.redactions += n
 	c.lines = append(c.lines, redacted)
 }
 
 // reset clears accumulated state so a failed pass can be retried with
-// a different reader.
+// a different reader. The redactor is reset too: the retry re-reads
+// from byte zero, so a latch left over from the abandoned pass would
+// mask the top of the file.
 func (c *windowCollector) reset() {
 	c.lines = nil
 	c.total = 0
 	c.redactions = 0
+	c.red = redactor{}
 }
 
 // collectScanner is the common read path: a bufio.Scanner with an

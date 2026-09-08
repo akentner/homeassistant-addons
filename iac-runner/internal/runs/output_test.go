@@ -344,3 +344,106 @@ func TestWriteLineConcurrentStreams(t *testing.T) {
 		t.Errorf("per-stream counts: got %v want %d each", counts, perStream)
 	}
 }
+
+// pemKeyLines is a full multi-line OPENSSH private key as tofu would
+// print it (a `tls_private_key` attribute, a `terraform output`, a
+// heredoc'd key echoed back by an error). The base64 bodies are the
+// payload SEC-03 exists to keep off the wire.
+var pemKeyLines = []string{
+	"-----BEGIN OPENSSH PRIVATE KEY-----",
+	"b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtz",
+	"c2gtZWQyNTUxOQAAACBHo3lC0M8kQ1c4v3S9pRQwZ1kZ0oXwYnZ9V0hZKk1v9wAA",
+	"AJDdKmqk3SpqpAAAAAtzc2gtZWQyNTUxOQAAACBHo3lC0M8kQ1c4v3S9pRQwZ1kZ",
+	"-----END OPENSSH PRIVATE KEY-----",
+}
+
+// TestReadOutputRedactsMultiLinePEM is the CR-01 regression: the PEM
+// rule has to hold across LINES, not just on the header. It drives the
+// real path GET /v1/runs/{id} serves — OpenOutput → WriteLine →
+// ReadOutput — because that is where the per-line redactor's missing
+// state showed up and where redact_test.go's single-line cases cannot
+// see it.
+func TestReadOutputRedactsMultiLinePEM(t *testing.T) {
+	s := newTestStore(t)
+	id := seedRun(t, s)
+
+	w, err := s.OpenOutput(id)
+	if err != nil {
+		t.Fatalf("OpenOutput: %v", err)
+	}
+	lines := append([]string{"Refreshing state..."}, pemKeyLines...)
+	lines = append(lines, "Apply complete! Resources: 1 added, 0 changed, 0 destroyed.")
+	for _, l := range lines {
+		if err := w.WriteLine("stdout", l); err != nil {
+			t.Fatalf("WriteLine: %v", err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	page, err := s.ReadOutput(id, 1, contract.DefaultOutputPageSize)
+	if err != nil {
+		t.Fatalf("ReadOutput: %v", err)
+	}
+	joined := strings.Join(page.Lines, "\n")
+	// Every line of the block — header, each base64 body line, footer.
+	for _, secret := range pemKeyLines {
+		if strings.Contains(joined, secret) {
+			t.Errorf("PEM line survived redaction: %q\nserved page:\n%s", secret, joined)
+		}
+	}
+	if page.Redactions != len(pemKeyLines) {
+		t.Errorf("Redactions: got %d want %d (one per PEM line)", page.Redactions, len(pemKeyLines))
+	}
+	// The latch must not swallow the rest of the run: the line after
+	// the footer is ordinary output and has to survive intact.
+	if !strings.Contains(joined, "Apply complete!") {
+		t.Errorf("output after the PEM block was over-redacted:\n%s", joined)
+	}
+	if !strings.Contains(joined, "Refreshing state...") {
+		t.Errorf("output before the PEM block was over-redacted:\n%s", joined)
+	}
+
+	// D-08: the raw file keeps the key so an operator can debug.
+	if !strings.Contains(rawOutput(t, s, id), pemKeyLines[1]) {
+		t.Errorf("on-disk output.log lost the raw key body — redaction leaked into the write path")
+	}
+}
+
+// TestReadOutputRedactsPEMBodyOnALaterPage covers the boundary the
+// latch must survive: the requested window starts INSIDE the key body,
+// so the `-----BEGIN` line is never redacted by this call and the state
+// has to come from the scan of the skipped lines.
+func TestReadOutputRedactsPEMBodyOnALaterPage(t *testing.T) {
+	s := newTestStore(t)
+	id := seedRun(t, s)
+
+	w, err := s.OpenOutput(id)
+	if err != nil {
+		t.Fatalf("OpenOutput: %v", err)
+	}
+	for _, l := range pemKeyLines {
+		if err := w.WriteLine("stdout", l); err != nil {
+			t.Fatalf("WriteLine: %v", err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	// pageSize 1: page 2 is the first base64 body line on its own.
+	page, err := s.ReadOutput(id, 2, 1)
+	if err != nil {
+		t.Fatalf("ReadOutput: %v", err)
+	}
+	if len(page.Lines) != 1 {
+		t.Fatalf("page 2 lines = %d, want 1", len(page.Lines))
+	}
+	if page.Lines[0] != redactedMarker {
+		t.Errorf("key body served on page 2 = %q, want %q", page.Lines[0], redactedMarker)
+	}
+	if page.Redactions != 1 {
+		t.Errorf("Redactions on page 2 = %d, want 1", page.Redactions)
+	}
+}
