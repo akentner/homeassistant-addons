@@ -8,12 +8,16 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"iac-runner/internal/auth"
+	"iac-runner/internal/git"
 	"iac-runner/internal/httpapi"
+	"iac-runner/internal/jobq"
 	"iac-runner/internal/keys"
 	"iac-runner/internal/logging"
+	"iac-runner/internal/runs"
 	"iac-runner/internal/statebackend"
 )
 
@@ -37,6 +41,16 @@ const defaultDataDir = "/data"
 // chmod 600 — the keys validator (SEC-01) enforces this at startup.
 const defaultKeysDir = defaultDataDir + "/keys"
 
+// defaultReposDir holds one working tree per configured `repos` entry
+// (CONTEXT D-01). git.NewManager creates it with 0700 — the checkouts
+// can contain private tfvars and only this process reads them.
+const defaultReposDir = defaultDataDir + "/repos"
+
+// defaultRunsDir holds one directory per run (meta.json + output.log +
+// plan.tfplan). runs.NewStore creates it with 0700; the retention
+// ticker (CONTEXT D-25) bounds its growth.
+const defaultRunsDir = defaultDataDir + "/runs"
+
 // options is the subset of /data/options.json the runner reads at
 // startup. BindAddress defaults to "auto" (Tailscale detection);
 // BindAllowedSubnets defaults to [] (strict refusal of non-Tailscale
@@ -56,6 +70,16 @@ type options struct {
 	S3Endpoint         string   `json:"s3_endpoint"`
 	S3Bucket           string   `json:"s3_bucket"`
 	S3Region           string   `json:"s3_region"`
+
+	// Phase 17 fields — see CONTEXT D-04 / D-15 / D-25 and the
+	// config.yaml schema shipped by 17-01. Repos unmarshals the
+	// Supervisor's list-of-dict straight into []git.RepoConfig, so the
+	// JSON tags on git.RepoConfig ARE the Options contract; the three
+	// ints carry the schema defaults applied in main() below.
+	Repos               []git.RepoConfig `json:"repos"`
+	MaxParallelJobs     int              `json:"max_parallel_jobs"`
+	ApplyTimeoutMinutes int              `json:"apply_timeout_minutes"`
+	RunsRetentionHours  int              `json:"runs_retention_hours"`
 }
 
 func main() {
@@ -80,13 +104,17 @@ func main() {
 
 	// Read add-on options from /data/options.json (HA add-on store).
 	opts := options{
-		BindAddress:        "auto",
-		BindAllowedSubnets: []string{},
-		StateBackend:       defaultStateBackend,
-		R2Bucket:           "",
-		S3Endpoint:         "",
-		S3Bucket:           "",
-		S3Region:           "",
+		BindAddress:         "auto",
+		BindAllowedSubnets:  []string{},
+		StateBackend:        defaultStateBackend,
+		R2Bucket:            "",
+		S3Endpoint:          "",
+		S3Bucket:            "",
+		S3Region:            "",
+		Repos:               []git.RepoConfig{},
+		MaxParallelJobs:     4,  // CONTEXT D-04
+		ApplyTimeoutMinutes: 60, // CONTEXT D-15
+		RunsRetentionHours:  24, // CONTEXT D-25
 	}
 	if b, err := os.ReadFile("/data/options.json"); err == nil {
 		_ = json.Unmarshal(b, &opts) // fall back to defaults on parse failure
@@ -158,6 +186,146 @@ func main() {
 		"required_files", keysValidator.RequiredFiles(),
 	)
 
+	// ─── Phase 17: git manager + run store + retention + job queue ───
+	//
+	// Everything below runs BEFORE the HTTP listener starts, so no
+	// client can observe a half-initialized runner: a repo is either
+	// cloned or logged as failed, and a stale `running` run from the
+	// previous container is already rewritten to `interrupted` by the
+	// time /v1/runs can be queried.
+
+	// git.NewManager validates every `repos` entry, rejects duplicate
+	// names and creates /data/repos with 0700. A construction error is
+	// fatal: it means the operator's `repos` list is malformed, and
+	// booting with a silently-empty repo set would make every
+	// /v1/plan answer run_unknown_repo with no clue why.
+	gitMgr, err := git.NewManager(
+		defaultReposDir,
+		defaultKeysDir, // already chmod-600-validated above
+		opts.Repos,
+		nil, // git.DefaultCommandRunner
+		nil, // time.Sleep
+	)
+	if err != nil {
+		slog.Error("git_manager_init_failed", "err", err.Error())
+		os.Exit(1)
+	}
+	if warn := gitMgr.SafeDirectoryWarning(); warn != nil {
+		// The one-time `git config --global --add safe.directory '*'`
+		// guard failed. Not fatal (ROADMAP SC-2): it only matters on a
+		// UID-mismatched /data volume, and git operations are attempted
+		// regardless — but the operator needs the record when a later
+		// pull reports "dubious ownership".
+		slog.Warn("git_safe_directory_guard_failed", "err", warn.Error())
+	}
+	slog.Info("repos_loaded",
+		"count", len(opts.Repos),
+		"repos", repoNames(opts.Repos),
+		"key_issues", repoKeyIssues(defaultKeysDir, opts.Repos),
+		"max_parallel_jobs", opts.MaxParallelJobs,
+		"apply_timeout_minutes", opts.ApplyTimeoutMinutes,
+		"runs_retention_hours", opts.RunsRetentionHours,
+	)
+
+	// Best-effort startup clone with the CONTEXT D-13 backoff curve
+	// (1s / 5s / 30s, 3 attempts). CloneAll never returns an error;
+	// per-repo outcomes are logged here so a failed clone is
+	// operator-visible without blocking startup (CONTEXT D-14 —
+	// a later /v1/plan for that repo answers git_clone_missing).
+	for _, outcome := range gitMgr.CloneAll(context.Background()) {
+		switch {
+		case outcome.Err != nil:
+			slog.Warn("git_clone_failed",
+				"repo", outcome.Name,
+				"attempts", outcome.Attempts,
+				"err", outcome.Err.Error(),
+			)
+		case outcome.Skipped:
+			slog.Info("git_clone_skipped", "repo", outcome.Name)
+		default:
+			slog.Info("git_clone_succeeded",
+				"repo", outcome.Name,
+				"attempts", outcome.Attempts,
+			)
+		}
+	}
+
+	// runs.NewStore does os.MkdirAll(runsDir, 0700), so /data/runs
+	// exists by the time the sweep below reads it.
+	runStore, err := runs.NewStore(defaultRunsDir, nil) // nil clock -> time.Now
+	if err != nil {
+		slog.Error("runs_store_init_failed", "err", err.Error())
+		os.Exit(1)
+	}
+
+	// CONTEXT D-02: a run still marked `running` belongs to a tofu
+	// process that died with the previous container and can never
+	// resolve itself. Rewrite it to `interrupted` before the listener
+	// opens so no client ever observes a perpetual `running`.
+	if swept, err := runStore.SweepInterrupted(); err != nil {
+		slog.Warn("runs_sweep_interrupted_failed", "err", err.Error())
+	} else if swept > 0 {
+		slog.Info("runs_swept_interrupted", "count", swept)
+	}
+
+	// CONTEXT D-25. The Supervisor schema bounds runs_retention_hours
+	// to 1..720, but a hand-edited /data/options.json can still deliver
+	// 0 — and Rotate(0) would delete every terminal run on the first
+	// tick. Clamp to the schema default instead of trusting the file.
+	retention := time.Duration(opts.RunsRetentionHours) * time.Hour
+	if opts.RunsRetentionHours <= 0 {
+		retention = 24 * time.Hour
+		slog.Warn("runs_retention_invalid",
+			"configured_hours", opts.RunsRetentionHours,
+			"applied_hours", int(retention.Hours()),
+		)
+	}
+
+	// One explicit reclaim at boot, so the startup sweep is its own
+	// observable record; StartRetentionTicker deliberately does not
+	// rotate on start (17-04 contract) and only handles steady state.
+	if deleted, err := runStore.Rotate(retention); err != nil {
+		slog.Warn("runs_rotate_failed", "err", err.Error())
+	} else if deleted > 0 {
+		slog.Info("runs_rotated_at_boot",
+			"deleted", deleted,
+			"retention_hours", int(retention.Hours()),
+		)
+	}
+
+	// The ticker fires every retention/4 (default 6h), floored at 1
+	// minute by internal/runs. stopRetention is passed to
+	// HandleSignals so the goroutine dies inside the SIGTERM drain
+	// rather than outliving the process; the defer is belt-and-braces
+	// for the paths that never reach the signal handler.
+	stopRetention := runStore.StartRetentionTicker(context.Background(), retention)
+	defer stopRetention()
+	slog.Info("runs_retention_started",
+		"runs_dir", runStore.RunsDir(),
+		"retention_hours", int(retention.Hours()),
+	)
+
+	// jobq.New applies the D-04 / D-15 defaults for a zero value and
+	// resolves the tofu binary via exec.LookPath. A missing tofu is
+	// deliberately NOT fatal there — /healthz reports tofu_on_path
+	// false and Submit answers run_tofu_not_found per request, which
+	// beats a crash-looping container with no diagnosable surface.
+	q, err := jobq.New(jobq.Deps{
+		Store:        runStore,
+		Git:          gitMgr,
+		Backend:      backend,
+		MaxParallel:  opts.MaxParallelJobs,
+		ApplyTimeout: time.Duration(opts.ApplyTimeoutMinutes) * time.Minute,
+	})
+	if err != nil {
+		slog.Error("jobq_init_failed", "err", err.Error())
+		os.Exit(1)
+	}
+	slog.Info("jobq_ready",
+		"max_parallel_jobs", opts.MaxParallelJobs,
+		"apply_timeout_minutes", opts.ApplyTimeoutMinutes,
+	)
+
 	// TokenStore — load from /data or generate on first start.
 	store, err := auth.NewFileTokenStore(defaultDataDir)
 	if err != nil {
@@ -201,17 +369,11 @@ func main() {
 	)
 
 	// Build the router — pass store so the auth middleware can
-	// validate; pass keysValidator so /healthz can probe /data/keys/.
-	//
-	// TODO(17-07): the last three arguments — *git.Manager,
-	// *runs.Store, *jobq.Queue — are the Phase 17 dependencies and
-	// are still nil here. 17-08 owns the router mount and 17-07 owns
-	// the startup wiring that constructs them, so the nils are the
-	// deliberate seam between those two plans: /v1/version,
-	// /v1/auth/rotate, /healthz and / are fully functional, while the
-	// five Phase 17 endpoints answer 500 (via chi's Recoverer) until
-	// 17-07 replaces these arguments with real dependencies.
-	router := httpapi.NewRouter(runnerVersion, store, keysValidator, nil, nil, nil)
+	// validate; pass keysValidator so /healthz can probe /data/keys/;
+	// pass the three Phase 17 dependencies constructed above so
+	// /v1/repos/{name}/pull, /v1/plan, /v1/apply, /v1/runs/{id} and
+	// /v1/runs all serve real work.
+	router := httpapi.NewRouter(runnerVersion, store, keysValidator, gitMgr, runStore, q)
 
 	srv := &http.Server{
 		Addr:              bindIP + ":8125",
@@ -221,7 +383,7 @@ func main() {
 
 	// Signal handling — HandleSignals owns the lifecycle.
 	signalsDone := make(chan struct{})
-	go HandleSignals(context.Background(), srv, logger, signalsDone)
+	go HandleSignals(context.Background(), srv, logger, signalsDone, q, stopRetention)
 
 	logger.Info("listening", "bind_address", bindIP+":8125")
 
@@ -231,4 +393,46 @@ func main() {
 	}
 
 	<-signalsDone
+}
+
+// repoNames returns the configured repo names for the `repos_loaded`
+// record. The list is bounded by the schema-validated Options (a
+// handful of entries in practice), so a fresh slice per startup costs
+// nothing.
+func repoNames(rs []git.RepoConfig) []string {
+	names := make([]string, len(rs))
+	for i, r := range rs {
+		names[i] = r.Name
+	}
+	return names
+}
+
+// repoKeyIssues reports the missing SSH prerequisites for the
+// configured repos: one entry per repo whose deploy key
+// <keysDir>/<name>.key is absent, plus one entry when
+// <keysDir>/known_hosts is absent while at least one repo is
+// configured.
+//
+// Presence only — the keys validator (SEC-01) has already asserted
+// chmod 600 and UID ownership for every file that DOES exist under
+// keysDir, and a missing deploy key is deliberately not fatal: the
+// clone for that repo fails with git_ssh_handshake, every other repo
+// still works, and the operator gets a named list at boot instead of
+// having to decode an ssh error.
+func repoKeyIssues(keysDir string, rs []git.RepoConfig) []string {
+	if len(rs) == 0 {
+		return []string{}
+	}
+	issues := make([]string, 0, len(rs)+1)
+	for _, r := range rs {
+		keyPath := filepath.Join(keysDir, r.Name+".key")
+		if _, err := os.Stat(keyPath); err != nil {
+			issues = append(issues, r.Name+": missing deploy key "+keyPath)
+		}
+	}
+	knownHosts := filepath.Join(keysDir, "known_hosts")
+	if _, err := os.Stat(knownHosts); err != nil {
+		issues = append(issues, "missing "+knownHosts)
+	}
+	return issues
 }
