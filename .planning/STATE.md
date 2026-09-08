@@ -136,7 +136,7 @@ on either fail. `statebackend.Factory.New` returns ErrUnsupported for any value 
 verification deferred to Phase 19.
 
 **v1.4 Phase 17** — 3 of 8 plans complete (17-01, 17-02, 17-03). Plan 03 (`internal/git`) is COMPLETE: 7 atomic commits
-on main (3 RED + 3 GREEN + 1 docs), 5 new files (1757 insertions), 35 test functions / 82 sub-tests passing under
+on main (3 RED + 3 GREEN + 1 docs), 5 new files (1757 insertions), 35 test functions (75 PASS lines incl. table sub-cases) passing under
 `-race`. `RepoConfig` + `Error`/`Classify` + `Manager` (WorkTree / IsCloned / EnsureCloned / Clone / CloneAll / Pull)
 with an injectable `CommandRunner` and clock — no test spawns a real git process. Ships GIT-02 (clone-if-absent,
 skip-if-present, 3-attempt 1s/5s backoff that never blocks startup), GIT-03 (SSH-keyed pull, deploy key +

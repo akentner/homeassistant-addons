@@ -26,7 +26,7 @@ affects:
 actuals:
   tokens: 15600
   tasks: 3
-  commits: 7
+  commits: 10
 plan_head_before: 5b41d49b68846986008b18b687a1245c28a2465a
 
 tech-stack:
@@ -164,7 +164,7 @@ status: complete
 - **Started:** 2026-09-08T10:18:05Z
 - **Tasks:** 3 of 3
 - **Files:** 5 created, 1 modified
-- **Commits:** 7 (3 RED + 3 GREEN + 1 docs)
+- **Commits:** 10 — 3 RED + 3 GREEN + 1 deferred-items docs + 1 SUMMARY + 1 STATE/ROADMAP metadata + 1 count reconciliation (measured: `git rev-list --count 5b41d49..HEAD`)
 
 ## Accomplishments
 
@@ -343,7 +343,7 @@ All commands run from `iac-runner/` inside the toolchain container described abo
 | `go build ./...`                                     | exit 0 |
 | `go vet ./...`                                        | exit 0 |
 | `gofmt -l internal/git/`                              | empty (package is gofmt-clean) |
-| `go test ./internal/git/... -count=1`                 | exit 0 — 35 test functions, 82 sub-tests |
+| `go test ./internal/git/... -count=1`                 | exit 0 — 35 test functions, 40 table sub-cases, 75 PASS lines, 0 FAIL |
 | `go test ./internal/git/... -race -count=1`           | exit 0 |
 | `go test ./... -count=1`                              | exit 0 — no Phase 16 or 17-02 suite regressed |
 | `! grep -rE 'exec\.Command' internal/git/*_test.go`   | pass — no test spawns a real git process |
@@ -389,6 +389,6 @@ None blocking. Two environment findings were logged to `.planning/phases/17-git-
 
 - All 5 created files exist on disk (`repo.go` 78, `errors.go` 141, `manager.go` 439, `errors_test.go` 351, `manager_test.go` 714 lines).
 - All 7 commits verified present in `git log`: `19a4284`, `5c4d5d2`, `23d7190`, `680dc9f`, `9c6d815`, `24976da`, `a6afb32`.
-- `git rev-list --count 5b41d49..HEAD` = 7, matching the `commits:` frontmatter (measured, not narrated).
+- `git rev-list --count 5b41d49..HEAD` = 10, matching the `commits: 10` frontmatter (measured, not narrated): the 7 code+docs commits listed above, plus this SUMMARY's own commit, the STATE/ROADMAP metadata commit, and the commit that reconciled this count. The reconciliation was amended rather than re-committed so the number is stable.
 - All task `<acceptance_criteria>` re-run and passing (except the three regexes that are unsatisfiable in valid Go, replaced with compile-time locks).
 - Plan-level `<verification>` steps 1-6 all re-run and passing.
