@@ -23,7 +23,10 @@ pre-commit install --hook-type commit-msg || true
 # Install pre-push hook for version-tag sync
 echo "Installing pre-push hook (version tag sync)..."
 GIT_ROOT=$(git rev-parse --show-toplevel)
-HOOK_TARGET="$GIT_ROOT/.git/hooks/pre-push"
+# --git-common-dir resolves to the main repository's .git from a linked
+# worktree too, where .git is a file and "$GIT_ROOT/.git/hooks" does not
+# exist. GIT_ROOT is still required below for HOOK_SOURCE.
+HOOK_TARGET="$(git rev-parse --path-format=absolute --git-common-dir)/hooks/pre-push"
 HOOK_SOURCE="$GIT_ROOT/internal/check-version-tags.sh"
 if [[ -f "$HOOK_SOURCE" ]]; then
     cp "$HOOK_SOURCE" "$HOOK_TARGET"
@@ -49,6 +52,9 @@ echo "   • Dockerfile linting (hadolint)"
 echo "   • General code formatting checks"
 echo "   Before push:"
 echo "   • Version-tag sync (verifies v<version> tag exists for any bumped addon)"
+echo "     Skipped for the add-ons listed in LOCAL_BUILD_ADDONS in"
+echo "     internal/check-version-tags.sh — those are built locally by the Supervisor"
+echo "     and never pulled from ghcr.io, so no release tag is required."
 echo ""
 echo "💡 To skip pre-commit hooks temporarily: git commit --no-verify"
 echo "💡 To skip pre-push hook temporarily:    git push --no-verify"
