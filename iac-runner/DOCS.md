@@ -447,8 +447,23 @@ status they would carry if a future endpoint ever returns them directly.
 
 `tofu` stdout/stderr is captured line-by-line to `/data/runs/{run_id}/output.log` (JSONL, one object per line) and
 redacted at READ time, not write time: the raw log stays intact for post-mortem inside the container, and every line
-served over HTTP is redacted by construction. The patterns are R2/AWS access keys (20-char upper-alnum), AWS secret keys
-(40-char base64-ish) and SSH private-key headers (`-----BEGIN`).
+served over HTTP is redacted by construction. What is masked:
+
+| Shape                                    | Example source                                  |
+| ---------------------------------------- | ----------------------------------------------- |
+| 20-char upper-alphanumeric token         | AWS-style access key id                         |
+| 40-char base64-ish token                 | AWS-style secret access key                     |
+| 32- or 64-char lowercase-hex token       | Cloudflare R2 access key id / secret            |
+| `scheme://user:password@host`            | credentials inlined in an endpoint or git remote |
+| a `-----BEGIN` block, **body and all**   | SSH or TLS private key                          |
+
+The PEM rule spans lines: `-----BEGIN` masks every following line until the matching `-----END`, so a multi-line
+private key never reaches the API with only its header masked. Pagination does not break it — a page that starts in the
+middle of a key body is still masked.
+
+Two consequences worth knowing: a bare 32-, 40- or 64-character hex string in tofu output (a checksum, a git SHA) is
+masked as well, and a redacted line reads `<redacted>` in place of the whole token. Nothing is lost — the untouched
+bytes are in `/data/runs/{run_id}/output.log` inside the container.
 
 Each `GET /v1/runs/{id}` emits one `redaction.audit` log record for the page it served, carrying the run id and the
 number of redactions applied — so an operator can tell "nothing was redacted" from "redaction never ran". Grep the

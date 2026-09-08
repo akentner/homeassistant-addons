@@ -26,10 +26,32 @@ const redactedMarker = "<redacted>"
 // output (resource addresses, plan diffs, ids) untouched while still
 // catching a credential that leaked into a log line.
 var (
-	// r2AccessKeyRe matches a Cloudflare R2 access key id.
+	// r2AccessKeyRe matches an AWS-style access key id (20 uppercase
+	// alphanumerics). REQUIREMENTS.md SC-10 calls this the "R2/AWS"
+	// shape, but it is the AWS one — see r2HexKeyRe.
 	r2AccessKeyRe = regexp.MustCompile(`^[A-Z0-9]{20}$`)
 	// awsSecretKeyRe matches an AWS-style secret access key.
 	awsSecretKeyRe = regexp.MustCompile(`^[A-Za-z0-9/+=]{40}$`)
+	// r2HexKeyRe matches the shapes Cloudflare R2 actually issues: a
+	// 32-character lowercase-hex access key id and a 64-character
+	// lowercase-hex secret. Neither matches the two AWS patterns
+	// above, so before this the DEFAULT state backend's credentials
+	// crossed the API boundary in the clear.
+	//
+	// This is wider than SC-10's literal wording, deliberately: the
+	// spec enumerated the AWS shapes and the implementation matched
+	// it, so the spec was the incomplete artifact. The cost is that a
+	// bare 32- or 64-character hex string in tofu output (an md5 or
+	// sha256 sum) is masked too; a masked checksum is recoverable from
+	// the raw log under /data, a leaked secret is not.
+	r2HexKeyRe = regexp.MustCompile(`^[0-9a-f]{32}$|^[0-9a-f]{64}$`)
+	// urlUserinfoRe matches credentials embedded in a URL —
+	// `https://KEY:SECRET@host/…`, the shape an S3-compatible endpoint
+	// or a git remote takes when someone inlines the credentials. The
+	// tokenizer cannot isolate them (a URL is one token), so they are
+	// masked in a pre-pass. The password is non-greedy so it stops at
+	// the FIRST '@' rather than swallowing a later one in the path.
+	urlUserinfoRe = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://)[^\s:@/]+:[^\s@]+?@`)
 )
 
 // pemHeaderPrefix triggers whole-line redaction: a PEM header means the
@@ -145,7 +167,11 @@ func (rd *redactor) observe(raw string) {
 // common shape, and splitting there is what exposes the key as a
 // token. A key carrying base64 padding is handled by re-testing a
 // token together with its trailing '=' run (see Redact).
-const tokenDelimiters = " \t\"'=,()[]{}:;"
+//
+// '@' is included so a `user:secret@host` shape isolates the secret.
+// '/' is NOT: it is a member of the AWS secret alphabet, and splitting
+// there would stop awsSecretKeyRe from ever matching a real key.
+const tokenDelimiters = " \t\"'=,()[]{}:;@"
 
 // Redact returns the line with credential-shaped tokens replaced and
 // the number of replacements made. It is applied at READ time
@@ -174,8 +200,10 @@ func Redact(line string) (string, int) {
 // redactTokens is the per-line, stateless half of the redaction: the
 // token scan. Multi-line artifacts are the redactor's job.
 func redactTokens(line string) (string, int) {
+	// URL-embedded credentials first: the tokenizer sees a URL as one
+	// token, so the userinfo has to be masked before the split.
+	line, count := redactURLUserinfo(line)
 	segs := splitTokens(line)
-	count := 0
 	var b strings.Builder
 	b.Grow(len(line))
 
@@ -196,7 +224,8 @@ func redactTokens(line string) (string, int) {
 				continue
 			}
 		}
-		if r2AccessKeyRe.MatchString(seg.text) || awsSecretKeyRe.MatchString(seg.text) {
+		if r2AccessKeyRe.MatchString(seg.text) || awsSecretKeyRe.MatchString(seg.text) ||
+			r2HexKeyRe.MatchString(seg.text) {
 			b.WriteString(redactedMarker)
 			count++
 			continue
@@ -204,6 +233,20 @@ func redactTokens(line string) (string, int) {
 		b.WriteString(seg.text)
 	}
 	return b.String(), count
+}
+
+// redactURLUserinfo replaces the `user:password@` part of every URL in
+// line with the marker, reporting how many it masked. A URL with no
+// password (`ssh://git@github.com`) does not match: the username alone
+// is not a credential, and masking it would hide which remote failed.
+func redactURLUserinfo(line string) (string, int) {
+	n := 0
+	out := urlUserinfoRe.ReplaceAllStringFunc(line, func(match string) string {
+		n++
+		scheme := strings.Index(match, "://") + len("://")
+		return match[:scheme] + redactedMarker + "@"
+	})
+	return out, n
 }
 
 // segment is one run of the input: either a delimiter run or a token.

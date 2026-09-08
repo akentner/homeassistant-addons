@@ -113,3 +113,81 @@ func TestRedactIsLosslessForSecretFreeLines(t *testing.T) {
 		}
 	}
 }
+
+// r2HexAccessKey / r2HexSecret are the shapes Cloudflare R2 actually
+// issues: 32 and 64 lowercase hex characters. Neither matches the two
+// AWS patterns, which is how the DEFAULT state backend's credentials
+// used to reach the API in the clear (WR-02).
+const (
+	r2HexAccessKey = "3a1f9c0e7b25d48af6301bc9e2d7845f"
+	r2HexSecret    = "9f2c1e4b7a08d35c6e91f4b28d70a5c31e6f9d4b2a87c05e3f1d9b6a48e5d2a7"
+)
+
+func TestRedactR2AndURLCredentials(t *testing.T) {
+	tests := []struct {
+		name  string
+		line  string
+		want  string
+		count int
+	}{
+		{
+			name:  "r2 hex access key id",
+			line:  "access_key_id = " + r2HexAccessKey,
+			want:  "access_key_id = " + redactedMarker,
+			count: 1,
+		},
+		{
+			name:  "r2 hex secret",
+			line:  "secret = " + r2HexSecret,
+			want:  "secret = " + redactedMarker,
+			count: 1,
+		},
+		{
+			name:  "credentials embedded in an https url",
+			line:  "endpoint = https://" + r2Key + ":" + awsSecret + "@example.com/bucket",
+			want:  "endpoint = https://" + redactedMarker + "@example.com/bucket",
+			count: 1,
+		},
+		{
+			name:  "credentials embedded in an ssh url",
+			line:  "remote: ssh://deploy:s3cr3t-p4ss@git.example.com/org/repo.git",
+			want:  "remote: ssh://" + redactedMarker + "@git.example.com/org/repo.git",
+			count: 1,
+		},
+		{
+			name:  "a git remote with no password is not a credential",
+			line:  "Cloning into ssh://git@github.com/akentner/homelab-infra.git",
+			want:  "Cloning into ssh://git@github.com/akentner/homelab-infra.git",
+			count: 0,
+		},
+		{
+			// PRE-EXISTING and unchanged by the R2 patterns: a 40-char
+			// git SHA is 40 characters of the base64-ish alphabet, so
+			// SC-10's AWS-secret pattern has always masked it. Pinned
+			// here so the behaviour is a decision rather than a
+			// surprise; the raw log under /data still has the SHA.
+			name:  "a 40 char hex git sha is masked by the aws secret pattern",
+			line:  "HEAD is now at 0f1e2d3c4b5a69788796a5b4c3d2e1f009182736",
+			want:  "HEAD is now at " + redactedMarker,
+			count: 1,
+		},
+		{
+			name:  "uppercase hex of r2 length is not an r2 key",
+			line:  strings.ToUpper(r2HexAccessKey),
+			want:  strings.ToUpper(r2HexAccessKey),
+			count: 0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, n := Redact(tc.line)
+			if got != tc.want {
+				t.Errorf("Redact(%q)\n got %q\nwant %q", tc.line, got, tc.want)
+			}
+			if n != tc.count {
+				t.Errorf("Redact(%q) count: got %d want %d", tc.line, n, tc.count)
+			}
+		})
+	}
+}
