@@ -44,3 +44,39 @@ Assigned to **17-07**, which already lists `iac-runner/Dockerfile` in `files_mod
 `docker build` for its other Dockerfile work anyway (project CLAUDE.md: no untested Dockerfile changes). The fix is to
 replace the in-`RUN` `cd /tmp` with a `WORKDIR /tmp` before that `RUN` (and restore the prior workdir afterwards if any
 later instruction in the stage depends on it), then re-run `make lint` to confirm a clean exit.
+
+## Secondary `*_VERSION` build args drift silently (found during 17-07)
+
+`internal/update-version.py` rewrites exactly three fields: `config.yaml` `version`, `build.yaml` `args.VERSION`, and
+the `README.md` shield/release links. It does NOT know about additional `args.<X>_VERSION` entries, and
+`internal/validate-versions.sh` does not check them either (its grep is anchored on `^[[:space:]]*VERSION:`).
+
+Two add-ons already carry drifted secondary args:
+
+- `iac-runner/build.yaml` had `RUNNER_VERSION: "0.1.0"` against `VERSION: "0.2.0"` — the ldflags-injected
+  `runner_version` reported by `/v1/version`, `/healthz` and the `starting` record would have been a version behind the
+  add-on. Fixed by hand in 17-07 (the field has no supported tool path).
+- `terraform-bridge/build.yaml` has `BRIDGE_VERSION: "0.1.0"` against `VERSION: "0.3.0"`. NOT touched — out of scope for
+  Phase 17, and whether those two are meant to be in lock-step is a terraform-bridge decision.
+
+Follow-up worth a small plan: teach `update-version.py` to rewrite sibling `args.*_VERSION` entries (opt-in per add-on,
+or only when the sibling currently equals the outgoing `VERSION`), and extend `validate-versions.sh` to flag the
+mismatch so it cannot recur silently.
+
+## Backend credentials never reach the tofu child process (found during 17-07)
+
+`internal/jobq/exec.go:91-93` passes `os.Environ()` to the tofu child and its comment states the backend credentials are
+"the backend credentials 17-07 exports (AWS_ACCESS_KEY_ID and friends)". Nothing in the repository exports them:
+`statebackend.Backend` offers `CredentialFiles()` (consumed only by the SEC-01 keys validator) but no env projection,
+`run.sh` exports nothing, and `main.go` sets no variables. So the tofu child inherits the plain container environment.
+
+Security-wise this is the conservative direction — the minimum credential env is literally empty, no `/data/keys/`
+content is projected into a spawned process, and the process-spawn surface is limited to the pinned `tofu` binary
+resolved once via `exec.LookPath` (`jobq.New`) plus `git` invoked with an explicit `GIT_SSH_COMMAND`. Functionally it
+means `tofu init` against the r2/s3 backends cannot authenticate unless the operator's own IaC repo supplies credentials
+another way.
+
+No Phase 17 requirement covers the projection (the STBK requirements landed in Phase 16; the GIT, RUN, SEC-03 and OBS
+requirements do not mention it), and ROADMAP Phase 19 SC-3 is the state-backend matrix that will exercise it end-to-end
+against a real R2 bucket. Left to Phase 19 to design deliberately (which variables, read from which `/data/keys/` file,
+scrubbed from which logs) rather than guessed at here.
