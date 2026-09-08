@@ -518,8 +518,10 @@ For R2 and S3 backends, the runner invokes `tofu` with `use_lockfile = true` so 
 semantics (no DynamoDB required). For the local backend, locking is file-based at `/data/terraform.tfstate.lock`. HA
 Supervisor's backup integration covers both files automatically.
 
-Apply fails fast with HTTP 423 (`locked`) when another apply holds the lock. The `use_lockfile` semantics for R2 were
-verified empirically in Phase 16 (IRUN-H-1 spike result documented in `16-SUMMARY.md`).
+When another apply holds the per-repo lock, the second request is still accepted with `202` and serializes behind the
+first (RUN-06) — the runner returns no `423`, and there is no `locked` error code. Only if the lock is held longer than
+`apply_timeout_minutes` does the run reach a terminal `error_code: "apply_already_running"`. The `use_lockfile`
+semantics for R2 were verified empirically in Phase 16 (IRUN-H-1 spike result documented in `16-SUMMARY.md`).
 
 ## The tofu child environment
 
