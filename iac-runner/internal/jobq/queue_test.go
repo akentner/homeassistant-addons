@@ -168,6 +168,19 @@ func (e *testEnv) drain() {
 	}
 }
 
+// gate returns an ExecFunc that signals entry exactly once and then
+// blocks until release is closed. runJob issues TWO exec calls per job
+// (init, then plan or apply), so the entry signal has to be
+// idempotent — a bare close() would panic on the second call.
+func gate(entered chan struct{}, release <-chan struct{}, res ExecResult) ExecFunc {
+	var once sync.Once
+	return func(context.Context, ExecSpec) (ExecResult, error) {
+		once.Do(func() { close(entered) })
+		<-release
+		return res, nil
+	}
+}
+
 // waitFor receives from ch with a timeout guard so a regression fails
 // with a readable message instead of hanging the suite.
 func waitFor(t *testing.T, ch <-chan struct{}, what string) {
@@ -266,11 +279,7 @@ func TestSubmitReturnsRunIDAndQueuedMeta(t *testing.T) {
 	e := newEnv(t, envOpts{
 		repos:       []string{"infra"},
 		maxParallel: 2,
-		exec: func(context.Context, ExecSpec) (ExecResult, error) {
-			close(entered)
-			<-release
-			return ExecResult{}, nil
-		},
+		exec:        gate(entered, release, ExecResult{}),
 	})
 
 	id, err := e.q.Submit(Request{Repo: "infra", Dir: "envs/prod", Kind: contract.RunKindApply})
@@ -301,11 +310,7 @@ func TestSubmitCapacityExhausted(t *testing.T) {
 	e := newEnv(t, envOpts{
 		repos:       []string{"a", "b"},
 		maxParallel: 1,
-		exec: func(context.Context, ExecSpec) (ExecResult, error) {
-			close(entered)
-			<-release
-			return ExecResult{}, nil
-		},
+		exec:        gate(entered, release, ExecResult{}),
 	})
 
 	first, err := e.q.Submit(Request{Repo: "a", Kind: contract.RunKindApply})
@@ -330,16 +335,11 @@ func TestSubmitCapacityExhausted(t *testing.T) {
 
 func TestSubmitSlotReleasedAfterCompletion(t *testing.T) {
 	release := make(chan struct{})
-	var once sync.Once
 	entered := make(chan struct{})
 	e := newEnv(t, envOpts{
 		repos:       []string{"a", "b"},
 		maxParallel: 1,
-		exec: func(context.Context, ExecSpec) (ExecResult, error) {
-			once.Do(func() { close(entered) })
-			<-release
-			return ExecResult{}, nil
-		},
+		exec:        gate(entered, release, ExecResult{}),
 	})
 
 	if _, err := e.q.Submit(Request{Repo: "a", Kind: contract.RunKindApply}); err != nil {
@@ -363,8 +363,8 @@ func TestSubmitSlotReleasedAfterCompletion(t *testing.T) {
 }
 
 func TestWorkerPanicIsRecoveredAndSlotReleased(t *testing.T) {
-	var calls int32
 	var mu sync.Mutex
+	var calls int
 	e := newEnv(t, envOpts{
 		repos:       []string{"a"},
 		maxParallel: 1,
@@ -373,6 +373,8 @@ func TestWorkerPanicIsRecoveredAndSlotReleased(t *testing.T) {
 			calls++
 			n := calls
 			mu.Unlock()
+			// The first exec call of the first job — tofu init — is
+			// where the panic is injected.
 			if n == 1 {
 				panic("boom from the fake exec")
 			}
@@ -470,11 +472,7 @@ func TestDrainWaitsForInFlight(t *testing.T) {
 	e := newEnv(t, envOpts{
 		repos:       []string{"a"},
 		maxParallel: 2,
-		exec: func(context.Context, ExecSpec) (ExecResult, error) {
-			close(entered)
-			<-release
-			return ExecResult{}, nil
-		},
+		exec:        gate(entered, release, ExecResult{}),
 	})
 	id, err := e.q.Submit(Request{Repo: "a", Kind: contract.RunKindApply})
 	if err != nil {
@@ -517,11 +515,7 @@ func TestDrainRespectsContextDeadline(t *testing.T) {
 	e := newEnv(t, envOpts{
 		repos:       []string{"a"},
 		maxParallel: 2,
-		exec: func(context.Context, ExecSpec) (ExecResult, error) {
-			close(entered)
-			<-release
-			return ExecResult{}, nil
-		},
+		exec:        gate(entered, release, ExecResult{}),
 	})
 	if _, err := e.q.Submit(Request{Repo: "a", Kind: contract.RunKindApply}); err != nil {
 		t.Fatalf("Submit: %v", err)
