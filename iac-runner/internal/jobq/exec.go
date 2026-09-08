@@ -9,10 +9,16 @@ package jobq
 import (
 	"context"
 	"errors"
+	"time"
 
 	"iac-runner/internal/contract"
 	"iac-runner/internal/runs"
 )
+
+// killGrace is the D-16 grace window between SIGTERM and SIGKILL. It
+// is a var, not a const, purely so the kill-chain tests can shrink it;
+// the production value is 10 * time.Second.
+var killGrace = 10 * time.Second
 
 // runJob executes one job's command sequence. Task 1 seam: a single
 // exec call whose result drives the terminal state. Task 2 replaces
