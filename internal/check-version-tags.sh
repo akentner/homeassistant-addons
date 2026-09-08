@@ -48,6 +48,51 @@ fi
 
 errored=0
 
+# Add-ons the Home Assistant Supervisor builds locally from their Dockerfile.
+#
+# Why an entry is on this list: the add-on's config.yaml declares no top-level
+# `image:` key, so the Supervisor never pulls a prebuilt image from ghcr.io and
+# builds the add-on locally instead. The 404-on-update this hook guards against
+# therefore cannot occur, and an `<addon>/v<version>` release tag publishes
+# nothing the Supervisor consumes.
+#
+# What takes an entry off this list: the add-on gaining a top-level `image:`
+# key. From then on the Supervisor pulls a prebuilt image and the tag
+# requirement genuinely applies again. The drift guard inside the loop below
+# detects that case, warns and enforces anyway — but the array must still be
+# corrected.
+#
+# Why this is an explicit allowlist and not a test for a missing `image:` key:
+# six other add-ons also lack the key while publishing ghcr.io images via their
+# build workflows, which may be a missing-key bug rather than intent. Inferring
+# the rule from the key's absence would cement that bug behind a guard that
+# stopped complaining. Full reasoning in
+# .planning/quick/make-the-pre-push-version-tag-hook-stop-demanding-a-release/260908-pfq-PLAN.md
+#
+# Known limitation: an entry naming a renamed or removed directory is inert
+# rather than detected — the loop below only iterates add-on directories that a
+# push actually modified, so a stale name simply never matches.
+LOCAL_BUILD_ADDONS=(
+    iac-runner
+    terraform-bridge
+)
+
+# is_local_build: returns 0 if $1 is an exact member of LOCAL_BUILD_ADDONS,
+# 1 otherwise. Call it only as an `if` condition — `set -e` is active, so a
+# bare call returning 1 would abort the hook. The comparison is written as a
+# full `if` rather than `[[ ... ]] && return 0` for the same reason: the `&&`
+# form leaves a non-zero AND-OR list as the loop body's last statement on a
+# non-match.
+is_local_build() {
+    local a
+    for a in "${LOCAL_BUILD_ADDONS[@]}"; do
+        if [[ "$a" == "$1" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 # tag_exists: echoes 0 if the tag is reachable via local refs, origin remote
 # refs (after `git fetch --tags`), or `git ls-remote` against origin.
 tag_exists() {
@@ -69,6 +114,31 @@ while IFS= read -r addon_dir; do
     # quoted/unquoted values; head -1 protects against multi-line matches.
     config_version=$(grep -E '^[[:space:]]*version:' "$addon_dir/config.yaml" | sed -E 's/^[[:space:]]*version:[[:space:]]*"?([^"]+)"?.*/\1/' | head -1)
     [[ -z "$build_version" && -z "$config_version" ]] && continue
+
+    # Add-ons built locally by the Supervisor need no release tag (see
+    # LOCAL_BUILD_ADDONS above). config.yaml is re-read on every push so a
+    # stale allowlist entry cannot silently disable the ghcr-404 guard.
+    if is_local_build "$addon_dir"; then
+        # Anchored at ^ and requiring a non-blank value: an indented sub-key,
+        # a commented `# image:` line or an empty value cannot satisfy it, and
+        # `image` is a top-level key in the HA add-on manifest so the anchor is
+        # exact. grep, not yq: HA config.yaml needs `yq eval --unsafe` for its
+        # custom tags, and this script runs as a bare .git/hooks copy that must
+        # carry no tool dependency.
+        if grep -qE '^image:[[:space:]]*[^[:space:]]' "$addon_dir/config.yaml"; then
+            echo ""
+            echo "⚠️  $addon_dir is on LOCAL_BUILD_ADDONS but its config.yaml declares"
+            echo "   a top-level 'image:' key. The Supervisor now pulls a prebuilt"
+            echo "   image from ghcr.io, so the release tag is required again."
+            echo "   Enforcing the tag requirement despite the allowlist entry."
+            echo "   Remove '$addon_dir' from LOCAL_BUILD_ADDONS in"
+            echo "   internal/check-version-tags.sh."
+            echo ""
+        else
+            echo "⊘ $addon_dir: built locally by the Supervisor, never pulled from ghcr.io; release tag not required"
+            continue
+        fi
+    fi
 
     # Tag format changed to include the subpatch suffix so it matches the OCI
     # image tag (CONFIG_VERSION) the build workflow publishes. Older releases
