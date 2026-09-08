@@ -100,6 +100,10 @@ func reposPullHandler(p repoPuller) http.HandlerFunc {
 			return
 		}
 
+		// limitBody / maxRequestBodyBytes live in plan.go: the cap is
+		// package-wide, and every POST in this package shares it.
+		limitBody(w, r)
+
 		body, err := decodeReposPullBody(r)
 		if err != nil {
 			// A body-shape failure has no dedicated code in the D-19

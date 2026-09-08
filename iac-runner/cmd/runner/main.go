@@ -403,10 +403,24 @@ func main() {
 	// /v1/runs all serve real work.
 	router := httpapi.NewRouter(runnerVersion, store, keysValidator, gitMgr, runStore, q)
 
+	// Every timeout is set, not just ReadHeaderTimeout: a client that
+	// opens a connection and then dribbles (or sends nothing at all)
+	// would otherwise hold it indefinitely, including against the
+	// unauthenticated / and /healthz routes.
+	//
+	// WriteTimeout has to cover the slowest legitimate response, which
+	// is a GET /v1/runs/{id} page of up to 1000 verbatim tofu lines
+	// (D-09/D-24 forbids truncating a multi-megabyte line) — and the
+	// synchronous POST /v1/repos/{name}/pull, itself bounded at 2
+	// minutes by the handler. 5 minutes clears both with room to
+	// spare.
 	srv := &http.Server{
 		Addr:              bindIP + ":8125",
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      5 * time.Minute,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Signal handling — HandleSignals owns the lifecycle.

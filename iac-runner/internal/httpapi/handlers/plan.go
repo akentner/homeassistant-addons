@@ -34,6 +34,23 @@ import (
 	"iac-runner/internal/jobq"
 )
 
+// maxRequestBodyBytes caps every request body this package decodes.
+// Without it a json.Decoder reads a multi-gigabyte string value for
+// `dir` into memory before validation ever rejects it, on an endpoint
+// whose entire legal body is two short strings. 64 KiB is three orders
+// of magnitude more than any legitimate request needs.
+const maxRequestBodyBytes = 64 * 1024
+
+// limitBody caps r.Body in place. The ResponseWriter argument is what
+// lets net/http close the connection instead of leaving a client
+// streaming into a body nobody will read.
+func limitBody(w http.ResponseWriter, r *http.Request) {
+	if r.Body == nil {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+}
+
 // retryAfterCapacitySeconds is the D-06 back-pressure hint. It is a
 // constant rather than a function of queue depth because there is no
 // queue: a saturated runner refuses, so the only honest answer is "try
@@ -82,6 +99,8 @@ func Apply(q *jobq.Queue) http.HandlerFunc {
 // a malformed body differently from /v1/plan.
 func submitHandler(q submitter, kind contract.RunKind) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		limitBody(w, r)
+
 		var body planApplyRequest
 		dec := json.NewDecoder(r.Body)
 		// An unknown field is a 400, not a shrug: {"repo":"prod","dirr":"envs"}

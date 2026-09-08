@@ -366,3 +366,32 @@ func TestSubmitOpaqueErrorDoesNotLeak(t *testing.T) {
 		t.Errorf("response body leaked a path: %s", raw)
 	}
 }
+
+// TestSubmitRejectsAnOversizedBody is the WR-10 regression: the
+// decoder had no http.MaxBytesReader, so a multi-gigabyte string value
+// for `dir` was read into memory before validation ever rejected it —
+// on an endpoint whose entire legal body is two short strings.
+func TestSubmitRejectsAnOversizedBody(t *testing.T) {
+	q := queueReturning("ABCDEFGH23456777", nil)
+
+	oversized := `{"repo":"prod","dir":"` + strings.Repeat("a", maxRequestBodyBytes+1) + `"}`
+	rec := serveSubmit(t, q, contract.RunKindPlan, oversized)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (body %q)", rec.Code, rec.Body.String())
+	}
+	if n := len(q.recorded()); n != 0 {
+		t.Errorf("Submit was called %d times for a body that never validated", n)
+	}
+}
+
+// TestSubmitAcceptsABodyUnderTheLimit pins the cap as a ceiling rather
+// than a new rejection rule: a legitimate request must be unaffected.
+func TestSubmitAcceptsABodyUnderTheLimit(t *testing.T) {
+	q := queueReturning("ABCDEFGH23456777", nil)
+
+	rec := serveSubmit(t, q, contract.RunKindPlan, `{"repo":"prod","dir":"envs/prod"}`)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 (body %q)", rec.Code, rec.Body.String())
+	}
+}
