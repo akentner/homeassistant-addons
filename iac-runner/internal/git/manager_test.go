@@ -20,6 +20,7 @@ import (
 var (
 	_ func(string, string, []RepoConfig, CommandRunner, func(time.Duration)) (*Manager, error) = NewManager
 	_ CommandRunner                                                                            = DefaultCommandRunner
+	_ func(context.Context, string, bool) (PullOutcome, error)                                 = (&Manager{}).Pull
 )
 
 // recordedCall is one git invocation the fake runner observed.
@@ -466,5 +467,248 @@ func TestManagerSSHEnvCarriesKeyAndKnownHosts(t *testing.T) {
 	}
 	if !strings.Contains(env, "GIT_TERMINAL_PROMPT=0") {
 		t.Errorf("clone environment is missing GIT_TERMINAL_PROMPT=0")
+	}
+}
+
+// scripted responds per git subcommand; a subcommand absent from the map
+// exits 0 with empty output.
+func scripted(bySubcommand map[string]CommandResult) func(recordedCall) (CommandResult, error) {
+	return func(call recordedCall) (CommandResult, error) {
+		if len(call.args) == 0 {
+			return CommandResult{}, nil
+		}
+		if res, ok := bySubcommand[call.args[0]]; ok {
+			return res, nil
+		}
+		return CommandResult{}, nil
+	}
+}
+
+// newClonedManager is newTestManager plus a materialized working tree,
+// so EnsureCloned passes and Pull reaches the git layer.
+func newClonedManager(
+	t *testing.T,
+	repos []RepoConfig,
+	respond func(recordedCall) (CommandResult, error),
+) (*Manager, *fakeGit, string) {
+	t.Helper()
+	m, f, reposDir, keysDir := newTestManager(t, repos, respond)
+	for _, r := range repos {
+		preClone(t, reposDir, r.Name)
+	}
+	return m, f, keysDir
+}
+
+func TestManagerPullUnpinnedRunsFastForward(t *testing.T) {
+	repos := []RepoConfig{{Name: "infra", URL: "git@github.com:acme/infra.git"}}
+	m, f, _ := newClonedManager(t, repos, nil)
+
+	out, err := m.Pull(context.Background(), "infra", false)
+	if err != nil {
+		t.Fatalf("Pull: %v", err)
+	}
+	// D-11: an unpinned repo fast-forwards its configured branch.
+	if want := []string{"pull", "--ff-only", "origin", "main"}; !argsEqual(callAt(t, f, 0).args, want) {
+		t.Errorf("pull args = %v, want %v", callAt(t, f, 0).args, want)
+	}
+	if callAt(t, f, 0).workDir != m.WorkTree("infra") {
+		t.Errorf("pull workDir = %q, want %q", callAt(t, f, 0).workDir, m.WorkTree("infra"))
+	}
+	if out.Mode != PullModeFastForward {
+		t.Errorf("Mode = %q, want %q", out.Mode, PullModeFastForward)
+	}
+	if out.Name != "infra" {
+		t.Errorf("Name = %q, want infra", out.Name)
+	}
+}
+
+func TestManagerPullUnpinnedUsesConfiguredBranch(t *testing.T) {
+	repos := []RepoConfig{{Name: "infra", URL: "git@github.com:acme/infra.git", Branch: "production"}}
+	m, f, _ := newClonedManager(t, repos, nil)
+
+	if _, err := m.Pull(context.Background(), "infra", true); err != nil {
+		t.Fatalf("Pull: %v", err)
+	}
+	if want := []string{"pull", "--ff-only", "origin", "production"}; !argsEqual(callAt(t, f, 0).args, want) {
+		t.Errorf("pull args = %v, want %v", callAt(t, f, 0).args, want)
+	}
+}
+
+func TestManagerPullPinnedFetchesAndChecksOut(t *testing.T) {
+	repos := []RepoConfig{{Name: "infra", URL: "git@github.com:acme/infra.git", Ref: "v1.2.3"}}
+	m, f, _ := newClonedManager(t, repos, nil)
+
+	out, err := m.Pull(context.Background(), "infra", false)
+	if err != nil {
+		t.Fatalf("Pull: %v", err)
+	}
+	// D-10: a pinned repo re-lands on its ref instead of fast-forwarding.
+	if want := []string{"fetch", "origin", "v1.2.3"}; !argsEqual(callAt(t, f, 0).args, want) {
+		t.Errorf("fetch args = %v, want %v", callAt(t, f, 0).args, want)
+	}
+	if want := []string{"checkout", "--detach", "FETCH_HEAD"}; !argsEqual(callAt(t, f, 1).args, want) {
+		t.Errorf("checkout args = %v, want %v", callAt(t, f, 1).args, want)
+	}
+	if out.Mode != PullModeRef {
+		t.Errorf("Mode = %q, want %q", out.Mode, PullModeRef)
+	}
+	for _, sub := range f.subcommands() {
+		if sub == "pull" {
+			t.Errorf("a pinned repo must not run `git pull`; subcommands = %v", f.subcommands())
+		}
+	}
+}
+
+func TestManagerPullFFOnlyOnPinnedRepoIsRefused(t *testing.T) {
+	repos := []RepoConfig{{Name: "infra", URL: "git@github.com:acme/infra.git", Ref: "v1.2.3"}}
+	m, f, _ := newClonedManager(t, repos, nil)
+
+	_, err := m.Pull(context.Background(), "infra", true)
+	// D-12 survives as an explicit-conflict guard: a caller that asked
+	// for fast-forward semantics against a pinned repo requested two
+	// contradictory things.
+	gitErr(t, err, contract.ErrCodeGitRefPullIncompatible)
+	if len(f.calls) != 0 {
+		t.Errorf("the D-12 guard ran %d git commands, want 0: %v", len(f.calls), f.subcommands())
+	}
+}
+
+func TestManagerPullOnMissingWorkTreeReportsCloneMissing(t *testing.T) {
+	repos := []RepoConfig{{Name: "infra", URL: "git@github.com:acme/infra.git"}}
+	m, f, _, _ := newTestManager(t, repos, nil)
+
+	_, err := m.Pull(context.Background(), "infra", false)
+	gitErr(t, err, contract.ErrCodeGitCloneMissing)
+	if len(f.calls) != 0 {
+		t.Errorf("Pull ran %d git commands on a missing work tree, want 0", len(f.calls))
+	}
+}
+
+func TestManagerPullUnknownRepo(t *testing.T) {
+	m, f, _, _ := newTestManager(t, nil, nil)
+
+	_, err := m.Pull(context.Background(), "nope", false)
+	gitErr(t, err, contract.ErrCodeRunUnknownRepo)
+	if len(f.calls) != 0 {
+		t.Errorf("Pull ran %d git commands for an unknown repo, want 0", len(f.calls))
+	}
+}
+
+func TestManagerPullNonFastForwardIsTyped(t *testing.T) {
+	repos := []RepoConfig{{Name: "infra", URL: "git@github.com:acme/infra.git"}}
+	m, _, _ := newClonedManager(t, repos, scripted(map[string]CommandResult{
+		"pull": {Stderr: "fatal: Not possible to fast-forward, aborting.", ExitCode: 128},
+	}))
+
+	_, err := m.Pull(context.Background(), "infra", false)
+	gitErr(t, err, contract.ErrCodeGitNonFastForward)
+}
+
+func TestManagerPullBadKeyIsTyped(t *testing.T) {
+	repos := []RepoConfig{{Name: "infra", URL: "git@github.com:acme/infra.git"}}
+	m, _, _ := newClonedManager(t, repos, scripted(map[string]CommandResult{
+		"pull": {Stderr: "git@github.com: Permission denied (publickey).", ExitCode: 128},
+	}))
+
+	_, err := m.Pull(context.Background(), "infra", false)
+	gitErr(t, err, contract.ErrCodeGitSSHHandshake)
+}
+
+func TestManagerPullMissingRefIsTyped(t *testing.T) {
+	repos := []RepoConfig{{Name: "infra", URL: "git@github.com:acme/infra.git", Ref: "v9.9.9"}}
+	m, _, _ := newClonedManager(t, repos, scripted(map[string]CommandResult{
+		"fetch": {Stderr: "fatal: couldn't find remote ref v9.9.9", ExitCode: 128},
+	}))
+
+	_, err := m.Pull(context.Background(), "infra", false)
+	gitErr(t, err, contract.ErrCodeGitRefNotFound)
+}
+
+func TestManagerPullReturnsHead(t *testing.T) {
+	repos := []RepoConfig{{Name: "infra", URL: "git@github.com:acme/infra.git"}}
+	m, f, _ := newClonedManager(t, repos, scripted(map[string]CommandResult{
+		"rev-parse": {Stdout: "9f1c0de4ab7e5f2c1d3b8a90e7654321fedcba98\n"},
+	}))
+
+	out, err := m.Pull(context.Background(), "infra", false)
+	if err != nil {
+		t.Fatalf("Pull: %v", err)
+	}
+	if want := "9f1c0de4ab7e5f2c1d3b8a90e7654321fedcba98"; out.Head != want {
+		t.Errorf("Head = %q, want %q", out.Head, want)
+	}
+	if want := []string{"rev-parse", "HEAD"}; !argsEqual(callAt(t, f, 1).args, want) {
+		t.Errorf("head lookup args = %v, want %v", callAt(t, f, 1).args, want)
+	}
+	// The SHA lookup is local: it needs no deploy key.
+	for _, kv := range callAt(t, f, 1).env {
+		if strings.HasPrefix(kv, "GIT_SSH_COMMAND=") {
+			t.Errorf("the rev-parse call must not carry GIT_SSH_COMMAND")
+		}
+	}
+}
+
+func TestManagerPullHeadLookupFailureIsNonFatal(t *testing.T) {
+	repos := []RepoConfig{{Name: "infra", URL: "git@github.com:acme/infra.git"}}
+	m, _, _ := newClonedManager(t, repos, scripted(map[string]CommandResult{
+		"rev-parse": {Stderr: "fatal: ambiguous argument 'HEAD'", ExitCode: 128},
+	}))
+
+	out, err := m.Pull(context.Background(), "infra", false)
+	if err != nil {
+		t.Fatalf("a failed HEAD lookup must not fail a pull that succeeded: %v", err)
+	}
+	if out.Head != "" {
+		t.Errorf("Head = %q, want empty", out.Head)
+	}
+	if out.Mode != PullModeFastForward {
+		t.Errorf("Mode = %q, want %q", out.Mode, PullModeFastForward)
+	}
+}
+
+func TestManagerPullErrorBodyHasNoStderrDump(t *testing.T) {
+	rawStderr := "From github.com:acme/infra\n" +
+		" ! [rejected]        main -> main (non-fast-forward)\n" +
+		"error: failed to push some refs\n" +
+		"hint: Updates were rejected because the tip of your current branch is behind\n"
+	repos := []RepoConfig{{Name: "infra", URL: "git@github.com:acme/infra.git"}}
+	m, _, _ := newClonedManager(t, repos, scripted(map[string]CommandResult{
+		"pull": {Stderr: rawStderr, ExitCode: 1},
+	}))
+
+	_, err := m.Pull(context.Background(), "infra", false)
+	gerr := gitErr(t, err, contract.ErrCodeGitNonFastForward)
+
+	// GIT-04: no stack traces or raw output in the surfaced error.
+	got := gerr.Error()
+	if strings.Contains(got, rawStderr) || strings.Contains(got, "hint: Updates were rejected") {
+		t.Errorf("Error() leaked raw git stderr: %q", got)
+	}
+	if strings.Contains(got, "\n") {
+		t.Errorf("Error() must be a single line, got %q", got)
+	}
+	if !strings.Contains(gerr.Hint, "infra") {
+		t.Errorf("hint = %q, want the concrete repo name substituted", gerr.Hint)
+	}
+}
+
+func TestManagerPullCarriesSSHCredentials(t *testing.T) {
+	repos := []RepoConfig{{Name: "infra", URL: "git@github.com:acme/infra.git"}}
+	m, f, keysDir := newClonedManager(t, repos, nil)
+
+	if _, err := m.Pull(context.Background(), "infra", false); err != nil {
+		t.Fatalf("Pull: %v", err)
+	}
+	env := strings.Join(callAt(t, f, 0).env, "\n")
+	for _, want := range []string{
+		"-i " + filepath.Join(keysDir, "infra.key"),
+		"UserKnownHostsFile=" + filepath.Join(keysDir, "known_hosts"),
+		"IdentitiesOnly=yes",
+		"BatchMode=yes",
+		"GIT_TERMINAL_PROMPT=0",
+	} {
+		if !strings.Contains(env, want) {
+			t.Errorf("pull environment is missing %q", want)
+		}
 	}
 }

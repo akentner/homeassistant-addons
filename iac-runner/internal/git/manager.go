@@ -83,6 +83,18 @@ type CloneOutcome struct {
 	Err      error
 }
 
+// PullOutcome describes a successful pull.
+type PullOutcome struct {
+	Name string
+	Mode string
+	Head string
+}
+
+const (
+	PullModeFastForward = "ff-only"
+	PullModeRef         = "ref"
+)
+
 // Manager owns /data/repos/ and the configured repo set.
 type Manager struct {
 	reposDir string
@@ -353,4 +365,9 @@ func (m *Manager) landOnRef(ctx context.Context, cfg RepoConfig, workTree string
 	_, err := m.git(ctx, cfg.Name, workTree, env, contract.ErrCodeGitRefNotFound, message,
 		"checkout", "--detach", "FETCH_HEAD")
 	return err
+}
+
+// Pull updates the checkout for name.
+func (m *Manager) Pull(ctx context.Context, name string, ffOnly bool) (PullOutcome, error) {
+	return PullOutcome{}, nil
 }
