@@ -5,6 +5,7 @@
   "exa_search": false,
   "firecrawl": false,
   "git": {
+    "allow_default_branch_commits": true,
     "branching_strategy": "none",
     "milestone_branch_template": "gsd/{milestone}-{slug}",
     "phase_branch_template": "gsd/phase-{phase}-{slug}",
