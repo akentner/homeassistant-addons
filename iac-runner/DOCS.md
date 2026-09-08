@@ -493,7 +493,7 @@ The runner logs one structured JSON record per startup step. Grep these to diagn
 | `git_clone_succeeded`          | Startup clone landed (`repo`, `attempts`)                                        |
 | `git_clone_skipped`            | The working tree already existed; nothing was fetched                            |
 | `git_clone_failed`             | All 3 attempts failed (1s/5s backoff); startup continues anyway                  |
-| `runs_swept_interrupted`       | N runs left `running` by a previous container became `interrupted`               |
+| `runs_swept_interrupted`       | N runs left `queued`/`running` by a previous container became `interrupted`      |
 | `runs_rotated_at_boot`         | N run directories older than `runs_retention_hours` were reclaimed at boot       |
 | `runs_retention_started`       | The retention ticker is armed (`runs_dir`, `retention_hours`)                    |
 | `jobq_ready`                   | The job queue is up (`max_parallel_jobs`, `apply_timeout_minutes`)               |

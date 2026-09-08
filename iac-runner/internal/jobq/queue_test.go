@@ -3,10 +3,12 @@ package jobq
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -588,5 +590,115 @@ func TestLockForReturnsSameMutexPerRepo(t *testing.T) {
 	}
 	if e.q.lockFor("a") == e.q.lockFor("b") {
 		t.Fatal("lockFor returned the same mutex for two different repos")
+	}
+}
+
+// TestRunningUpdateFailureAttemptsATerminalState is the WR-06
+// regression. work() used to log the failed queued->running update and
+// return with NO terminal state, so the run stayed `queued` forever —
+// and Rotate skips queued runs, so its directory was never reclaimed
+// either. The worker now always attempts the terminal write.
+//
+// The failure is forced by corrupting meta.json, which makes
+// Store.Update fail on its internal Load. That also means the
+// terminal write cannot land on disk in THIS scenario (there is no
+// readable meta to update), so the assertion is on the attempt — the
+// jobq.fail_update_failed record — plus the release discipline. In the
+// realistic case (a transient I/O error) the same attempt succeeds.
+func TestRunningUpdateFailureAttemptsATerminalState(t *testing.T) {
+	var execCalls atomic.Int32
+	e := newEnv(t, envOpts{
+		repos:       []string{"a"},
+		maxParallel: 2,
+		exec: func(context.Context, ExecSpec) (ExecResult, error) {
+			execCalls.Add(1)
+			return ExecResult{}, nil
+		},
+	})
+
+	id, err := runs.NewRunID()
+	if err != nil {
+		t.Fatalf("NewRunID: %v", err)
+	}
+	if err := e.store.Create(runs.Meta{
+		RunID:     id,
+		Repo:      "a",
+		Kind:      contract.RunKindApply,
+		Status:    contract.RunStatusQueued,
+		StartedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(e.store.Dir(id), "meta.json"), []byte("{"), 0o600); err != nil {
+		t.Fatalf("corrupt meta.json: %v", err)
+	}
+
+	var buf lockedBuffer
+	restore := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	defer slog.SetDefault(restore)
+
+	// Drive work() the way Submit would, then let its own defers
+	// release the gates.
+	e.q.wg.Add(1)
+	e.q.sem <- struct{}{}
+	e.q.work(id, "a", "", contract.RunKindApply)
+
+	if n := execCalls.Load(); n != 0 {
+		t.Errorf("tofu was started %d times for a run that could not be marked running", n)
+	}
+	logged := buf.String()
+	if !strings.Contains(logged, "jobq.status_update_failed") {
+		t.Errorf("the failed status update was not recorded:\n%s", logged)
+	}
+	if !strings.Contains(logged, "jobq.fail_update_failed") {
+		t.Errorf("no terminal state was attempted — the run would stay queued forever:\n%s", logged)
+	}
+
+	// Release discipline: the slot and the repo mutex must both be
+	// free, so the next submission still runs.
+	if len(e.q.sem) != 0 {
+		t.Errorf("semaphore holds %d slots after the early return", len(e.q.sem))
+	}
+	next, err := e.q.Submit(Request{Repo: "a", Kind: contract.RunKindApply})
+	if err != nil {
+		t.Fatalf("Submit after a failed status update: %v", err)
+	}
+	e.drain()
+	e.waitStatus(next, contract.RunStatusSucceeded)
+}
+
+// TestSubmitLeavesNoStateWhenCreateFails is WR-06's third path: Create
+// does MkdirAll and THEN writes meta.json, so a failure used to leave
+// a meta-less directory behind — which retention could never age,
+// because it ages a run by its metadata.
+func TestSubmitLeavesNoStateWhenCreateFails(t *testing.T) {
+	e := newEnv(t, envOpts{repos: []string{"a"}, maxParallel: 2})
+
+	// Replace the runs directory with a regular file: every
+	// Store.Create for this store now fails. (Permission bits cannot
+	// express this — the test process may be root.)
+	if err := os.RemoveAll(e.runsDir); err != nil {
+		t.Fatalf("remove runs dir: %v", err)
+	}
+	if err := os.WriteFile(e.runsDir, []byte("not a directory\n"), 0o600); err != nil {
+		t.Fatalf("write runs dir file: %v", err)
+	}
+
+	if _, err := e.q.Submit(Request{Repo: "a", Kind: contract.RunKindApply}); err == nil {
+		t.Fatal("Submit succeeded with an unusable runs directory")
+	}
+	// The refused submission must not have leaked its capacity slot.
+	if len(e.q.sem) != 0 {
+		t.Errorf("semaphore holds %d slots after a failed Submit", len(e.q.sem))
+	}
+	if err := os.Remove(e.runsDir); err != nil {
+		t.Fatalf("restore runs dir: %v", err)
+	}
+	if err := os.MkdirAll(e.runsDir, 0o700); err != nil {
+		t.Fatalf("restore runs dir: %v", err)
+	}
+	if n := e.runDirCount(); n != 0 {
+		t.Errorf("%d run directories left behind by a failed Submit", n)
 	}
 }

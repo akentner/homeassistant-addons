@@ -54,7 +54,13 @@ func runDirExists(t *testing.T, s *Store, runID string) bool {
 	return false
 }
 
-func TestSweepInterruptedTransitionsRunningOnly(t *testing.T) {
+// TestSweepInterruptedTransitionsActiveRuns pins the D-02 sweep to
+// the NON-TERMINAL statuses. `queued` is included (WR-06): the queue
+// is in-process only (D-05), so a persisted queued run has no worker
+// after a restart — and Rotate never touches a queued run, so leaving
+// it would exempt the directory from retention permanently as well as
+// showing the operator a job that never starts.
+func TestSweepInterruptedTransitionsActiveRuns(t *testing.T) {
 	s := newTestStore(t)
 
 	running := seedActive(t, s, contract.RunStatusRunning, time.Hour)
@@ -67,25 +73,26 @@ func TestSweepInterruptedTransitionsRunningOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SweepInterrupted: %v", err)
 	}
-	if n != 1 {
-		t.Errorf("count: got %d want 1", n)
+	if n != 2 {
+		t.Errorf("count: got %d want 2 (running + queued)", n)
 	}
 
-	got, err := s.Load(running)
-	if err != nil {
-		t.Fatalf("Load swept run: %v", err)
-	}
-	if got.Status != contract.RunStatusInterrupted {
-		t.Errorf("swept run status: got %q want %q", got.Status, contract.RunStatusInterrupted)
-	}
-	if got.FinishedAt == nil {
-		t.Errorf("swept run has no FinishedAt — the timeline is incomplete")
-	} else if !got.FinishedAt.Equal(baseTime) {
-		t.Errorf("swept run FinishedAt: got %s want %s", got.FinishedAt, baseTime)
+	for _, id := range []string{running, queued} {
+		got, err := s.Load(id)
+		if err != nil {
+			t.Fatalf("Load swept run: %v", err)
+		}
+		if got.Status != contract.RunStatusInterrupted {
+			t.Errorf("swept run status: got %q want %q", got.Status, contract.RunStatusInterrupted)
+		}
+		if got.FinishedAt == nil {
+			t.Errorf("swept run has no FinishedAt — the timeline is incomplete")
+		} else if !got.FinishedAt.Equal(baseTime) {
+			t.Errorf("swept run FinishedAt: got %s want %s", got.FinishedAt, baseTime)
+		}
 	}
 
 	untouched := map[string]contract.RunStatus{
-		queued:      contract.RunStatusQueued,
 		succeeded:   contract.RunStatusSucceeded,
 		failed:      contract.RunStatusFailed,
 		interrupted: contract.RunStatusInterrupted,
@@ -231,4 +238,56 @@ func TestStartRetentionTickerStopsOnContextCancel(t *testing.T) {
 	cancel()
 	time.Sleep(50 * time.Millisecond)
 	stop()
+}
+
+// TestRotateReclaimsUnparseableRunDirectory is the WR-06 regression:
+// a directory whose meta.json is missing or corrupt cannot be aged by
+// its metadata, and skipping it made it exempt from retention forever.
+// A disk-full episode (Create's MkdirAll succeeded, its writeMeta did
+// not) therefore left permanent garbage under /data/runs that the
+// add-on could not recover from without a manual rm -rf.
+func TestRotateReclaimsUnparseableRunDirectory(t *testing.T) {
+	s := newTestStore(t)
+
+	// A meta-less directory, aged past retention.
+	stillborn := newRunID(t)
+	if err := os.MkdirAll(s.Dir(stillborn), 0o700); err != nil {
+		t.Fatalf("mkdir stillborn: %v", err)
+	}
+	old := s.now().Add(-72 * time.Hour)
+	if err := os.Chtimes(s.Dir(stillborn), old, old); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	// A corrupt meta.json, aged past retention.
+	corrupt := seedFinished(t, s, contract.RunStatusSucceeded, 72*time.Hour)
+	if err := os.WriteFile(filepath.Join(s.Dir(corrupt), "meta.json"), []byte("{"), 0o600); err != nil {
+		t.Fatalf("corrupt meta.json: %v", err)
+	}
+	if err := os.Chtimes(s.Dir(corrupt), old, old); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	// A meta-less directory being created RIGHT NOW must survive.
+	fresh := newRunID(t)
+	if err := os.MkdirAll(s.Dir(fresh), 0o700); err != nil {
+		t.Fatalf("mkdir fresh: %v", err)
+	}
+
+	n, err := s.Rotate(24 * time.Hour)
+	if err != nil {
+		t.Fatalf("Rotate: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("deleted %d, want 2 (the stillborn and the corrupt directory)", n)
+	}
+	if runDirExists(t, s, stillborn) {
+		t.Errorf("a meta-less directory older than retention is still on disk")
+	}
+	if runDirExists(t, s, corrupt) {
+		t.Errorf("a corrupt run directory older than retention is still on disk")
+	}
+	if !runDirExists(t, s, fresh) {
+		t.Errorf("Rotate deleted a run directory that is mid-creation")
+	}
 }

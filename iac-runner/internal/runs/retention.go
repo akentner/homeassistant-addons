@@ -29,8 +29,8 @@ import (
 // loop that walks /data/runs continuously.
 const minTickInterval = 1 * time.Minute
 
-// SweepInterrupted rewrites every run still marked `running` to
-// `interrupted` and returns how many it transitioned.
+// SweepInterrupted rewrites every run still marked `running` or
+// `queued` to `interrupted` and returns how many it transitioned.
 //
 // Why this exists (CONTEXT D-02): a run's tofu process died with the
 // previous container, so a persisted `running` status can never resolve
@@ -39,6 +39,15 @@ const minTickInterval = 1 * time.Minute
 // would be a lie that sends them looking for a tofu error that does not
 // exist. `interrupted` says exactly what happened: the add-on restarted
 // mid-run.
+//
+// `queued` is swept for the same reason. The job queue is in-process
+// only (D-05: a restart resumes nothing), so a persisted `queued` run
+// has no worker either — and because Rotate deliberately never touches
+// a queued run (its writer may hold an open fd), leaving it would make
+// the directory exempt from retention permanently on top of showing
+// the operator a job that never starts. This runs BEFORE the listener
+// opens and before the queue exists, so it cannot race a live
+// submission.
 //
 // 17-07 calls this once from main.go BEFORE the HTTP listener starts,
 // so no client ever observes a stale `running`.
@@ -70,7 +79,7 @@ func (s *Store) SweepInterrupted() (int, error) {
 			errs = append(errs, err)
 			continue
 		}
-		if m.Status != contract.RunStatusRunning {
+		if m.Status != contract.RunStatusRunning && m.Status != contract.RunStatusQueued {
 			continue
 		}
 		if _, err := s.Update(runID, func(m *Meta) error {
@@ -124,6 +133,18 @@ func (s *Store) Rotate(maxAge time.Duration) (int, error) {
 		m, err := s.Load(runID)
 		if err != nil {
 			if errors.Is(err, ErrRunNotFound) {
+				// No usable metadata: a corrupt meta.json, or none at
+				// all because Create's MkdirAll succeeded and its
+				// writeMeta did not (a full disk — precisely when
+				// retention matters). Skipping made such a directory
+				// exempt from rotation FOREVER, so the add-on could
+				// not recover from a disk-full episode without a
+				// manual rm -rf. Age it by its own mtime instead; a
+				// directory being created right now is by definition
+				// not over-age.
+				if s.rotateUnparseable(e, now, maxAge) {
+					deleted++
+				}
 				continue
 			}
 			errs = append(errs, err)
@@ -146,6 +167,27 @@ func (s *Store) Rotate(maxAge time.Duration) (int, error) {
 		deleted++
 	}
 	return deleted, errors.Join(errs...)
+}
+
+// rotateUnparseable deletes a run directory that carries no readable
+// meta.json and whose own mtime is older than maxAge, reporting
+// whether it did. Every failure is swallowed: this is a best-effort
+// reclaim of state nothing else can interpret, and it must not turn
+// into an error the boot path reports.
+func (s *Store) rotateUnparseable(e os.DirEntry, now time.Time, maxAge time.Duration) bool {
+	info, err := e.Info()
+	if err != nil {
+		return false
+	}
+	if now.Sub(info.ModTime()) <= maxAge {
+		return false
+	}
+	if err := os.RemoveAll(s.Dir(e.Name())); err != nil {
+		slog.Warn("runs.rotate_unparseable_failed", "run_id", e.Name(), "err", err.Error())
+		return false
+	}
+	slog.Info("runs.rotated_unparseable", "run_id", e.Name(), "mtime", info.ModTime().UTC().Format(time.RFC3339))
+	return true
 }
 
 // tickInterval is the rotation cadence for a given retention window:

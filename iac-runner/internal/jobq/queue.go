@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -279,6 +280,17 @@ func (q *Queue) Submit(req Request) (string, error) {
 		StartedAt: q.now().UTC(),
 	}); err != nil {
 		<-q.sem
+		// Create does MkdirAll and THEN writes meta.json, so a
+		// writeMeta failure — a full disk, precisely when this matters
+		// — leaves a meta-less directory behind. Retention can only
+		// age a run by its metadata, so that directory would be
+		// permanent garbage under /data/runs.
+		if dir := q.store.Dir(runID); dir != "" {
+			if rmErr := os.RemoveAll(dir); rmErr != nil {
+				slog.Warn("jobq.stillborn_run_dir_cleanup_failed",
+					"run_id", runID, "err", rmErr.Error())
+			}
+		}
 		return "", fmt.Errorf("jobq: create run: %w", err)
 	}
 
@@ -330,7 +342,12 @@ func (q *Queue) work(runID, repo, cleanDir string, kind contract.RunKind) {
 		m.StartedAt = q.now().UTC()
 		return nil
 	}); err != nil {
+		// Returning here without a terminal state left the run
+		// `queued` forever — and Rotate skips queued runs, so the
+		// directory was never reclaimed either. The operator saw a job
+		// that never starts and never explains itself.
 		slog.Error("jobq.status_update_failed", "run_id", runID, "status", "running", "err", err.Error())
+		q.fail(runID, contract.ErrCodeApplyFailed, "the run could not be marked running")
 		return
 	}
 
