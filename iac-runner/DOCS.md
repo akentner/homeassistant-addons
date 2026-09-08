@@ -486,6 +486,7 @@ The runner logs one structured JSON record per startup step. Grep these to diagn
 
 | Record                         | Meaning                                                                          |
 | ------------------------------ | -------------------------------------------------------------------------------- |
+| `options_parse_failed`         | `/data/options.json` is not valid JSON — the runner refuses to start             |
 | `bind_resolved`                | The bind IP was accepted (`bind_ip`, `allowed_subnets`)                          |
 | `state_backend_ready`          | Backend, endpoint, bucket, region, `use_lockfile`                                |
 | `keys_validated`               | `/data/keys/` passed the chmod-600 + ownership check                             |

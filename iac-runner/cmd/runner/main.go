@@ -122,10 +122,24 @@ func main() {
 		ApplyTimeoutMinutes: 60, // CONTEXT D-15
 		RunsRetentionHours:  24, // CONTEXT D-25
 	}
+	// A parse failure is FATAL, like every other startup input below.
+	// encoding/json does not "fall back to defaults": it populates
+	// fields until it hits the error and leaves the rest at their
+	// previous values, so a wrong type anywhere in the file boots the
+	// runner with a PARTIAL configuration — most damagingly an empty
+	// `repos` list, which makes every /v1/plan answer
+	// run_unknown_repo with nothing in the log to explain why. A
+	// missing file stays legal: that is a plain `docker run` with no
+	// Supervisor volume, and the defaults above are the whole
+	// configuration.
 	if b, err := os.ReadFile("/data/options.json"); err == nil {
-		_ = json.Unmarshal(b, &opts) // fall back to defaults on parse failure
+		if err := json.Unmarshal(b, &opts); err != nil {
+			slog.Error("options_parse_failed", "err", err.Error())
+			os.Exit(1)
+		}
 	} else if !os.IsNotExist(err) {
 		slog.Error("options_read_failed", "err", err.Error())
+		os.Exit(1)
 	}
 
 	// Resolve the bind address. Refusal is fatal — no degraded
