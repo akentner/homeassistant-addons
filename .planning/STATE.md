@@ -4,10 +4,11 @@ milestone: v1.3
 milestone_name: opentofu-bridge
 current_phase: 17
 current_phase_name: Git Integration + Apply Job System
+current_plan: 7
 status: Ready to plan
-stopped_at: Completed 17-06-PLAN.md
-last_updated: "2026-09-08T11:54:18.241Z"
-state_head: dad051b1d62d375821d558f63b473e0603f096ea
+stopped_at: Completed 17-08-PLAN.md
+last_updated: "2026-09-08T12:12:01.277Z"
+state_head: 14b51ac8acc2e1c89fe757829e4d2e7d5f56e5d2
 progress:
   total_phases: 7
   completed_phases: 2
@@ -104,6 +105,9 @@ Phase dependency graph: 16 → 17 → 18 → 19 (strictly serial in initial plan
 parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
+
+Current Plan: 7
+Total Plans in Phase: 8
 
 Phase: 17 (Git Integration + Apply Job System) — EXECUTING COMPLETE (7 atomic commits landed on main; live-HA empirical
 exercise deferred to operator runtime as documented in 14-VERIFICATION.md — preflight returns 1 in this env: no tofu, no
@@ -330,6 +334,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | Phase 17 P04 | 12 min   | 3 tasks | 8 files |
 | Phase 17 P05 | 25 min | 3 tasks | 5 files |
 | Phase 17 P06 | 19 min | 3 tasks | 8 files |
+| Phase 17 P08 | 10 min | 3 tasks | 7 files |
 
 ## Quick Tasks Completed
 
@@ -347,9 +352,9 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 
 ## Session Continuity
 
-**Stopped at:** Completed 17-06-PLAN.md
+**Stopped at:** Completed 17-08-PLAN.md
 
-Last session: 2026-09-08T11:53:53.821Z
+Last session: 2026-09-08T12:11:16.482Z
 clean base). Next step: `/gsd-execute-phase 16 --plan 03` (GET /v1/version + DOCS.md + README + pre-commit config)
 Resume file: None
 
@@ -382,3 +387,6 @@ skipped; Phase 16 ready to plan_
 - [Phase 17]: The optional ff_only request body defaults to false, implementing 17-03's D-10/D-12 resolution: a bare pull on a pinned repo re-lands on its ref; only an explicit true triggers the 400 refusal
 - [Phase 17]: handlers.statusForCode is the single error_code to HTTP status table for all five Phase 17 endpoints; 17-08 must call writeError/writeGitError instead of choosing a status
 - [Phase 17]: auditRedactions is the single emission point for the SEC-03 redaction.audit record and is silent on a zero-redaction page; 17-08's GetRun calls it exactly once per response
+- [Phase 17]: 17-08: GetRun calls 17-06's auditRedactions (not an inline slog record) as the single SEC-03 emission point — The plan sketched a second emission point under a different record name (iac_runner.redaction.audit vs redaction.audit), which would have broken the exactly-once contract and left ROADMAP SC-10 unmet while looking satisfied. WINDOWS.md entry 1 is now fixed.
+- [Phase 17]: 17-08: NewRouter appends the three Phase 17 dependencies after the Phase 16 arguments; main.go passes nil with a TODO(17-07) — Appending (not reordering) keeps the RUN-01 /v1/version mount and the auth gate provably untouched. The nils are the deliberate plan boundary: 17-08 owns the router mount, 17-07 owns the startup wiring, and go build ./... exiting 0 is a Task 3 acceptance criterion.
+- [Phase 17]: 17-08: read-handler error bodies use contract.ErrCodeApplyFailed (500) and contract.ErrCodeRunInvalidDir (400) instead of the plan's off-taxonomy "internal" literal — D-19/D-20 require a real ErrCode* value on every 4xx/5xx, and statusForCode("internal") would have fallen through to 502 — disagreeing with the status the handler wrote. run_invalid_dir is the request-shape slot 17-06 already established.

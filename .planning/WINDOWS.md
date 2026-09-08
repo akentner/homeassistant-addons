@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 1
+open_count: 0
 waived_count: 0
-fixed_count: 0
+fixed_count: 1
 total_count: 1
-last_updated: 2026-09-08T11:50:39.004Z
+last_updated: 2026-09-08T12:08:09.469Z
 ---
 
 # Broken Windows Ledger
@@ -15,7 +15,7 @@ last_updated: 2026-09-08T11:50:39.004Z
 
 | id | phase | kind | file | line | description | status | reason | recorded_at | resolved_at |
 |----|-------|------|------|------|-------------|--------|--------|-------------|-------------|
-| 1 | 17 | unmet-truth | iac-runner/internal/httpapi/handlers/redaction_audit.go | 51 | auditRedactions is implemented and unit-tested but has no production caller until 17-08 mounts GET /v1/runs/{id}; ROADMAP SC-10 is not observable end-to-end until then | open |  | 2026-09-08T11:50:39.004Z |  |
+| 1 | 17 | unmet-truth | iac-runner/internal/httpapi/handlers/redaction_audit.go | 51 | auditRedactions is implemented and unit-tested but has no production caller until 17-08 mounts GET /v1/runs/{id}; ROADMAP SC-10 is not observable end-to-end until then | fixed |  | 2026-09-08T11:50:39.004Z | 2026-09-08T12:08:09.469Z |
 
 ````json
 [
@@ -26,10 +26,10 @@ last_updated: 2026-09-08T11:50:39.004Z
     "file": "iac-runner/internal/httpapi/handlers/redaction_audit.go",
     "line": 51,
     "description": "auditRedactions is implemented and unit-tested but has no production caller until 17-08 mounts GET /v1/runs/{id}; ROADMAP SC-10 is not observable end-to-end until then",
-    "status": "open",
+    "status": "fixed",
     "reason": "",
     "recorded_at": "2026-09-08T11:50:39.004Z",
-    "resolved_at": null
+    "resolved_at": "2026-09-08T12:08:09.469Z"
   }
 ]
 ````
