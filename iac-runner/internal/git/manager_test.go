@@ -269,7 +269,7 @@ func TestManagerCloneUnpinnedUsesBranchSingleBranch(t *testing.T) {
 	if len(f.calls) != 1 {
 		t.Fatalf("Clone ran %d commands, want 1: %v", len(f.calls), f.subcommands())
 	}
-	want := []string{"clone", "--branch", "main", "--single-branch", "git@github.com:acme/infra.git", m.WorkTree("infra")}
+	want := []string{"clone", "--branch", "main", "--single-branch", "--", "git@github.com:acme/infra.git", m.WorkTree("infra")}
 	if got := callAt(t, f, 0).args; !argsEqual(got, want) {
 		t.Errorf("clone args = %v, want %v", got, want)
 	}
@@ -303,7 +303,7 @@ func TestManagerClonePinnedFetchesAndChecksOutRef(t *testing.T) {
 	if got := callAt(t, f, 0).args; strings.Contains(strings.Join(got, " "), "--branch") {
 		t.Errorf("pinned clone args = %v, want no --branch", got)
 	}
-	if want := []string{"fetch", "origin", "abc123"}; !argsEqual(callAt(t, f, 1).args, want) {
+	if want := []string{"fetch", "origin", "--", "abc123"}; !argsEqual(callAt(t, f, 1).args, want) {
 		t.Errorf("fetch args = %v, want %v", callAt(t, f, 1).args, want)
 	}
 	if want := []string{"checkout", "--detach", "FETCH_HEAD"}; !argsEqual(callAt(t, f, 2).args, want) {
@@ -508,7 +508,7 @@ func TestManagerPullUnpinnedRunsFastForward(t *testing.T) {
 		t.Fatalf("Pull: %v", err)
 	}
 	// D-11: an unpinned repo fast-forwards its configured branch.
-	if want := []string{"pull", "--ff-only", "origin", "main"}; !argsEqual(callAt(t, f, 0).args, want) {
+	if want := []string{"pull", "--ff-only", "origin", "--", "main"}; !argsEqual(callAt(t, f, 0).args, want) {
 		t.Errorf("pull args = %v, want %v", callAt(t, f, 0).args, want)
 	}
 	if callAt(t, f, 0).workDir != m.WorkTree("infra") {
@@ -529,7 +529,7 @@ func TestManagerPullUnpinnedUsesConfiguredBranch(t *testing.T) {
 	if _, err := m.Pull(context.Background(), "infra", true); err != nil {
 		t.Fatalf("Pull: %v", err)
 	}
-	if want := []string{"pull", "--ff-only", "origin", "production"}; !argsEqual(callAt(t, f, 0).args, want) {
+	if want := []string{"pull", "--ff-only", "origin", "--", "production"}; !argsEqual(callAt(t, f, 0).args, want) {
 		t.Errorf("pull args = %v, want %v", callAt(t, f, 0).args, want)
 	}
 }
@@ -543,7 +543,7 @@ func TestManagerPullPinnedFetchesAndChecksOut(t *testing.T) {
 		t.Fatalf("Pull: %v", err)
 	}
 	// D-10: a pinned repo re-lands on its ref instead of fast-forwarding.
-	if want := []string{"fetch", "origin", "v1.2.3"}; !argsEqual(callAt(t, f, 0).args, want) {
+	if want := []string{"fetch", "origin", "--", "v1.2.3"}; !argsEqual(callAt(t, f, 0).args, want) {
 		t.Errorf("fetch args = %v, want %v", callAt(t, f, 0).args, want)
 	}
 	if want := []string{"checkout", "--detach", "FETCH_HEAD"}; !argsEqual(callAt(t, f, 1).args, want) {

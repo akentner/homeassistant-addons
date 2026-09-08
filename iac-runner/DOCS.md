@@ -96,6 +96,17 @@ Default: `[]` (empty). List of dicts; each entry has `name`, `url`, `branch`, `r
 `^(git@|ssh://).+$`); the runner re-validates every entry at startup and refuses to start on a malformed or duplicated
 entry, because a silently-dropped repo would surface much later as an inexplicable `run_unknown_repo`.
 
+The runner's own validation is the stricter of the two, because a hand-edited `/data/options.json` bypasses the
+Supervisor schema entirely:
+
+- `url` must match `^(git@|ssh://).+$`. That rules out git's `ext::` transport (which executes a command) and any
+  value starting with `-`, which git would parse as an option.
+- `branch` and `ref` must match `^[A-Za-z0-9][A-Za-z0-9._/+-]{0,254}$` — no leading `-`, no whitespace, no shell
+  metacharacters. Both land in a positional argv slot.
+
+Every git invocation additionally passes `--` before its operands, so even an accepted value can never be re-read as
+an option.
+
 Each entry is cloned into `/data/repos/<name>/` at startup. `branch` defaults to `main` when empty. A non-empty `ref`
 pins the checkout to that commit or tag and takes precedence over `branch`.
 

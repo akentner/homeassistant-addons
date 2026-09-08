@@ -315,6 +315,8 @@ func TestRepoConfigValidateAccepts(t *testing.T) {
 		{name: "dotted name", repo: RepoConfig{Name: "home.lab", URL: "git@github.com:a/b.git"}},
 		{name: "dashed name", repo: RepoConfig{Name: "home-lab_1", URL: "git@github.com:a/b.git"}},
 		{name: "ref pinned", repo: RepoConfig{Name: "infra", URL: "git@github.com:a/b.git", Ref: "abc1234"}},
+		{name: "tag ref", repo: RepoConfig{Name: "infra", URL: "git@github.com:a/b.git", Ref: "v1.2.3"}},
+		{name: "slashed branch", repo: RepoConfig{Name: "infra", URL: "git@github.com:a/b.git", Branch: "release/2026.09"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -340,6 +342,21 @@ func TestRepoConfigValidateRejects(t *testing.T) {
 		{name: "https url", repo: RepoConfig{Name: "infra", URL: "https://github.com/x/y.git"}},
 		{name: "http url", repo: RepoConfig{Name: "infra", URL: "http://github.com/x/y.git"}},
 		{name: "uppercase https url", repo: RepoConfig{Name: "infra", URL: "HTTPS://github.com/x/y.git"}},
+		// WR-04: the guard claimed to mirror the config.yaml schema
+		// (`^(git@|ssh://).+$`) but only rejected the http(s)
+		// prefixes, so git's command-executing ext:: transport and any
+		// option-shaped value walked straight into git's argv.
+		{name: "ext transport", repo: RepoConfig{Name: "infra", URL: "ext::sh -c 'touch /tmp/pwned'"}},
+		{name: "file url", repo: RepoConfig{Name: "infra", URL: "file:///etc"}},
+		{name: "option-shaped url", repo: RepoConfig{Name: "infra", URL: "--upload-pack=touch /tmp/pwned"}},
+		{name: "option-shaped ref", repo: RepoConfig{
+			Name: "infra", URL: "git@github.com:a/b.git", Ref: "--upload-pack=touch /tmp/pwned"}},
+		{name: "option-shaped branch", repo: RepoConfig{
+			Name: "infra", URL: "git@github.com:a/b.git", Branch: "--config=core.pager=id"}},
+		{name: "ref with a space", repo: RepoConfig{
+			Name: "infra", URL: "git@github.com:a/b.git", Ref: "main; rm -rf /"}},
+		{name: "ref with a shell metachar", repo: RepoConfig{
+			Name: "infra", URL: "git@github.com:a/b.git", Ref: "$(id)"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

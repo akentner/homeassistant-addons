@@ -362,13 +362,19 @@ func (m *Manager) cloneOutcome(ctx context.Context, name string) CloneOutcome {
 }
 
 func (m *Manager) cloneAttempt(ctx context.Context, cfg RepoConfig, workTree string, env []string) error {
+	// "--" separates options from operands. RepoConfig.Validate
+	// already rejects a url or ref that could be read as an option,
+	// but the separator is what makes that a belt AND braces: without
+	// it `git fetch origin --upload-pack=<cmd>` demonstrably EXECUTES
+	// the command, while with it git rejects the same string as an
+	// invalid refspec.
 	args := []string{"clone"}
 	if cfg.Pinned() {
 		// D-10: a pinned repo clones full history and then lands on the
 		// ref, because --branch cannot take a bare commit SHA.
-		args = append(args, cfg.URL, workTree)
+		args = append(args, "--", cfg.URL, workTree)
 	} else {
-		args = append(args, "--branch", cfg.EffectiveBranch(), "--single-branch", cfg.URL, workTree)
+		args = append(args, "--branch", cfg.EffectiveBranch(), "--single-branch", "--", cfg.URL, workTree)
 	}
 
 	message := fmt.Sprintf("clone of repo %s failed", cfg.Name)
@@ -387,7 +393,7 @@ func (m *Manager) cloneAttempt(ctx context.Context, cfg RepoConfig, workTree str
 func (m *Manager) landOnRef(ctx context.Context, cfg RepoConfig, workTree string, env []string) error {
 	message := fmt.Sprintf("fetch of ref %s for repo %s failed", cfg.Ref, cfg.Name)
 	if _, err := m.git(ctx, cfg.Name, workTree, env, contract.ErrCodeGitRefNotFound, message,
-		"fetch", "origin", cfg.Ref); err != nil {
+		"fetch", "origin", "--", cfg.Ref); err != nil {
 		return err
 	}
 
@@ -444,7 +450,7 @@ func (m *Manager) Pull(ctx context.Context, name string, ffOnly bool) (PullOutco
 	} else {
 		message := fmt.Sprintf("pull of repo %s failed", name)
 		if _, err := m.git(ctx, name, workTree, env, contract.ErrCodeGitNonFastForward, message,
-			"pull", "--ff-only", "origin", cfg.EffectiveBranch()); err != nil {
+			"pull", "--ff-only", "origin", "--", cfg.EffectiveBranch()); err != nil {
 			return PullOutcome{}, err
 		}
 		out.Mode = PullModeFastForward

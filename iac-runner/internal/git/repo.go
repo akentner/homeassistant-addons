@@ -29,6 +29,20 @@ const defaultBranch = "main"
 // URL path segment in /v1/repos/{name}/pull.
 var repoNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
 
+// repoURLRe mirrors the config.yaml schema regex for `url`. Rejecting
+// only the http(s) prefixes was strictly weaker than the schema this
+// guard claims to re-implement: it accepted git's `ext::` transport
+// (`ext::sh -c …` runs a command) and any value starting with `-`,
+// which git parses as an option (`--upload-pack=…`, `--config=…`).
+var repoURLRe = regexp.MustCompile(`^(git@|ssh://).+$`)
+
+// refRe bounds `ref` and `branch`. Neither the HA schema (`str?`) nor
+// this guard validated them at all, yet both land in a positional
+// argv slot — `git fetch origin <ref>`, `git pull --ff-only origin
+// <branch>`. The leading character is deliberately not `-`, and the
+// 255-byte ceiling matches git's own ref-name limit.
+var refRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/+-]{0,254}$`)
+
 // RepoConfig is one entry of the `repos` Options list (GIT-01). Field
 // names match the HA schema keys exactly so main.go can unmarshal
 // /data/options.json straight into []RepoConfig.
@@ -67,12 +81,23 @@ func (r RepoConfig) Validate() error {
 	if strings.TrimSpace(r.URL) == "" {
 		return fmt.Errorf("git: repo %q has an empty url", r.Name)
 	}
-	lower := strings.ToLower(strings.TrimSpace(r.URL))
-	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+	if !repoURLRe.MatchString(strings.TrimSpace(r.URL)) {
 		return fmt.Errorf(
-			"git: repo %q url must be an SSH url (git@host:path or ssh://…); "+
-				"https clones cannot authenticate with the deploy key at /data/keys/%s.key",
-			r.Name, r.Name)
+			"git: repo %q url must be an SSH url matching %s; "+
+				"an https clone cannot authenticate with the deploy key at /data/keys/%s.key",
+			r.Name, repoURLRe.String(), r.Name)
+	}
+	for _, f := range []struct{ field, value string }{
+		{"ref", r.Ref},
+		{"branch", r.Branch},
+	} {
+		if f.value == "" {
+			continue
+		}
+		if !refRe.MatchString(f.value) {
+			return fmt.Errorf("git: repo %q %s %q is not a valid ref name: must match %s",
+				r.Name, f.field, f.value, refRe.String())
+		}
 	}
 	return nil
 }
