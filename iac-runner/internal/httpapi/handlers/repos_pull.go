@@ -28,12 +28,20 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"iac-runner/internal/contract"
 	"iac-runner/internal/git"
 )
+
+// pullTimeout bounds one POST /v1/repos/{name}/pull. A pull is a
+// synchronous network operation (unlike a plan or an apply, which get
+// a run id and a worker goroutine), so the handler owns its deadline.
+// Two minutes is generous for a fast-forward on a homelab repo and
+// well inside the server's WriteTimeout.
+const pullTimeout = 2 * time.Minute
 
 // reposPullResponse is the 200 body of POST /v1/repos/{name}/pull.
 // Mode is "ff-only" for a fast-forward pull on the configured branch
@@ -106,7 +114,16 @@ func reposPullHandler(p repoPuller) http.HandlerFunc {
 			return
 		}
 
-		outcome, err := p.Pull(r.Context(), name, body.FFOnly)
+		// A pull spawns a network-touching git process, and
+		// r.Context() alone bounds it by the CLIENT's patience: a curl
+		// left open would hold a git process indefinitely. The
+		// deadline is the runner's own ceiling; ssh's ConnectTimeout
+		// (17-03) is what makes an unreachable remote fail faster
+		// than this.
+		ctx, cancel := context.WithTimeout(r.Context(), pullTimeout)
+		defer cancel()
+
+		outcome, err := p.Pull(ctx, name, body.FFOnly)
 		if err != nil {
 			var ge *git.Error
 			if !errors.As(err, &ge) {

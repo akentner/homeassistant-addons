@@ -243,11 +243,19 @@ func (m *Manager) unknownRepoError(name string) *Error {
 //   - BatchMode=yes plus GIT_TERMINAL_PROMPT=0 — a missing or
 //     passphrase-protected key must fail fast, never block a job
 //     goroutine on an interactive prompt forever.
+//   - ConnectTimeout=10 — a blackholed or firewalled remote (a
+//     Tailscale peer that is down, a DNS answer that routes nowhere)
+//     would otherwise hang on TCP with no bound of its own, three
+//     attempts per repo, serially across repos. ROADMAP SC-2's "a
+//     failed clone never blocks startup" has to hold for a HANGING
+//     clone too, and the context deadline the caller sets can only
+//     cover the whole sequence, not make each attempt fail fast.
 func (m *Manager) sshEnv(name string) []string {
 	keyPath := filepath.Join(m.keysDir, name+".key")
 	knownHosts := filepath.Join(m.keysDir, "known_hosts")
 	sshCmd := fmt.Sprintf(
-		"ssh -i %s -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=%s -o BatchMode=yes",
+		"ssh -i %s -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=%s "+
+			"-o BatchMode=yes -o ConnectTimeout=10",
 		keyPath, knownHosts)
 	return append(baseEnv(),
 		"GIT_SSH_COMMAND="+sshCmd,

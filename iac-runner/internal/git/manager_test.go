@@ -460,6 +460,9 @@ func TestManagerSSHEnvCarriesKeyAndKnownHosts(t *testing.T) {
 		"StrictHostKeyChecking=yes",
 		"UserKnownHostsFile=" + filepath.Join(keysDir, "known_hosts"),
 		"BatchMode=yes",
+		// WR-05: an unreachable remote must fail fast rather than
+		// hang on TCP for the whole retry curve.
+		"ConnectTimeout=10",
 	} {
 		if !strings.Contains(sshCmd, want) {
 			t.Errorf("GIT_SSH_COMMAND = %q, want substring %q", sshCmd, want)

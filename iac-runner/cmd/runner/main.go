@@ -46,6 +46,12 @@ const defaultKeysDir = defaultDataDir + "/keys"
 // can contain private tfvars and only this process reads them.
 const defaultReposDir = defaultDataDir + "/repos"
 
+// startupCloneTimeout bounds the whole best-effort startup clone
+// sweep. ROADMAP SC-2 requires that a failed clone never blocks
+// startup; a HANGING clone is the same requirement with a different
+// failure mode, and a hang has no bound of its own.
+const startupCloneTimeout = 5 * time.Minute
+
 // defaultRunsDir holds one directory per run (meta.json + output.log +
 // plan.tfplan). runs.NewStore creates it with 0700; the retention
 // ticker (CONTEXT D-25) bounds its growth.
@@ -232,7 +238,14 @@ func main() {
 	// per-repo outcomes are logged here so a failed clone is
 	// operator-visible without blocking startup (CONTEXT D-14 —
 	// a later /v1/plan for that repo answers git_clone_missing).
-	for _, outcome := range gitMgr.CloneAll(context.Background()) {
+	// The deadline is what keeps a HANGING remote from blocking the
+	// listener: CloneAll retries three times per repo, serially across
+	// repos, and without a bound the process never reaches `listening`
+	// — so /healthz cannot answer and the operator sees an add-on that
+	// "started" with no diagnosis. Per-attempt fail-fast is ssh's
+	// ConnectTimeout (17-03); this is the ceiling for the whole sweep.
+	cloneCtx, cancelClone := context.WithTimeout(context.Background(), startupCloneTimeout)
+	for _, outcome := range gitMgr.CloneAll(cloneCtx) {
 		switch {
 		case outcome.Err != nil:
 			slog.Warn("git_clone_failed",
@@ -249,6 +262,7 @@ func main() {
 			)
 		}
 	}
+	cancelClone()
 
 	// runs.NewStore does os.MkdirAll(runsDir, 0700), so /data/runs
 	// exists by the time the sweep below reads it.

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -334,5 +335,41 @@ func TestReposPullEmptyJSONBodyIsLegal(t *testing.T) {
 	}
 	if len(p.calls) != 1 || p.calls[0].ffOnly {
 		t.Errorf("calls = %+v, want one call with ffOnly=false", p.calls)
+	}
+}
+
+// pullCtxPuller records the context Pull received, which is what the
+// WR-05 assertion is actually about.
+type pullCtxPuller struct {
+	stubPuller
+	ctx context.Context
+}
+
+func (p *pullCtxPuller) Pull(ctx context.Context, name string, ffOnly bool) (git.PullOutcome, error) {
+	p.ctx = ctx
+	return p.stubPuller.Pull(ctx, name, ffOnly)
+}
+
+// TestReposPullBoundsTheGitDeadline is the WR-05 regression: a pull
+// runs a network-touching git process synchronously, so it must carry
+// the runner's own deadline rather than inheriting only the client's
+// patience — http.Server sets no ReadTimeout on the request context,
+// so a curl left open would otherwise hold a git process open too.
+func TestReposPullBoundsTheGitDeadline(t *testing.T) {
+	p := &pullCtxPuller{stubPuller: *knownRepo()}
+
+	rec := servePull(t, p, "prod", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", rec.Code, rec.Body.String())
+	}
+	if p.ctx == nil {
+		t.Fatal("Pull was not called")
+	}
+	deadline, ok := p.ctx.Deadline()
+	if !ok {
+		t.Fatal("Pull got a context with no deadline — a hanging remote would be bounded only by the client")
+	}
+	if remaining := time.Until(deadline); remaining <= 0 || remaining > pullTimeout {
+		t.Errorf("deadline is %v out, want within (0, %v]", remaining, pullTimeout)
 	}
 }
