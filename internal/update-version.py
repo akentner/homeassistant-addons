@@ -355,6 +355,16 @@ Examples:
     if readme_success:
         success_count += 1
 
+    # config_new is the ONLY source of the git tag (see the comment at the
+    # update_*() calls above). update_config_yaml returns "" for it when
+    # config.yaml has no matching `version:` line or the read raised, and the
+    # tag paths below never checked: that produced — and PUSHED — the tag
+    # "<addon>/v", which triggers the per-add-on build workflow. Refuse instead.
+    if not config_new:
+        print(f"❌ Could not determine the config.yaml version for {args.addon_name} — refusing to tag")
+        print("   Fix the `version:` line in config.yaml, then re-run.")
+        return 1
+
     # ── Cross-artifact Provider bump (TOFU-03: Bridge+Provider share one release cycle) ──
     # When the addon being bumped is terraform-bridge, also touch
     # terraform-provider-homeassistant/build.yaml's VERSION field with the
