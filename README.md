@@ -158,7 +158,8 @@ not practical.
   `<addon>/v<version>` git tag**. Images are built by the per-add-on workflows (`build-<addon>.yml`, each calling the
   reusable `_build-template.yml`), which fire on a `push` to `main` touching `<addon>/**`. Without a pushed version bump
   the HA store sees the new version but the image at `ghcr.io` does not exist → 404. A pre-push hook enforces that any
-  bumped version has a matching tag.
+  bumped version has a matching tag, except for the add-ons on the `LOCAL_BUILD_ADDONS` allowlist in
+  `internal/check-version-tags.sh` — those are built locally by the Supervisor and never pulled from `ghcr.io`.
 - **Auto-update for upstream wrappers** — add-ons that wrap an upstream project carry a `.upstream.yaml` and participate
   in the daily `Auto Update` GitHub Actions workflow. The workflow bumps `build.yaml` and `config.yaml` to the latest
   upstream release and adds the release notes to `CHANGELOG.md`.

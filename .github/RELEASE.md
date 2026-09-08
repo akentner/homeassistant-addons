@@ -112,7 +112,9 @@ reason — anyone reading the comment and following the pointer now lands on a r
    ```
 
    The `internal/check-version-tags.sh` pre-push hook verifies the `<addon>/v<version>` tag already exists locally or on
-   origin before letting the branch push through.
+   origin before letting the branch push through. Add-ons on the `LOCAL_BUILD_ADDONS` allowlist in that script are
+   exempt — they are built locally by the Supervisor and never pulled from ghcr.io, so no release tag is required. That
+   array is the source of truth for the current membership.
 
 3. **Optional: GitHub Release page.** If you have the `gh` CLI and want the release notes rendered on the GitHub
    Releases UI:
@@ -153,7 +155,8 @@ If the tag and the 3-file set ever drift, the canonical fix order is:
    ```
 
    The pre-push hook will refuse a branch push until a tag named `<addon>/v<version>` exists for every modified
-   `config.yaml`.
+   `config.yaml`, except for add-ons on the `LOCAL_BUILD_ADDONS` allowlist in `internal/check-version-tags.sh` — those
+   are built locally by the Supervisor and need no release tag.
 
 ## Auto-update path
 
