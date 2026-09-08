@@ -334,7 +334,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | Phase 17 P05 | 25 min   | 3 tasks | 5 files |
 | Phase 17 P06 | 19 min   | 3 tasks | 8 files |
 | Phase 17 P08 | 10 min   | 3 tasks | 7 files |
-| Phase 17 P07 | 25 min | 4 tasks | 8 files |
+| Phase 17 P07 | 25 min   | 4 tasks | 8 files |
 
 ## Quick Tasks Completed
 
@@ -356,8 +356,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 
 **Stopped at:** Completed 17-07-PLAN.md (Phase 17 code-complete: 8/8 plans)
 
-Last session: 2026-09-08T12:37:49.668Z
-DOCS.md + README + pre-commit config) Resume file: None
+Last session: 2026-09-08T12:37:49.668Z DOCS.md + README + pre-commit config) Resume file: None
 
 ---
 
@@ -404,6 +403,14 @@ skipped; Phase 16 ready to plan_
   (400) instead of the plan's off-taxonomy "internal" literal — D-19/D-20 require a real ErrCode* value on every
   4xx/5xx, and statusForCode("internal") would have fallen through to 502 — disagreeing with the status the handler
   wrote. run_invalid_dir is the request-shape slot 17-06 already established.
-- [Phase 17]: runs_retention_hours <= 0 is clamped to the 24h default at startup with a runs_retention_invalid warning — 17-04's tickInterval floors the cadence at 1 minute and starts normally for retention=0, and Rotate(0) treats every terminal run as expired — so trusting a hand-edited /data/options.json would delete all finished runs on the first tick.
-- [Phase 17]: The iac-runner/v0.2.0-0 git tag is intentionally outstanding — no tag created, nothing pushed — Pushing the tag fires the build-iac-runner image workflow while the v1.2 Phase 8 Cloudflare prerequisite is still open. Release command left for the operator: make update-version ADDON=iac-runner VERSION=0.2.0-0 (no NO_* flags).
-- [Phase 17]: No backend-credential env projection was invented for the tofu child process — internal/jobq/exec.go attributes the export to 17-07 but no Phase 17 requirement covers it and nothing in the repo implements it. Credential-env minimality is therefore trivially satisfied (empty); designing which variables to project belongs to Phase 19 SC-3's three-backend matrix.
+- [Phase 17]: runs_retention_hours <= 0 is clamped to the 24h default at startup with a runs_retention_invalid warning —
+  17-04's tickInterval floors the cadence at 1 minute and starts normally for retention=0, and Rotate(0) treats every
+  terminal run as expired — so trusting a hand-edited /data/options.json would delete all finished runs on the first
+  tick.
+- [Phase 17]: The iac-runner/v0.2.0-0 git tag is intentionally outstanding — no tag created, nothing pushed — Pushing
+  the tag fires the build-iac-runner image workflow while the v1.2 Phase 8 Cloudflare prerequisite is still open.
+  Release command left for the operator: make update-version ADDON=iac-runner VERSION=0.2.0-0 (no NO_* flags).
+- [Phase 17]: No backend-credential env projection was invented for the tofu child process — internal/jobq/exec.go
+  attributes the export to 17-07 but no Phase 17 requirement covers it and nothing in the repo implements it.
+  Credential-env minimality is therefore trivially satisfied (empty); designing which variables to project belongs to
+  Phase 19 SC-3's three-backend matrix.
