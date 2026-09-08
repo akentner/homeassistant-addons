@@ -353,7 +353,12 @@ func TestManagerCloneRemovesPartialWorkTreeBetweenAttempts(t *testing.T) {
 	// Simulate git leaving a partial checkout behind on every failure:
 	// without cleanup, attempt 2 would fail with "destination path
 	// already exists" for a reason unrelated to the real fault.
-	f.respond = func(recordedCall) (CommandResult, error) {
+	f.respond = func(call recordedCall) (CommandResult, error) {
+		// m is still nil while NewManager runs its safe.directory guard,
+		// which is not a clone and must not be scripted here.
+		if m == nil || len(call.args) == 0 || call.args[0] != "clone" {
+			return CommandResult{}, nil
+		}
 		if err := os.MkdirAll(filepath.Join(m.WorkTree("infra"), ".git"), 0o700); err != nil {
 			t.Fatalf("simulate partial clone: %v", err)
 		}
