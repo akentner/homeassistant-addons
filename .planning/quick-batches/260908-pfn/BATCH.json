@@ -1,0 +1,71 @@
+{
+  "base_revision": "457e67558308e7a8a287557d08fcc2ddb81a4562",
+  "batch_id": "260908-pfn",
+  "created_at": "2026-09-08T16:18:47.895Z",
+  "items": [
+    {
+      "client_id": null,
+      "commit": null,
+      "depends_on": [],
+      "description": "Fix the iac-runner Options schema so Home Assistant renders the state_backend picker correctly. In iac-runner/config.yaml line 35, replace the value list(match(^(r2|s3|local)$)) with list(r2|s3|local). Home Assistant's options validator splits the content of list(...) on the pipe character, so the nested match(...) is not treated as a regex at all \u2014 the UI currently renders three bogus radio options reading \"match(^(r2\", \"s3\" and \"local)$)\" (confirmed by the user from a screenshot of the add-on configuration page). Every other add-on in this repo uses plain literals inside list(...) \u2014 see coding-assistants, meridian, gatus, phone-logger, authentik, network-tools. Validation is NOT lost by dropping match(): list(...) constrains the value to exactly those three literals by itself, and the Go code validates again. Do not touch bind_address, which legitimately uses a bare match(^auto$|^(...)$)? whose pipe stays inside the regex \u2014 terraform-bridge ships the identical string. In the SAME commit, set the version field in iac-runner/config.yaml to \"0.2.1-1\". This is an add-on-only subpatch bump per the repo's 3-file versioning scheme: build.yaml keeps args.VERSION \"0.2.1\" and RUNNER_VERSION \"0.2.1\", and README.md keeps its v0.2.1 badges. internal/update-version.py cannot emit a subpatch (it always writes X.Y.Z-0 and has no increment flag), so this single version edit is deliberately manual and has been explicitly approved by the user \u2014 do not route it through update-version.py and do not change build.yaml or README.md. Verify with: make validate-versions (must pass) and make lint (must exit 0).",
+      "directory": null,
+      "dispatched_base": "457e67558308e7a8a287557d08fcc2ddb81a4562",
+      "dispatched_branch": "worktree-agent-a7ce52853e502b65e",
+      "dispatched_worktree": "/home/akentner/Projects/homeassistant-addons/.claude/worktrees/agent-a7ce52853e502b65e",
+      "failure_reason": null,
+      "planned_files": [
+        "iac-runner/config.yaml",
+        "iac-runner/DOCS.md",
+        ".planning/REQUIREMENTS.md"
+      ],
+      "quick_id": "260908-pfo",
+      "status": "pending",
+      "wave": 0,
+      "worktree": null
+    },
+    {
+      "client_id": null,
+      "commit": "a4ca23f",
+      "depends_on": [],
+      "description": "Add a build workflow for the iac-runner add-on. There is currently no .github/workflows/build-iac-runner.yml at all \u2014 the repo has build workflows for authentik, coding-assistants, gatus, markdown-renderer, meridian, network-tools, phone-logger and terraform-bridge, but not iac-runner. Consequence: the release tag iac-runner/v0.2.1 was pushed and triggered nothing, so no image was ever published. Model the new file on .github/workflows/build-terraform-bridge.yml, which is the closest analog (also a Go add-on, also amd64-only) and which delegates to the reusable .github/workflows/_build-template.yml. Match the existing conventions exactly: explicit timeout-minutes on every job (the Phase-8 pattern), the same trigger shape (push to main touching the add-on's path, plus the addon/v* tag trigger), and the same ghcr image naming. Must pass actionlint with the repo's .actionlint.yml.",
+      "directory": null,
+      "dispatched_base": "457e67558308e7a8a287557d08fcc2ddb81a4562",
+      "dispatched_branch": "worktree-agent-a1268f7d03de24f94",
+      "dispatched_worktree": "/home/akentner/Projects/homeassistant-addons/.claude/worktrees/agent-a1268f7d03de24f94",
+      "failure_reason": null,
+      "planned_files": [
+        ".github/workflows/build-iac-runner.yml",
+        ".github/RELEASE.md"
+      ],
+      "quick_id": "260908-pfp",
+      "status": "complete",
+      "wave": 0,
+      "worktree": null
+    },
+    {
+      "client_id": null,
+      "commit": "812f028",
+      "depends_on": [],
+      "description": "Make the pre-push version-tag hook stop demanding a release tag for add-ons that are built locally by the Supervisor. internal/check-version-tags.sh currently blocks a push whenever an add-on's config.yaml version has no matching git tag, and its own error text gives the rationale: \"The build workflow triggers on a <addon>/v* tag push. Without the tag, HA-Store-Refresh sees the new version but the Docker image at ghcr.io doesn't exist -> 404 on update.\" That rationale only holds for add-ons whose config.yaml declares an image: key, i.e. those that pull a prebuilt image from ghcr.io. Add-ons with NO image: key \u2014 currently iac-runner and terraform-bridge \u2014 are built from their Dockerfile by the Supervisor on the Home Assistant host and never pull from ghcr, so for them the 404 scenario cannot occur and the hook is pushing the user toward a release that publishes nothing. Change the hook to skip the tag requirement for an add-on whose config.yaml has no image: key, and say so in the skip message so the behaviour is visible rather than silent. Keep the existing primary_tag / legacy_tag subpatch handling intact for add-ons that DO declare image:. Must pass shellcheck with the repo's ignore set (SC1091, SC2034).",
+      "directory": null,
+      "dispatched_base": null,
+      "dispatched_branch": null,
+      "dispatched_worktree": null,
+      "failure_reason": null,
+      "planned_files": [
+        "internal/check-version-tags.sh",
+        "internal/setup-hooks.sh",
+        "docs/UPDATE_VERSION.md",
+        ".github/RELEASE.md",
+        "README.md",
+        "AGENTS.md"
+      ],
+      "quick_id": "260908-pfq",
+      "status": "complete",
+      "wave": 1,
+      "worktree": null
+    }
+  ],
+  "options": {},
+  "schema_version": 1
+}

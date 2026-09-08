@@ -349,6 +349,8 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260507-w85    | coding-assistants: dedizierter zigbee2mqtt Config-Block mit auto-MCP-Registrierung            | 2026-05-07 | e4d1bc4 | [quick/260507-w85-coding-assistants-dedizierter-zigbee2mqt](./quick/260507-w85-coding-assistants-dedizierter-zigbee2mqt/) |
 | 260628-eqo3yb | network-tools: Icon + Flap-Detection (disconnect_threshold, consecutive_failures)             | 2026-06-28 | 7f53c82 | [quick/260628-eqo3yb-network-tools-icon-flap-detection](./quick/260628-eqo3yb-network-tools-icon-flap-detection/)         |
 | 260901-na1    | Fix 6 pre-existing lint failures on main (EOF, shellcheck, prettier, actionlint, 2 real bugs) | 2026-09-01 | 87dc714 | [quick/260901-na1-fix-6-pre-existing-lint-failures-on-main](./quick/260901-na1-fix-6-pre-existing-lint-failures-on-main/) |
+| 260908-pfp    | Add .github/workflows/build-iac-runner.yml via _build-template.yml                            | 2026-09-08 | a4ca23f | /home/akentner/Projects/homeassistant-addons/.planning/quick/add-a-build-workflow-for-the-iac-runner-add-on-there-is-curr |
+| 260908-pfq    | Scope the pre-push release-tag check to non-allowlisted add-ons                               | 2026-09-08 | 812f028 | /home/akentner/Projects/homeassistant-addons/.planning/quick/make-the-pre-push-version-tag-hook-stop-demanding-a-release  |
 
 ## Session Continuity
 
