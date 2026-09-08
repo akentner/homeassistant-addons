@@ -543,6 +543,19 @@ Notably absent: `SUPERVISOR_TOKEN`. The Supervisor injects it into every add-on 
 against the Core API from inside a provider or a provisioner. `git` and the `ssh` it spawns get the same treatment plus
 `GIT_SSH_COMMAND` / `GIT_TERMINAL_PROMPT=0`.
 
+### What the environment allowlist does not contain
+
+The allowlist is an _environment_ boundary, not a process boundary. The `tofu` child inherits the runner's UID (the
+image declares no `USER`, so both run as root) and its mount namespace, so operator IaC, `local-exec` provisioners and
+any third-party provider plugin `tofu init` downloads can **read every file under `/data`** — including each repo's
+deploy key at `/data/keys/<name>.key`, the state-backend credential files, and `/data/initial-iac-runner-token`, which
+holds the runner's own bearer token in plaintext. They can also write `/data/runs/*/meta.json`.
+
+This is an accepted risk, recorded as R-01 in `17-SECURITY.md`: the add-on is single-tenant and you author the IaC being
+executed, so anyone able to submit an apply already controls code the runner runs. The residual exposure is third-party
+provider plugins, which you select. Treat `/data/keys/` as readable by anything you apply, and prefer a deploy key
+scoped to the single repository it serves over one reused across several.
+
 Consequence for state backends: **no backend credentials are projected into the environment yet.** `tofu init` against
 `r2`/`s3` authenticates only if your own IaC supplies credentials another way (a `backend` block reading a file, a
 provider-level credential). The credential projection is deferred to a later phase; `/data/keys/` validation (SEC-01)
