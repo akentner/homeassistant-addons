@@ -8,6 +8,13 @@ import (
 	"iac-runner/internal/contract"
 )
 
+// Compile-time signature lock. The plan's acceptance criteria pin the
+// exported signature with a regex anchored at end-of-line, which no
+// valid Go declaration can satisfy (the language requires `{` on the
+// signature line). This assertion checks the same contract at the type
+// level, where drift is a build failure rather than a grep miss.
+var _ func(string, int, string) (string, string) = Classify
+
 // TestClassify is the GIT-04 taxonomy table: every git stderr family
 // an operator can provoke must land on a distinct contract.ErrCodeGit*
 // value with a non-empty, actionable hint. Unrecognized stderr falls
