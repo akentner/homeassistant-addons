@@ -202,7 +202,16 @@ func main() {
 
 	// Build the router — pass store so the auth middleware can
 	// validate; pass keysValidator so /healthz can probe /data/keys/.
-	router := httpapi.NewRouter(runnerVersion, store, keysValidator)
+	//
+	// TODO(17-07): the last three arguments — *git.Manager,
+	// *runs.Store, *jobq.Queue — are the Phase 17 dependencies and
+	// are still nil here. 17-08 owns the router mount and 17-07 owns
+	// the startup wiring that constructs them, so the nils are the
+	// deliberate seam between those two plans: /v1/version,
+	// /v1/auth/rotate, /healthz and / are fully functional, while the
+	// five Phase 17 endpoints answer 500 (via chi's Recoverer) until
+	// 17-07 replaces these arguments with real dependencies.
+	router := httpapi.NewRouter(runnerVersion, store, keysValidator, nil, nil, nil)
 
 	srv := &http.Server{
 		Addr:              bindIP + ":8125",
