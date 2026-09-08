@@ -83,7 +83,9 @@ type CloneOutcome struct {
 	Err      error
 }
 
-// PullOutcome describes a successful pull.
+// PullOutcome describes a successful pull. Mode is PullModeFastForward
+// (CONTEXT D-11) or PullModeRef (CONTEXT D-10); Head is the commit the
+// working tree ended up on, best-effort.
 type PullOutcome struct {
 	Name string
 	Mode string
@@ -367,7 +369,71 @@ func (m *Manager) landOnRef(ctx context.Context, cfg RepoConfig, workTree string
 	return err
 }
 
-// Pull updates the checkout for name.
+// Pull updates the checkout for name: a fast-forward of the configured
+// branch for an unpinned repo (CONTEXT D-11), or a re-landing on the
+// pinned ref for a pinned one (CONTEXT D-10).
+//
+// Reconciliation of two conflicting locked decisions. D-10 says a pinned
+// repo re-lands on its ref for BOTH the startup clone and
+// POST /v1/repos/{name}/pull. D-12 says a pull against a non-empty `ref`
+// is refused outright with git_ref_pull_incompatible. Both cannot hold
+// for the same request. GIT-03 and ROADMAP SC-3 word the endpoint as
+// "runs `git pull --ff-only` (or the configured ref)", which matches
+// D-10 — so D-10 is the default behavior and D-12 survives as an
+// explicit-conflict guard: only a caller that explicitly asked for
+// fast-forward semantics (`ff_only` in the request body) against a
+// pinned repo is refused, because those two requests genuinely
+// contradict each other. To make D-12 win unconditionally instead, drop
+// the ffOnly term from the guard below and fire on cfg.Pinned() alone.
 func (m *Manager) Pull(ctx context.Context, name string, ffOnly bool) (PullOutcome, error) {
-	return PullOutcome{}, nil
+	cfg, ok := m.repos[name]
+	if !ok {
+		return PullOutcome{}, m.unknownRepoError(name)
+	}
+	// D-14: no git command runs against a missing working tree.
+	if err := m.EnsureCloned(name); err != nil {
+		return PullOutcome{}, err
+	}
+	// D-12 guard — see the reconciliation note above.
+	if ffOnly && cfg.Pinned() {
+		return PullOutcome{}, &Error{
+			Code: contract.ErrCodeGitRefPullIncompatible,
+			Message: fmt.Sprintf(
+				"repo %s is pinned to ref %s; a fast-forward pull is not applicable", name, cfg.Ref),
+			Hint: "drop ff_only from the request, or clear the `ref` Options field to track the `branch` instead",
+		}
+	}
+
+	workTree := m.WorkTree(name)
+	env := m.sshEnv(name)
+	out := PullOutcome{Name: name}
+
+	if cfg.Pinned() {
+		if err := m.landOnRef(ctx, cfg, workTree, env); err != nil {
+			return PullOutcome{}, err
+		}
+		out.Mode = PullModeRef
+	} else {
+		message := fmt.Sprintf("pull of repo %s failed", name)
+		if _, err := m.git(ctx, name, workTree, env, contract.ErrCodeGitNonFastForward, message,
+			"pull", "--ff-only", "origin", cfg.EffectiveBranch()); err != nil {
+			return PullOutcome{}, err
+		}
+		out.Mode = PullModeFastForward
+	}
+
+	out.Head = m.resolveHead(ctx, workTree)
+	return out, nil
+}
+
+// resolveHead reports the commit the working tree ended up on. The
+// lookup is local, so it runs with a plain environment and no deploy
+// key. A failure is non-fatal: a pull that already succeeded must not be
+// reported as failed just because the SHA lookup did not work.
+func (m *Manager) resolveHead(ctx context.Context, workTree string) string {
+	res, err := m.run(ctx, workTree, os.Environ(), "git", "rev-parse", "HEAD")
+	if err != nil || res.ExitCode != 0 {
+		return ""
+	}
+	return strings.TrimSpace(res.Stdout)
 }
