@@ -1,6 +1,6 @@
 name: "IaC Runner"
 description: "Bearer-authenticated OpenTofu/Terraform runner for homelab IaC against R2/S3/local state backends."
-version: "0.2.1-0"
+version: "0.2.1-1"
 slug: "iac-runner"
 init: false
 arch:
@@ -32,7 +32,7 @@ schema:
   bind_address: "match(^auto$|^(([0-9]{1,3}\\.){3}[0-9]{1,3})$)?"
   bind_allowed_subnets:
     - "str?"
-  state_backend: "list(match(^(r2|s3|local)$))"
+  state_backend: "list(r2|s3|local)"
   r2_bucket: "str"
   s3_endpoint: "str"
   s3_bucket: "str"
