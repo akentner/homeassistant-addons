@@ -119,6 +119,10 @@ func (q *Queue) runJob(runID, repo, cleanDir string, kind contract.RunKind, w *r
 
 	var planFile string
 	var args []string
+	// prior/priorRunID are the D-18 artifact this apply consumes, if
+	// any. They are needed after the process returns, which is why
+	// they live outside the switch.
+	var prior, priorRunID string
 	switch kind {
 	case contract.RunKindPlan:
 		// RUN-02: the artifact lands inside the run directory so
@@ -130,6 +134,11 @@ func (q *Queue) runJob(runID, repo, cleanDir string, kind contract.RunKind, w *r
 			"-input=false",
 			"-out=" + planFile,
 		}
+		// D-18 freshness reference: a saved plan is only valid for the
+		// commit it was built against, so record that commit now. An
+		// apply compares it against the working tree's HEAD and
+		// refuses a plan that predates a pull (CR-02).
+		q.recordPlanHead(ctx, runID, repo)
 	case contract.RunKindApply:
 		// RUN-03 + D-17/D-18.
 		args = []string{
@@ -138,7 +147,8 @@ func (q *Queue) runJob(runID, repo, cleanDir string, kind contract.RunKind, w *r
 			"-input=false",
 			"-auto-approve",
 		}
-		if prior := q.priorPlanFile(repo, cleanDir); prior != "" {
+		prior, priorRunID = q.priorPlanFile(ctx, repo, cleanDir)
+		if prior != "" {
 			args = append(args, prior)
 		}
 	default:
@@ -149,28 +159,79 @@ func (q *Queue) runJob(runID, repo, cleanDir string, kind contract.RunKind, w *r
 	if err != nil {
 		return res, "", err
 	}
+	if prior != "" && res.ExitCode == 0 && !res.TimedOut {
+		// D-18 consumption. tofu has applied the saved plan, so the
+		// artifact now describes state that no longer exists: handing
+		// it to a second apply gets it rejected as stale, which is how
+		// /v1/apply became non-idempotent for a reason no error
+		// message here could explain.
+		q.consumePlanArtifact(priorRunID, prior)
+	}
 	return res, planFile, nil
 }
 
+// recordPlanHead stores the repo HEAD this plan is being built against
+// in the plan run's meta. A failure is logged and tolerated: the
+// consequence is a later apply that cannot establish freshness and
+// therefore falls back to an inline apply — the safe direction.
+func (q *Queue) recordPlanHead(ctx context.Context, runID, repo string) {
+	head := q.git.Head(ctx, repo)
+	if head == "" {
+		slog.Warn("jobq.plan_head_unknown", "run_id", runID, "repo", repo)
+		return
+	}
+	if _, err := q.store.Update(runID, func(m *runs.Meta) error {
+		m.HeadSHA = head
+		return nil
+	}); err != nil {
+		slog.Warn("jobq.plan_head_record_failed", "run_id", runID, "repo", repo, "err", err.Error())
+	}
+}
+
 // priorPlanFile implements D-18: the newest succeeded plan run for the
-// same (repo, dir) whose artifact is still on disk, or "" for the D-17
+// same (repo, dir) whose artifact is still on disk AND was built
+// against the commit the working tree is on now. It returns the
+// artifact path plus the run id that owns it, or ("", "") for the D-17
 // inline apply.
-func (q *Queue) priorPlanFile(repo, cleanDir string) string {
+//
+// The freshness gate is the whole point. Without it a
+// POST /v1/repos/{name}/pull between plan and apply hands tofu a plan
+// built against the PRE-PULL commit: OpenTofu applies the saved plan,
+// so the operator gets the previous revision's changes and no signal
+// that their pull was ignored. When freshness cannot be established at
+// all — git could not answer, or the plan predates this field — the
+// artifact is skipped, because an inline apply is a supported D-17
+// mode and is the only safe default.
+func (q *Queue) priorPlanFile(ctx context.Context, repo, cleanDir string) (string, string) {
 	metas, err := q.store.List(runs.ListFilter{
 		Repo:   repo,
 		Status: contract.RunStatusSucceeded,
-		Limit:  contract.MaxRunListLimit,
+		Kind:   contract.RunKindPlan,
+		Dir:    cleanDir,
+		DirSet: true,
+		Limit:  1,
 	})
 	if err != nil {
 		// Losing the lookup is not a reason to refuse the apply: D-17
 		// inline apply is a legal mode, so degrade to it.
 		slog.Warn("jobq.prior_plan_lookup_failed", "repo", repo, "err", err.Error())
-		return ""
+		return "", ""
+	}
+	head := q.git.Head(ctx, repo)
+	if head == "" {
+		slog.Warn("jobq.plan_freshness_unknown", "repo", repo, "dir", cleanDir)
+		return "", ""
 	}
 	// List is already sorted newest-first, so the first match is the
 	// most recent plan for this (repo, dir).
 	for _, m := range metas {
-		if m.Kind != contract.RunKindPlan || m.Dir != cleanDir || m.PlanFile == "" {
+		if m.PlanFile == "" {
+			continue
+		}
+		if m.HeadSHA != head {
+			slog.Info("jobq.plan_artifact_stale",
+				"repo", repo, "dir", cleanDir, "plan_run_id", m.RunID,
+				"plan_head", m.HeadSHA, "worktree_head", head)
 			continue
 		}
 		if _, err := os.Stat(m.PlanFile); err != nil {
@@ -179,9 +240,31 @@ func (q *Queue) priorPlanFile(repo, cleanDir string) string {
 			// is still better than none.
 			continue
 		}
-		return m.PlanFile
+		return m.PlanFile, m.RunID
 	}
-	return ""
+	return "", ""
+}
+
+// consumePlanArtifact retires a plan artifact an apply just used: the
+// file goes, and the owning plan run stops advertising it so
+// priorPlanFile cannot find it again.
+//
+// Both failures are logged and tolerated — the apply itself already
+// succeeded, and refusing to report that because a cleanup step failed
+// would be a lie about the infrastructure.
+func (q *Queue) consumePlanArtifact(planRunID, path string) {
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		slog.Warn("jobq.plan_artifact_remove_failed", "path", path, "err", err.Error())
+	}
+	if planRunID == "" {
+		return
+	}
+	if _, err := q.store.Update(planRunID, func(m *runs.Meta) error {
+		m.PlanFile = ""
+		return nil
+	}); err != nil {
+		slog.Warn("jobq.plan_artifact_clear_failed", "run_id", planRunID, "err", err.Error())
+	}
 }
 
 // DefaultExec is the production os/exec implementation and the only

@@ -61,16 +61,40 @@ type Meta struct {
 	// PlanFile is the absolute path of the plan artifact a successful
 	// `plan` run produced. /v1/apply looks it up to decide between
 	// consuming a prior plan and an inline apply (CONTEXT D-18); an
-	// empty value means "no plan artifact".
+	// empty value means "no plan artifact". It is CLEARED once an
+	// apply has consumed the artifact, so the same saved plan is never
+	// handed to tofu twice.
 	PlanFile string `json:"plan_file,omitempty"`
+	// HeadSHA is the repo HEAD the run was built against, recorded at
+	// plan time. It is the D-18 freshness gate: a saved plan describes
+	// one specific commit, so an apply must refuse an artifact whose
+	// HeadSHA no longer matches the working tree — otherwise a
+	// POST /v1/repos/{name}/pull between plan and apply would apply
+	// the PREVIOUS revision's changes with no signal to the operator.
+	// Empty means "unknown", which the apply path treats as
+	// not-fresh.
+	HeadSHA string `json:"head_sha,omitempty"`
 }
 
 // ListFilter narrows a List call. The zero value means "everything,
 // capped at contract.DefaultRunListLimit".
+//
+// Kind and Dir have no query-parameter counterpart in RUN-05; they
+// exist for internal callers that need ONE specific run rather than a
+// page of history. internal/jobq's D-18 artifact lookup is the reason:
+// filtering after the RUN-05 response cap made the newest matching
+// plan invisible as soon as the repo accumulated `Limit` newer
+// succeeded runs, and the apply silently degraded to an inline apply.
+// Filtering here means the cap applies to the MATCHES.
 type ListFilter struct {
 	Repo   string
 	Status contract.RunStatus
+	Kind   contract.RunKind
+	Dir    string
 	Limit  int
+	// DirSet distinguishes "Dir is not part of this filter" from
+	// "match the repo root", which D-23 spells as the empty string.
+	DirSet bool
 }
 
 // Store owns the /data/runs tree. It holds no run state — every read
@@ -299,6 +323,12 @@ func (s *Store) List(f ListFilter) ([]Meta, error) {
 			continue
 		}
 		if f.Status != "" && m.Status != f.Status {
+			continue
+		}
+		if f.Kind != "" && m.Kind != f.Kind {
+			continue
+		}
+		if f.DirSet && m.Dir != f.Dir {
 			continue
 		}
 		out = append(out, m)

@@ -319,8 +319,20 @@ curl -sS -X POST -H "Authorization: Bearer $IAC_RUNNER_BEARER" \
 
 Submit a `tofu apply` job. Returns 202 + `Location: /v1/runs/{id}`; `tofu init` then
 `tofu apply -no-color -input=false -auto-approve` run in a background worker. When the newest succeeded plan run for the
-same `(repo, dir)` still has its `plan.tfplan` on disk, that file is passed to `apply`; otherwise the apply runs inline
-(planning as part of the apply). Both modes are supported by design.
+same `(repo, dir)` still has its `plan.tfplan` on disk **and was built against the commit the working tree is on now**,
+that file is passed to `apply`; otherwise the apply runs inline (planning as part of the apply). Both modes are
+supported by design.
+
+A saved plan is used **at most once**, and only while it is still current:
+
+- The plan run records the working tree's `HEAD` at plan time. A `POST /v1/repos/{name}/pull` (or any other commit
+  change) between plan and apply makes the artifact ineligible, and the apply falls back to the inline mode instead of
+  applying the previous revision's changes. The skip is logged as `jobq.plan_artifact_stale` with both SHAs.
+- A successful apply consumes the artifact: `plan.tfplan` is deleted and the plan run's `plan_file` is cleared. A second
+  apply with no intervening plan therefore runs inline rather than re-submitting a plan tofu has already applied (which
+  tofu would reject as stale).
+- When the commit cannot be determined at all (git could not answer), the artifact is skipped —
+  `jobq.plan_freshness_unknown` — because an inline apply is the only safe default.
 
 Auth: required. Request body and response: identical to `/v1/plan`.
 

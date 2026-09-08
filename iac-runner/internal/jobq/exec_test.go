@@ -171,6 +171,7 @@ func TestExecApplyUsesPriorPlanFile(t *testing.T) {
 		Kind:      contract.RunKindPlan,
 		Status:    contract.RunStatusSucceeded,
 		StartedAt: time.Now().UTC().Add(-time.Minute),
+		HeadSHA:   fixtureHeadSHA, // D-18 freshness: built against the current worktree HEAD
 	})
 	priorPlan := filepath.Join(e.store.Dir(prior.RunID), "plan.tfplan")
 	if err := os.WriteFile(priorPlan, []byte("binary plan"), 0o600); err != nil {
@@ -205,6 +206,7 @@ func TestApplyFallsBackWhenPriorPlanFileMissing(t *testing.T) {
 		Kind:      contract.RunKindPlan,
 		Status:    contract.RunStatusSucceeded,
 		StartedAt: time.Now().UTC().Add(-time.Minute),
+		HeadSHA:   fixtureHeadSHA, // D-18 freshness: built against the current worktree HEAD
 	})
 	// Retention already swept the artifact: the meta still names it,
 	// the file is gone (D-18 fallback).
@@ -238,6 +240,7 @@ func TestPriorPlanIgnoresOtherDirsAndKinds(t *testing.T) {
 		Kind:      contract.RunKindPlan,
 		Status:    contract.RunStatusSucceeded,
 		StartedAt: time.Now().UTC().Add(-time.Minute),
+		HeadSHA:   fixtureHeadSHA, // D-18 freshness: built against the current worktree HEAD
 	})
 	otherPlan := filepath.Join(e.store.Dir(other.RunID), "plan.tfplan")
 	if err := os.WriteFile(otherPlan, []byte("binary plan"), 0o600); err != nil {
@@ -473,5 +476,162 @@ func TestDefaultExecGracefulExitNotKilled(t *testing.T) {
 	}
 	if !res.TimedOut {
 		t.Fatalf("result = %+v, want TimedOut (the deadline still expired)", res)
+	}
+}
+
+// TestApplyIgnoresPlanBuiltAgainstAnotherCommit is the CR-02
+// data-integrity regression: a plan artifact describes ONE commit, so
+// an apply issued after the working tree moved (POST
+// /v1/repos/{name}/pull) must not hand tofu the pre-pull plan.
+func TestApplyIgnoresPlanBuiltAgainstAnotherCommit(t *testing.T) {
+	rec := &recordedExec{}
+	e := newEnv(t, envOpts{repos: []string{"infra"}, maxParallel: 2, exec: rec.fn})
+
+	prior := e.seedRun(runs.Meta{
+		Repo:      "infra",
+		Dir:       "envs/prod",
+		Kind:      contract.RunKindPlan,
+		Status:    contract.RunStatusSucceeded,
+		StartedAt: time.Now().UTC().Add(-time.Minute),
+		// A commit the working tree is no longer on.
+		HeadSHA: "1111111111111111111111111111111111111111",
+	})
+	priorPlan := filepath.Join(e.store.Dir(prior.RunID), "plan.tfplan")
+	if err := os.WriteFile(priorPlan, []byte("binary plan"), 0o600); err != nil {
+		t.Fatalf("write prior plan: %v", err)
+	}
+	if _, err := e.store.Update(prior.RunID, func(m *runs.Meta) error {
+		m.PlanFile = priorPlan
+		return nil
+	}); err != nil {
+		t.Fatalf("Update prior: %v", err)
+	}
+
+	apply := e.seedRun(runs.Meta{Repo: "infra", Dir: "envs/prod", Kind: contract.RunKindApply, Status: contract.RunStatusRunning})
+	if _, _, err := e.runJobFor(apply); err != nil {
+		t.Fatalf("runJob: %v", err)
+	}
+
+	args := mustCalls(t, rec, 2)[1].Args
+	if last := args[len(args)-1]; !strings.HasPrefix(last, "-") {
+		t.Fatalf("apply args = %v, want the inline form for a stale plan (CR-02)", args)
+	}
+	// The stale artifact is left alone: only a CONSUMED plan is
+	// retired, and this one was never handed to tofu.
+	if _, err := os.Stat(priorPlan); err != nil {
+		t.Errorf("stale plan artifact was removed without being consumed: %v", err)
+	}
+}
+
+// TestApplyIgnoresPlanWithNoRecordedHead covers the "freshness cannot
+// be established" branch: a plan written before HeadSHA existed (or by
+// a runner whose git could not answer rev-parse) is not eligible.
+func TestApplyIgnoresPlanWithNoRecordedHead(t *testing.T) {
+	rec := &recordedExec{}
+	e := newEnv(t, envOpts{repos: []string{"infra"}, maxParallel: 2, exec: rec.fn})
+
+	prior := e.seedRun(runs.Meta{
+		Repo:      "infra",
+		Dir:       "envs/prod",
+		Kind:      contract.RunKindPlan,
+		Status:    contract.RunStatusSucceeded,
+		StartedAt: time.Now().UTC().Add(-time.Minute),
+	})
+	priorPlan := filepath.Join(e.store.Dir(prior.RunID), "plan.tfplan")
+	if err := os.WriteFile(priorPlan, []byte("binary plan"), 0o600); err != nil {
+		t.Fatalf("write prior plan: %v", err)
+	}
+	if _, err := e.store.Update(prior.RunID, func(m *runs.Meta) error {
+		m.PlanFile = priorPlan
+		return nil
+	}); err != nil {
+		t.Fatalf("Update prior: %v", err)
+	}
+
+	apply := e.seedRun(runs.Meta{Repo: "infra", Dir: "envs/prod", Kind: contract.RunKindApply, Status: contract.RunStatusRunning})
+	if _, _, err := e.runJobFor(apply); err != nil {
+		t.Fatalf("runJob: %v", err)
+	}
+	args := mustCalls(t, rec, 2)[1].Args
+	if last := args[len(args)-1]; !strings.HasPrefix(last, "-") {
+		t.Fatalf("apply args = %v, want the inline form when freshness is unknown", args)
+	}
+}
+
+// TestApplyConsumesPlanArtifact asserts the other half of CR-02: after
+// a successful apply the artifact is gone and the plan run stops
+// advertising it, so a second apply cannot be handed the same saved
+// plan (which tofu would reject as stale).
+func TestApplyConsumesPlanArtifact(t *testing.T) {
+	rec := &recordedExec{}
+	e := newEnv(t, envOpts{repos: []string{"infra"}, maxParallel: 2, exec: rec.fn})
+
+	prior := e.seedRun(runs.Meta{
+		Repo:      "infra",
+		Dir:       "envs/prod",
+		Kind:      contract.RunKindPlan,
+		Status:    contract.RunStatusSucceeded,
+		StartedAt: time.Now().UTC().Add(-time.Minute),
+		HeadSHA:   fixtureHeadSHA,
+	})
+	priorPlan := filepath.Join(e.store.Dir(prior.RunID), "plan.tfplan")
+	if err := os.WriteFile(priorPlan, []byte("binary plan"), 0o600); err != nil {
+		t.Fatalf("write prior plan: %v", err)
+	}
+	if _, err := e.store.Update(prior.RunID, func(m *runs.Meta) error {
+		m.PlanFile = priorPlan
+		return nil
+	}); err != nil {
+		t.Fatalf("Update prior: %v", err)
+	}
+
+	first := e.seedRun(runs.Meta{Repo: "infra", Dir: "envs/prod", Kind: contract.RunKindApply, Status: contract.RunStatusRunning})
+	if _, _, err := e.runJobFor(first); err != nil {
+		t.Fatalf("first runJob: %v", err)
+	}
+	args := mustCalls(t, rec, 2)[1].Args
+	if args[len(args)-1] != priorPlan {
+		t.Fatalf("first apply args = %v, want the artifact consumed (D-18)", args)
+	}
+	if _, err := os.Stat(priorPlan); !os.IsNotExist(err) {
+		t.Errorf("consumed plan artifact still on disk: err = %v", err)
+	}
+	m, err := e.store.Load(prior.RunID)
+	if err != nil {
+		t.Fatalf("Load prior: %v", err)
+	}
+	if m.PlanFile != "" {
+		t.Errorf("plan run still advertises plan_file = %q after consumption", m.PlanFile)
+	}
+
+	// A second apply with no intervening plan must go inline rather
+	// than re-submitting a plan tofu has already applied.
+	second := e.seedRun(runs.Meta{Repo: "infra", Dir: "envs/prod", Kind: contract.RunKindApply, Status: contract.RunStatusRunning})
+	if _, _, err := e.runJobFor(second); err != nil {
+		t.Fatalf("second runJob: %v", err)
+	}
+	args = mustCalls(t, rec, 4)[3].Args
+	if last := args[len(args)-1]; !strings.HasPrefix(last, "-") {
+		t.Fatalf("second apply args = %v, want the inline form (CR-02)", args)
+	}
+}
+
+// TestPlanRecordsWorktreeHead asserts the freshness reference is
+// actually written at plan time — the input every assertion above
+// depends on.
+func TestPlanRecordsWorktreeHead(t *testing.T) {
+	rec := &recordedExec{}
+	e := newEnv(t, envOpts{repos: []string{"infra"}, maxParallel: 2, exec: rec.fn})
+	m := e.seedRun(runs.Meta{Repo: "infra", Dir: "envs/prod", Kind: contract.RunKindPlan, Status: contract.RunStatusRunning})
+
+	if _, _, err := e.runJobFor(m); err != nil {
+		t.Fatalf("runJob: %v", err)
+	}
+	got, err := e.store.Load(m.RunID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.HeadSHA != fixtureHeadSHA {
+		t.Errorf("plan run head_sha = %q, want %q", got.HeadSHA, fixtureHeadSHA)
 	}
 }

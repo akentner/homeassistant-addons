@@ -426,6 +426,19 @@ func (m *Manager) Pull(ctx context.Context, name string, ffOnly bool) (PullOutco
 	return out, nil
 }
 
+// Head reports the commit the working tree of name is on, or "" when
+// it cannot be determined (unknown repo, missing checkout, git
+// failure). internal/jobq uses it as the D-18 plan-artifact freshness
+// reference; "" is deliberately a value the caller can act on rather
+// than an error, because "freshness unknown" and "freshness stale" get
+// the same safe treatment there — an inline apply.
+func (m *Manager) Head(ctx context.Context, name string) string {
+	if _, ok := m.repos[name]; !ok {
+		return ""
+	}
+	return m.resolveHead(ctx, m.WorkTree(name))
+}
+
 // resolveHead reports the commit the working tree ended up on. The
 // lookup is local, so it runs with a plain environment and no deploy
 // key. A failure is non-fatal: a pull that already succeeded must not be

@@ -40,9 +40,18 @@ func (f fakeBackend) UseLockfile() bool         { return f.lockfile }
 func (f fakeBackend) CredentialFiles() []string { return nil }
 func (f fakeBackend) Name() string              { return "fake" }
 
+// fixtureHeadSHA is the commit okGitRunner reports for `rev-parse
+// HEAD`. The D-18 freshness gate compares a plan artifact's recorded
+// HeadSHA against it, so the fixture has to answer that one command
+// with something stable.
+const fixtureHeadSHA = "0f1e2d3c4b5a69788796a5b4c3d2e1f009182736"
+
 // okGitRunner is a git.CommandRunner that succeeds silently. No test
 // in this package spawns a real git process.
-func okGitRunner(_ context.Context, _ string, _ []string, _ string, _ ...string) (git.CommandResult, error) {
+func okGitRunner(_ context.Context, _ string, _ []string, _ string, args ...string) (git.CommandResult, error) {
+	if len(args) > 0 && args[0] == "rev-parse" {
+		return git.CommandResult{Stdout: fixtureHeadSHA + "\n"}, nil
+	}
 	return git.CommandResult{}, nil
 }
 

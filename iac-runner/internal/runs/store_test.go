@@ -378,3 +378,97 @@ func TestStoreListFiltersAndCaps(t *testing.T) {
 		}
 	})
 }
+
+// TestListFilterKindAndDirApplyBeforeTheLimit is the WR-09 regression:
+// the RUN-05 response cap must bound the MATCHES, not the candidates.
+// Filtering after the cap made internal/jobq's D-18 artifact lookup
+// blind as soon as a repo accumulated `Limit` newer succeeded runs, and
+// the apply silently degraded to an inline apply with no log record.
+func TestListFilterKindAndDirApplyBeforeTheLimit(t *testing.T) {
+	s := newTestStore(t)
+
+	// The plan we want is the OLDEST run for the repo.
+	want := newRunID(t)
+	mustCreate(t, s, Meta{
+		RunID:     want,
+		Repo:      "infra",
+		Dir:       "envs/prod",
+		Kind:      contract.RunKindPlan,
+		Status:    contract.RunStatusSucceeded,
+		StartedAt: baseTime,
+	})
+	// A plan for another dir, and several newer succeeded applies.
+	mustCreate(t, s, Meta{
+		RunID:     newRunID(t),
+		Repo:      "infra",
+		Dir:       "envs/stage",
+		Kind:      contract.RunKindPlan,
+		Status:    contract.RunStatusSucceeded,
+		StartedAt: baseTime.Add(time.Minute),
+	})
+	for i := 0; i < 5; i++ {
+		mustCreate(t, s, Meta{
+			RunID:     newRunID(t),
+			Repo:      "infra",
+			Dir:       "envs/prod",
+			Kind:      contract.RunKindApply,
+			Status:    contract.RunStatusSucceeded,
+			StartedAt: baseTime.Add(time.Duration(2+i) * time.Minute),
+		})
+	}
+
+	got, err := s.List(ListFilter{
+		Repo:   "infra",
+		Status: contract.RunStatusSucceeded,
+		Kind:   contract.RunKindPlan,
+		Dir:    "envs/prod",
+		DirSet: true,
+		Limit:  1,
+	})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 || got[0].RunID != want {
+		t.Fatalf("List = %+v, want exactly the plan run %s for envs/prod", got, want)
+	}
+}
+
+// TestListDirFilterIsOptOut asserts the DirSet flag: D-23 spells the
+// repo root as the empty Dir, so an unset filter must not be read as
+// "match the root".
+func TestListDirFilterIsOptOut(t *testing.T) {
+	s := newTestStore(t)
+	mustCreate(t, s, Meta{
+		RunID:     newRunID(t),
+		Repo:      "infra",
+		Dir:       "envs/prod",
+		Kind:      contract.RunKindApply,
+		Status:    contract.RunStatusSucceeded,
+		StartedAt: baseTime,
+	})
+	root := newRunID(t)
+	mustCreate(t, s, Meta{
+		RunID:     root,
+		Repo:      "infra",
+		Dir:       "",
+		Kind:      contract.RunKindApply,
+		Status:    contract.RunStatusSucceeded,
+		StartedAt: baseTime.Add(time.Minute),
+	})
+
+	all, err := s.List(ListFilter{Repo: "infra"})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("unset Dir filter returned %d runs, want both", len(all))
+	}
+
+	onlyRoot, err := s.List(ListFilter{Repo: "infra", Dir: "", DirSet: true})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(onlyRoot) != 1 || onlyRoot[0].RunID != root {
+		t.Fatalf("Dir=\"\" with DirSet returned %+v, want only the repo-root run", onlyRoot)
+	}
+}
