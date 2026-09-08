@@ -37,14 +37,26 @@ FROM alpine:3.22 AS tofu
 
 ARG TOFU_VERSION
 
+# WORKDIR instead of an in-RUN `cd /tmp` (hadolint DL3003). sha256sum -c
+# resolves the filename inside SHA256SUMS relative to the working
+# directory, so the checksum step needs /tmp to BE the workdir — it
+# cannot take an absolute path. Nothing later in this build-only stage
+# depends on the previous workdir, and the COPY --from=tofu in stage 3
+# uses an absolute path, so there is nothing to restore.
+WORKDIR /tmp
+
+# The zip MUST keep its upstream filename: `sha256sum -c -` reads the
+# name out of the SHA256SUMS line and opens exactly that path relative
+# to the workdir. Saving it as tofu.zip made the verification step fail
+# with "can't open tofu_<v>_linux_amd64.zip" — a checksum that can never
+# pass is worse than none, because it looks like a guarantee.
 RUN apk add --no-cache curl unzip && \
-    curl -fsSL -o /tmp/tofu.zip \
+    curl -fsSL -o "tofu_${TOFU_VERSION}_linux_amd64.zip" \
         "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.zip" && \
-    curl -fsSL -o /tmp/SHA256SUMS \
+    curl -fsSL -o SHA256SUMS \
         "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" && \
-    cd /tmp && \
     grep " tofu_${TOFU_VERSION}_linux_amd64.zip\$" SHA256SUMS | sha256sum -c - && \
-    unzip -j /tmp/tofu.zip tofu -d /usr/local/bin && \
+    unzip -j "tofu_${TOFU_VERSION}_linux_amd64.zip" tofu -d /usr/local/bin && \
     chmod +x /usr/local/bin/tofu && \
     /usr/local/bin/tofu version
 
