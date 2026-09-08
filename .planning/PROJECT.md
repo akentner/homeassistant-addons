@@ -224,5 +224,9 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-09-06 — Phase 16 (iac-runner Scaffold + Auth + State Backends + Healthcheck) COMPLETE 12/12 requirements validated. v1.4 Phases 17–19 remain. v1.3 essentially complete (6 of 7 phases shipped: 9–14; Phase 15 CI hardening mechanically ready, blocked on v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite — `/gsd-execute-phase 8 --gaps-only` when ready). v1.4 runs in parallel to v1.3 Phase 15 by user decision 2026-09-06. v1.4 roadmap: 4 phases (16–19), ~32 requirements across AUTHR/STBK/SEC/GIT/RUN/MQTT/OBS categories. RESEARCH
-skipped by explicit decision (scope clear from conversation). Phase 16 ready to plan via `/gsd-plan-phase 16`._
+_Last updated: 2026-09-06 — Phase 16 (iac-runner Scaffold + Auth + State Backends + Healthcheck) COMPLETE 12/12
+requirements validated. v1.4 Phases 17–19 remain. v1.3 essentially complete (6 of 7 phases shipped: 9–14; Phase 15 CI
+hardening mechanically ready, blocked on v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite —
+`/gsd-execute-phase 8 --gaps-only` when ready). v1.4 runs in parallel to v1.3 Phase 15 by user decision 2026-09-06. v1.4
+roadmap: 4 phases (16–19), ~32 requirements across AUTHR/STBK/SEC/GIT/RUN/MQTT/OBS categories. RESEARCH skipped by
+explicit decision (scope clear from conversation). Phase 16 ready to plan via `/gsd-plan-phase 16`._

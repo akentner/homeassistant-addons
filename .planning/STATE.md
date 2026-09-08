@@ -105,13 +105,13 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Phase: 17 (Git Integration + Apply Job System) — EXECUTING
-COMPLETE (7 atomic commits landed on main; live-HA empirical exercise deferred to operator runtime as documented in
-14-VERIFICATION.md — preflight returns 1 in this env: no tofu, no Provider binary, /healthz unreachable). OPS-04 surface
-delivered: `tools/test-addon/` (5 files) + `internal/verify-bridge-e2e/` (_lib.sh + 00-happy-path.sh + 12 error-code
-scenarios + 99-cleanup) + `terraform-bridge/{README.md, DOCS.md}` rewrite. Bridge 0.2.0 == Provider 0.2.0 (TOFU-05
-unchanged — CF-11 honored). **v1.3 Phase 15** (CI hardening + provider install workflow) is mechanically ready but
-blocked on v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite.
+Phase: 17 (Git Integration + Apply Job System) — EXECUTING COMPLETE (7 atomic commits landed on main; live-HA empirical
+exercise deferred to operator runtime as documented in 14-VERIFICATION.md — preflight returns 1 in this env: no tofu, no
+Provider binary, /healthz unreachable). OPS-04 surface delivered: `tools/test-addon/` (5 files) +
+`internal/verify-bridge-e2e/` (_lib.sh + 00-happy-path.sh + 12 error-code scenarios + 99-cleanup) +
+`terraform-bridge/{README.md, DOCS.md}` rewrite. Bridge 0.2.0 == Provider 0.2.0 (TOFU-05 unchanged — CF-11 honored).
+**v1.3 Phase 15** (CI hardening + provider install workflow) is mechanically ready but blocked on v1.2 Phase 8
+gap-closure Cloudflare-setup prerequisite.
 
 **v1.4 Phase 16** Plan 01 (iac-runner Scaffold + Auth) is COMPLETE (3 atomic commits: 0fa09fb scaffold, bb00c4f auth
 package + version + contract, 4df2d95 main.go + signals + handlers + router). 24 files (5 scaffold + 18 Go source + 1
@@ -136,11 +136,11 @@ on either fail. `statebackend.Factory.New` returns ErrUnsupported for any value 
 verification deferred to Phase 19.
 
 **v1.4 Phase 17** — 3 of 8 plans complete (17-01, 17-02, 17-03). Plan 03 (`internal/git`) is COMPLETE: 7 atomic commits
-on main (3 RED + 3 GREEN + 1 docs), 5 new files (1757 insertions), 35 test functions (75 PASS lines incl. table sub-cases) passing under
-`-race`. `RepoConfig` + `Error`/`Classify` + `Manager` (WorkTree / IsCloned / EnsureCloned / Clone / CloneAll / Pull)
-with an injectable `CommandRunner` and clock — no test spawns a real git process. Ships GIT-02 (clone-if-absent,
-skip-if-present, 3-attempt 1s/5s backoff that never blocks startup), GIT-03 (SSH-keyed pull, deploy key +
-`IdentitiesOnly` + pinned `known_hosts` + `BatchMode`, ref-vs-fast-forward semantics) and GIT-04 (ordered stderr →
+on main (3 RED + 3 GREEN + 1 docs), 5 new files (1757 insertions), 35 test functions (75 PASS lines incl. table
+sub-cases) passing under `-race`. `RepoConfig` + `Error`/`Classify` + `Manager` (WorkTree / IsCloned / EnsureCloned /
+Clone / CloneAll / Pull) with an injectable `CommandRunner` and clock — no test spawns a real git process. Ships GIT-02
+(clone-if-absent, skip-if-present, 3-attempt 1s/5s backoff that never blocks startup), GIT-03 (SSH-keyed pull, deploy
+key + `IdentitiesOnly` + pinned `known_hosts` + `BatchMode`, ref-vs-fast-forward semantics) and GIT-04 (ordered stderr →
 `git_*` classifier with an Options-field hint and no raw stderr). **The D-10/D-12 contradiction is resolved in favor of
 D-10** per GIT-03/SC-3: a pinned repo re-lands on its `ref` on pull, and D-12 fires only when a caller sets `ff_only`
 against a pinned repo. GIT-02/03/04 are NOT yet marked complete in `REQUIREMENTS.md` — the shared-ID gate correctly
@@ -322,12 +322,12 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | Phase 16 P01                                           | 17 min | 3 tasks  | 24 files |
 | Phase 16 P02                                           | 18     | 2 tasks  | 14 files |
 | Phase 16 P03                                           | 5 min  | 2 tasks  | 6 files  |
-**Per-Plan Metrics:**
+| **Per-Plan Metrics:**                                  |
 
-| Plan | Duration | Tasks | Files |
-|------|----------|-------|-------|
-| Phase 17 P03 | 21 min | 3 tasks | 6 files |
-| Phase 17 P04 | 12 min | 3 tasks | 8 files |
+| Plan         | Duration | Tasks   | Files   |
+| ------------ | -------- | ------- | ------- |
+| Phase 17 P03 | 21 min   | 3 tasks | 6 files |
+| Phase 17 P04 | 12 min   | 3 tasks | 8 files |
 
 ## Quick Tasks Completed
 
@@ -345,12 +345,11 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 
 ## Session Continuity
 
-**Stopped at:** Completed 17-04-PLAN.md (internal/runs store/output/redact/retention)
-**Resume file:** None
+**Stopped at:** Completed 17-04-PLAN.md (internal/runs store/output/redact/retention) **Resume file:** None
 
-Last session: 2026-09-08T11:05:09.498Z
-origin/main, dropped stale v1.3 working tree, re-applied v1.4 setup commits on clean base). Next step:
-`/gsd-execute-phase 16 --plan 03` (GET /v1/version + DOCS.md + README + pre-commit config) Resume file: None
+Last session: 2026-09-08T11:05:09.498Z origin/main, dropped stale v1.3 working tree, re-applied v1.4 setup commits on
+clean base). Next step: `/gsd-execute-phase 16 --plan 03` (GET /v1/version + DOCS.md + README + pre-commit config)
+Resume file: None
 
 ---
 
@@ -364,7 +363,16 @@ skipped; Phase 16 ready to plan_
 
 ## Decisions
 
-- [Phase 17]: D-10 wins over D-12 for POST /v1/repos/{name}/pull; D-12 survives only as an explicit ff_only-vs-pinned conflict guard — GIT-03 and ROADMAP SC-3 both word the endpoint as "runs git pull --ff-only (or the configured ref)", which is D-10. Making D-12 unconditional would leave a pinned repo with no way to update at all. Reverting to strict D-12 is a one-line change documented in manager.go.
-- [Phase 17]: git stderr classifier consults "repository not found"/"authentication failed" BEFORE gits generic "Could not read from remote repository" line — GitHub emits both lines together for an unauthorized repo; the plan rule order would have returned git_ssh_handshake and sent the operator to check a deploy key that is fine.
-- [Phase 17]: safe.directory guard runs once from NewManager; its failure is surfaced via SafeDirectoryWarning() rather than swallowed or made fatal — ROADMAP SC-2 requires startup to proceed, but silently discarding the failure would hide a real /data ownership misconfiguration behind unrecognized git errors.
-- [Phase 17]: git.allow_default_branch_commits enabled in .planning/config.json — Sequential-mode dispatch instructed staying on main and the project already uses git.branching_strategy none with 17-01/17-02 committed directly on main; the flag is the documented escape hatch for the executor protected-branch assertion.
+- [Phase 17]: D-10 wins over D-12 for POST /v1/repos/{name}/pull; D-12 survives only as an explicit ff_only-vs-pinned
+  conflict guard — GIT-03 and ROADMAP SC-3 both word the endpoint as "runs git pull --ff-only (or the configured ref)",
+  which is D-10. Making D-12 unconditional would leave a pinned repo with no way to update at all. Reverting to strict
+  D-12 is a one-line change documented in manager.go.
+- [Phase 17]: git stderr classifier consults "repository not found"/"authentication failed" BEFORE gits generic "Could
+  not read from remote repository" line — GitHub emits both lines together for an unauthorized repo; the plan rule order
+  would have returned git_ssh_handshake and sent the operator to check a deploy key that is fine.
+- [Phase 17]: safe.directory guard runs once from NewManager; its failure is surfaced via SafeDirectoryWarning() rather
+  than swallowed or made fatal — ROADMAP SC-2 requires startup to proceed, but silently discarding the failure would
+  hide a real /data ownership misconfiguration behind unrecognized git errors.
+- [Phase 17]: git.allow_default_branch_commits enabled in .planning/config.json — Sequential-mode dispatch instructed
+  staying on main and the project already uses git.branching_strategy none with 17-01/17-02 committed directly on main;
+  the flag is the documented escape hatch for the executor protected-branch assertion.
