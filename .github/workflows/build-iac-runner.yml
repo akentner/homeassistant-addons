@@ -1,0 +1,28 @@
+name: Build IaC Runner
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "iac-runner/**"
+    tags:
+      - "iac-runner/v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build-template.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      addon-name: iac-runner
+      addon-display-name: "IaC Runner"
+      addon-description: "Bearer-authenticated OpenTofu runner for homelab IaC with R2/S3/local state backends"
+      archs: '["amd64"]'
+    secrets:
+      HA_BASE_URL: ${{ secrets.HA_BASE_URL }}
+      HA_WEBHOOK_ID: ${{ secrets.HA_WEBHOOK_ID }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
