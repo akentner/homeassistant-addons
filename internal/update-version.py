@@ -417,14 +417,20 @@ Examples:
         if not tag_ok:
             print()
             print("⚠️  Tag push failed — push manually:")
-            print(f"   git push origin {args.addon_name}/v{new_v}")
+            print(f"   git push origin {args.addon_name}/v{config_new}")
             return 1
 
-    print(f"\n💡 Next steps:")
-    print(f"   • Run 'make validate-versions' to verify")
-    print(f"   • Run 'make check-all' for full validation")
+    print("\n💡 Next steps:")
+    print("   • Run 'make validate-versions' to verify")
+    print("   • Run 'make check-all' for full validation")
     print(f"   • Commit: git add {args.addon_name} && git commit -m 'chore: update {args.addon_name} to v{args.new_version}'")
-    print(f"   • Push:  git push origin main {args.addon_name}/v{new_v}")
+    if args.no_tag:
+        # The tag was deliberately not created, so do not suggest pushing one
+        # that does not exist — the release step creates it.
+        print(f"   • Push:  git push origin main   (tag skipped; release with: "
+              f"make update-version ADDON={args.addon_name} VERSION={args.new_version})")
+    else:
+        print(f"   • Push:  git push origin main {args.addon_name}/v{config_new}")
     return 0
 
 

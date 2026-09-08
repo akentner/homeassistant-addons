@@ -9,9 +9,10 @@ no `SUPERVISOR_TOKEN` required.
 ## About
 
 The runner exposes a versioned JSON-over-HTTP API on port 8125 (distinct from `terraform-bridge`'s 8124 so both add-ons
-can coexist on the same HA host). Phase 16 ships the authentication, state-backend configuration, and healthcheck
-surface. Phase 17 adds `POST /v1/plan` + `POST /v1/apply` with per-repo mutex; Phase 18 adds MQTT Discovery (three
-sensors + two buttons).
+can coexist on the same HA host). Phase 16 shipped the authentication, state-backend configuration, and healthcheck
+surface. Phase 17 adds SSH-keyed git integration and the OpenTofu job system: `POST /v1/repos/{name}/pull`,
+`POST /v1/plan`, `POST /v1/apply`, `GET /v1/runs/{id}` and `GET /v1/runs`, serialized per repo by an in-process mutex.
+Phase 18 adds MQTT Discovery (three sensors + two buttons).
 
 Plain HTTP; TLS termination is out of scope (network-layer access control via Tailscale ACL or LAN).
 
@@ -21,9 +22,19 @@ Plain HTTP; TLS termination is out of scope (network-layer access control via Ta
 - Three state backends: R2 (Cloudflare, S3-compatible, default), S3 (any provider), local (`/data/terraform.tfstate`)
 - `use_lockfile` semantics for R2/S3 (no DynamoDB required); file-based lock for local
 - Tailscale-bind-gate: auto-detects the first `tailscale*` interface in `/sys/class/net`; refuses `0.0.0.0` at startup
+- Git integration: SSH-keyed startup clone with 1s/5s/30s backoff + per-repo `POST /v1/repos/{name}/pull` (fast-forward
+  or ref-pinned); a failed clone is logged and never blocks startup
+- `POST /v1/plan` + `POST /v1/apply` as background jobs, with paginated `GET /v1/runs/{id}` and filterable
+  `GET /v1/runs`
+- RUN-06 per-repo mutex: same-repo applies serialize, cross-repo applies run in parallel, bounded by `max_parallel_jobs`
+  (saturation is refused with 503 + `Retry-After`, never silently queued)
+- `apply_timeout_minutes` kill-chain (SIGTERM, then SIGKILL after 10s) so tofu releases its state lock
+- Read-time secret redaction of tofu output (R2/AWS key + SSH-private-key patterns) with a `redaction.audit` record
+- `runs_retention_hours` rotation (default 24h) on a `runs_retention_hours / 4` ticker, plus a boot-time reclaim
+- Boot-time `interrupted` sweep: a run orphaned by a container restart never shows as perpetually `running`
 - `/data/keys/` chmod-600 enforcement (fail-fast at startup)
 - Log scrubbing (key-name mask for Authorization/Bearer/token/password/key/secret) — case-insensitive
-- SIGTERM 30s drain + SIGHUP log-reopen handler
+- SIGTERM 30s drain (25s HTTP + 5s in-flight job drain) + SIGHUP log-reopen handler
 
 ## Install
 
@@ -43,11 +54,12 @@ Plain HTTP; TLS termination is out of scope (network-layer access control via Ta
 
 ## Configuration
 
-See [DOCS.md](DOCS.md) for the full operator reference: every config option with example, every HTTP endpoint, the
-bearer-token issuance + rotation flow, the `/data/keys/` chmod-600 requirement per backend, the three state backends
-with `use_lockfile` semantics, and the log-scrubbing invariant.
+See [DOCS.md](DOCS.md) for the full operator reference: every config option with example, every HTTP endpoint with a
+worked `curl` call, the complete `error_code` table, the bearer-token issuance + rotation flow, the `/data/keys/`
+chmod-600 requirement per backend and per repo, the three state backends with `use_lockfile` semantics, the
+startup/shutdown log records, and the log-scrubbing invariant.
 
-[release-shield]: https://img.shields.io/badge/version-v0.1.0-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v0.1.0
+[release-shield]: https://img.shields.io/badge/version-v0.2.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v0.2.0
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
 [amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
