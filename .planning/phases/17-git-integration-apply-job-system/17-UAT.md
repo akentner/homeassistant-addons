@@ -8,12 +8,10 @@ updated: 2026-09-08T17:30:00Z
 
 ## Current Test
 
-number: 1
-name: Output-Pipe-Lifecycle und Timeout-Pfad gegen ein echtes tofu (WR-01)
-expected: |
-  No output lines are lost at the end of the run; the run reaches status `failed` with `error_code: apply_timeout`; no
-  `jobq.output_join_timeout` WARN is emitted on the normal path; no orphaned tofu process survives.
-awaiting: user response
+number: 1 name: Output-Pipe-Lifecycle und Timeout-Pfad gegen ein echtes tofu (WR-01) expected: | No output lines are
+lost at the end of the run; the run reaches status `failed` with `error_code: apply_timeout`; no
+`jobq.output_join_timeout` WARN is emitted on the normal path; no orphaned tofu process survives. awaiting: user
+response
 
 ## Tests
 
@@ -65,11 +63,6 @@ result: [pending]
 
 ## Summary
 
-total: 3
-passed: 0
-issues: 0
-pending: 3
-skipped: 0
-blocked: 0
+total: 3 passed: 0 issues: 0 pending: 3 skipped: 0 blocked: 0
 
 ## Gaps
