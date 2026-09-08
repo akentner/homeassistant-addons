@@ -489,6 +489,30 @@ Supervisor's backup integration covers both files automatically.
 Apply fails fast with HTTP 423 (`locked`) when another apply holds the lock. The `use_lockfile` semantics for R2 were
 verified empirically in Phase 16 (IRUN-H-1 spike result documented in `16-SUMMARY.md`).
 
+## The tofu child environment
+
+`tofu` executes operator-authored IaC: providers downloaded from a registry, `local-exec` provisioners, external data
+sources. The runner therefore does **not** hand it the add-on container's environment. Each `tofu` process gets a built
+environment containing only:
+
+| Variable            | Why                                                             |
+| ------------------- | --------------------------------------------------------------- |
+| `PATH`              | plugin resolution and any `local-exec` shell                    |
+| `HOME`              | CLI config and the provider plugin cache                        |
+| `TMPDIR`            | provider downloads, plan serialization                          |
+| `LANG`/`LC_ALL`/`TZ`| output formatting                                               |
+| `TF_*` / `TOFU_*`   | tofu's own documented knobs, passed through wholesale           |
+
+Notably absent: `SUPERVISOR_TOKEN`. The Supervisor injects it into every add-on container and this add-on declares
+`homeassistant_api: true` (required for the Phase 18 MQTT service connection), which would make that token usable
+against the Core API from inside a provider or a provisioner. `git` and the `ssh` it spawns get the same treatment plus
+`GIT_SSH_COMMAND` / `GIT_TERMINAL_PROMPT=0`.
+
+Consequence for state backends: **no backend credentials are projected into the environment yet.** `tofu init` against
+`r2`/`s3` authenticates only if your own IaC supplies credentials another way (a `backend` block reading a file, a
+provider-level credential). The credential projection is deferred to a later phase; `/data/keys/` validation (SEC-01)
+already covers the files themselves.
+
 ## Log scrubbing
 
 The runner's structured JSON logger (stdlib `log/slog`) wraps every record through a key-name scrubber

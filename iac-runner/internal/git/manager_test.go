@@ -712,3 +712,55 @@ func TestManagerPullCarriesSSHCredentials(t *testing.T) {
 		}
 	}
 }
+
+// TestGitChildEnvironmentIsAllowlisted asserts the CR-03 companion on
+// the git side: the add-on container environment (SUPERVISOR_TOKEN and
+// anything else the Supervisor injects) is not handed to git or to the
+// ssh it spawns. Only the allowlisted variables plus the two GIT_*
+// settings GIT-03 requires are present.
+func TestGitChildEnvironmentIsAllowlisted(t *testing.T) {
+	t.Setenv("SUPERVISOR_TOKEN", "supervisor-token-must-not-leak")
+
+	var envs [][]string
+	runner := func(_ context.Context, _ string, env []string, _ string, args ...string) (CommandResult, error) {
+		envs = append(envs, env)
+		if len(args) > 0 && args[0] == "rev-parse" {
+			return CommandResult{Stdout: "deadbeef\n"}, nil
+		}
+		return CommandResult{}, nil
+	}
+
+	dir := t.TempDir()
+	m, err := NewManager(filepath.Join(dir, "repos"), filepath.Join(dir, "keys"),
+		[]RepoConfig{{Name: "infra", URL: "git@example.invalid:org/infra.git"}},
+		runner, func(time.Duration) {})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	// The construction-time safe.directory guard, an SSH-keyed clone
+	// and the local HEAD lookup: all three environments.
+	if err := m.Clone(context.Background(), "infra"); err != nil {
+		t.Fatalf("Clone: %v", err)
+	}
+	m.Head(context.Background(), "infra")
+
+	if len(envs) < 2 {
+		t.Fatalf("recorded %d git invocations, want at least the guard and the clone", len(envs))
+	}
+	for i, env := range envs {
+		for _, kv := range env {
+			if strings.HasPrefix(kv, "SUPERVISOR_TOKEN=") {
+				t.Errorf("git invocation %d leaked SUPERVISOR_TOKEN", i)
+			}
+		}
+		found := false
+		for _, kv := range env {
+			if strings.HasPrefix(kv, "PATH=") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("git invocation %d env = %v, want PATH", i, env)
+		}
+	}
+}

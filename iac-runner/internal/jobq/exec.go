@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -46,6 +47,63 @@ const (
 	initialScanBufBytes = 64 * 1024
 	maxScanLineBytes    = 8 * 1024 * 1024
 )
+
+// tofuEnvKeep is the allowlist of environment variables a tofu child
+// receives by name. Everything else is dropped.
+//
+//   - PATH   — tofu resolves provider plugins and any local-exec shell.
+//   - HOME   — the plugin cache and CLI config live under it.
+//   - TMPDIR — provider downloads and plan serialization need scratch.
+//   - LANG / LC_ALL / TZ — output formatting only.
+//
+// Nothing else is required. In particular the HA base image needs no
+// SSL_CERT_* to reach the provider registry: Go uses the system trust
+// store at /etc/ssl/certs.
+var tofuEnvKeep = []string{"PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "TZ"}
+
+// tofuEnvPrefixes are the operator-facing knob namespaces that are
+// passed through wholesale. They are tofu's own documented
+// configuration surface, and none of them is injected by the
+// Supervisor.
+var tofuEnvPrefixes = []string{"TF_", "TOFU_"}
+
+// tofuEnv builds the ONLY environment a tofu child receives.
+//
+// Inheriting os.Environ() handed the whole add-on container
+// environment to `tofu`, and `tofu` executes arbitrary operator IaC:
+// providers downloaded from a registry, local-exec provisioners,
+// external data sources. Everything in the runner's environment was
+// readable by all of them — including SUPERVISOR_TOKEN, which the
+// Supervisor injects and which config.yaml's `homeassistant_api: true`
+// makes usable against http://supervisor/core/api for state writes and
+// service calls. The runner's own posture (bearer auth, Tailscale
+// bind-gate, chmod-600 key enforcement) cannot survive handing a Home
+// Assistant API credential to code the runner does not control.
+//
+// NOTE: no backend credential projection exists yet. The r2/s3
+// AWS_ACCESS_KEY_ID-style variables are NOT set anywhere in this
+// repository (deferred to Phase 19 — see the phase 17
+// deferred-items.md), so `tofu init` against r2/s3 authenticates only
+// if the operator's own IaC supplies credentials another way. When
+// that projection lands it appends to this slice rather than
+// reintroducing inheritance.
+func tofuEnv() []string {
+	env := make([]string, 0, len(tofuEnvKeep)+8)
+	for _, k := range tofuEnvKeep {
+		if v, ok := os.LookupEnv(k); ok {
+			env = append(env, k+"="+v)
+		}
+	}
+	for _, kv := range os.Environ() {
+		for _, prefix := range tofuEnvPrefixes {
+			if strings.HasPrefix(kv, prefix) {
+				env = append(env, kv)
+				break
+			}
+		}
+	}
+	return env
+}
 
 // runJob executes one job's full command sequence and returns the
 // outcome plus the plan-artifact path (empty for an apply).
@@ -88,9 +146,8 @@ func (q *Queue) runJob(runID, repo, cleanDir string, kind contract.RunKind, w *r
 			Path:    q.tofuPath,
 			WorkDir: workDir,
 			Args:    args,
-			// os.Environ() carries the backend credentials 17-07
-			// exports (AWS_ACCESS_KEY_ID and friends) plus TF_* knobs.
-			Env:    os.Environ(),
+			// An explicit allowlist, never os.Environ() — see tofuEnv.
+			Env:    tofuEnv(),
 			Stdout: func(line string) { record(w.WriteLine("stdout", line)) },
 			Stderr: func(line string) { record(w.WriteLine("stderr", line)) },
 		})

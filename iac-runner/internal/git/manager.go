@@ -160,7 +160,7 @@ func NewManager(reposDir, keysDir string, repos []RepoConfig, run CommandRunner,
 // A failure must not block startup (ROADMAP SC-2), so it is returned for
 // the caller to log rather than made fatal.
 func (m *Manager) allowDubiousOwnership() error {
-	res, err := m.run(context.Background(), "", os.Environ(),
+	res, err := m.run(context.Background(), "", baseEnv(),
 		"git", "config", "--global", "--add", "safe.directory", "*")
 	if err != nil {
 		return fmt.Errorf("git: safe.directory guard could not run: %w", err)
@@ -249,10 +249,38 @@ func (m *Manager) sshEnv(name string) []string {
 	sshCmd := fmt.Sprintf(
 		"ssh -i %s -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=%s -o BatchMode=yes",
 		keyPath, knownHosts)
-	return append(os.Environ(),
+	return append(baseEnv(),
 		"GIT_SSH_COMMAND="+sshCmd,
 		"GIT_TERMINAL_PROMPT=0",
 	)
+}
+
+// envKeep is the allowlist of environment variables a git (and
+// therefore ssh) child receives by name.
+//
+//   - PATH   — git resolves ssh and its own helper binaries.
+//   - HOME   — `git config --global` and ssh's own defaults live there.
+//   - TMPDIR — pack and index scratch space.
+//   - LANG / LC_ALL / TZ — message formatting only.
+var envKeep = []string{"PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "TZ"}
+
+// baseEnv builds the environment every git invocation starts from.
+//
+// It is an allowlist rather than the inherited process environment.
+// The same reasoning as internal/jobq's tofuEnv applies with less
+// force here — git is a trusted child, not operator-authored code —
+// but the add-on container environment carries SUPERVISOR_TOKEN, the
+// deploy key is the only credential git legitimately needs, and a
+// narrow environment is one fewer thing that has to stay true when a
+// future transport (or a credential helper) is added.
+func baseEnv() []string {
+	env := make([]string, 0, len(envKeep))
+	for _, k := range envKeep {
+		if v, ok := os.LookupEnv(k); ok {
+			env = append(env, k+"="+v)
+		}
+	}
+	return env
 }
 
 // git runs one git invocation and converts a non-zero exit into a typed
@@ -444,7 +472,7 @@ func (m *Manager) Head(ctx context.Context, name string) string {
 // key. A failure is non-fatal: a pull that already succeeded must not be
 // reported as failed just because the SHA lookup did not work.
 func (m *Manager) resolveHead(ctx context.Context, workTree string) string {
-	res, err := m.run(ctx, workTree, os.Environ(), "git", "rev-parse", "HEAD")
+	res, err := m.run(ctx, workTree, baseEnv(), "git", "rev-parse", "HEAD")
 	if err != nil || res.ExitCode != 0 {
 		return ""
 	}

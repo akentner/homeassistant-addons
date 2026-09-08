@@ -635,3 +635,50 @@ func TestPlanRecordsWorktreeHead(t *testing.T) {
 		t.Errorf("plan run head_sha = %q, want %q", got.HeadSHA, fixtureHeadSHA)
 	}
 }
+
+// TestTofuChildEnvironmentIsAllowlisted is the CR-03 regression. tofu
+// executes arbitrary operator IaC (providers, local-exec provisioners,
+// external data sources), so the runner must hand it a built
+// environment rather than its own: SUPERVISOR_TOKEN is injected into
+// add-on containers and config.yaml sets homeassistant_api: true,
+// which makes that token usable against the Core API.
+func TestTofuChildEnvironmentIsAllowlisted(t *testing.T) {
+	t.Setenv("SUPERVISOR_TOKEN", "supervisor-token-must-not-leak")
+	t.Setenv("R2_SECRET_ACCESS_KEY", "r2-secret-must-not-leak")
+	t.Setenv("TF_LOG", "DEBUG")
+
+	rec := &recordedExec{}
+	e := newEnv(t, envOpts{repos: []string{"infra"}, maxParallel: 2, exec: rec.fn})
+	m := e.seedRun(runs.Meta{Repo: "infra", Dir: "envs/prod", Kind: contract.RunKindPlan, Status: contract.RunStatusRunning})
+	if _, _, err := e.runJobFor(m); err != nil {
+		t.Fatalf("runJob: %v", err)
+	}
+
+	for i, call := range mustCalls(t, rec, 2) {
+		if len(call.Env) == 0 {
+			t.Fatalf("call %d got an empty Env — nil would make os/exec inherit the parent environment", i)
+		}
+		for _, kv := range call.Env {
+			for _, forbidden := range []string{"SUPERVISOR_TOKEN=", "R2_SECRET_ACCESS_KEY="} {
+				if strings.HasPrefix(kv, forbidden) {
+					t.Errorf("call %d leaked %s to the tofu child", i, strings.TrimSuffix(forbidden, "="))
+				}
+			}
+		}
+		if !hasEnvKey(call.Env, "PATH") {
+			t.Errorf("call %d env = %v, want PATH (tofu resolves plugins and local-exec through it)", i, call.Env)
+		}
+		if !hasArg(call.Env, "TF_LOG=DEBUG") {
+			t.Errorf("call %d env = %v, want the TF_* operator knobs passed through", i, call.Env)
+		}
+	}
+}
+
+func hasEnvKey(env []string, key string) bool {
+	for _, kv := range env {
+		if strings.HasPrefix(kv, key+"=") {
+			return true
+		}
+	}
+	return false
+}
