@@ -56,8 +56,11 @@ type envOpts struct {
 	uncloned []string
 	// maxParallel is passed through to Deps.MaxParallel.
 	maxParallel int
-	// noTofu leaves the resolved tofu path empty so Submit must
-	// report run_tofu_not_found.
+	// noTofu clears the RESOLVED tofu path after construction so
+	// Submit must report run_tofu_not_found. Deps.TofuPath == ""
+	// means "look it up on PATH", and the CI/dev container does have
+	// a tofu on PATH, so the missing-binary condition can only be
+	// expressed by clearing the field New resolved.
 	noTofu bool
 	// exec is the injected ExecFunc.
 	exec ExecFunc
@@ -112,10 +115,6 @@ func newEnv(t *testing.T, o envOpts) *testEnv {
 		t.Fatalf("runs.NewStore: %v", err)
 	}
 
-	tofuPath := "/usr/bin/tofu"
-	if o.noTofu {
-		tofuPath = ""
-	}
 	timeout := o.applyTimeout
 	if timeout == 0 {
 		timeout = 30 * time.Second
@@ -132,10 +131,13 @@ func newEnv(t *testing.T, o envOpts) *testEnv {
 		MaxParallel:  o.maxParallel,
 		ApplyTimeout: timeout,
 		Exec:         execFn,
-		TofuPath:     tofuPath,
+		TofuPath:     "/usr/bin/tofu",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
+	}
+	if o.noTofu {
+		q.tofuPath = ""
 	}
 	return &testEnv{t: t, q: q, store: store, runsDir: runsDir, reposDir: reposDir}
 }

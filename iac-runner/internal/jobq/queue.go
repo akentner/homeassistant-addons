@@ -23,6 +23,9 @@ package jobq
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
+	"os/exec"
 	"sync"
 	"time"
 
@@ -51,6 +54,13 @@ const (
 type ExecFunc func(ctx context.Context, spec ExecSpec) (ExecResult, error)
 
 // ExecSpec is one command invocation.
+//
+// Path and Env are not in the plan's published interface sketch but
+// are required by its own DefaultExec body (`exec.CommandContext(ctx,
+// spec.Path, spec.Args...)` / `cmd.Env = spec.Env`): the resolved tofu
+// binary and the backend credential environment have to reach the
+// process somehow, and threading them through the spec keeps ExecFunc
+// a pure function of its argument rather than a closure over Queue.
 type ExecSpec struct {
 	Path    string
 	WorkDir string
@@ -68,7 +78,7 @@ type ExecResult struct {
 	TimedOut bool
 }
 
-// Deps is the constructor input for New.
+// Deps is the constructor input for New. 17-07 fills it from Options.
 type Deps struct {
 	Store        *runs.Store
 	Git          *git.Manager
@@ -80,7 +90,7 @@ type Deps struct {
 	TofuPath     string           // "" -> resolved via exec.LookPath("tofu")
 }
 
-// Request is one submission from the HTTP layer.
+// Request is one submission from the HTTP layer (17-06).
 type Request struct {
 	Repo string
 	Dir  string
@@ -90,7 +100,7 @@ type Request struct {
 // ErrCapacityExhausted is returned by Submit when every
 // max_parallel_jobs slot is occupied. CONTEXT D-06: saturation is
 // refused, never queued, so 17-06 can map it to HTTP 503 +
-// Retry-After: 30.
+// Retry-After: 30 with error_code apply_capacity_exhausted.
 var ErrCapacityExhausted = errors.New("jobq: max_parallel_jobs saturated")
 
 // Queue owns the two admission gates and the worker goroutines.
@@ -99,8 +109,15 @@ type Queue struct {
 	git     *git.Manager
 	backend statebackend.Backend
 
+	// sem is the D-04 global semaphore. Its capacity IS
+	// max_parallel_jobs; a send that would block means saturation.
 	sem chan struct{}
 
+	// locksMu guards locks. A plain map behind an RWMutex beats
+	// sync.Map here for the same reason terraform-bridge's
+	// internal/mutex documents: sync.Map has no Clear before process
+	// exit, so entries leak. Repo names come from a bounded Options
+	// list, so this map cannot grow unboundedly either way.
 	locksMu sync.RWMutex
 	locks   map[string]*sync.Mutex
 
@@ -112,7 +129,8 @@ type Queue struct {
 	applyTimeout time.Duration
 }
 
-// New validates deps and returns a ready Queue.
+// New validates deps, applies the D-04/D-15 defaults and returns a
+// ready Queue.
 func New(d Deps) (*Queue, error) {
 	if d.Store == nil {
 		return nil, errors.New("jobq: New requires a runs.Store")
@@ -120,44 +138,315 @@ func New(d Deps) (*Queue, error) {
 	if d.Git == nil {
 		return nil, errors.New("jobq: New requires a git.Manager")
 	}
+
+	maxParallel := d.MaxParallel
+	if maxParallel <= 0 {
+		maxParallel = defaultMaxParallel
+	}
+	if maxParallel > maxMaxParallel {
+		maxParallel = maxMaxParallel
+	}
+	applyTimeout := d.ApplyTimeout
+	if applyTimeout <= 0 {
+		applyTimeout = defaultApplyTimeout
+	}
+	execFn := d.Exec
+	if execFn == nil {
+		execFn = DefaultExec
+	}
+	now := d.Now
+	if now == nil {
+		now = time.Now
+	}
+
+	tofuPath := d.TofuPath
+	if tofuPath == "" {
+		// A failed lookup is deliberately NOT fatal at construction.
+		// The add-on must still start so GET /healthz can report
+		// tofu_on_path=false — the real cause — instead of the
+		// container crash-looping with no diagnosable surface. Submit
+		// turns the empty path into run_tofu_not_found per request.
+		if resolved, err := exec.LookPath("tofu"); err == nil {
+			tofuPath = resolved
+		}
+	}
+
 	return &Queue{
 		store:        d.Store,
 		git:          d.Git,
 		backend:      d.Backend,
-		sem:          make(chan struct{}, 1),
+		sem:          make(chan struct{}, maxParallel),
 		locks:        make(map[string]*sync.Mutex),
-		exec:         d.Exec,
-		now:          time.Now,
-		tofuPath:     d.TofuPath,
-		applyTimeout: d.ApplyTimeout,
+		exec:         execFn,
+		now:          now,
+		tofuPath:     tofuPath,
+		applyTimeout: applyTimeout,
 	}, nil
 }
 
-// lockFor returns the per-repo mutex, creating it on first reference.
+// lockFor returns the per-repo mutex, creating it on first reference
+// (D-05 lazy population). Read-then-upgrade so concurrent lookups for
+// distinct repos do not serialize on the map itself.
 func (q *Queue) lockFor(repo string) *sync.Mutex {
-	q.locksMu.Lock()
-	defer q.locksMu.Unlock()
+	q.locksMu.RLock()
 	lock, ok := q.locks[repo]
+	q.locksMu.RUnlock()
+	if ok {
+		return lock
+	}
+
+	q.locksMu.Lock()
+	// Re-check under the write lock — a concurrent caller may have
+	// raced us to create the entry.
+	lock, ok = q.locks[repo]
 	if !ok {
 		lock = &sync.Mutex{}
 		q.locks[repo] = lock
 	}
+	q.locksMu.Unlock()
 	return lock
 }
 
-// Submit admits one job and returns its run id.
+// Submit admits one job and returns its run id. It never blocks: the
+// tofu process runs in a worker goroutine, so RUN-02/RUN-03 can answer
+// 202 + Location immediately.
+//
+// ORDER MATTERS. Every rejection in steps 1-4 happens BEFORE the
+// semaphore acquire and before any run directory exists, so a stream
+// of malformed requests can neither consume capacity nor litter
+// /data/runs with stillborn runs.
 func (q *Queue) Submit(req Request) (string, error) {
-	return "", errors.New("jobq: Submit not implemented")
+	// 1. Unknown repo (D-19 run_unknown_repo).
+	cfg, ok := q.git.Repo(req.Repo)
+	if !ok {
+		return "", &git.Error{
+			Code:    contract.ErrCodeRunUnknownRepo,
+			Message: fmt.Sprintf("unknown repo %s", req.Repo),
+			Hint:    "add it to the `repos` Options list",
+		}
+	}
+
+	// 2. dir shape (D-21/D-22). The cleaned value is the ONLY string
+	// that may later be joined onto the repo working tree.
+	cleanDir, err := runs.ValidateDir(req.Dir)
+	if err != nil {
+		return "", &git.Error{
+			Code:    contract.ErrCodeRunInvalidDir,
+			Message: runs.InvalidDirMessage,
+			Hint:    "set `dir` to a path relative to the repo root, or omit it for the repo root",
+		}
+	}
+
+	// 3. Working tree present. EnsureCloned already returns the typed
+	// *git.Error carrying contract.ErrCodeGitCloneMissing (D-14), so
+	// jobq propagates git's error verbatim rather than re-deriving the
+	// code — one owner per taxonomy entry.
+	if err := q.git.EnsureCloned(req.Repo); err != nil {
+		return "", err
+	}
+
+	// 4. tofu binary resolvable. See New for why this is a per-request
+	// rejection rather than a startup failure.
+	if q.tofuPath == "" {
+		return "", &git.Error{
+			Code:    contract.ErrCodeRunTofuNotFound,
+			Message: "the tofu binary could not be resolved on PATH",
+			Hint:    "the tofu binary is missing from the image — check GET /healthz",
+		}
+	}
+
+	// 5. Global slot, NON-BLOCKING (D-06). A full semaphore is a
+	// refusal, not a wait: an invisible queue would hide back-pressure
+	// from the operator and let request timeouts pile up upstream.
+	select {
+	case q.sem <- struct{}{}:
+	default:
+		return "", ErrCapacityExhausted
+	}
+
+	runID, err := runs.NewRunID()
+	if err != nil {
+		<-q.sem
+		return "", fmt.Errorf("jobq: generate run id: %w", err)
+	}
+
+	if err := q.store.Create(runs.Meta{
+		RunID:     runID,
+		Repo:      req.Repo,
+		Dir:       cleanDir,
+		Kind:      req.Kind,
+		Status:    contract.RunStatusQueued,
+		StartedAt: q.now().UTC(),
+	}); err != nil {
+		<-q.sem
+		return "", fmt.Errorf("jobq: create run: %w", err)
+	}
+
+	q.wg.Add(1)
+	go q.work(runID, cfg.Name, cleanDir, req.Kind)
+	return runID, nil
 }
 
-// Drain waits for every in-flight job to finish.
+// work is the worker goroutine. Its release discipline IS the RUN-06
+// guarantee: the repo mutex and the global slot are given back on every
+// exit path — success, non-zero exit, timeout, store failure, and a
+// recovered panic.
+//
+// Defer registration order is load-bearing and runs bottom-up:
+//
+//   - `<-q.sem` is registered FIRST so it runs LAST. The slot is
+//     therefore released after the mutex, never before: a waiter that
+//     wins the freed slot can only find the mutex already available.
+//   - the recover defer is registered BEFORE lock.Lock() so a panic
+//     raised while holding the mutex is still recovered.
+func (q *Queue) work(runID, repo, cleanDir string, kind contract.RunKind) {
+	defer q.wg.Done()
+	defer func() { <-q.sem }()
+	defer func() {
+		if r := recover(); r != nil {
+			// A panic in exec or in the store must not wedge the repo
+			// mutex or leak a slot. Record the run as failed and let
+			// the deferred unlock and slot release do their job.
+			slog.Error("jobq.panic", "run_id", runID, "repo", repo, "panic", fmt.Sprint(r))
+			q.finish(runID, ExecResult{ExitCode: -1}, kind, "", errors.New("panic"))
+		}
+	}()
+
+	lock := q.lockFor(repo)
+	// RUN-06 normal case: serialize-and-wait. The bound exists only so
+	// a wedged apply cannot pin a slot forever; see acquire.
+	if !acquire(lock, q.applyTimeout) {
+		q.fail(runID, contract.ErrCodeApplyAlreadyRunning,
+			fmt.Sprintf("another job for repo %s held the serialization lock for longer than %s", repo, q.applyTimeout))
+		return
+	}
+	defer lock.Unlock()
+
+	if _, err := q.store.Update(runID, func(m *runs.Meta) error {
+		m.Status = contract.RunStatusRunning
+		// StartedAt is refreshed to the ACTUAL start: for a job that
+		// waited on the repo mutex the queued timestamp would make the
+		// run look far slower than tofu actually was.
+		m.StartedAt = q.now().UTC()
+		return nil
+	}); err != nil {
+		slog.Error("jobq.status_update_failed", "run_id", runID, "status", "running", "err", err.Error())
+		return
+	}
+
+	w, err := q.store.OpenOutput(runID)
+	if err != nil {
+		slog.Error("jobq.output_open_failed", "run_id", runID, "err", err.Error())
+		q.fail(runID, contract.ErrCodeApplyFailed, "the run output log could not be opened")
+		return
+	}
+	defer func() { _ = w.Close() }()
+
+	res, planFile, runErr := q.runJob(runID, repo, cleanDir, kind, w)
+	q.finish(runID, res, kind, planFile, runErr)
+}
+
+// acquire blocks until lock is held or timeout elapses, reporting
+// whether it won. sync.Mutex has no deadline, so the wait runs in a
+// goroutine and the caller selects on a timer — the terraform-bridge
+// internal/mutex pattern.
+//
+// On expiry the acquisition is handed off: a second goroutine waits for
+// the (eventual) lock and immediately releases it. Without that
+// hand-off the abandoned Lock() would succeed with nobody left to
+// Unlock, permanently wedging the repo — the exact failure this whole
+// file exists to prevent.
+func acquire(lock *sync.Mutex, timeout time.Duration) bool {
+	acquired := make(chan struct{}, 1)
+	go func() {
+		lock.Lock()
+		acquired <- struct{}{}
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case <-acquired:
+		return true
+	case <-timer.C:
+		go func() {
+			<-acquired
+			lock.Unlock()
+		}()
+		return false
+	}
+}
+
+// finish writes the terminal state for runID.
+func (q *Queue) finish(runID string, res ExecResult, kind contract.RunKind, planFile string, runErr error) {
+	exitCode := res.ExitCode
+	status := contract.RunStatusSucceeded
+	errorCode := ""
+
+	switch {
+	case res.TimedOut:
+		// D-16: a timed-out run is failed, never left running. The
+		// plan and apply paths report distinct codes (D-20 additive).
+		status = contract.RunStatusFailed
+		errorCode = contract.ErrCodeApplyTimeout
+		if kind == contract.RunKindPlan {
+			errorCode = contract.ErrCodePlanTimeout
+		}
+	case runErr != nil:
+		// The process could not be started at all, or a panic was
+		// recovered. Either way there is no tofu exit code to report.
+		status = contract.RunStatusFailed
+		errorCode = contract.ErrCodeApplyFailed
+	case exitCode != 0:
+		status = contract.RunStatusFailed
+		errorCode = contract.ErrCodeApplyFailed
+	}
+
+	finishedAt := q.now().UTC()
+	if _, err := q.store.Update(runID, func(m *runs.Meta) error {
+		m.Status = status
+		m.ExitCode = &exitCode
+		m.ErrorCode = errorCode
+		m.FinishedAt = &finishedAt
+		if status == contract.RunStatusSucceeded && kind == contract.RunKindPlan {
+			m.PlanFile = planFile
+		}
+		return nil
+	}); err != nil {
+		slog.Error("jobq.terminal_update_failed", "run_id", runID, "status", string(status), "err", err.Error())
+	}
+}
+
+// fail records a terminal failure that never reached a tofu process, so
+// there is no exit code to report.
+func (q *Queue) fail(runID, errorCode, message string) {
+	finishedAt := q.now().UTC()
+	if _, err := q.store.Update(runID, func(m *runs.Meta) error {
+		m.Status = contract.RunStatusFailed
+		m.ErrorCode = errorCode
+		m.FinishedAt = &finishedAt
+		return nil
+	}); err != nil {
+		slog.Error("jobq.fail_update_failed", "run_id", runID, "error_code", errorCode, "err", err.Error())
+		return
+	}
+	slog.Warn("jobq.run_failed", "run_id", runID, "error_code", errorCode, "message", message)
+}
+
+// Drain waits for every in-flight job to finish, or returns ctx.Err()
+// when the deadline passes first. cmd/runner/signals.go's 30s SIGTERM
+// window calls this (wired in 17-07).
 func (q *Queue) Drain(ctx context.Context) error {
-	return nil
-}
-
-// DefaultExec is the production os/exec implementation. Task 2
-// replaces this placeholder with the real SIGTERM->SIGKILL kill-chain
-// in exec.go.
-func DefaultExec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
-	return ExecResult{}, errors.New("jobq: DefaultExec not implemented")
+	done := make(chan struct{})
+	go func() {
+		q.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
