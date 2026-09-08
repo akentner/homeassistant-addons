@@ -28,3 +28,19 @@ base `iac-runner/Dockerfile` builds with) with the host module cache mounted. Tw
 - `internal/httpapi/handlers.TestHealthzBothPass` probes for a `tofu` binary via `exec.LookPath` and fails inside a bare
   toolchain container. This is an environment artifact, not a regression: with a stub `tofu` on PATH the suite is fully
   green. Consider making that test skip when `tofu` is absent (`t.Skip`) so the suite is hermetic.
+
+## hadolint DL3003 in iac-runner/Dockerfile (found by the Wave 2 post-merge gate)
+
+`make lint` fails with exit 1 on a single finding:
+
+```
+iac-runner/Dockerfile:40 DL3003 warning: Use WORKDIR to switch to a directory
+```
+
+The offending `cd /tmp && \` sits inside the OpenTofu download `RUN` of the `tofu` build stage, introduced by 17-01
+(commit `81b0f54`). It is the only remaining `make lint` failure in the phase — every other hook passes.
+
+Assigned to **17-07**, which already lists `iac-runner/Dockerfile` in `files_modified` and must run a local
+`docker build` for its other Dockerfile work anyway (project CLAUDE.md: no untested Dockerfile changes). The fix is to
+replace the in-`RUN` `cd /tmp` with a `WORKDIR /tmp` before that `RUN` (and restore the prior workdir afterwards if any
+later instruction in the stage depends on it), then re-run `make lint` to confirm a clean exit.
