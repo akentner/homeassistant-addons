@@ -99,13 +99,13 @@ entry, because a silently-dropped repo would surface much later as an inexplicab
 The runner's own validation is the stricter of the two, because a hand-edited `/data/options.json` bypasses the
 Supervisor schema entirely:
 
-- `url` must match `^(git@|ssh://).+$`. That rules out git's `ext::` transport (which executes a command) and any
-  value starting with `-`, which git would parse as an option.
+- `url` must match `^(git@|ssh://).+$`. That rules out git's `ext::` transport (which executes a command) and any value
+  starting with `-`, which git would parse as an option.
 - `branch` and `ref` must match `^[A-Za-z0-9][A-Za-z0-9._/+-]{0,254}$` — no leading `-`, no whitespace, no shell
   metacharacters. Both land in a positional argv slot.
 
-Every git invocation additionally passes `--` before its operands, so even an accepted value can never be re-read as
-an option.
+Every git invocation additionally passes `--` before its operands, so even an accepted value can never be re-read as an
+option.
 
 Each entry is cloned into `/data/repos/<name>/` at startup. `branch` defaults to `main` when empty. A non-empty `ref`
 pins the checkout to that commit or tag and takes precedence over `branch`.
@@ -465,17 +465,17 @@ status they would carry if a future endpoint ever returns them directly.
 redacted at READ time, not write time: the raw log stays intact for post-mortem inside the container, and every line
 served over HTTP is redacted by construction. What is masked:
 
-| Shape                                    | Example source                                  |
-| ---------------------------------------- | ----------------------------------------------- |
-| 20-char upper-alphanumeric token         | AWS-style access key id                         |
-| 40-char base64-ish token                 | AWS-style secret access key                     |
-| 32- or 64-char lowercase-hex token       | Cloudflare R2 access key id / secret            |
-| `scheme://user:password@host`            | credentials inlined in an endpoint or git remote |
-| a `-----BEGIN` block, **body and all**   | SSH or TLS private key                          |
+| Shape                                  | Example source                                   |
+| -------------------------------------- | ------------------------------------------------ |
+| 20-char upper-alphanumeric token       | AWS-style access key id                          |
+| 40-char base64-ish token               | AWS-style secret access key                      |
+| 32- or 64-char lowercase-hex token     | Cloudflare R2 access key id / secret             |
+| `scheme://user:password@host`          | credentials inlined in an endpoint or git remote |
+| a `-----BEGIN` block, **body and all** | SSH or TLS private key                           |
 
-The PEM rule spans lines: `-----BEGIN` masks every following line until the matching `-----END`, so a multi-line
-private key never reaches the API with only its header masked. Pagination does not break it — a page that starts in the
-middle of a key body is still masked.
+The PEM rule spans lines: `-----BEGIN` masks every following line until the matching `-----END`, so a multi-line private
+key never reaches the API with only its header masked. Pagination does not break it — a page that starts in the middle
+of a key body is still masked.
 
 Two consequences worth knowing: a bare 32-, 40- or 64-character hex string in tofu output (a checksum, a git SHA) is
 masked as well, and a redacted line reads `<redacted>` in place of the whole token. Nothing is lost — the untouched
@@ -483,8 +483,8 @@ bytes are in `/data/runs/{run_id}/output.log` inside the container.
 
 A `redaction.audit` log record is emitted for every `GET /v1/runs/{id}` page on which **at least one** redaction
 happened, carrying the run id, the page, and the number of redactions applied. A page with nothing credential-shaped on
-it emits no record: a running apply is polled repeatedly, and a zero-record per poll would bury the ones that matter.
-So no record means nothing was withheld from that page. Grep the add-on log for `redaction.audit` to audit it.
+it emits no record: a running apply is polled repeatedly, and a zero-record per poll would bury the ones that matter. So
+no record means nothing was withheld from that page. Grep the add-on log for `redaction.audit` to audit it.
 
 ## Startup and shutdown records
 
@@ -530,13 +530,13 @@ semantics for R2 were verified empirically in Phase 16 (IRUN-H-1 spike result do
 sources. The runner therefore does **not** hand it the add-on container's environment. Each `tofu` process gets a built
 environment containing only:
 
-| Variable            | Why                                                             |
-| ------------------- | --------------------------------------------------------------- |
-| `PATH`              | plugin resolution and any `local-exec` shell                    |
-| `HOME`              | CLI config and the provider plugin cache                        |
-| `TMPDIR`            | provider downloads, plan serialization                          |
-| `LANG`/`LC_ALL`/`TZ`| output formatting                                               |
-| `TF_*` / `TOFU_*`   | tofu's own documented knobs, passed through wholesale           |
+| Variable             | Why                                                   |
+| -------------------- | ----------------------------------------------------- |
+| `PATH`               | plugin resolution and any `local-exec` shell          |
+| `HOME`               | CLI config and the provider plugin cache              |
+| `TMPDIR`             | provider downloads, plan serialization                |
+| `LANG`/`LC_ALL`/`TZ` | output formatting                                     |
+| `TF_*` / `TOFU_*`    | tofu's own documented knobs, passed through wholesale |
 
 Notably absent: `SUPERVISOR_TOKEN`. The Supervisor injects it into every add-on container and this add-on declares
 `homeassistant_api: true` (required for the Phase 18 MQTT service connection), which would make that token usable
