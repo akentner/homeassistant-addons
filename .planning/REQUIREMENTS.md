@@ -282,41 +282,41 @@ Discovery.
 - [x] **SEC-02**: Add-on emits structured JSON logs with a scrubbing `slog.Handler` wrapper (case-insensitive key-name
       mask for `Authorization`, `Bearer`, `token`, `password`, `key`, `secret` → `<redacted>`) — same pattern as
       `terraform-bridge` AUTH-05; a unit test asserts no credential field ever survives the handler
-- [ ] **SEC-03**: `tofu` stdout/stderr captured per-run to `/data/runs/{run_id}/output.log` is redacted for
+- [x] **SEC-03**: `tofu` stdout/stderr captured per-run to `/data/runs/{run_id}/output.log` is redacted for
       credential-like patterns before being surfaced via `GET /v1/runs/{id}` (e.g. R2 access keys `^[A-Z0-9]{20}$`, AWS
       secret keys `^[A-Za-z0-9/+=]{40}$`, SSH private-key headers `-----BEGIN`); a `redaction.audit` log record counts
       redactions per-run
 
 ### GIT — Git Integration
 
-- [ ] **GIT-01**: Add-on options schema accepts a list of `repos` entries; each entry has `name` (URI-safe identifier),
+- [x] **GIT-01**: Add-on options schema accepts a list of `repos` entries; each entry has `name` (URI-safe identifier),
       `url` (SSH URL like `git@github.com:akentner/homelab-infra.git`), `branch` (default `main`), `ref` (optional
       commit/tag pin)
-- [ ] **GIT-02**: At startup, for each configured repo, the add-on clones into `/data/repos/<name>/` if absent; existing
+- [x] **GIT-02**: At startup, for each configured repo, the add-on clones into `/data/repos/<name>/` if absent; existing
       directories are left untouched (caller is responsible for triggering `POST /v1/repos/{name}/pull`)
-- [ ] **GIT-03**: `POST /v1/repos/{name}/pull` runs `git pull --ff-only` (or the configured ref) using the SSH deploy
+- [x] **GIT-03**: `POST /v1/repos/{name}/pull` runs `git pull --ff-only` (or the configured ref) using the SSH deploy
       key `/data/keys/<name>.key` and `known_hosts` from `/data/keys/known_hosts`; non-fast-forward pulls and auth
       failures surface as typed HTTP 409 / 403 errors with actionable messages
-- [ ] **GIT-04**: Git errors (SSH handshake, DNS failure, ref not found) are surfaced as typed HTTP responses with
+- [x] **GIT-04**: Git errors (SSH handshake, DNS failure, ref not found) are surfaced as typed HTTP responses with
       `error_code: "git_*"` and a hint pointing at the relevant Options field; no stack traces in the response body
 
 ### RUN — Runner HTTP API
 
-- [ ] **RUN-01**: Add-on exposes `GET /v1/version` returning JSON
+- [x] **RUN-01**: Add-on exposes `GET /v1/version` returning JSON
       `{runner_version, schema_version, min_supported_opentofu, max_supported_opentofu}` — no provider handshake (no
       external Provider binary consumes this API in v1.4; schema_version reserved for future use)
-- [ ] **RUN-02**: Add-on exposes `POST /v1/plan` accepting JSON `{repo: "<name>", dir: "<subpath>"}`; starts
+- [x] **RUN-02**: Add-on exposes `POST /v1/plan` accepting JSON `{repo: "<name>", dir: "<subpath>"}`; starts
       `tofu init -input=false && tofu plan -no-color -out=/data/runs/{run_id}/plan.tfplan` as a background job; returns
       HTTP 202 with `{run_id, status: "queued"}` and a `Location: /v1/runs/{run_id}` header
-- [ ] **RUN-03**: Add-on exposes `POST /v1/apply` accepting the same body as `/v1/plan`; starts
+- [x] **RUN-03**: Add-on exposes `POST /v1/apply` accepting the same body as `/v1/plan`; starts
       `tofu apply -no-color -auto-approve /data/runs/{run_id}/plan.tfplan` (or `tofu apply -no-color -auto-approve`
       inline when no plan was provided); returns HTTP 202 with `{run_id, status: "queued"}`
-- [ ] **RUN-04**: Add-on exposes `GET /v1/runs/{id}` returning JSON
+- [x] **RUN-04**: Add-on exposes `GET /v1/runs/{id}` returning JSON
       `{run_id, repo, kind: "plan|apply", status:     "queued|running|succeeded|failed", exit_code, started_at, finished_at, output_lines: [...], page, page_size}`;
       `output_lines` are paginated (default 100 lines, max 1000); secret-redacted per SEC-03
-- [ ] **RUN-05**: Add-on exposes `GET /v1/runs` returning the last N runs (default 20, max 100) ordered by
+- [x] **RUN-05**: Add-on exposes `GET /v1/runs` returning the last N runs (default 20, max 100) ordered by
       `started_at desc`; supports `?repo=<name>` and `?status=<status>` filters
-- [ ] **RUN-06**: Two concurrent `POST /v1/apply` calls targeting the same repo are serialized by an in-process per-repo
+- [x] **RUN-06**: Two concurrent `POST /v1/apply` calls targeting the same repo are serialized by an in-process per-repo
       mutex; the second call returns HTTP 202 with `status: "queued"` but waits in line until the first finishes;
       cross-repo applies proceed in parallel; mutex is released on job exit (success, failure, or crash recovery)
 
@@ -350,10 +350,10 @@ Discovery.
 - [x] **OBS-01**: Add-on emits one structured JSON log record per HTTP request with fields `ts`, `level`, `msg`,
       `request_id`, `route`, `method`, `status`, `duration_ms` — same pattern as `terraform-bridge` OPS-01;
       `Authorization` header is stripped before request-log snapshot (chi middleware)
-- [ ] **OBS-02**: `tofu` stdout/stderr for each run is captured line-by-line to `/data/runs/{run_id}/output.log` (one
+- [x] **OBS-02**: `tofu` stdout/stderr for each run is captured line-by-line to `/data/runs/{run_id}/output.log` (one
       line per capture, prefixed with `ts`); the file is rotated/deleted 24 hours after the run completes (configurable
       via `runs_retention_hours`, default 24)
-- [ ] **OBS-03**: `GET /v1/runs/{id}` returns paginated `output_lines`; `page` and `page_size` query parameters allow
+- [x] **OBS-03**: `GET /v1/runs/{id}` returns paginated `output_lines`; `page` and `page_size` query parameters allow
       incremental fetching for long apply outputs; the file-on-disk is the source of truth, not an in-memory buffer
 
 ---
