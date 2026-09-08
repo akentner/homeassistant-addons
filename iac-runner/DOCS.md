@@ -481,9 +481,10 @@ Two consequences worth knowing: a bare 32-, 40- or 64-character hex string in to
 masked as well, and a redacted line reads `<redacted>` in place of the whole token. Nothing is lost — the untouched
 bytes are in `/data/runs/{run_id}/output.log` inside the container.
 
-Each `GET /v1/runs/{id}` emits one `redaction.audit` log record for the page it served, carrying the run id and the
-number of redactions applied — so an operator can tell "nothing was redacted" from "redaction never ran". Grep the
-add-on log for `redaction.audit` to audit it.
+A `redaction.audit` log record is emitted for every `GET /v1/runs/{id}` page on which **at least one** redaction
+happened, carrying the run id, the page, and the number of redactions applied. A page with nothing credential-shaped on
+it emits no record: a running apply is polled repeatedly, and a zero-record per poll would bury the ones that matter.
+So no record means nothing was withheld from that page. Grep the add-on log for `redaction.audit` to audit it.
 
 ## Startup and shutdown records
 
