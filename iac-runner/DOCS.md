@@ -76,8 +76,8 @@ Default: `"r2"`. Selects the Terraform state backend. One of `"r2"`, `"s3"`, `"l
 - `state_backend: "local"`: state stored at `/data/terraform.tfstate`. No external credentials required. Lock is
   file-based at `/data/terraform.tfstate.lock` (HA backup covers both files automatically).
 
-Any other value is rejected at the HA Supervisor UI level (the `config.yaml` schema uses `list(match(^(r2|s3|local)$))`)
-AND at runtime by `statebackend.New` (returns `ErrUnsupported`).
+Any other value is rejected at the HA Supervisor UI level (the `config.yaml` schema uses `list(r2|s3|local)`) AND at
+runtime by `statebackend.New` (returns `ErrUnsupported`).
 
 ### `r2_bucket`
 
