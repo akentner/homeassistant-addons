@@ -59,7 +59,7 @@ worked `curl` call, the complete `error_code` table, the bearer-token issuance +
 chmod-600 requirement per backend and per repo, the three state backends with `use_lockfile` semantics, the
 startup/shutdown log records, and the log-scrubbing invariant.
 
-[release-shield]: https://img.shields.io/badge/version-v0.2.0-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v0.2.0
+[release-shield]: https://img.shields.io/badge/version-v0.2.1-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v0.2.1
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
 [amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
