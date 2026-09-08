@@ -122,6 +122,16 @@ type Queue struct {
 	locksMu sync.RWMutex
 	locks   map[string]*sync.Mutex
 
+	// pending counts admitted-but-unfinished jobs per repo: the one
+	// executing plus the ones waiting on that repo's mutex. It is the
+	// per-repo admission bound that replaces "a waiter holds a global
+	// slot" — see work for why that mattered. maxPending is
+	// max_parallel_jobs, so the refusal threshold for a single repo is
+	// unchanged.
+	pendingMu  sync.Mutex
+	pending    map[string]int
+	maxPending int
+
 	wg sync.WaitGroup
 
 	exec         ExecFunc
@@ -178,6 +188,8 @@ func New(d Deps) (*Queue, error) {
 		backend:      d.Backend,
 		sem:          make(chan struct{}, maxParallel),
 		locks:        make(map[string]*sync.Mutex),
+		pending:      make(map[string]int),
+		maxPending:   maxParallel,
 		exec:         execFn,
 		now:          now,
 		tofuPath:     tofuPath,
@@ -259,15 +271,35 @@ func (q *Queue) Submit(req Request) (string, error) {
 	// 5. Global slot, NON-BLOCKING (D-06). A full semaphore is a
 	// refusal, not a wait: an invisible queue would hide back-pressure
 	// from the operator and let request timeouts pile up upstream.
+	//
+	// The slot admitted here covers the SUBMISSION only. work() hands
+	// it straight back before it waits on the repo mutex and takes a
+	// fresh one for the execution window, so capacity means "tofu
+	// processes running", not "jobs that exist" (WR-08).
 	select {
 	case q.sem <- struct{}{}:
 	default:
 		return "", ErrCapacityExhausted
 	}
 
+	// 6. Per-repo admission bound. Because a waiter no longer holds a
+	// global slot, something else has to stop one repo from accruing
+	// unbounded goroutines and run directories. maxPending equals
+	// max_parallel_jobs, so a single repo still refuses the same
+	// submission it refused before — the difference is that OTHER
+	// repos are no longer refused with it.
+	if !q.reservePending(cfg.Name) {
+		<-q.sem
+		return "", ErrCapacityExhausted
+	}
+	releaseAdmission := func() {
+		q.releasePending(cfg.Name)
+		<-q.sem
+	}
+
 	runID, err := runs.NewRunID()
 	if err != nil {
-		<-q.sem
+		releaseAdmission()
 		return "", fmt.Errorf("jobq: generate run id: %w", err)
 	}
 
@@ -279,7 +311,7 @@ func (q *Queue) Submit(req Request) (string, error) {
 		Status:    contract.RunStatusQueued,
 		StartedAt: q.now().UTC(),
 	}); err != nil {
-		<-q.sem
+		releaseAdmission()
 		// Create does MkdirAll and THEN writes meta.json, so a
 		// writeMeta failure — a full disk, precisely when this matters
 		// — leaves a meta-less directory behind. Retention can only
@@ -300,20 +332,31 @@ func (q *Queue) Submit(req Request) (string, error) {
 }
 
 // work is the worker goroutine. Its release discipline IS the RUN-06
-// guarantee: the repo mutex and the global slot are given back on every
-// exit path — success, non-zero exit, timeout, store failure, and a
-// recovered panic.
+// guarantee: the repo mutex, the per-repo admission reservation and
+// the global slot are given back on every exit path — success,
+// non-zero exit, timeout, store failure, and a recovered panic.
 //
-// Defer registration order is load-bearing and runs bottom-up:
+// ORDER: the admission slot Submit took is released BEFORE the wait on
+// the repo mutex, and a fresh slot is taken after the mutex is held.
 //
-//   - `<-q.sem` is registered FIRST so it runs LAST. The slot is
-//     therefore released after the mutex, never before: a waiter that
-//     wins the freed slot can only find the mutex already available.
-//   - the recover defer is registered BEFORE lock.Lock() so a panic
-//     raised while holding the mutex is still recovered.
+// Holding one slot across the wait made a same-repo waiter consume
+// capacity for the entire wait — bounded only by apply_timeout, 60
+// minutes by default. With max_parallel_jobs at its default of 4, four
+// queued applies against ONE repo pinned the whole runner: every other
+// repo's /v1/plan got 503 apply_capacity_exhausted while three of
+// those four slots had no tofu process behind them at all. That
+// contradicts D-06's purpose, which is for saturation to mean "the
+// runner is busy".
+//
+// Deadlock is not possible in the new order: a slot is only ever held
+// by a job that already owns its repo mutex and is executing, and
+// every such job finishes or times out.
+//
+// The recover defer is registered BEFORE lock.Lock() so a panic
+// raised while holding the mutex is still recovered.
 func (q *Queue) work(runID, repo, cleanDir string, kind contract.RunKind) {
 	defer q.wg.Done()
-	defer func() { <-q.sem }()
+	defer q.releasePending(repo)
 	defer func() {
 		if r := recover(); r != nil {
 			// A panic in exec or in the store must not wedge the repo
@@ -324,15 +367,29 @@ func (q *Queue) work(runID, repo, cleanDir string, kind contract.RunKind) {
 		}
 	}()
 
+	// Hand the admission slot back: waiting on a repo mutex is not
+	// work, and it must not look like capacity to another repo.
+	<-q.sem
+
 	lock := q.lockFor(repo)
 	// RUN-06 normal case: serialize-and-wait. The bound exists only so
-	// a wedged apply cannot pin a slot forever; see acquire.
+	// a wedged apply cannot pin a repo forever; see acquire.
 	if !acquire(lock, q.applyTimeout) {
 		q.fail(runID, contract.ErrCodeApplyAlreadyRunning,
 			fmt.Sprintf("another job for repo %s held the serialization lock for longer than %s", repo, q.applyTimeout))
 		return
 	}
 	defer lock.Unlock()
+
+	// The execution window is the only thing max_parallel_jobs bounds.
+	// This wait is short by construction: every holder is a running
+	// job, and each one is capped by apply_timeout.
+	if !acquireSlot(q.sem, q.applyTimeout) {
+		q.fail(runID, contract.ErrCodeApplyCapacityExhausted,
+			fmt.Sprintf("no execution slot became free for repo %s within %s", repo, q.applyTimeout))
+		return
+	}
+	defer func() { <-q.sem }()
 
 	if _, err := q.store.Update(runID, func(m *runs.Meta) error {
 		m.Status = contract.RunStatusRunning
@@ -361,6 +418,46 @@ func (q *Queue) work(runID, repo, cleanDir string, kind contract.RunKind) {
 
 	res, planFile, runErr := q.runJob(runID, repo, cleanDir, kind, w)
 	q.finish(runID, res, kind, planFile, runErr)
+}
+
+// reservePending takes one per-repo admission reservation, reporting
+// whether it won. A full repo is refused, never queued — the same D-06
+// posture the global semaphore has.
+func (q *Queue) reservePending(repo string) bool {
+	q.pendingMu.Lock()
+	defer q.pendingMu.Unlock()
+	if q.pending[repo] >= q.maxPending {
+		return false
+	}
+	q.pending[repo]++
+	return true
+}
+
+// releasePending gives one reservation back. The map entry is deleted
+// at zero so the map stays the size of the ACTIVE repo set.
+func (q *Queue) releasePending(repo string) {
+	q.pendingMu.Lock()
+	defer q.pendingMu.Unlock()
+	if q.pending[repo] <= 1 {
+		delete(q.pending, repo)
+		return
+	}
+	q.pending[repo]--
+}
+
+// acquireSlot blocks until a semaphore slot is free or timeout
+// elapses, reporting whether it won. Unlike the admission acquire in
+// Submit this one WAITS: the caller already holds its repo mutex, so
+// refusing here would fail a job the runner has already accepted.
+func acquireSlot(sem chan struct{}, timeout time.Duration) bool {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case sem <- struct{}{}:
+		return true
+	case <-timer.C:
+		return false
+	}
 }
 
 // acquire blocks until lock is held or timeout elapses, reporting

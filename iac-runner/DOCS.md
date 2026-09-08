@@ -143,6 +143,11 @@ server cannot safely host many concurrent state-locking tofu processes.
 Jobs for the SAME repo are serialized by a per-repo mutex regardless of this value: a second apply on the same repo is
 accepted with `202` and waits its turn (RUN-06). Only cross-repo jobs actually run in parallel.
 
+`max_parallel_jobs` bounds **running tofu processes**, not jobs that exist. A job waiting on its repo's mutex holds no
+slot, so a repo with a queue of its own cannot make another repo's `/v1/plan` return 503 while nothing is executing.
+Each repo does have its own admission bound of `max_parallel_jobs` waiting-or-running jobs; past that, further
+submissions **for that repo** are refused with the same `apply_capacity_exhausted`.
+
 ### `apply_timeout_minutes`
 
 Default: `60`. Range: `5..1440`. Integer. Per-job wall-clock cap covering the WHOLE command sequence (`tofu init` +

@@ -448,3 +448,75 @@ func TestDrainLeavesNoRunningRuns(t *testing.T) {
 		}
 	}
 }
+
+// TestSameRepoWaiterDoesNotStarveOtherRepos is the WR-08 regression.
+// The global slot used to be taken in Submit and held across the wait
+// on the per-repo mutex, so a job queued behind another job on the
+// SAME repo consumed capacity for the whole wait — up to
+// apply_timeout, 60 minutes by default. Four queued applies against
+// one repo pinned the entire runner: every other repo got 503
+// apply_capacity_exhausted while three of the four slots had no tofu
+// process behind them.
+func TestSameRepoWaiterDoesNotStarveOtherRepos(t *testing.T) {
+	g := newGatedExec()
+	e := newEnv(t, envOpts{repos: []string{"a", "b"}, maxParallel: 2, exec: g.fn})
+
+	first, err := e.q.Submit(Request{Repo: "a", Kind: contract.RunKindApply})
+	if err != nil {
+		t.Fatalf("Submit a#1: %v", err)
+	}
+	g.waitEntered(t, "the first job to occupy an execution slot")
+
+	second, err := e.q.Submit(Request{Repo: "a", Kind: contract.RunKindApply})
+	if err != nil {
+		t.Fatalf("Submit a#2: %v", err)
+	}
+
+	// The waiter hands its admission slot back asynchronously, so the
+	// claim is that repo b becomes admissible — under the old
+	// ordering it never would, until the first job finished.
+	var third string
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		id, err := e.q.Submit(Request{Repo: "b", Kind: contract.RunKindApply})
+		if err == nil {
+			third = id
+			break
+		}
+		if !errors.Is(err, ErrCapacityExhausted) {
+			t.Fatalf("Submit b: %v", err)
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("repo b stayed refused while a same-repo waiter held a slot (WR-08)")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// Admitted is not enough: it has to actually execute, which means
+	// it won a real slot while repo a's second job was still waiting.
+	if repo := g.waitEntered(t, "repo b to enter exec"); repo != "b" {
+		t.Fatalf("entered repo = %q, want b", repo)
+	}
+	if got := e.statusOf(second); got != contract.RunStatusQueued {
+		t.Fatalf("repo a's second run = %q, want it still queued behind the first", got)
+	}
+
+	// The per-repo admission bound is what replaces "a waiter holds a
+	// global slot": maxPending == max_parallel_jobs, so repo a refuses
+	// its third submission exactly where it refused before.
+	if _, err := e.q.Submit(Request{Repo: "a", Kind: contract.RunKindApply}); !errors.Is(err, ErrCapacityExhausted) {
+		t.Fatalf("third same-repo Submit err = %v, want ErrCapacityExhausted", err)
+	}
+
+	g.releaseAll("a", "b")
+	e.drain()
+	for _, id := range []string{first, second, third} {
+		e.waitStatus(id, contract.RunStatusSucceeded)
+	}
+	// RUN-06 still holds: the two repo-a jobs never overlapped.
+	if peak := g.occ.peakRepo("a"); peak != 1 {
+		t.Errorf("same-repo occupancy peaked at %d, want 1", peak)
+	}
+	if peak := g.occ.peakGlobal(); peak > 2 {
+		t.Errorf("global occupancy peaked at %d, want at most max_parallel_jobs (2)", peak)
+	}
+}
