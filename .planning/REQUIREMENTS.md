@@ -261,8 +261,8 @@ Discovery.
 
 ### STBK — State Backend (R2 / S3 / local)
 
-- [x] **STBK-01**: Add-on options schema exposes `state_backend: list(match(^(r2|s3|local)$))` defaulting to `r2`;
-      selected backend drives which credentials are required at startup
+- [x] **STBK-01**: Add-on options schema exposes `state_backend: list(r2|s3|local)` defaulting to `r2`; selected backend
+      drives which credentials are required at startup
 - [x] **STBK-02**: When `state_backend = r2`: add-on reads R2 access key from `/data/keys/r2-access.key`, secret key
       from `/data/keys/r2-secret.key`, account ID from `/data/keys/r2-account-id` (plaintext, non-sensitive), bucket
       from Options (`r2_bucket`); endpoint constructed as `https://<account_id>.r2.cloudflarestorage.com`
