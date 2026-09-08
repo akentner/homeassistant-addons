@@ -350,51 +350,77 @@ func DefaultExec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 	cmd.WaitDelay = killGrace
 
-	stdout, err := cmd.StdoutPipe()
+	// os.Pipe rather than cmd.StdoutPipe/StderrPipe, and the reason is
+	// the ORDERING of the join against cmd.Wait().
+	//
+	// Wait() closes the pipes StdoutPipe created, which cuts a
+	// still-running scanner short — so with those the scanners have to
+	// be joined BEFORE Wait. But that join must be bounded (an
+	// orphaned grandchild can hold the write end open forever), and a
+	// bound armed before the process has even exited fires on every
+	// command that runs longer than it: every real tofu init, plan and
+	// apply. The result was a WARN per invocation plus a guarantee
+	// that did not hold on the normal path.
+	//
+	// A pipe the runner owns is not touched by Wait, so the process
+	// can be reaped FIRST and the scanners joined afterwards, when a
+	// bound finally means what it says.
+	outR, outW, err := os.Pipe()
 	if err != nil {
 		return ExecResult{ExitCode: -1}, fmt.Errorf("jobq: stdout pipe: %w", err)
 	}
-	stderr, err := cmd.StderrPipe()
+	defer outR.Close()
+	errR, errW, err := os.Pipe()
 	if err != nil {
+		outW.Close()
 		return ExecResult{ExitCode: -1}, fmt.Errorf("jobq: stderr pipe: %w", err)
 	}
+	defer errR.Close()
+	cmd.Stdout = outW
+	cmd.Stderr = errW
 
 	if err := cmd.Start(); err != nil {
+		outW.Close()
+		errW.Close()
 		return ExecResult{ExitCode: -1}, fmt.Errorf("jobq: start %s: %w", spec.Path, err)
 	}
+	// The child holds its own copies of the write ends now. The parent
+	// MUST drop its copies or the reads below never see EOF.
+	outW.Close()
+	errW.Close()
 
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go scanLines(&wg, stdout, spec.Stdout)
-	go scanLines(&wg, stderr, spec.Stderr)
+	go scanLines(&wg, outR, spec.Stdout)
+	go scanLines(&wg, errR, spec.Stderr)
 
-	// Join the scanners BEFORE cmd.Wait() so no line emitted just
-	// before exit is lost — Wait closes the pipes, which would cut a
-	// still-running scanner short.
-	//
-	// The join is BOUNDED, though: a killed shell can leave an
-	// orphaned grandchild holding the pipe's write end, in which case
-	// EOF never arrives and an unbounded join would hang the worker
-	// forever (exactly the wedge the whole timeout chain exists to
-	// prevent). After killGrace we hand over to Wait, whose own
-	// WaitDelay closes the pipes and unblocks the scanners.
 	scanned := make(chan struct{})
 	go func() {
 		wg.Wait()
 		close(scanned)
 	}()
-	joinTimer := time.NewTimer(killGrace)
-	select {
-	case <-scanned:
-	case <-joinTimer.C:
-		slog.Warn("jobq.output_join_timeout", "path", spec.Path)
-	}
-	joinTimer.Stop()
 
 	// Wait's error is deliberately not propagated: a non-zero exit, a
 	// signal death and a post-cancel exit all arrive here, and
 	// ProcessState carries the only fact the caller needs.
 	waitErr := cmd.Wait()
+
+	// The process is gone, so EOF is imminent — unless a grandchild
+	// inherited the write end, which is the wedge the whole timeout
+	// chain exists to prevent. Bound the join from HERE, and on expiry
+	// close the read ends: that is what unblocks the scanners, so the
+	// join afterwards is guaranteed to complete and no goroutine
+	// outlives this call.
+	joinTimer := time.NewTimer(killGrace)
+	defer joinTimer.Stop()
+	select {
+	case <-scanned:
+	case <-joinTimer.C:
+		slog.Warn("jobq.output_join_timeout", "path", spec.Path)
+		outR.Close()
+		errR.Close()
+		<-scanned
+	}
 
 	res := ExecResult{
 		ExitCode: -1,

@@ -1,7 +1,9 @@
 package jobq
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -681,4 +683,71 @@ func hasEnvKey(env []string, key string) bool {
 		}
 	}
 	return false
+}
+
+// lockedBuffer serializes writes so one slog handler can be shared
+// with the goroutines DefaultExec starts.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
+}
+
+// TestDefaultExecLongCommandJoinsCleanly is the WR-01 regression. The
+// bounded join used to be armed right after Start, so every command
+// that outlived killGrace — i.e. every real tofu init, plan and apply
+// — took the timeout branch, logged a WARN, and voided the
+// "join before Wait" guarantee on the normal path. The bound now
+// starts when the process is already gone, so a slow-but-healthy
+// command joins silently and keeps its tail output.
+func TestDefaultExecLongCommandJoinsCleanly(t *testing.T) {
+	restoreGrace := killGrace
+	killGrace = 300 * time.Millisecond
+	defer func() { killGrace = restoreGrace }()
+
+	var buf lockedBuffer
+	restoreLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	defer slog.SetDefault(restoreLogger)
+
+	var mu sync.Mutex
+	var out []string
+	res, err := DefaultExec(context.Background(), ExecSpec{
+		Path: "/bin/sh",
+		// Runs ~3x killGrace, and prints AFTER the old bound would
+		// have fired.
+		Args: []string{"-c", "echo first; sleep 1; echo last"},
+		Stdout: func(l string) {
+			mu.Lock()
+			out = append(out, l)
+			mu.Unlock()
+		},
+		Stderr: func(string) {},
+	})
+	if err != nil {
+		t.Fatalf("DefaultExec: %v", err)
+	}
+	if res.ExitCode != 0 || res.TimedOut {
+		t.Fatalf("result = %+v, want a clean exit", res)
+	}
+	mu.Lock()
+	got := strings.Join(out, ",")
+	mu.Unlock()
+	if got != "first,last" {
+		t.Errorf("stdout = %q, want %q — the tail line was lost", got, "first,last")
+	}
+	if logged := buf.String(); strings.Contains(logged, "output_join_timeout") {
+		t.Errorf("a healthy long command logged the join timeout:\n%s", logged)
+	}
 }
