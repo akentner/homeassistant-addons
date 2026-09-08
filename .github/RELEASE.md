@@ -30,17 +30,19 @@ version itself. CalVer is supported (`authentik/v2026.8.0`); pre-release and sub
 
 Every per-addon build workflow (`build-<addon>.yml`) triggers on a `push` to `main` with changes under `<addon>/**`. A
 second trigger on `push` of a `<addon>/v*` tag exists in each file but is **commented out for all add-ons except
-network-tools**:
+network-tools, terraform-bridge and iac-runner**:
 
 | Add-on            | `paths:` on `main` | `<addon>/v*` tag |
 | ----------------- | ------------------ | ---------------- |
 | authentik         | active             | disabled         |
 | coding-assistants | active             | disabled         |
 | gatus             | active             | disabled         |
+| iac-runner        | active             | **active**       |
 | markdown-renderer | active             | disabled         |
 | meridian          | active             | disabled         |
 | network-tools     | active             | **active**       |
 | phone-logger      | active             | disabled         |
+| terraform-bridge  | active             | **active**       |
 
 This split is deliberate. The `tags:` block in each caller carries the in-file comment
 `# tag-trigger temporarily disabled (see .github/RELEASE.md)` — this section is what that comment resolves to.
@@ -66,9 +68,9 @@ release flow below (committing and pushing `config.yaml` / `build.yaml` / `READM
 build, via the `paths:` filter. Skipping it produces exactly the 404 that the versioning docs warn about, even when the
 tag exists on origin.
 
-Only `network-tools` is built twice when both the commit and the tag are pushed: once by the `paths:` trigger and once
-by the active `tags:` trigger. The double-build is intentional — the tag-triggered leg is the one that pulls
-`build.yaml:args.VERSION`, so it produces the canonical image for the tag.
+`network-tools`, `terraform-bridge` and `iac-runner` are built twice when both the commit and the tag are pushed: once
+by the `paths:` trigger and once by the active `tags:` trigger. The double-build is intentional — the tag-triggered leg
+is the one that pulls `build.yaml:args.VERSION`, so it produces the canonical image for the tag.
 
 ### Re-enabling a tag trigger
 
