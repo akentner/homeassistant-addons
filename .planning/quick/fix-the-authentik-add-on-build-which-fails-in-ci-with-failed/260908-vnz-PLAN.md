@@ -66,7 +66,7 @@ startup to the one supervised process that is the correct shape for an HA add-on
 
 Output: two edited files, proven by a real local container build that exits 0. </objective>
 
-<execution_context> @~~/.claude/gsd-core/workflows/execute-plan.md @~~/.claude/gsd-core/templates/summary.md
+<execution_context> @~/.claude/gsd-core/workflows/execute-plan.md @~/.claude/gsd-core/templates/summary.md
 </execution_context>
 
 <context>
@@ -107,14 +107,15 @@ re-probing costs a 1.34 GB image pull for no new information):
 - That scoped form was pre-flighted on the unmodified files at plan-revision time and exits 0, with both
   terraform-bridge hooks reporting `Skipped (no files to check)`. So it is a known-green, known-cheap baseline: a
   non-zero exit after the edits is attributable to the edits.
-- Gate hazard, already worked around below — do not undo it. The repo's `prettier` pre-commit hook formats every
-  markdown file under `.planning/`, and its emphasis pass rewrites a matched pair of asterisk characters into
-  underscores. On the first commit attempt that silently corrupted the comment-stripping regex in two of this plan's
-  gates, turning the zero-or-more-blanks quantifier into a literal underscore and disabling the comment filter. The
-  gates therefore use the asterisk-free `grep -vE` alternation form, verified byte-identical in output to the quantifier
-  form on both edited files. Keep any gate you touch free of asterisk characters, and keep the blank line that separates
-  each gate block from the prose above it — `proseWrap: always` will otherwise rewrap the gates into unrunnable
-  fragments.
+- Why the gates use the asterisk-free `grep -vE '^(#|[[:blank:]]+#)'` form — history, not an active constraint. The
+  repo's `prettier` pre-commit hook used to format every markdown file under `.planning/`, and its emphasis pass
+  rewrote a matched pair of asterisk characters into underscores. On the first commit attempt that silently corrupted
+  the comment-stripping regex in two of this plan's gates, turning the zero-or-more-blanks quantifier into a literal
+  underscore and disabling the comment filter. **That hazard is now fixed at the source:** commit `120c55a` added
+  `.planning/` to `.prettierignore`, so the hook no longer touches any file in this directory. The asterisk-free form
+  stays because it was verified byte-identical in output to the quantifier form on both edited files — there is no
+  reason to churn it back, and equally no reason to add further formatter workarounds. Do not treat prettier as an
+  adversary when writing gates: asterisks are fine, and gate blocks need no defensive blank-line separation.
 - `authentik/DOCS.md` line 26 ("Authentik worker | Background tasks, email delivery, scheduling") stays accurate — the
   worker still runs, inside the supervised process — and line 18 ("three processes": PostgreSQL, Valkey, authentik)
   becomes _more_ accurate after this change. **DOCS.md is deliberately NOT in scope. Do not edit it.**
@@ -329,9 +330,9 @@ keeping it costs ~2 GB and speeds up a re-check.
 
 <verify>
 <automated>grep -q 'BUILD_EXIT=0' "${TMPDIR:-/tmp}/authentik-build-260908-vnz.log"</automated>
-    <automated>podman run --rm --entrypoint /bin/sh localhost/authentik-addon-verify:2026.8.1 -c 'test -x /usr/bin/authentik &amp;&amp; test -x /usr/sbin/runuser &amp;&amp; /usr/bin/authentik --help' 2>&amp;1 | grep -q allinone</automated>
-    <automated>pre-commit run --files authentik/Dockerfile authentik/run.sh</automated>
-    <automated>CHANGED="$(git diff --name-only HEAD -- authentik/)" &amp;&amp; test "$(printf '%s\n' "$CHANGED" | sort | paste -sd, -)" = "authentik/Dockerfile,authentik/run.sh"</automated>
+<automated>podman run --rm --entrypoint /bin/sh localhost/authentik-addon-verify:2026.8.1 -c 'test -x /usr/bin/authentik && test -x /usr/sbin/runuser && /usr/bin/authentik --help' 2>&1 | grep -q allinone</automated>
+<automated>pre-commit run --files authentik/Dockerfile authentik/run.sh</automated>
+<automated>CHANGED="$(git diff --name-only HEAD -- authentik/)" && test "$(printf '%s\n' "$CHANGED" | sort | paste -sd, -)" = "authentik/Dockerfile,authentik/run.sh"</automated>
 </verify>
 
 <done>
