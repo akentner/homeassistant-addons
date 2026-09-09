@@ -1,0 +1,52 @@
+{
+  "base_revision": "1ff2f215f1b75489bb2e210ce41121a3ae50d422",
+  "batch_id": "260908-vnx",
+  "created_at": "2026-09-08T20:47:54.710Z",
+  "items": [
+    {
+      "client_id": null,
+      "commit": null,
+      "depends_on": [],
+      "description": "Add the `image:` key to five add-ons whose ghcr images are verified-public and version-matched, so the HA Supervisor pulls instead of rebuilding locally. Add `image: \"ghcr.io/akentner/homeassistant-addons/{arch}-<slug>\"` to gatus/config.yaml, markdown-renderer/config.yaml, phone-logger/config.yaml, meridian/config.yaml and terraform-bridge/config.yaml, where <slug> is the addon directory name with hyphens replaced by underscores (gatus, markdown_renderer, phone_logger, meridian, terraform_bridge) - matching the exact convention already used in coding-assistants/config.yaml and network-tools/config.yaml (verify against those two files; place the key in the same position in the file). VERIFIED PRECONDITION (do not re-litigate, but do not break either): each add-on's current config.yaml version has a matching anonymously-pullable ghcr tag - gatus 5.36.0-11, markdown-renderer 1.1.0-23, phone-logger 1.0.6-0, meridian 1.66.0-0, terraform-bridge 0.3.0-0. CRITICAL: do NOT bump any version in config.yaml, build.yaml or README.md - a bump would advertise a version whose image does not exist yet. Also remove `terraform-bridge` from the LOCAL_BUILD_ADDONS array in internal/check-version-tags.sh (keep `iac-runner`), because that allowlist means \"built locally by the Supervisor, never pulled from ghcr\" and that is now factually false for terraform-bridge; leave the drift guard and the is_local_build helper intact. Update the table and the \"Why the split\" / \"What this means operationally\" text in .github/RELEASE.md so the claim that skipping the version-file push \"produces exactly the 404\" is no longer stated for add-ons that have no image: key, and so the LOCAL_BUILD_ADDONS description matches the new single-entry membership. `make validate-versions`, `make validate-addons` and `make lint` must all pass. authentik and iac-runner are explicitly OUT OF SCOPE for this item.",
+      "directory": null,
+      "dispatched_base": null,
+      "dispatched_branch": null,
+      "dispatched_worktree": null,
+      "failure_reason": null,
+      "planned_files": [
+        "gatus/config.yaml",
+        "markdown-renderer/config.yaml",
+        "phone-logger/config.yaml",
+        "meridian/config.yaml",
+        "terraform-bridge/config.yaml",
+        "internal/check-version-tags.sh",
+        ".github/RELEASE.md"
+      ],
+      "quick_id": "260908-vny",
+      "status": "pending",
+      "wave": 0,
+      "worktree": null
+    },
+    {
+      "client_id": null,
+      "commit": "dc544d1",
+      "depends_on": [],
+      "description": "Fix the authentik add-on build, which fails in CI with `failed to compute cache key: \"/usr/bin/authentik-server\": not found`. Upstream authentik 2026.8.1 (ghcr.io/goauthentik/server:2026.8.1) no longer ships the separate Go binary `/usr/bin/authentik-server`; it now ships a single Rust binary `/usr/bin/authentik` with subcommands `server`, `worker`, `allinone`, `proxy`, `healthcheck` (verified by running the upstream image). Two edits: (a) in authentik/Dockerfile remove the `COPY --from=authentik-source /usr/bin/authentik-server /usr/bin/authentik-server` line and update its preceding comment block, which still describes a Go server binary plus a separate Rust binary; (b) in authentik/run.sh replace the two-process startup at lines 117-123 (backgrounded `runuser -u authentik -- /usr/bin/authentik-server &` plus `exec runuser -u authentik -- /usr/bin/authentik worker`) with the single `exec runuser -u authentik -- /usr/bin/authentik allinone`, updating the surrounding comments - allinone runs both server and worker in one supervised process, which is the correct shape for an HA add-on entrypoint and removes the orphaned-background-process problem. All 18 other COPY paths in the Dockerfile were individually verified to still exist upstream - do not change them. MANDATORY per CLAUDE.md: verify with a real local container build before committing (`podman build` works on this host; podman is available as both `podman` and `docker`), passing the build args the CI template passes: BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:trixie, VERSION=2026.8.1, BUILD_ARCH=amd64. The build must complete successfully. Do NOT bump the authentik version and do NOT add an `image:` key to authentik/config.yaml - no authentik image exists in ghcr yet; that is a deliberate follow-up once CI has published one. `make lint` (shellcheck on run.sh) must pass.",
+      "directory": null,
+      "dispatched_base": null,
+      "dispatched_branch": null,
+      "dispatched_worktree": null,
+      "failure_reason": null,
+      "planned_files": [
+        "authentik/Dockerfile",
+        "authentik/run.sh"
+      ],
+      "quick_id": "260908-vnz",
+      "status": "complete",
+      "wave": 0,
+      "worktree": null
+    }
+  ],
+  "options": {},
+  "schema_version": 1
+}
