@@ -7,7 +7,8 @@ For how the daily auto-update works see `docs/AUTO_UPDATE_GUIDE.md`.
 
 ## Tag schema
 
-Every release ships as one git tag named:
+Every release cut through one of the two manual paths below — step 1 of `## Standard release flow`, or `## Patch flow` —
+ships as one git tag named:
 
 ```text
 <addon-name>/v<version>
@@ -50,8 +51,10 @@ so the Supervisor builds the add-on's `Dockerfile` itself. This axis is independ
 columns to its left — an add-on can have its tag trigger disabled and still be pulled, or enabled and still be built
 locally.
 
-This split is deliberate. The `tags:` block in each caller carries the in-file comment
-`# tag-trigger temporarily disabled (see .github/RELEASE.md)` — this section is what that comment resolves to.
+This split is deliberate. In the six callers whose tag trigger is disabled, the `tags:` block holds the in-file comment
+`# tag-trigger temporarily disabled (see .github/RELEASE.md)` — this section is what that comment resolves to. The three
+add-ons with an active `tags:` block carry no such comment, so the comment is a marker of the disabled state rather than
+a fixture of every caller.
 
 ### Why the split
 
@@ -74,9 +77,13 @@ operational paragraph below assert one consequence for add-ons that do not share
 
 ### What this means operationally
 
-For the six add-ons with the tag-trigger disabled, pushing the tag alone does **not** build an image. Step 2 of the
-release flow below (committing and pushing `config.yaml` / `build.yaml` / `README.md` to `main`) is what fires the
-build, via the `paths:` filter.
+For the six add-ons with the tag-trigger disabled, pushing the tag alone does **not** build an image. When a human
+pushes step 2 of the release flow below (committing and pushing `config.yaml` / `build.yaml` / `README.md` to `main`),
+that push is what fires the build, via the `paths:` filter.
+
+That scoping is load-bearing. A push made by a GitHub Actions workflow with the default `GITHUB_TOKEN` creates no
+workflow runs at all, so the `paths:` filter never fires for an automated version bump and the automated path has to ask
+for its builds explicitly. See `## Auto-update path` for how it does that.
 
 What skipping step 2 actually costs depends on the image source, not on the tag trigger:
 
@@ -91,8 +98,11 @@ What skipping step 2 actually costs depends on the image source, not on the tag 
   claims the new version.
 
 `network-tools`, `terraform-bridge` and `iac-runner` are built twice when both the commit and the tag are pushed: once
-by the `paths:` trigger and once by the active `tags:` trigger. The double-build is intentional — the tag-triggered leg
-is the one that pulls `build.yaml:args.VERSION`, so it produces the canonical image for the tag.
+by the `paths:` trigger and once by the active `tags:` trigger. Neither leg is authoritative for the version the tag
+names — both read `build.yaml:args.VERSION` out of whatever ref they check out. Because the release procedure tags
+before it commits (see `### What a tag guarantees` below), the tag's ref is the one that may still carry the older
+version, which makes the tag-triggered leg the leg more likely to build stale content. The `paths:` leg on `main` is the
+one that sees the bump.
 
 ### Re-enabling a tag trigger
 
@@ -103,8 +113,51 @@ To re-enable for an add-on:
 2. Edit `.github/workflows/build-<addon>.yml`: remove the leading `#` from the two commented lines in the `tags:` block.
 3. Open a PR with the rationale and a roll-back plan if the rebuild would overwrite a published image unexpectedly.
 
-The seven callers carry the comment `# tag-trigger temporarily disabled (see .github/RELEASE.md)` for exactly this
-reason — anyone reading the comment and following the pointer now lands on a real explanation.
+The six callers carry the comment `# tag-trigger temporarily disabled (see .github/RELEASE.md)` for exactly this reason
+— anyone reading the comment and following the pointer now lands on a real explanation.
+
+### What a tag guarantees
+
+The one-tag-per-release rule at the top of this section describes the manual paths only. Two automated paths ship
+version bumps with no tag at all:
+
+- `.github/workflows/base-image-update.yml` drives `internal/update-base-image.py`, which performs no git operations of
+  any kind — it edits files and nothing else. That workflow has therefore never produced a tag.
+- The daily `.github/workflows/auto-update.yml` passes `--no-tag` to `internal/update-version.py`
+  (`auto-update.yml:123`), so an automated bump lands as a commit on `main` with no tag behind it. See
+  `## Auto-update path`.
+
+A `<addon>/v<version>` tag names an **intended** version. It does not prove that the tree it points at carries that
+version. The mechanism is the ordering of the release procedure: `internal/update-version.py` tags `HEAD` (the
+`--no-tag` guard at `internal/update-version.py:425` calls `create_and_push_tag`) and never commits the three files it
+just edited — it prints a suggested `git add` / `git commit` for the operator instead
+(`internal/update-version.py:443`). Step 1 of the release flow below therefore tags the pre-bump commit, and step 2
+creates the bump commit afterwards. The `## Patch flow` snippet has the same ordering: `git tag` runs before the version
+files are committed.
+
+Measured on 2026-09-09: 15 of the 40 `<addon>/v*` tags in this repository point at a tree whose `build.yaml`
+`args.VERSION` is an older version than the tag names. The other 25 agree with their tree. Three of the fifteen:
+
+- `authentik/v2026.8.1` — the tree at that tag carries `2026.8.0`
+- `meridian/v1.59.0` — the tree at that tag carries `1.58.3`
+- `terraform-bridge/v0.2.0` — the tree at that tag carries `0.1.0`
+
+`terraform-bridge` has no `.upstream.yaml`, so the daily auto-update never touches it and that tag was cut by hand. The
+off-by-one is a defect in the documented manual procedure, not only in the bot.
+
+Reproduce the count:
+
+```bash
+for tag in $(git tag -l '*/v*'); do
+    addon=${tag%%/*}
+    want=${tag#*/v}
+    have=$(git show "$tag:$addon/build.yaml" | sed -n 's/^ *VERSION: *"\?\([^"]*\)"\?$/\1/p')
+    case "$want" in "$have" | "$have"-*) ;; *) echo "MISMATCH $tag tree=$have" ;; esac
+done
+```
+
+Reordering the release procedure so the commit precedes the tag is **not** done here. This section documents the defect;
+it does not change `make release`.
 
 ## Standard release flow
 
@@ -184,6 +237,28 @@ If the tag and the 3-file set ever drift, the canonical fix order is:
 
 ## Auto-update path
 
-The daily `auto-update.yml` workflow calls the same `internal/update-version.py` for every add-on with a
-`.upstream.yaml`. From the perspective of this document, that path is identical to a manual `make release` — only the
-trigger differs.
+The daily `.github/workflows/auto-update.yml` workflow — workflow name `Auto Update`, schedule `0 6 * * *` — calls the
+same `internal/update-version.py` for every add-on that has a `.upstream.yaml`. Today that is four add-ons: `authentik`,
+`gatus`, `meridian` and `phone-logger`. From the perspective of this document the path is **not** interchangeable with a
+manual `make release`, for two reasons.
+
+**1. Its own push cannot start a build, so it asks for the builds explicitly.** The workflow commits and pushes to
+`main` with the default `GITHUB_TOKEN`, and GitHub creates no workflow runs for an event produced by that token — so the
+`paths:` filter in `.github/workflows/build-<addon>.yml` never fires for an automated bump. `workflow_dispatch` is the
+documented exception: a dispatch created with `GITHUB_TOKEN` does run
+(<https://docs.github.com/actions/using-workflows/triggering-a-workflow>). The workflow therefore runs
+`internal/dispatch-builds.sh` immediately after its `git push` (`auto-update.yml:166-167`), and requests the
+`actions: write` permission to do so (`auto-update.yml:49`). That script derives the changed add-on directories from
+`git diff --name-only "$BASE_SHA"..HEAD` and issues one `gh workflow run build-<addon>.yml --ref <ref>` per add-on. Two
+of its error semantics matter when reading a run log:
+
+- A candidate directory with no `.github/workflows/build-<addon>.yml` is reported as a warning and does **not** fail the
+  run. This is the common case, because a bump commit also touches non-add-on paths.
+- A dispatch that fails makes the job exit non-zero. The bump is already on `main` by then, so a green run would hide a
+  manifest advertising an image that was never built.
+
+**2. It creates no tag.** The call passes `--no-tag` (`auto-update.yml:123`). See `## Tag schema` — and in particular
+`### What a tag guarantees` — for what a `<addon>/v<version>` tag does and does not prove.
+
+For the discovery loop, the per-add-on error handling and the `.upstream.yaml` keys the workflow actually reads, see
+`docs/AUTO_UPDATE_GUIDE.md`.
