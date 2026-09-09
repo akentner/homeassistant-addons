@@ -1,7 +1,7 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions update-version validate-dockerfiles docker-build-check build-addon release install-provider verify-install-provider
+.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions update-version validate-dockerfiles docker-build-check build-addon release install-provider verify-install-provider verify-images verify-images-self-test
 
 # Default target
 help: ## Show this help message
@@ -94,6 +94,21 @@ validate-addons: ## Validate add-on configurations
 validate-versions: ## Validate add-on versioning consistency
 	@echo "🔍 Validating add-on versions..."
 	./internal/validate-versions.sh
+
+# verify-images and verify-images-self-test are deliberately NOT members of
+# check-all. Every current check-all member is offline, deterministic, and fails
+# only for something in your own working tree. A registry probe breaks all three
+# properties: it needs the network, it depends on ghcr.io being healthy, and it
+# can turn red because somebody else's build failed. A check people learn to
+# bypass is worse than no check at all, because it also devalues the four
+# legitimate offline checks standing beside it. Reach the probe explicitly.
+verify-images: ## Verify every advertised add-on image is anonymously pullable from ghcr.io
+	@echo "🔍 Verifying add-on image availability on ghcr.io..."
+	./internal/verify-image-availability.sh
+
+verify-images-self-test: ## Prove the ghcr probe detects ok / missing / denied before trusting it
+	@echo "🔍 Self-testing the ghcr image-availability probe..."
+	./internal/verify-image-availability.sh --self-test
 
 validate-dockerfiles: ## Validate ARG-before-FROM scope in all Dockerfiles
 	@echo "🔍 Validating Dockerfile ARG scope..."
