@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 2
+open_count: 6
 waived_count: 0
 fixed_count: 2
-total_count: 4
-last_updated: 2026-09-09T20:25:44.422Z
+total_count: 8
+last_updated: 2026-09-09T20:41:32.937Z
 ---
 
 # Broken Windows Ledger
@@ -19,6 +19,10 @@ last_updated: 2026-09-09T20:25:44.422Z
 | 2 | 17 | unmet-truth | CLAUDE.md | 80 | CLAUDE.md documents 'yq eval --unsafe' for parsing HA config.yaml, but the yq installed on this host is python-yq (kislyuk) 4.1.2, which has no 'eval' subcommand and no '--unsafe' flag - the documented command fails locally. CI is unaffected (ubuntu-latest ships mikefarah/yq, which _build-template.yml relies on). Local scripts and agents must use python3 -c 'import yaml' instead, which is what make validate-addons already does. | open |  | 2026-09-08T21:06:25.807Z |  |
 | 3 | 17 | lint-warning | .github/workflows/lint.yml | 94 | The 'Lint shell scripts' step ends in '\|\| echo "No shell scripts to check"', which swallows shellcheck's exit code - the step can never fail, so the repo's strictest shell gate (shellcheck with no -e exclusions) is non-blocking. Verified: repo-wide shellcheck without -e flags exits 1 with 46 diagnostics on main today. Removing the '\|\|' would immediately turn CI red, so the fix is ordered: clear the pre-existing SC2034/SC1091 findings first, then drop the fallback. Until then the effective shell gate is pre-commit's '-e SC1091 -e SC2034'. | open |  | 2026-09-09T18:18:06.064Z |  |
 | 4 | quick-260909-rlj | unrun-verify | .github/workflows/auto-update.yml |  | actionlint was verified only under the pre-commit-pinned v1.7.3; lint.yml installs the latest release at run time and that build could not be exercised locally (no actionlint on PATH, no go toolchain, no network install in scope). The three edited workflows pass v1.7.3 and parse under PyYAML; latest-release actionlint remains CI-verified only. | fixed |  | 2026-09-09T20:12:43.269Z | 2026-09-09T20:25:44.422Z |
+| 5 | quick-260909-rll | unrun-verify | .github/workflows/auto-update.yml |  | Live-run truth unverified: that a real auto-update run creates no tag (git ls-remote --tags origin after the next run) - not reachable from a repo checkout | open |  | 2026-09-09T20:38:21.321Z |  |
+| 6 | quick-260909-rll | unrun-verify | .github/workflows/base-image-update.yml |  | Live-run truth unverified: that the two bump workflows actually queue behind the shared addon-version-bump group - needs two overlapping GitHub runs | open |  | 2026-09-09T20:38:26.589Z |  |
+| 7 | quick-260909-rll | deviation | .github/workflows/auto-update.yml |  | Sibling 260909-rlj GATE-T1-14 (loop-region sha256 7b7356ab) is intentionally red: 7b7356ab -> cdaa8113. Replaced by narrower flanking pins GATE-T1-B/C/D | open |  | 2026-09-09T20:38:29.158Z |  |
+| 8 | quick-260909-rlk | unrun-verify | .github/workflows/verify-image-availability.yml | 1 | The if: failure() HA-webhook leg has never executed. Run 34402464619 (workflow_dispatch, grace-minutes=0) was GREEN, so the notify step was correctly skipped: self-test, scan and checkout all succeeded. Proving the notify leg needs a genuinely red run, which requires a config.yaml version with no published image on the default branch - deliberately not manufactured. Everything else in the workflow is exercised: the self-test runs as its own step before the scan and passes all three probe directions. | open |  | 2026-09-09T20:41:32.937Z |  |
 
 ````json
 [
@@ -69,6 +73,54 @@ last_updated: 2026-09-09T20:25:44.422Z
     "reason": "",
     "recorded_at": "2026-09-09T20:12:43.269Z",
     "resolved_at": "2026-09-09T20:25:44.422Z"
+  },
+  {
+    "id": 5,
+    "kind": "unrun-verify",
+    "phase": "quick-260909-rll",
+    "file": ".github/workflows/auto-update.yml",
+    "line": null,
+    "description": "Live-run truth unverified: that a real auto-update run creates no tag (git ls-remote --tags origin after the next run) - not reachable from a repo checkout",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-09T20:38:21.321Z",
+    "resolved_at": null
+  },
+  {
+    "id": 6,
+    "kind": "unrun-verify",
+    "phase": "quick-260909-rll",
+    "file": ".github/workflows/base-image-update.yml",
+    "line": null,
+    "description": "Live-run truth unverified: that the two bump workflows actually queue behind the shared addon-version-bump group - needs two overlapping GitHub runs",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-09T20:38:26.589Z",
+    "resolved_at": null
+  },
+  {
+    "id": 7,
+    "kind": "deviation",
+    "phase": "quick-260909-rll",
+    "file": ".github/workflows/auto-update.yml",
+    "line": null,
+    "description": "Sibling 260909-rlj GATE-T1-14 (loop-region sha256 7b7356ab) is intentionally red: 7b7356ab -> cdaa8113. Replaced by narrower flanking pins GATE-T1-B/C/D",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-09T20:38:29.158Z",
+    "resolved_at": null
+  },
+  {
+    "id": 8,
+    "kind": "unrun-verify",
+    "phase": "quick-260909-rlk",
+    "file": ".github/workflows/verify-image-availability.yml",
+    "line": 1,
+    "description": "The if: failure() HA-webhook leg has never executed. Run 34402464619 (workflow_dispatch, grace-minutes=0) was GREEN, so the notify step was correctly skipped: self-test, scan and checkout all succeeded. Proving the notify leg needs a genuinely red run, which requires a config.yaml version with no published image on the default branch - deliberately not manufactured. Everything else in the workflow is exercised: the self-test runs as its own step before the scan and passes all three probe directions.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-09T20:41:32.937Z",
+    "resolved_at": null
   }
 ]
 ````

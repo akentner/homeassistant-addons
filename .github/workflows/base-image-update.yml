@@ -5,6 +5,18 @@ on:
     - cron: "0 7 * * *"
   workflow_dispatch:
 
+# Both this workflow and .github/workflows/auto-update.yml commit version
+# bumps to main and push them, so two overlapping runs give a
+# non-fast-forward push - or, worse, a green run that pushed the wrong
+# content. The group name is deliberately shared with that workflow
+# because a repo-scoped group is what makes the two mutually exclusive;
+# it also stops both runs from asking for a build of the same ref.
+# cancel-in-progress: false so the second run queues rather than
+# aborting either one.
+concurrency:
+  group: addon-version-bump
+  cancel-in-progress: false
+
 jobs:
   update:
     runs-on: ubuntu-latest

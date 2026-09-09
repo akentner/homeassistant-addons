@@ -353,6 +353,8 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260908-pfq    | Scope the pre-push release-tag check to non-allowlisted add-ons                               | 2026-09-08 | 812f028 | /home/akentner/Projects/homeassistant-addons/.planning/quick/make-the-pre-push-version-tag-hook-stop-demanding-a-release  |
 | 12            | Stop prettier breaking the broken-windows ledger (.prettierignore + canonical table)          | 2026-09-08 | 1bcdd9a | —                                                                                                                         |
 | 260908-vnz | Fix the authentik add-on build: adapt Dockerfile and run.sh to upstream 2026.8.1's single Rust binary with allinone subcommand | 2026-09-09 | dc544d1 | .planning/quick/fix-the-authentik-add-on-build-which-fails-in-ci-with-failed |
+| 260909-rlj | Dispatch builds after automated version bumps (GITHUB_TOKEN pushes trigger no workflows) + BUILD_DATE fallback for dispatch-triggered runs | 2026-09-09 | 6fbe7a4 | .planning/quick/stage-1-2-urgent-land-first-one-commit-make-automated-versio |
+| 260909-rlk | Image-availability guard: internal/verify-image-availability.sh + 4x-daily scheduled workflow, proving the Supervisor pull invariant with a three-way ghcr probe and two anti-silent-pass safeguards | 2026-09-09 | a2b66fc | .planning/quick/stage-3-add-a-ci-guard-that-turns-the-silent-live-breaking-i |
 
 ## Session Continuity
 
