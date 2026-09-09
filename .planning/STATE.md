@@ -357,6 +357,8 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260909-rlk | Image-availability guard: internal/verify-image-availability.sh + 4x-daily scheduled workflow, proving the Supervisor pull invariant with a three-way ghcr probe and two anti-silent-pass safeguards | 2026-09-09 | a2b66fc | .planning/quick/stage-3-add-a-ci-guard-that-turns-the-silent-live-breaking-i |
 | 260909-rll | Stop tagging the pre-bump commit (--no-tag) and serialize both bump workflows with a shared concurrency group; correct update-version.py's false tag-triggers-a-build prose | 2026-09-09 | ce932fa | .planning/quick/stage-4-depends-on-stage-1-same-workflow-files-fix-the-tag-o |
 | 260909-wgm    | Pre-push release-tag check: advisory instead of blocking, rationale corrected                 | 2026-09-09 | 2ba51a2 | [quick/260909-wgm-rework-internal-check-version-tags-sh-so](./quick/260909-wgm-rework-internal-check-version-tags-sh-so/) |
+| 260910-0og    | Apply the eleven 260909-rlm verification findings so RELEASE.md and AUTO_UPDATE_GUIDE.md are true      | 2026-09-10 | 176de25 | [quick/260910-0og-apply-the-eleven-260909-rlm-verification](./quick/260910-0og-apply-the-eleven-260909-rlm-verification/) |
+| 260909-rlm | Make the CI documentation describe what the workflows really do | 2026-09-10 | 176de257f6cb5c8d5f5686c059102ee345563f43 | .planning/quick/stage-5-depends-on-stages-1-and-3-it-documents-what-they-cha |
 
 ## Session Continuity
 
