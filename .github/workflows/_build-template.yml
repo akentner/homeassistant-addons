@@ -70,6 +70,8 @@ jobs:
 
       - name: Resolve version and base image from build.yaml
         id: meta
+        env:
+          HEAD_COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
         run: |
           VERSION=$(yq eval '.args.VERSION' "${{ inputs.addon-name }}/build.yaml")
           # CONFIG_VERSION (full add-on version incl. subpatch, e.g. "0.5.0-0") drives
@@ -95,11 +97,17 @@ jobs:
             echo "::error::no build_from.${{ matrix.arch }} in ${{ inputs.addon-name }}/build.yaml"
             exit 1
           fi
+          # github.event.head_commit.timestamp is empty under workflow_dispatch, which
+          # internal/dispatch-builds.sh now makes the normal trigger for automated
+          # version bumps. Without this fallback such a build would ship an empty
+          # org.opencontainers.image.created label.
+          BUILD_DATE="${HEAD_COMMIT_TIMESTAMP:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
           {
             echo "VERSION=$VERSION"
             echo "CONFIG_VERSION=$CONFIG_VERSION"
             echo "BUILD_FROM=$BUILD_FROM"
             echo "PLATFORM=$PLATFORM"
+            echo "BUILD_DATE=$BUILD_DATE"
           } >> "$GITHUB_OUTPUT"
 
       - name: Compute image slug (addon-name with underscores)
@@ -129,7 +137,7 @@ jobs:
               "addon": "${{ inputs.addon-name }}",
               "version": "${{ steps.meta.outputs.CONFIG_VERSION }}",
               "arch": "${{ matrix.arch }}",
-              "started_at": "${{ github.event.head_commit.timestamp }}"
+              "started_at": "${{ steps.meta.outputs.BUILD_DATE }}"
             }
         run: ./.github/scripts/notify-ha.sh
 
@@ -158,7 +166,7 @@ jobs:
             BUILD_FROM=${{ steps.meta.outputs.BUILD_FROM }}
             VERSION=${{ steps.meta.outputs.VERSION }}
             BUILD_ARCH=${{ matrix.arch }}
-            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            BUILD_DATE=${{ steps.meta.outputs.BUILD_DATE }}
             BUILD_NAME=${{ inputs.addon-display-name }}
             BUILD_DESCRIPTION=${{ inputs.addon-description }}
             BUILD_REF=${{ github.sha }}
