@@ -46,7 +46,7 @@
     },
     {
       "client_id": null,
-      "commit": null,
+      "commit": "ce932fa",
       "depends_on": [
         "260909-rlj"
       ],
@@ -62,7 +62,7 @@
         ".github/workflows/base-image-update.yml"
       ],
       "quick_id": "260909-rll",
-      "status": "pending",
+      "status": "complete",
       "wave": 1,
       "worktree": null
     },

@@ -355,6 +355,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260908-vnz | Fix the authentik add-on build: adapt Dockerfile and run.sh to upstream 2026.8.1's single Rust binary with allinone subcommand | 2026-09-09 | dc544d1 | .planning/quick/fix-the-authentik-add-on-build-which-fails-in-ci-with-failed |
 | 260909-rlj | Dispatch builds after automated version bumps (GITHUB_TOKEN pushes trigger no workflows) + BUILD_DATE fallback for dispatch-triggered runs | 2026-09-09 | 6fbe7a4 | .planning/quick/stage-1-2-urgent-land-first-one-commit-make-automated-versio |
 | 260909-rlk | Image-availability guard: internal/verify-image-availability.sh + 4x-daily scheduled workflow, proving the Supervisor pull invariant with a three-way ghcr probe and two anti-silent-pass safeguards | 2026-09-09 | a2b66fc | .planning/quick/stage-3-add-a-ci-guard-that-turns-the-silent-live-breaking-i |
+| 260909-rll | Stop tagging the pre-bump commit (--no-tag) and serialize both bump workflows with a shared concurrency group; correct update-version.py's false tag-triggers-a-build prose | 2026-09-09 | ce932fa | .planning/quick/stage-4-depends-on-stage-1-same-workflow-files-fix-the-tag-o |
 
 ## Session Continuity
 
