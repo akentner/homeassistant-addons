@@ -24,10 +24,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxslt1.1 \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Authentik binaries ───────────────────────────────────────────────────────
-# authentik-server: Go binary, nearly static — only needs libc
-COPY --from=authentik-source /usr/bin/authentik-server /usr/bin/authentik-server
-# authentik: Rust binary — dynamically linked to libpython3.14
+# ── Authentik binary ─────────────────────────────────────────────────────────
+# authentik: single Rust binary carrying the server, worker and allinone
+# subcommands — dynamically linked to libpython3.14
 COPY --from=authentik-source /usr/bin/authentik /usr/bin/authentik
 
 # ── Python 3.14 runtime (needed by the Rust worker binary and lifecycle scripts) ──

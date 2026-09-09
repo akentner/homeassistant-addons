@@ -114,10 +114,6 @@ chown -R authentik:authentik /data/media /data/certs
 ln -sfn /data/media /media
 ln -sfn /data/certs /certs
 
-# ── Start authentik server (Go binary — serves web UI and API on :9000/:9443) ─
-bashio::log.info "Starting authentik server on :9000..."
-runuser -u authentik -- /usr/bin/authentik-server &
-
-# ── Start authentik worker (Rust binary — handles background tasks) ───────────
-bashio::log.info "Starting authentik worker..."
-exec runuser -u authentik -- /usr/bin/authentik worker
+# ── Start authentik (single Rust binary: server + worker) ────────────────────
+bashio::log.info "Starting authentik (server + worker) on :9000/:9443..."
+exec runuser -u authentik -- /usr/bin/authentik allinone
