@@ -5,7 +5,12 @@ stage: 5
 commit: 833c176e30b53c522201973de96abab9b5f0e792
 verified_at: "2026-09-10"
 verified_against_head: c43375f35fb024406fd0cf1c083c6baa3adbfae8
-status: incomplete
+status: resolved
+resolved_by: 260910-0og
+resolved_at: "2026-09-10"
+resolved_commits:
+  - 176de257f6cb5c8d5f5686c059102ee345563f43
+  - bcad8cca6a29736ce31a60fd81a5e12342839863
 verdict: gaps_found
 score: 10/13 tested claims hold
 findings:
@@ -647,3 +652,107 @@ low priority.
 ---
 
 _Verified 2026-09-10 against HEAD `c43375f`. No files were edited; nothing committed._
+
+---
+
+## Resolution — applied by quick task 260910-0og
+
+All eleven findings were applied on 2026-09-10. Nothing above this heading was rewritten: the
+evidence of what was false has independent value, so this section is append-only.
+
+### Commits
+
+| Task | Commit | Scope |
+| --- | --- | --- |
+| 1 | `176de257f6cb5c8d5f5686c059102ee345563f43` | `.github/RELEASE.md`, `docs/AUTO_UPDATE_GUIDE.md` — findings 1-11 |
+| 2 | `bcad8cca6a29736ce31a60fd81a5e12342839863` | `.github/workflows/auto-update.yml`, `.github/workflows/base-image-update.yml` — the source comments behind finding 1 |
+| 3 | this commit | `260909-rln-PLAN.md` re-pin, and this section |
+
+### Finding-by-finding, as shipped
+
+| # | Severity | File | Correction as shipped | Deviation from the suggested wording |
+| --- | --- | --- | --- | --- |
+| 1 | FALSE | `docs/AUTO_UPDATE_GUIDE.md` + both workflows | "`base-image-update.yml:33` requests the same scope for the same reason; no other workflow in this repository does." The two source comment blocks were corrected in Task 2, each now naming the other file | none — the report's suggestion to fix the source comments too was followed, as a separate commit so the comment-only property could be proved |
+| 2 | FALSE | `docs/AUTO_UPDATE_GUIDE.md` | "runs prettier over the result … Prettier does not wrap bare URLs, so a release body containing one still lands a `CHANGELOG.md` that fails `markdownlint` MD034 and has to be hand-fixed afterwards. That is a known open defect, not a design choice" | points at **`.planning/WINDOWS.md` by path**, not at a bare "ledger item 10", so the reader can find the register. The defect is described, not fixed |
+| 3 | FALSE | `.github/RELEASE.md` | the ordering note, plus "this step cannot stop a bad tag from reaching `origin`", plus the compensating control: `verify-image-availability.yml`, four times daily, no registry credential | **adds** the compensating control, which the report did not suggest. Disclosing a gap without naming what catches its consequence would have been a net loss to the operator |
+| 4 | STALE | `.github/RELEASE.md` | "Measured 2026-09-09 and re-measured 2026-09-10: 15 of the 42 … The other 27 agree with their tree. Two tags were cut by hand between the two measurements, so the total moved while the mismatch count did not." | keeps **both** measurement dates rather than replacing 2026-09-09 with 2026-09-10. `260909-rlm`'s own `C3-dated` gate and `260909-rln`'s `L-18` preserve list both pin the older date, and two dates is also the more honest record |
+| 5 | STALE | `.github/RELEASE.md` step 2 | "reports every add-on whose bumped `config.yaml` version is about to reach `main` with no matching tag … Since `2ba51a2` it is **advisory only — it never fails the push**", with the reason (the tag does not cause the build) | as suggested, plus the `2ba51a2` citation and the rationale. `are exempt` became `are skipped entirely`; `no release tag is required` became `expected` |
+| 6 | STALE | `.github/RELEASE.md` `## Manual repair` | "will report, but not block, a branch push whose modified `config.yaml` has no tag named `<addon>/v<version>`; it says nothing at all for …" | as suggested |
+| 7 | STALE | `.github/RELEASE.md` `## Patch flow` | "reports a missing tag only when the subpatch in `config.yaml` has no matching tag suffix, and it is advisory either way — it never blocks the push." | as suggested |
+| 8 | IMPRECISE (doc) / FALSE (commit msg) | `.github/RELEASE.md` | "commits and pushes its own bumps (`base-image-update.yml:94-95` and `:112`) but never tags one: `internal/update-base-image.py` performs no git operations at all, and no revision of either file has ever contained `git tag`." The non-sequitur "therefore" is gone | cites **`:94-95`, not the report's `:94-96`** — `:96` is `UPDATES_MADE=1`, measured. The `git tag` claim was verified with `git log --all -S'git tag'` over both paths: empty |
+| 9 | IMPRECISE | `docs/AUTO_UPDATE_GUIDE.md`, both sites | error-handling section: the two guarded failures cited (`:94-98`, `:123-127`), "Those two are the only guarded failures", then `set -eo pipefail` (`:70`) and the unguarded commands named — `yq eval` (`:90-91`), `npx --yes prettier@3.9.6` (`:148`), `git add` / `git commit` (`:153-154`). Benefits bullet retitled and scoped to the same two failures | **adds the line citations** for every command named, so each is checkable. `ERRORS=1` preserved at both sites for `Y04` and `260909-rln`'s `GATE-G3-10` |
+| 10 | IMPRECISE | `.github/RELEASE.md` | "both read `build.yaml:args.VERSION` (`_build-template.yml:76`) and `config.yaml:version` (`_build-template.yml:80`) out of whatever ref they check out, and it is `config.yaml:version` that becomes the published OCI image tag (`_build-template.yml:176`)." | **adds three `_build-template.yml` line citations** the report did not give, which is what makes the claim checkable rather than merely asserted |
+| 11 | IMPRECISE | `.github/RELEASE.md` | "skipping step 2 leaves `config.yaml` off `main`, so the store keeps advertising the old version and nothing breaks yet … The ghcr.io 404 … arrives when that bump commit later lands with no build behind it" | as suggested, with the two-stage causality spelled out rather than compressed into one clause |
+
+### `260909-rlm`'s own gates that this resolution knowingly invalidates
+
+Recorded so a verifier re-running rlm's 98 `ck` gates knows which reds are expected.
+
+| rlm gate | Status after 260910-0og | Successor |
+| --- | --- | --- |
+| `C4-count-15` (`260909-rlm-PLAN.md:404`) | **RED, expected.** It pins the total in the tag statistic, which is exactly what finding 4 corrected | `260910-0og` `GATE-T1-F4`: the old total absent, the new total present, both dates present |
+| `Z1-scope` (`:447`, `:630`), `C12-scope` (`:717`) | **RED, expected.** They assert the commit changes nothing outside `.planning/` beyond the two target docs. Correct for rlm's own commit; `260910-0og` deliberately adds two workflow files to Task 2's commit | `260910-0og` `GATE-T2-SCOPE`, plus `GATE-T2-EXEC-BYTE-IDENTICAL` proving the workflow diff is comment-only by hash equality |
+
+**Preserved and re-verified GREEN:** `C3-dated` (`2026-09-09` survives, because finding 4 kept both
+dates), `C1`, `C2`, `C6`, `C7`, `C8`, `C9`, `B1`-`B4`, `Y04` (`ERRORS=1`), `Y08`, `Y16`
+(`actions: write`), `Y17` (`notify-ha.sh`). `260910-0og`'s `GATE-T1-SIBLING` and
+`GATE-T1-INVARIANTS` re-assert each of them and both passed.
+
+**Passing for the wrong reason — recorded, not counted as coverage.** `C5-count-25` asserts the bare
+literal `25` appears in the `## Tag schema` region. It was 2 before (`The other 25` and the citation
+`internal/update-version.py:425`); it is now 1, from the citation alone. So `C5` still passes while
+the statement it was written to protect is gone. `260910-0og` added an explicit successor assertion —
+`The other 27 agree with their tree.` — rather than relying on it.
+
+### `260909-rln-PLAN.md` — eleven sites re-pinned, with their superseded values
+
+This section and `260910-0og`'s SUMMARY are the only two places permitted to hold the old values;
+they were removed from `260909-rln-PLAN.md` itself so its own gates could reach zero.
+
+| # | Site | Superseded value | Re-pinned to |
+| --- | --- | --- | --- |
+| R-01 | `:115` baseline table row | `**15 of 40**` | `**15 of 42**` + why the total moved. The `1 of 8` active-trigger sub-count was re-derived and is unchanged |
+| R-02 | `:126` baseline table row | `**2**: .github/RELEASE.md:103, internal/update-version.py:203` | `9 references, measured 2026-09-10`, by file. Was **already stale before this task**: the `RELEASE.md` line no longer resolved and the count had grown to 9 |
+| R-03 | `:162` rationale item 3 | `15 of 40` | `15 of 42` + why the total moved |
+| R-04 | `:166-168` rationale item 3 | line citation `RELEASE.md:93-95` + "currently claims the opposite" | content anchor. The claim was **already false before this task**: rlm removed that sentence at `833c176`, and it measures 0 at `ba490aa`. `GATE-G3-1c`'s clause on it is now recorded as a satisfied invariant, not work-proving |
+| R-05 | `:367` `L-18` preserve list | pin `15 of the 40` | `15 of the 42`. `2026-09-09` deliberately left in place |
+| R-06 | `:1032` Task 3 `<precondition>` | `grep -qF '15 of the 40' .github/RELEASE.md` — HALT-on-failure | `grep -qF '15 of the 42' …`. Left un-repinned, the pending sibling would have halted on a false precondition |
+| R-07 | `:1065` Task 3 action item 1 | `15 of the 40` | `15 of the 42` |
+| R-08 | `:1209` `GATE-G3-1c` | `grep -cF '15 of the 40' … -ge 1` | `grep -cF '15 of the 42' … -ge 1` |
+| R-09 | `:1420` `<gate_calibration>` row | `15 of the 40` as the absent-at-baseline literal | `15 of the 42` |
+| R-10 | `:1423` `G3-8` calibration row | `**2** … (RELEASE.md:103, update-version.py:203)` | `9 references, measured 2026-09-10`, by file. The gate itself is `== 0` and baseline-independent, so it did not change |
+| R-11 | `:468`-`:479` `<sibling_supersession>` | recorded only `260909-wgm` as a non-sibling change; closing line said "all three lists" | a new `## 4.` section for `260910-0og`; closing line now "all four lists" |
+
+The re-derivation greps mandated by `260910-0og` Task 3 returned **12** hits across 12 distinct lines,
+not eleven. Eleven are the sites above (`:166` and `:167` are one site, R-04); the twelfth is
+`260909-rln-PLAN.md:704`, a `planner-discipline-allow` comment for the phrase `GATE-G3-1c` asserts is
+absent. It was deliberately **not** changed: that phrase is not a superseded literal driven to zero by
+any gate, and it must survive at `:1209` where the invariant lives.
+
+### What stays open
+
+Named rather than silently dropped.
+
+- **Ledger item 10 in `.planning/WINDOWS.md`** — the prettier/MD034 bare-URL defect in
+  `auto-update.yml`'s changelog step. Finding 2 documents the symptom; it does not fix the bot. The
+  ledger file was not touched (its rendered table is generated and its fenced JSON block is the source
+  of truth), and all three tasks gated `git diff --quiet -- .planning/WINDOWS.md`.
+- **`auto-update.yml:147`** — the in-file comment `# Format with prettier so lint.yml does not reject the commit`.
+  It states the same intent finding 2 identifies as false, but ledger item 10 quotes that exact string
+  as its evidence. Rewriting it would destroy the record of the defect while leaving the defect. That
+  asymmetry is deliberate.
+- **`Makefile:234`** — the "will pick it up on the tag push" line. This report flagged it as adjacent
+  and out of scope for the two target files; it stays out of scope here for the same reason.
+
+### Follow-up — not this task's call
+
+Closing the batch item is the orchestrator's decision, not the executor's:
+
+```bash
+quick-batch complete --quick-id 260909-rlm --commit 176de257f6cb5c8d5f5686c059102ee345563f43
+```
+
+---
+
+_Resolution applied 2026-09-10 by quick task `260910-0og` against HEAD `ba490aa`. Findings above
+unchanged._
