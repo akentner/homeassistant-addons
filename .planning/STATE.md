@@ -352,6 +352,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260908-pfp    | Add .github/workflows/build-iac-runner.yml via _build-template.yml                            | 2026-09-08 | a4ca23f | /home/akentner/Projects/homeassistant-addons/.planning/quick/add-a-build-workflow-for-the-iac-runner-add-on-there-is-curr |
 | 260908-pfq    | Scope the pre-push release-tag check to non-allowlisted add-ons                               | 2026-09-08 | 812f028 | /home/akentner/Projects/homeassistant-addons/.planning/quick/make-the-pre-push-version-tag-hook-stop-demanding-a-release  |
 | 12            | Stop prettier breaking the broken-windows ledger (.prettierignore + canonical table)          | 2026-09-08 | 1bcdd9a | —                                                                                                                         |
+| 260908-vnz | Fix the authentik add-on build: adapt Dockerfile and run.sh to upstream 2026.8.1's single Rust binary with allinone subcommand | 2026-09-09 | dc544d1 | .planning/quick/fix-the-authentik-add-on-build-which-fails-in-ci-with-failed |
 
 ## Session Continuity
 
