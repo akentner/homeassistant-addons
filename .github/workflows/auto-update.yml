@@ -17,8 +17,20 @@ on:
 # local commits staged). With the new <addon>/v<version> tag schema
 # the tag-collision risk is gone, but the git-push race remains, so
 # the serialization still pays for itself.
+# The group name is shared with .github/workflows/base-image-update.yml
+# (cron 07:00 UTC), which commits and pushes version bumps to main the
+# same way. Until it joined this group it had no concurrency block at
+# all, so an overlap reproduced exactly the race described above, only
+# across two workflows instead of within one. One repo-scoped group
+# makes the two mutually exclusive and also stops both runs from asking
+# for a build of the same ref. The crons are an hour apart and this
+# workflow is observed at 8-28s, so the queueing cost is negligible.
+# History note: this workflow now passes --no-tag and creates no tag at
+# all, so the <addon>/v<version> tag-collision sentence above records
+# the old behaviour rather than a live claim - see the call-site comment
+# in the per-add-on loop below for why.
 concurrency:
-  group: auto-update
+  group: addon-version-bump
   cancel-in-progress: false
 
 jobs:
@@ -102,7 +114,13 @@ jobs:
 
             # Update the 3-file version set (AUTO-02)
             # Do NOT pass --check-release (that flag is interactive and will hang the workflow)
-            python3 internal/update-version.py "$addon_name" "$latest_version" || {
+            # --no-tag: this call runs BEFORE the git commit further down the loop, so
+            # HEAD here is still the pre-bump commit and tagging it names the wrong
+            # commit. Measured: meridian/v1.68.0-0 points at 9f45b96, whose
+            # meridian/build.yaml still reads VERSION 1.66.0 - an older version.
+            # Releases are tagged out of band; see .github/RELEASE.md. Rejected:
+            # git push --follow-tags, because actions/checkout fetches no tags.
+            python3 internal/update-version.py "$addon_name" "$latest_version" --no-tag || {
               echo "ERROR: update-version.py failed for $addon_name"
               ERRORS=1
               continue
