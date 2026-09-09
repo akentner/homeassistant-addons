@@ -73,8 +73,10 @@ For each add-on the loop:
   add-on when the two already match (`auto-update.yml:108-111`);
 - calls `internal/update-version.py <addon> <version> --no-tag` (`auto-update.yml:123`) to write the 3-file version set
   (`{addon}/config.yaml`, `{addon}/build.yaml`, `{addon}/README.md`);
-- prepends the upstream release body to `{addon}/CHANGELOG.md`, but only when that body is non-empty, and formats the
-  result with prettier so the lint workflow does not reject the commit (`auto-update.yml:135-150`);
+- prepends the upstream release body to `{addon}/CHANGELOG.md`, but only when that body is non-empty, and runs prettier
+  over the result (`auto-update.yml:135-150`). Prettier does not wrap bare URLs, so a release body containing one still
+  lands a `CHANGELOG.md` that fails `markdownlint` MD034 and has to be hand-fixed afterwards. That is a known open
+  defect, not a design choice — it is recorded as ledger item 10 in `.planning/WINDOWS.md`;
 - creates one `git commit` **inside** the loop, subject `chore(<addon>): update to <version>` (`auto-update.yml:154`).
 
 A single `git push` runs after the loop and only when at least one commit was made (`auto-update.yml:166`).
@@ -84,9 +86,13 @@ Runs are serialized against each other and against `base-image-update.yml` throu
 
 ### 3. **Error handling**
 
-A per-add-on failure — an unreachable upstream release, or a failing `internal/update-version.py` — prints an `ERROR:`
-line, sets `ERRORS=1`, and `continue`s to the next add-on. One add-on's failure therefore does not stop the others. The
-loop always runs to completion, and the last statement of the step is `exit $ERRORS` (`auto-update.yml:171`).
+A per-add-on failure — an unreachable upstream release (`auto-update.yml:94-98`) or a failing
+`internal/update-version.py` (`:123-127`) — prints an `ERROR:` line, sets `ERRORS=1`, and `continue`s to the next
+add-on, so one add-on's failure does not stop the others. Those two are the only guarded failures. The step runs under
+`set -eo pipefail` (`auto-update.yml:70`), so any other command failing aborts the step mid-loop and the remaining
+add-ons are never processed: `yq eval` (`:90-91`), `npx --yes prettier@3.9.6` (`:148`) and `git add` / `git commit`
+(`:153-154`) are all unguarded. When the loop does reach the end, the last statement of the step is `exit $ERRORS`
+(`auto-update.yml:171`).
 
 The failure signal is exactly two things: the `ERROR:` lines in the run log, and the non-zero job conclusion. Watch the
 workflow run list, or subscribe to GitHub's own failed-run notifications.
@@ -127,7 +133,7 @@ add-on directories from `git diff --name-only "$BASE_SHA"..HEAD` — `BASE_SHA` 
 start of the step (`auto-update.yml:77`) — and issues one `gh workflow run build-<addon>.yml --ref <ref>` per add-on.
 
 Creating a dispatch requires the `actions: write` permission, which the job requests explicitly (`auto-update.yml:49`).
-No other workflow in this repository asks for that scope.
+`base-image-update.yml:33` requests the same scope for the same reason; no other workflow in this repository does.
 
 ## 🏷️ Tags
 
@@ -223,8 +229,9 @@ path.
 
 - **Discovery is automatic.** Any directory containing a `.upstream.yaml` is picked up by the next run; the workflow
   never has to be edited to add or remove an add-on.
-- **One add-on's failure does not stop the others.** The loop sets `ERRORS=1` and continues, then fails the job at the
-  end, so a broken upstream does not block the remaining updates.
+- **An unreachable upstream or a failing version script does not stop the other add-ons.** Those two failures set
+  `ERRORS=1` and `continue`, and the job still fails at the end. Any other command failing aborts the step under
+  `set -e` — see the error-handling section above.
 - **Every change is one reviewable commit.** Each update is a single commit on `main` scoped to one add-on, so the
   commit log on `main` is the audit trail.
 - **The builds actually run.** The explicit dispatch closes the gap between a version bump landing on `main` and the
