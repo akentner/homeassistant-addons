@@ -32,17 +32,23 @@ Every per-addon build workflow (`build-<addon>.yml`) triggers on a `push` to `ma
 second trigger on `push` of a `<addon>/v*` tag exists in each file but is **commented out for all add-ons except
 network-tools, terraform-bridge and iac-runner**:
 
-| Add-on            | `paths:` on `main` | `<addon>/v*` tag |
-| ----------------- | ------------------ | ---------------- |
-| authentik         | active             | disabled         |
-| coding-assistants | active             | disabled         |
-| gatus             | active             | disabled         |
-| iac-runner        | active             | **active**       |
-| markdown-renderer | active             | disabled         |
-| meridian          | active             | disabled         |
-| network-tools     | active             | **active**       |
-| phone-logger      | active             | disabled         |
-| terraform-bridge  | active             | **active**       |
+| Add-on            | `paths:` on `main` | `<addon>/v*` tag | Supervisor image source |
+| ----------------- | ------------------ | ---------------- | ----------------------- |
+| authentik         | active             | disabled         | local build             |
+| coding-assistants | active             | disabled         | ghcr pull               |
+| gatus             | active             | disabled         | ghcr pull               |
+| iac-runner        | active             | **active**       | local build             |
+| markdown-renderer | active             | disabled         | ghcr pull               |
+| meridian          | active             | disabled         | ghcr pull               |
+| network-tools     | active             | **active**       | ghcr pull               |
+| phone-logger      | active             | disabled         | ghcr pull               |
+| terraform-bridge  | active             | **active**       | ghcr pull               |
+
+The `Supervisor image source` column reports whether that add-on's `config.yaml` declares a top-level `image:` key:
+`ghcr pull` means it does, so the Supervisor fetches the prebuilt image from ghcr.io; `local build` means it does not,
+so the Supervisor builds the add-on's `Dockerfile` itself. This axis is independent of the tag-trigger split in the two
+columns to its left — an add-on can have its tag trigger disabled and still be pulled, or enabled and still be built
+locally.
 
 This split is deliberate. The `tags:` block in each caller carries the in-file comment
 `# tag-trigger temporarily disabled (see .github/RELEASE.md)` — this section is what that comment resolves to.
@@ -61,12 +67,28 @@ Two commits, both on `main`, hold the rationale. They are quoted from their comm
   tag trigger for network-tools only. That add-on had just two tags (`v0.4.0`, `v0.2.3-1`) and `v0.4.0` already pointed
   at near-current source, so the contained risk was much smaller than for the other six.
 
+Both bullets are about CI triggers and nothing else. The tag-trigger split is a historical CI decision and must not be
+read as the pull-versus-local-build split; that axis is the `Supervisor image source` column above, and it is driven
+solely by the presence of a top-level `image:` key in `config.yaml`. Conflating the two axes is what made the
+operational paragraph below assert one consequence for add-ons that do not share it.
+
 ### What this means operationally
 
 For the six add-ons with the tag-trigger disabled, pushing the tag alone does **not** build an image. Step 2 of the
 release flow below (committing and pushing `config.yaml` / `build.yaml` / `README.md` to `main`) is what fires the
-build, via the `paths:` filter. Skipping it produces exactly the 404 that the versioning docs warn about, even when the
-tag exists on origin.
+build, via the `paths:` filter.
+
+What skipping step 2 actually costs depends on the image source, not on the tag trigger:
+
+- **Add-ons whose `config.yaml` declares a top-level `image:` key** are pulled by the Supervisor: coding-assistants,
+  gatus, markdown-renderer, meridian, network-tools, phone-logger and terraform-bridge. For these, skipping step 2
+  produces exactly the ghcr.io 404 that the versioning docs warn about, even when the tag exists on origin — the
+  manifest advertises a version whose image tag was never published, and every install and update of that add-on fails
+  on the pull.
+- **`authentik` and `iac-runner` declare no `image:` key**, so the Supervisor builds them locally from their
+  `Dockerfile` and a missing ghcr tag cannot produce a pull 404 for them at all. Their failure mode is a local build
+  against whatever `main` currently holds: skip step 2 and the add-on is built from un-bumped source while its tag
+  claims the new version.
 
 `network-tools`, `terraform-bridge` and `iac-runner` are built twice when both the commit and the tag are pushed: once
 by the `paths:` trigger and once by the active `tags:` trigger. The double-build is intentional — the tag-triggered leg
@@ -113,8 +135,9 @@ reason — anyone reading the comment and following the pointer now lands on a r
 
    The `internal/check-version-tags.sh` pre-push hook verifies the `<addon>/v<version>` tag already exists locally or on
    origin before letting the branch push through. Add-ons on the `LOCAL_BUILD_ADDONS` allowlist in that script are
-   exempt — they are built locally by the Supervisor and never pulled from ghcr.io, so no release tag is required. That
-   array is the source of truth for the current membership.
+   exempt — they are built locally by the Supervisor and never pulled from ghcr.io, so no release tag is required. The
+   allowlist now holds exactly one add-on, `iac-runner`. That array is the source of truth for the current membership —
+   read it, do not trust this sentence, when the membership matters.
 
 3. **Optional: GitHub Release page.** If you have the `gh` CLI and want the release notes rendered on the GitHub
    Releases UI:
@@ -155,8 +178,9 @@ If the tag and the 3-file set ever drift, the canonical fix order is:
    ```
 
    The pre-push hook will refuse a branch push until a tag named `<addon>/v<version>` exists for every modified
-   `config.yaml`, except for add-ons on the `LOCAL_BUILD_ADDONS` allowlist in `internal/check-version-tags.sh` — those
-   are built locally by the Supervisor and need no release tag.
+   `config.yaml`, except for add-ons on the `LOCAL_BUILD_ADDONS` allowlist in `internal/check-version-tags.sh` — now a
+   single entry, `iac-runner`, which the Supervisor builds locally and which therefore needs no release tag. The array
+   in that script stays the source of truth for the current membership.
 
 ## Auto-update path
 
