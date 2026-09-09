@@ -356,6 +356,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260909-rlj | Dispatch builds after automated version bumps (GITHUB_TOKEN pushes trigger no workflows) + BUILD_DATE fallback for dispatch-triggered runs | 2026-09-09 | 6fbe7a4 | .planning/quick/stage-1-2-urgent-land-first-one-commit-make-automated-versio |
 | 260909-rlk | Image-availability guard: internal/verify-image-availability.sh + 4x-daily scheduled workflow, proving the Supervisor pull invariant with a three-way ghcr probe and two anti-silent-pass safeguards | 2026-09-09 | a2b66fc | .planning/quick/stage-3-add-a-ci-guard-that-turns-the-silent-live-breaking-i |
 | 260909-rll | Stop tagging the pre-bump commit (--no-tag) and serialize both bump workflows with a shared concurrency group; correct update-version.py's false tag-triggers-a-build prose | 2026-09-09 | ce932fa | .planning/quick/stage-4-depends-on-stage-1-same-workflow-files-fix-the-tag-o |
+| 260909-wgm    | Pre-push release-tag check: advisory instead of blocking, rationale corrected                 | 2026-09-09 | 2ba51a2 | [quick/260909-wgm-rework-internal-check-version-tags-sh-so](./quick/260909-wgm-rework-internal-check-version-tags-sh-so/) |
 
 ## Session Continuity
 
