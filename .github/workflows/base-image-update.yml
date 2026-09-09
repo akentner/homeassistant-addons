@@ -28,8 +28,8 @@ jobs:
       contents: write
       # actions: write is required to create a workflow_dispatch event, which is
       # how this job kicks off the per-add-on image builds its own push cannot
-      # trigger (see the NOTE below). No other workflow in this repository has
-      # ever requested this scope.
+      # trigger (see the NOTE below). auto-update.yml requests the same scope
+      # for the same reason; no other workflow in this repository does.
       actions: write
     steps:
       - name: Checkout repository
