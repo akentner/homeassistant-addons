@@ -1,0 +1,125 @@
+{
+  "base_revision": "8c6645f0b0e6c0e6d5095ec28b9c209df5cea589",
+  "batch_id": "260909-rli",
+  "created_at": "2026-09-09T17:52:12.943Z",
+  "items": [
+    {
+      "client_id": null,
+      "commit": null,
+      "depends_on": [],
+      "description": "STAGE 1+2 (urgent, land first, one commit): Make automated version bumps trigger their build, and fix the BUILD_DATE that this makes reachable. ROOT CAUSE, already proven - do not re-investigate: auto-update.yml (cron 06:00 UTC) and base-image-update.yml (cron 07:00 UTC) both commit and push to main with the default GITHUB_TOKEN, and GitHub creates no new workflow runs for such events, so build-<addon>.yml (push to main, paths <addon>/**) never fires. Evidence: commit d3682f6 \"chore(meridian): update to 1.68.0\" produced ZERO build-meridian runs; base-image commits aaf6084 and 08dee0b produced ZERO runs for either sha; amd64-meridian:1.68.0-0 was measured HTTP 404 while meridian/config.yaml already advertised it. workflow_dispatch is the documented exception - a dispatch created with GITHUB_TOKEN DOES run. (a) NEW FILE internal/dispatch-builds.sh, mode 755 (pre-commit's check-shebang-scripts-are-executable fails otherwise), shebang \"#!/usr/bin/env bash\", \"set -euo pipefail\". Usage \"internal/dispatch-builds.sh [addon ...]\"; with no arguments derive the add-on set from \"git diff --name-only $BASE_SHA..HEAD | cut -d/ -f1 | sort -u\". CRITICAL: assign git diff output to a variable via command substitution, NOT directly into \"mapfile < <(...)\" - a process-substitution failure is invisible to set -e and would silently yield an empty list plus a green run. sort -u dedupes (a dispatch builds the REF, not a commit). A missing build-<addon>.yml is a WARN and continue, never an error (add-ons without an image: key are built locally by the Supervisor; that concept exists as LOCAL_BUILD_ADDONS in internal/check-version-tags.sh:75). A FAILED dispatch must exit 1 - the push already landed, the repo is in exactly the broken state, a green run would hide it. Support DRY_RUN=1 to print the gh commands instead of running them. Header comment must explain the cause, the workflow_dispatch exception and link https://docs.github.com/actions/using-workflows/triggering-a-workflow. (b) In BOTH .github/workflows/auto-update.yml and .github/workflows/base-image-update.yml: add \"actions: write\" to the job permissions (auto-update.yml:31-32, base-image-update.yml:15-16) - creating a workflow_dispatch event requires it and no workflow in this repo has ever requested it; capture BASE_SHA=$(git rev-parse HEAD) at the start of the run step and export it (do NOT rely on $GITHUB_SHA - capturing it is a measurement instead of an unverifiable assumption about actions/checkout); inside the existing \"if [ \"$UPDATES_MADE\" -eq 1 ]\" block, immediately AFTER git push and BEFORE exit $ERRORS, add \"./internal/dispatch-builds.sh || ERRORS=1\". The position is load-bearing in both directions: under set -e a failed push aborts the step so nothing is dispatched for unpushed commits, and a dispatch BEFORE the push would build the pre-bump tree. base-image-update.yml additionally needs \"env: GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\" on its run step - that job has no gh credentials at all today. Also correct the stale NOTE comment in both files (auto-update.yml:42-45, base-image-update.yml:34-36) which documents the GITHUB_TOKEN limitation but mentions only lint.yml, not the builds. DO NOT touch the per-add-on loops (auto-update.yml:55-123) - zero lines change there, that is the whole point. (c) In .github/workflows/_build-template.yml fix BUILD_DATE: github.event.head_commit.timestamp is EMPTY under workflow_dispatch, which this change makes reachable, and would ship an empty org.opencontainers.image.created label. Add a step-level \"env: HEAD_COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp }}\" to the meta step (line 71), then after the BUILD_FROM guard set BUILD_DATE from it with \"date -u +%Y-%m-%dT%H:%M:%SZ\" as fallback, add one line to the existing \"{ ... } >> $GITHUB_OUTPUT\" block, and change line 132 (\"started_at\") and line 161 (build-args BUILD_DATE) to read ${{ steps.meta.outputs.BUILD_DATE }}. The meta step already runs before both, no reordering needed. VERIFY: shellcheck internal/dispatch-builds.sh with NO -e flags (lint.yml:96-99 runs shellcheck without any exclusions, so CI is STRICTER than pre-commit and make lint-shell); DRY_RUN=1 BASE_SHA=<some sha> ./internal/dispatch-builds.sh must derive correctly; DRY_RUN=1 ./internal/dispatch-builds.sh meridian nonexistent-addon must show the WARN path; pre-commit run --all-files must pass. Shellcheck traps that apply: SC2086 quote everything, SC2155 never \"local x=$(cmd)\", SC2001 no echo|sed, pipefail plus \"grep -o | cut\" needs \"|| var=\"\"\", never \"... | while read\" (subshell loses counters).",
+      "directory": null,
+      "dispatched_base": null,
+      "dispatched_branch": null,
+      "dispatched_worktree": null,
+      "failure_reason": null,
+      "planned_files": [
+        "internal/dispatch-builds.sh",
+        ".github/workflows/auto-update.yml",
+        ".github/workflows/base-image-update.yml",
+        ".github/workflows/_build-template.yml"
+      ],
+      "quick_id": "260909-rlj",
+      "status": "pending",
+      "wave": 0,
+      "worktree": null
+    },
+    {
+      "client_id": null,
+      "commit": null,
+      "depends_on": [],
+      "description": "STAGE 3: Add a CI guard that turns the silent, live-breaking image-availability failure into a loud one. INVARIANT: for every add-on whose config.yaml declares a top-level image: key, an ANONYMOUSLY-PULLABLE manifest must exist at that image repository for the exact version: string in config.yaml, for every ACTIVE arch in its arch: list. When image: is present the HA Supervisor pulls with no credentials instead of building locally, so a missing manifest makes the add-on uninstallable and un-updatable. NEW FILE internal/verify-image-availability.sh, mode 755, \"#!/usr/bin/env bash\", \"set -euo pipefail\". Key facts, verified - do not re-derive: ghcr has THREE distinguishable states and the 403 occurs at the TOKEN endpoint, not the manifest endpoint - token 200 plus manifest 200 = ok; token 200 plus manifest 404 = version never published; token 403/401 = not anonymously pullable, which is ambiguous between a missing and a private package because ghcr does not distinguish them for anonymous callers, so the message must NOT claim to know which. Probe shape: resolve a token from \"https://ghcr.io/token?scope=repository:$repo_path:pull&service=ghcr.io\", extract it with \"grep -o '\\\"token\\\":\\\"[^\\\"]*\\\"' | cut -d'\\\"' -f4\" (field-order independent, no JSON parser needed), then request \"https://ghcr.io/v2/$repo_path/manifests/$tag\" with that bearer token and an Accept header covering both OCI index and docker manifest v2. Derive the registry path from the image: VALUE, never by recomputing the slug from the directory name - recomputing would silently agree with a typo'd image: key and mask exactly the bug that breaks the pull. Parse config.yaml with grep/sed/awk, never yq (internal/check-version-tags.sh:125 explains why, and the locally installed yq is python-yq with no eval subcommand). The arch: parser must handle 2-space AND 4-space list indentation (network-tools uses 4), must EXCLUDE commented-out \"# - aarch64\" entries (gatus, meridian, authentik have them), and must handle the inline flow form. FALSE-ALARM DEFENCE, and this is the central design point: it is NOT the cron schedule, because humans push bumps at arbitrary times. It is a per-add-on grace window dated from history with \"git log -1 --format=%ct -S\\\"$version\\\" -- \\\"$addon/config.yaml\\\"\" - default 45 minutes (measured worst case is 13m28s for aarch64 under QEMU plus queue time). EXIT CONTRACT: 0 = invariant holds, 1 = at least one violation or an uninterpretable config.yaml, 2 = the guard could not run reliably (shallow clone, ghcr unreachable after retries, self-test failed, bad arguments) - so a network blip is never reported as a broken add-on, but still fails, because a guard that cannot run is not guarding. TWO ANTI-SILENT-PASS SAFEGUARDS ARE MANDATORY: refuse to run with exit 2 on a shallow clone (there git log -S finds nothing, every add-on looks brand new, everything gets grace-skipped and the guard passes green having checked NOTHING - this is the guard's own version of the bug it exists to catch), and warn when passes==0 && skips>0. Modes: --grace-minutes N, --addon NAME, --dry-run (resolve and print image:tag per add-on/arch with no network - this is the parser regression check), --probe TEMPLATE --probe-version V [--probe-arch A], --summary-file PATH, --self-test, -h/--help. --self-test must prove the probe in ALL THREE directions against a third-party control image (ghcr.io/home-assistant/amd64-base - public, permanent, already a build_from dependency of every add-on, so the self-test never depends on this repo's own possibly-broken packages): :latest must be ok, a nonexistent tag must be missing:404, a nonexistent repo must be denied. Output vocabulary must match internal/check-version-tags.sh exactly: \u2713 pass, \u2298 deliberate skip with a visible reason, \u274c violation with a remediation block, \ud83d\udeab aggregate failure, \u2705 aggregate success; new: \u26a0 inconclusive, \u00b7 dry-run. NEW FILE .github/workflows/verify-image-availability.yml: schedule \"30 2,8,14,20 * * *\" (\":30\" because top-of-hour crons routinely slip 5-15 minutes) plus workflow_dispatch with a grace-minutes input; permissions \"contents: read\"; timeout-minutes 10; a concurrency group WITHOUT cancel-in-progress (a cancelled run is grey, and grey is precisely the state nobody notices). actions/checkout@v7 with \"fetch-depth: 0\" is MANDATORY, not an optimisation - see the shallow-clone trap. Run --self-test as its OWN step BEFORE the scan, so a green scan is only meaningful because the self-test passed. Report failures on two channels: ::error:: annotations plus GitHub's automatic scheduled-failure email, and an \"if: failure()\" step calling .github/scripts/notify-ha.sh with the existing HA_BASE_URL / HA_WEBHOOK_ID / CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET secrets and a NOTIFY_PAYLOAD - that script never parses the payload and always exits 0, so it can neither reject nor mask the job failure. Makefile: add \"verify-images\" and \"verify-images-self-test\" targets next to validate-versions plus .PHONY, and do NOT add them to check-all (every check-all member is offline and deterministic and fails only for something in your own working tree; a registry probe breaks all three properties and would turn check-all red because of somebody else's failed build - a bypassed check is worse than no check because it also devalues the four legitimate ones beside it). VERIFY before wiring CI: shellcheck with NO -e flags; --self-test gives 3x \u2713 and exit 0; --dry-run prints exactly 8 lines and gatus/meridian must yield ONLY amd64 (their commented aarch64 lines are inert), network-tools amd64 despite 4-space indent, coding-assistants TWO lines, authentik/iac-runner/tools/test-addon NOTHING - put that expected output in the script header as a fixture; the --probe negative direction must exit 1; a full scan must currently be all \u2713 exit 0. Files: internal/verify-image-availability.sh, .github/workflows/verify-image-availability.yml, Makefile.",
+      "directory": null,
+      "dispatched_base": null,
+      "dispatched_branch": null,
+      "dispatched_worktree": null,
+      "failure_reason": null,
+      "planned_files": [
+        "internal/verify-image-availability.sh",
+        ".github/workflows/verify-image-availability.yml",
+        "Makefile"
+      ],
+      "quick_id": "260909-rlk",
+      "status": "pending",
+      "wave": 0,
+      "worktree": null
+    },
+    {
+      "client_id": null,
+      "commit": null,
+      "depends_on": [
+        "260909-rlj"
+      ],
+      "description": "STAGE 4 (depends on stage 1 - same workflow files): Fix the tag off-by-one and serialize the two bump workflows. internal/update-version.py runs at auto-update.yml:89 BEFORE git commit, so create_and_push_tag tags the PRE-bump commit - proven: meridian/v1.68.0-0 points at 9f45b96 while the bump commit is its child d3682f6. Every auto-update tag is off by one. (a) auto-update.yml:89: add --no-tag to the update-version.py call, with a comment explaining that HEAD there is still the pre-bump commit. There is NO live consumer: all four auto-updatable add-ons (authentik, gatus, meridian, phone-logger) have their tags: trigger commented out, the three with an active tags: trigger (iac-runner, network-tools, terraform-bridge) have no .upstream.yaml, and internal/check-version-tags.sh is a LOCAL pre-push hook installed by setup-hooks.sh that no CI job runs. Also internal/update-base-image.py contains no git operations at all, so base-image-update already pushes version bumps with no tag whatsoever - dropping auto-update's tag makes the two workflows consistent. Do NOT instead try to tag after the commit: actions/checkout@v7 fetches no tags, so a combined \"git push --follow-tags\" would be rejected non-atomically for an already-existing remote tag, return non-zero and abort the step under set -e BEFORE the dispatch runs - a real regression on the critical path for a tag nobody consumes. (b) internal/update-version.py:275 prints \"\ud83d\ude80 Pushed tag: {tag} \u2192 build workflow will trigger\" which is false for the six add-ons whose tags: trigger is disabled. Reduce it to stating that a build only fires if the caller's tags: trigger is enabled, and point at .github/RELEASE.md. Also fix the create_and_push_tag docstring around lines 201-207, which conflates the paths: trigger with the tag trigger. (c) Add a SHARED concurrency group \"addon-version-bump\" to BOTH auto-update.yml and base-image-update.yml. auto-update.yml already has \"concurrency: {group: auto-update, cancel-in-progress: false}\" at lines 20-22 with a 12-line rationale comment at lines 8-19 - EXTEND that comment, do not replace it. base-image-update.yml has no concurrency block at all today, so it also has no protection against a non-fast-forward git push race. Sharing the group serializes the two, closes that race, and prevents two runs from dispatching the same ref. They are an hour apart and auto-update is observed at 8-28s, so the wait is negligible. VERIFY: actionlint (note pre-commit pins v1.7.3 while lint.yml resolves the latest release, so both must pass, and .actionlint.yml has an EMPTY config-variables list so any vars.* reference is flagged, and only ubuntu-latest is an allowed runner); python3 -m py_compile internal/update-version.py; make validate-versions and make lint must pass; and confirm with \"python3 internal/update-version.py --help\" that --no-tag is accepted before and after the positionals.",
+      "directory": null,
+      "dispatched_base": null,
+      "dispatched_branch": null,
+      "dispatched_worktree": null,
+      "failure_reason": null,
+      "planned_files": [
+        ".github/workflows/auto-update.yml",
+        "internal/update-version.py",
+        ".github/workflows/base-image-update.yml"
+      ],
+      "quick_id": "260909-rll",
+      "status": "pending",
+      "wave": 1,
+      "worktree": null
+    },
+    {
+      "client_id": null,
+      "commit": null,
+      "depends_on": [
+        "260909-rlj",
+        "260909-rll"
+      ],
+      "description": "STAGE 5 (depends on stages 1 and 3 - it documents what they change): Make the CI documentation describe what the code actually does. (a) .github/RELEASE.md:185-189 carries the load-bearing false claim about the auto-update path: \"From the perspective of this document, that path is identical to a manual `make release` \u2014 only the trigger differs.\" That is exactly the sentence that made this bug invisible for months: a manual push fires build-<addon>.yml via the paths: filter, while the workflow's GITHUB_TOKEN push fires nothing. Correct it and point at internal/dispatch-builds.sh. (b) .github/RELEASE.md:75-79 says committing and pushing the version files \"is what fires the build\" - true for a human push, silently untrue for the bot push. Scope the claim to human pushes. (c) .github/RELEASE.md, \"Tag schema\" section: note that auto-update no longer produces tags (stage 3 removes that), so \"Every release ships as one git tag\" is not read as a repo-wide invariant - it already was not, because base-image-update never tagged. (d) .github/RELEASE.md:126 claims \"The seven callers carry the comment\" while only six workflow files contain \"tag-trigger temporarily disabled\" - pre-existing, fix it here. (e) docs/AUTO_UPDATE_GUIDE.md is substantially fiction and must be brought in line with the implementation: it claims Parallel Updates and \"fail-fast: false\" (updates are SEQUENTIAL, there is no matrix), \"Automatic GitHub issues\" with per-add-on labels (there is NO issue creation anywhere in the workflow - errors only set ERRORS=1), workflow_dispatch inputs addon_name and force_update (the trigger is a BARE \"workflow_dispatch:\" key at auto-update.yml:6, those inputs do not exist), a \"Matrix View\" and \"Automatic Issues\" monitoring section (neither exists), version_pattern \"auto\" as recommended (no add-on uses it and the workflow never reads addon.version_pattern at all - behaviour is unconditionally \"sync\"), a workflow name \"Auto-Update Add-ons when upstream releases\" (the real name is \"Auto Update\"), and a stale add-on name fritz-callmonitor2mqtt. The daily-6:00-UTC discovery description at lines 41-47 IS accurate - keep it. Also document the GITHUB_TOKEN no-trigger limitation and the new dispatch, since the only place it is currently written down is in-file comments. VERIFY: make lint must pass (prettier reflows markdown OUTSIDE .planning/, so expect to run it until it converges), markdownlint clean, and every claim you write must be checkable against the file it describes - do not replace one set of fictional statements with another. Files: .github/RELEASE.md, docs/AUTO_UPDATE_GUIDE.md.",
+      "directory": null,
+      "dispatched_base": null,
+      "dispatched_branch": null,
+      "dispatched_worktree": null,
+      "failure_reason": null,
+      "planned_files": [
+        ".github/RELEASE.md",
+        "docs/AUTO_UPDATE_GUIDE.md"
+      ],
+      "quick_id": "260909-rlm",
+      "status": "pending",
+      "wave": 2,
+      "worktree": null
+    },
+    {
+      "client_id": null,
+      "commit": null,
+      "depends_on": [
+        "260909-rlj",
+        "260909-rlm"
+      ],
+      "description": "STAGE 6 (depends on stage 1 - it rewrites internal/dispatch-builds.sh; do this LAST): Replace the nine per-add-on build workflows with ONE builder that derives the add-on list, modelled on alexbelgium/hassio-addons/.github/workflows/onpush_builder.yaml which runs this pattern across ~100 add-ons. Today .github/workflows/build-authentik.yml, build-coding-assistants.yml, build-gatus.yml, build-iac-runner.yml, build-markdown-renderer.yml, build-meridian.yml, build-network-tools.yml, build-phone-logger.yml and build-terraform-bridge.yml are structurally IDENTICAL 28-line files differing only in name, the paths glob, three with: strings and archs. NEW FILE .github/workflows/build.yml: trigger on push to main with paths \"**/config.*\", \"**/build.*\" and \"**/Dockerfile\" (today's \"<addon>/**\" also rebuilds on README-only changes, so narrowing is a side benefit); a detect-changed-addons job that derives the add-on list from git diff and emits a JSON array (the same derivation stage 1's script uses: changed config paths, then \"awk -F/ 'NF {print $1}' | sort -u\", emitted with \"jq -R -s -c\"); a build job with a matrix over fromJSON(needs.detect.outputs.addons) crossed with [amd64, aarch64], SKIPPING any arch leg the add-on does not declare. CRITICAL: the arch list must come from <addon>/build.yaml build_from keys, falling back to <addon>/config.yaml arch:, NOT from a workflow input - that makes today's possible drift between config.yaml arch: and build-<addon>.yml archs: structurally impossible. Likewise addon-display-name and addon-description must be read from config.yaml name:/description: rather than passed as inputs, otherwise the duplication merely moves into the new workflow. Keep .github/workflows/_build-template.yml as the workflow_call target - only the nine callers disappear. Add a workflow_dispatch with an \"addons\" input (empty means all) and THEN update internal/dispatch-builds.sh to issue ONE dispatch with a list instead of N dispatches. Add the \"nobuild\" commit-message escape hatch (skip the build when the head commit message contains it) and fetch-depth: 0. TWO THINGS MUST BE DECIDED EXPLICITLY AND RECORDED IN THE PLAN, not handled incidentally: what happens to the three currently ACTIVE tags: triggers (iac-runner/v*, network-tools/v*, terraform-bridge/v*), and what becomes of the .github/RELEASE.md table that documents the per-caller active/disabled tag-trigger status - in a one-workflow world there is no per-add-on tags: block, so either a shared \"*/v*\" pattern or the tag triggers go away entirely (stage 1's dispatch plus the paths: trigger would then cover everything). VERIFY: actionlint under both the pre-commit-pinned v1.7.3 and the latest release; yamllint; and because a mistake here breaks all nine builds simultaneously where today only one would be affected, validate on a test branch or with act BEFORE main - then after merge make one trivial config.yaml change and prove that exactly ONE add-on builds and the right arch legs run (coding-assistants two, every other add-on one). Files: .github/workflows/build.yml (new), the nine build-*.yml (deleted), internal/dispatch-builds.sh, .github/RELEASE.md.",
+      "directory": null,
+      "dispatched_base": null,
+      "dispatched_branch": null,
+      "dispatched_worktree": null,
+      "failure_reason": null,
+      "planned_files": [
+        ".github/workflows/build.yml",
+        ".github/workflows/_build-template.yml",
+        "internal/dispatch-builds.sh",
+        "internal/check-version-tags.sh",
+        "internal/update-version.py",
+        ".github/RELEASE.md",
+        "README.md",
+        "docs/DEVELOPMENT.md",
+        "docs/WEBHOOK_SETUP.md",
+        "docs/UPDATE_VERSION.md",
+        "docs/AUTO_UPDATE_GUIDE.md"
+      ],
+      "quick_id": "260909-rln",
+      "status": "pending",
+      "wave": 3,
+      "worktree": null
+    }
+  ],
+  "options": {},
+  "schema_version": 1
+}
