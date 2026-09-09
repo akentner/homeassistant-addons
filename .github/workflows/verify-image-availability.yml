@@ -1,0 +1,103 @@
+name: Verify Image Availability
+
+# Guards a silent, live-breaking failure: when an add-on's config.yaml declares
+# a top-level `image:` key the HA Supervisor PULLS that image anonymously
+# instead of building locally, so if no manifest exists at the exact `version:`
+# the add-on is uninstallable and un-updatable — and nothing else in this repo
+# notices. Full reasoning in internal/verify-image-availability.sh.
+
+on:
+  schedule:
+    # Deliberately at :30, not on the hour. Top-of-hour crons on GitHub
+    # routinely slip 5-15 minutes, and every other scheduled workflow here
+    # already sits on the hour (auto-update.yml at 06:00, base-image-update.yml
+    # at 07:00), so :30 keeps this run out of their queue contention.
+    - cron: "30 2,8,14,20 * * *"
+  workflow_dispatch:
+    inputs:
+      grace-minutes:
+        description: "Skip add-ons whose version landed less than N minutes ago (0 disables)"
+        required: false
+        default: "45"
+        type: string
+
+# Read-only on repository contents, and NOTHING else. In particular this
+# workflow grants no registry scope. That is a correctness property, not a
+# least-privilege nicety: an authenticated probe returns 200 for an image that
+# is only pullable WITH credentials, which is exactly what the Supervisor
+# cannot do, so a credentialed guard would certify a broken add-on as healthy.
+permissions:
+  contents: read
+
+# Serialize runs, but never cancel one. A cancelled run renders grey in the
+# Actions UI, and grey is precisely the state nobody notices — which would
+# defeat a guard whose entire purpose is to be loud. Same rationale as
+# auto-update.yml:22-23.
+concurrency:
+  group: verify-image-availability
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    # Eight probes plus a three-direction self-test, each with a 30s cap and at
+    # most three attempts. Anything past 10 minutes means a hung network call.
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repository with full history
+        uses: actions/checkout@v7
+        with:
+          # MANDATORY, not an optimisation. The grace window reads git history
+          # via `git log -S`; on the default shallow checkout the grafted
+          # commit has no parent, so every add-on reports the HEAD commit's
+          # date, gets grace-skipped, and the guard would pass green having
+          # probed nothing. The script refuses to run in that state (exit 2),
+          # so a shallow checkout turns this job red rather than falsely
+          # green — but full history is the actual fix.
+          fetch-depth: 0
+
+      # Runs BEFORE the scan, as its own step, on purpose: the repository is
+      # green today, so a passing scan proves nothing on its own. It is only
+      # meaningful because the classifier was just proven to distinguish all
+      # three ghcr states against a third-party control image.
+      - name: Self-test the ghcr probe
+        run: ./internal/verify-image-availability.sh --self-test
+
+      - name: Scan all add-ons
+        env:
+          # Empty on the scheduled path, where there is no dispatch input; the
+          # shell default below then supplies 45.
+          GRACE_MINUTES_INPUT: ${{ github.event.inputs['grace-minutes'] }}
+        run: |
+          GRACE="${GRACE_MINUTES_INPUT:-45}"
+          echo "Using grace window: ${GRACE} minute(s)"
+          ./internal/verify-image-availability.sh \
+            --grace-minutes "${GRACE}" \
+            --summary-file "${GITHUB_STEP_SUMMARY}"
+
+      # The second of two mandated failure channels. The first is the
+      # ::error:: annotations the script emits on every violation, plus
+      # GitHub's automatic scheduled-failure email to the workflow author.
+      # notify-ha.sh never parses its payload and always exits 0
+      # (notify-ha.sh:35-36), so it can neither reject nor mask this job's
+      # failure.
+      - name: Notify HA — image availability check failed
+        if: failure()
+        env:
+          HA_BASE_URL: ${{ secrets.HA_BASE_URL }}
+          HA_WEBHOOK_ID: ${{ secrets.HA_WEBHOOK_ID }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          NOTIFY_DELIVERY_ID: ${{ github.run_id }}-${{ github.run_number }}
+          NOTIFY_EVENT: finished
+          NOTIFY_PAYLOAD: >-
+            {
+              "event": "image_availability_failed",
+              "workflow": "${{ github.workflow }}",
+              "repository": "${{ github.repository }}",
+              "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "conclusion": "${{ job.status }}",
+              "trigger": "${{ github.event_name }}"
+            }
+        run: ./.github/scripts/notify-ha.sh
