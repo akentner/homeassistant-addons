@@ -30,6 +30,11 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      # actions: write is required to create a workflow_dispatch event, which is
+      # how this job kicks off the per-add-on image builds its own push cannot
+      # trigger (see the NOTE below). No other workflow in this repository has
+      # ever requested this scope.
+      actions: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -39,15 +44,26 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # NOTE: Pushes made with GITHUB_TOKEN do not trigger other GitHub Actions workflows
-      # (documented GitHub limitation). Auto-update commits will not be validated by lint.yml
-      # automatically. Developers can manually trigger lint.yml if validation is needed.
+      # NOTE: a push made with GITHUB_TOKEN creates NO workflow runs at all (documented
+      # GitHub limitation) — not lint.yml, and not build-<addon>.yml, which triggers on
+      # `push` to main with `paths: <addon>/**`. So an automated version bump used to
+      # advertise a new add-on version whose ghcr.io image was never built. The workaround
+      # is the dispatch step at the end of the run block below: workflow_dispatch is the
+      # documented exception, and a dispatch created with GITHUB_TOKEN does run.
       # See: https://docs.github.com/actions/using-workflows/triggering-a-workflow
       - name: Check and update add-ons
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eo pipefail
+
+          # Capturing HEAD here is a measurement of what this step starts from.
+          # $GITHUB_SHA would be an unverifiable assumption about what
+          # actions/checkout left in the work tree. Capture and export are two
+          # separate lines because combining them into a single export with a
+          # command substitution trips SC2155.
+          BASE_SHA=$(git rev-parse HEAD)
+          export BASE_SHA
 
           ERRORS=0
           UPDATES_MADE=0
@@ -123,8 +139,14 @@ jobs:
           done < <(find . -maxdepth 2 -name .upstream.yaml | sort)
 
           # Push once at the end — only if commits were made (AUTO-03)
+          #
+          # The dispatch position below is load-bearing in both directions: under
+          # `set -e` a failed push aborts the step, so nothing is dispatched for
+          # commits that never landed; and a dispatch placed before the push would
+          # build the pre-bump tree.
           if [ "$UPDATES_MADE" -eq 1 ]; then
             git push
+            ./internal/dispatch-builds.sh || ERRORS=1
           fi
 
           # Exit non-zero if any per-addon error occurred (D-04)
