@@ -188,7 +188,7 @@ stayed outside that loop (rlj L-14). That assertion was true and its gate passed
 `auto-update.yml:89` — the line this item must change — sits **inside** that region, so the pin
 cannot survive this item.
 
-The replacement is strictly stronger, not weaker. Task 1 pins the two sub-regions that flank the
+The replacement is NARROWER, and a verifier's mutation probe disproved the original claim that it is stronger: code injected into the unpinned window (between the AUTO-02 anchor and the --check-release anchor) passes ALL of GATE-T1-A..F, while rlj's single whole-loop pin caught it. Recomputing a hash proves the pin is correct; only mutation proves it CATCHES. The avoidable part of the loss is that Region A could end at the --check-release comment INCLUSIVE, leaving only comment text unpinned. Task 1 pins the two sub-regions that flank the
 edit site, so the ONLY lines that can differ from the pre-change tree are the three-line window
 [AUTO-02 comment … the call]:
 
@@ -480,7 +480,7 @@ Then re-run every `GATE-*-PASS` from the three tasks and confirm each prints and
 
 **Expected red, by design:** rlj's `GATE-T1-14` (auto-update loop-region sha256 ==
 `7b7356ab…f2f8bc`). See `<sibling_supersession>` — Task 1's `GATE-T1-B`/`GATE-T1-C`/`GATE-T1-D`
-triple replaces it and is strictly narrower. Every other rlj gate over these two files is
+triple replaces it and is NARROWER - not stronger: a mutation probe showed the unpinned window admits undetected code, which rlj's pin caught. See the corrected note above. Every other rlj gate over these two files is
 re-asserted inside Tasks 1 and 3 and must be green.
 
 Deliberately NOT verified here (needs a live GitHub run): that a real auto-update run creates no

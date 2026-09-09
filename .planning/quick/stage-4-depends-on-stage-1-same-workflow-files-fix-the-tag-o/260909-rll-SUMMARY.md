@@ -158,7 +158,7 @@ Measured transition, both values verified on this tree:
 | before this item (rlj's pin, green at rlj's commit) | `7b7356ab16e89075cb44bd9ae13b94df53580b4b33a10e3f308e15d4b6f2f8bc` |
 | after this item | `cdaa8113a8f5e52c67778094835ba3feed0d278b39eb63ed8de03c2ef97780bb` |
 
-The replacement is **strictly stronger**, not weaker:
+The replacement is **narrower, not stronger** - the original claim was disproved by a verifier's mutation probe (code injected into the unpinned window passes every replacement gate, while rlj's whole-loop pin caught it). Recomputing a hash proves a pin is correct; only mutation proves it catches. Region A should have ended at the `--check-release` comment inclusive:
 
 - `GATE-T1-B` pins Region A (`while` line → line before the AUTO-02 comment) to `c1d95350…cecd20`.
 - `GATE-T1-C` pins Region B (the `ERROR: update-version.py failed for` line → the `-name .upstream.yaml` line) to

@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 6
+open_count: 7
 waived_count: 0
 fixed_count: 2
-total_count: 8
-last_updated: 2026-09-09T20:41:32.937Z
+total_count: 9
+last_updated: 2026-09-09T20:55:30.424Z
 ---
 
 # Broken Windows Ledger
@@ -23,6 +23,7 @@ last_updated: 2026-09-09T20:41:32.937Z
 | 6 | quick-260909-rll | unrun-verify | .github/workflows/base-image-update.yml |  | Live-run truth unverified: that the two bump workflows actually queue behind the shared addon-version-bump group - needs two overlapping GitHub runs | open |  | 2026-09-09T20:38:26.589Z |  |
 | 7 | quick-260909-rll | deviation | .github/workflows/auto-update.yml |  | Sibling 260909-rlj GATE-T1-14 (loop-region sha256 7b7356ab) is intentionally red: 7b7356ab -> cdaa8113. Replaced by narrower flanking pins GATE-T1-B/C/D | open |  | 2026-09-09T20:38:29.158Z |  |
 | 8 | quick-260909-rlk | unrun-verify | .github/workflows/verify-image-availability.yml | 1 | The if: failure() HA-webhook leg has never executed. Run 34402464619 (workflow_dispatch, grace-minutes=0) was GREEN, so the notify step was correctly skipped: self-test, scan and checkout all succeeded. Proving the notify leg needs a genuinely red run, which requires a config.yaml version with no published image on the default branch - deliberately not manufactured. Everything else in the workflow is exercised: the self-test runs as its own step before the scan and passes all three probe directions. | open |  | 2026-09-09T20:41:32.937Z |  |
+| 9 | quick-260909-rll | deviation | .planning/quick/stage-4-depends-on-stage-1-same-workflow-files-fix-the-tag-o/260909-rll-PLAN.md | 191 | The GATE-T1-14 supersession leaves a 9-line unpinned window (auto-update.yml 115-123) where only one line is the intended edit. A verifier's mutation probe injected shell code between the AUTO-02 and --check-release anchors and ALL replacement gates (GATE-T1-A..F) stayed green, while rlj's original whole-loop sha256 caught it. The shipped workflow is correct - this is a gap in the verification apparatus for future re-runs, not in the delivered code. Free fix: end Region A at the --check-release comment INCLUSIVE, leaving only comment text unpinned. Lesson: recomputing a hash proves a pin is correct; only mutation proves it catches. | open |  | 2026-09-09T20:55:30.424Z |  |
 
 ````json
 [
@@ -120,6 +121,18 @@ last_updated: 2026-09-09T20:41:32.937Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-09T20:41:32.937Z",
+    "resolved_at": null
+  },
+  {
+    "id": 9,
+    "kind": "deviation",
+    "phase": "quick-260909-rll",
+    "file": ".planning/quick/stage-4-depends-on-stage-1-same-workflow-files-fix-the-tag-o/260909-rll-PLAN.md",
+    "line": 191,
+    "description": "The GATE-T1-14 supersession leaves a 9-line unpinned window (auto-update.yml 115-123) where only one line is the intended edit. A verifier's mutation probe injected shell code between the AUTO-02 and --check-release anchors and ALL replacement gates (GATE-T1-A..F) stayed green, while rlj's original whole-loop sha256 caught it. The shipped workflow is correct - this is a gap in the verification apparatus for future re-runs, not in the delivered code. Free fix: end Region A at the --check-release comment INCLUSIVE, leaving only comment text unpinned. Lesson: recomputing a hash proves a pin is correct; only mutation proves it catches.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-09T20:55:30.424Z",
     "resolved_at": null
   }
 ]
