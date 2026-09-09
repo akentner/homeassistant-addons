@@ -63,9 +63,9 @@ errored=0
 # corrected.
 #
 # Why this is an explicit allowlist and not a test for a missing `image:` key:
-# six other add-ons also lack the key while publishing ghcr.io images via their
-# build workflows, which may be a missing-key bug rather than intent. Inferring
-# the rule from the key's absence would cement that bug behind a guard that
+# authentik also lacks the key while publishing ghcr.io images via its build
+# workflow, which may be a missing-key bug rather than intent. Inferring the
+# rule from the key's absence would cement that bug behind a guard that
 # stopped complaining. Full reasoning in
 # .planning/quick/make-the-pre-push-version-tag-hook-stop-demanding-a-release/260908-pfq-PLAN.md
 #
@@ -74,7 +74,6 @@ errored=0
 # push actually modified, so a stale name simply never matches.
 LOCAL_BUILD_ADDONS=(
     iac-runner
-    terraform-bridge
 )
 
 # is_local_build: returns 0 if $1 is an exact member of LOCAL_BUILD_ADDONS,
