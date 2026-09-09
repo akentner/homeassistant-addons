@@ -89,9 +89,10 @@ What skipping step 2 actually costs depends on the image source, not on the tag 
 
 - **Add-ons whose `config.yaml` declares a top-level `image:` key** are pulled by the Supervisor: coding-assistants,
   gatus, markdown-renderer, meridian, network-tools, phone-logger and terraform-bridge. For these, skipping step 2
-  produces exactly the ghcr.io 404 that the versioning docs warn about, even when the tag exists on origin — the
-  manifest advertises a version whose image tag was never published, and every install and update of that add-on fails
-  on the pull.
+  leaves `config.yaml` off `main`, so the store keeps advertising the old version and nothing breaks yet — what it
+  leaves behind is a version that was never built. The ghcr.io 404 the versioning docs warn about arrives when that bump
+  commit later lands with no build behind it: the manifest then advertises a version whose image tag was never
+  published, and every install and update of that add-on fails on the pull.
 - **`authentik` and `iac-runner` declare no `image:` key**, so the Supervisor builds them locally from their
   `Dockerfile` and a missing ghcr tag cannot produce a pull 404 for them at all. Their failure mode is a local build
   against whatever `main` currently holds: skip step 2 and the add-on is built from un-bumped source while its tag
@@ -99,10 +100,11 @@ What skipping step 2 actually costs depends on the image source, not on the tag 
 
 `network-tools`, `terraform-bridge` and `iac-runner` are built twice when both the commit and the tag are pushed: once
 by the `paths:` trigger and once by the active `tags:` trigger. Neither leg is authoritative for the version the tag
-names — both read `build.yaml:args.VERSION` out of whatever ref they check out. Because the release procedure tags
-before it commits (see `### What a tag guarantees` below), the tag's ref is the one that may still carry the older
-version, which makes the tag-triggered leg the leg more likely to build stale content. The `paths:` leg on `main` is the
-one that sees the bump.
+names — both read `build.yaml:args.VERSION` (`_build-template.yml:76`) and `config.yaml:version`
+(`_build-template.yml:80`) out of whatever ref they check out, and it is `config.yaml:version` that becomes the
+published OCI image tag (`_build-template.yml:176`). Because the release procedure tags before it commits (see
+`### What a tag guarantees` below), the tag's ref is the one that may still carry the older version, which makes the
+tag-triggered leg the leg more likely to build stale content. The `paths:` leg on `main` is the one that sees the bump.
 
 ### Re-enabling a tag trigger
 
@@ -121,8 +123,9 @@ The six callers carry the comment `# tag-trigger temporarily disabled (see .gith
 The one-tag-per-release rule at the top of this section describes the manual paths only. Two automated paths ship
 version bumps with no tag at all:
 
-- `.github/workflows/base-image-update.yml` drives `internal/update-base-image.py`, which performs no git operations of
-  any kind — it edits files and nothing else. That workflow has therefore never produced a tag.
+- `.github/workflows/base-image-update.yml` commits and pushes its own bumps (`base-image-update.yml:94-95` and `:112`)
+  but never tags one: `internal/update-base-image.py` performs no git operations at all, and no revision of either file
+  has ever contained `git tag`.
 - The daily `.github/workflows/auto-update.yml` passes `--no-tag` to `internal/update-version.py`
   (`auto-update.yml:123`), so an automated bump lands as a commit on `main` with no tag behind it. See
   `## Auto-update path`.
@@ -135,8 +138,9 @@ just edited — it prints a suggested `git add` / `git commit` for the operator 
 creates the bump commit afterwards. The `## Patch flow` snippet has the same ordering: `git tag` runs before the version
 files are committed.
 
-Measured on 2026-09-09: 15 of the 40 `<addon>/v*` tags in this repository point at a tree whose `build.yaml`
-`args.VERSION` is an older version than the tag names. The other 25 agree with their tree. Three of the fifteen:
+Measured 2026-09-09 and re-measured 2026-09-10: 15 of the 42 `<addon>/v*` tags in this repository point at a tree whose
+`build.yaml` `args.VERSION` is an older version than the tag names. The other 27 agree with their tree. Two tags were
+cut by hand between the two measurements, so the total moved while the mismatch count did not. Three of the fifteen:
 
 - `authentik/v2026.8.1` — the tree at that tag carries `2026.8.0`
 - `meridian/v1.59.0` — the tree at that tag carries `1.58.3`
@@ -175,8 +179,11 @@ it does not change `make release`.
    - creates the annotated tag `authentik/v2026.8.0`
    - pushes that tag to origin
 
-   The Makefile then runs `make validate-versions` so a broken 3-file set fails the release before the tag reaches
-   `origin`.
+   The Makefile then runs `make validate-versions` (`Makefile:201-203`). Note the ordering: `update-version.py` has
+   already created and pushed the tag by the time validation runs, so a broken 3-file set is only reported after the
+   fact — this step cannot stop a bad tag from reaching `origin`. The control that catches the consequence is
+   `.github/workflows/verify-image-availability.yml`, which re-checks four times daily, with no registry credential,
+   that every version a `config.yaml` advertises is anonymously pullable from ghcr.io.
 
 2. **Commit and push the version files** (config.yaml / build.yaml / README.md are not auto-committed by the script):
 
@@ -186,11 +193,13 @@ it does not change `make release`.
    git push origin main
    ```
 
-   The `internal/check-version-tags.sh` pre-push hook verifies the `<addon>/v<version>` tag already exists locally or on
-   origin before letting the branch push through. Add-ons on the `LOCAL_BUILD_ADDONS` allowlist in that script are
-   exempt — they are built locally by the Supervisor and never pulled from ghcr.io, so no release tag is required. The
-   allowlist now holds exactly one add-on, `iac-runner`. That array is the source of truth for the current membership —
-   read it, do not trust this sentence, when the membership matters.
+   The `internal/check-version-tags.sh` pre-push hook reports every add-on whose bumped `config.yaml` version is about
+   to reach `main` with no matching `<addon>/v<version>` tag locally or on origin. Since `2ba51a2` it is **advisory only
+   — it never fails the push**: the tag does not cause the build (`internal/dispatch-builds.sh` does, via
+   `workflow_dispatch`), and a release marker must not block a push. Add-ons on the `LOCAL_BUILD_ADDONS` allowlist in
+   that script are skipped entirely — they are built locally by the Supervisor and never pulled from ghcr.io, so no
+   release tag is expected. The allowlist now holds exactly one add-on, `iac-runner`. That array is the source of truth
+   for the current membership — read it, do not trust this sentence, when the membership matters.
 
 3. **Optional: GitHub Release page.** If you have the `gh` CLI and want the release notes rendered on the GitHub
    Releases UI:
@@ -213,8 +222,8 @@ git tag authentik/v2026.8.0-1
 git push origin authentik/v2026.8.0-1
 ```
 
-This bypasses `update-version.py` but still satisfies the pre-push hook (`internal/check-version-tags.sh`) as long as
-the subpatch in `config.yaml` matches the tag suffix.
+This bypasses `update-version.py`. The pre-push hook (`internal/check-version-tags.sh`) reports a missing tag only when
+the subpatch in `config.yaml` has no matching tag suffix, and it is advisory either way — it never blocks the push.
 
 ## Manual repair
 
@@ -230,10 +239,10 @@ If the tag and the 3-file set ever drift, the canonical fix order is:
    git push origin authentik/v2026.8.0              # re-create on remote
    ```
 
-   The pre-push hook will refuse a branch push until a tag named `<addon>/v<version>` exists for every modified
-   `config.yaml`, except for add-ons on the `LOCAL_BUILD_ADDONS` allowlist in `internal/check-version-tags.sh` — now a
-   single entry, `iac-runner`, which the Supervisor builds locally and which therefore needs no release tag. The array
-   in that script stays the source of truth for the current membership.
+   The pre-push hook will report, but not block, a branch push whose modified `config.yaml` has no tag named
+   `<addon>/v<version>`; it says nothing at all for add-ons on the `LOCAL_BUILD_ADDONS` allowlist in
+   `internal/check-version-tags.sh` — now a single entry, `iac-runner`, which the Supervisor builds locally and which
+   therefore needs no release tag. The array in that script stays the source of truth for the current membership.
 
 ## Auto-update path
 

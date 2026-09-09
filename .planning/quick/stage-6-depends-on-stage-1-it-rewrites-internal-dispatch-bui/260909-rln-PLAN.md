@@ -112,7 +112,7 @@ these; do NOT contradict them.
 | caller `addon-description` vs `config.yaml` `description:` | **1 of 9 agrees** (gatus). The other eight have drifted; e.g. iac-runner's caller says "OpenTofu runner … with R2/S3/local state backends" while its `config.yaml` says "OpenTofu/Terraform runner … against R2/S3/local state backends." |
 | `build_from` keys per add-on | `coding-assistants: [amd64, aarch64]`; all eight others `[amd64]`; identical to each `config.yaml` `arch:` |
 | add-ons with NO top-level `image:` key | `authentik`, `iac-runner` (Supervisor builds them locally) |
-| `<addon>/v*` tags whose tagged commit's `build.yaml` VERSION != the tag's base version | **15 of 40**, because `RELEASE.md` step 1 creates the tag BEFORE step 2 commits the bump. For the three add-ons whose tag trigger is currently ACTIVE the rate is 1 of 8 (`terraform-bridge/v0.2.0`, tagged at `build.yaml` VERSION 0.1.0) |
+| `<addon>/v*` tags whose tagged commit's `build.yaml` VERSION != the tag's base version | **15 of 42** (re-measured 2026-09-10 by quick task `260910-0og`; the mismatch count did not move, the total did, because two tags were cut by hand on 2026-09-09), because `RELEASE.md` step 1 creates the tag BEFORE step 2 commits the bump. For the three add-ons whose tag trigger is currently ACTIVE the rate is 1 of 8 (`terraform-bridge/v0.2.0`, tagged at `build.yaml` VERSION 0.1.0) |
 | local `python3` / PyYAML | 3.14.7 / PyYAML 6.0.3 — available |
 | local `yq` | python-yq, **no `eval` subcommand**: nothing that must run locally may use `yq eval` |
 | local `jq` | 1.8.2 |
@@ -123,7 +123,7 @@ these; do NOT contradict them.
 | `lint.yml:91-95` shell-lint step | ends in `\|\| echo "No shell scripts to check"` — **non-blocking**. Do not write a gate that depends on repo-wide strict shellcheck passing (22 pre-existing findings, per sibling rlj). |
 | non-add-on paths matched by the new `paths:` globs | `.planning/config.json`, `terraform-provider-homeassistant/build.yaml`, `tools/test-addon/{config.yaml,build.yaml,Dockerfile}` — all three are rejected by the derivation (see `<gate_calibration>` S5/S6), so they cost a ~15 s no-op `detect` job and never a build |
 | `.prettierignore` / `.markdownlint-cli2.yaml` | both exclude `.planning/` — this plan file is not reformatted or linted |
-| live full-path references to a deleted caller (`.github/workflows/build-`, excluding the nine files and `.planning/`) | **2**: `.github/RELEASE.md:103`, `internal/update-version.py:203`. Quick task `260909-wgm` removed the third when it rewrote the hook's header, so `internal/check-version-tags.sh` is no longer among them |
+| live full-path references to a deleted caller (`.github/workflows/build-`, excluding the nine files and `.planning/`) | **9 references, measured 2026-09-10** at `ba490aa`, by file: `.github/RELEASE.md` x3, `docs/AUTO_UPDATE_GUIDE.md` x3, `internal/dispatch-builds.sh` x2, `internal/update-version.py` x1. Per-file counts rather than line numbers, because both target docs are prettier-reflowed. The earlier record of **2** was stale twice over: it cited a `.github/RELEASE.md` line number that no longer resolves, and the count itself had grown — sibling `260909-rlm` planted six of the nine. Quick task `260910-0og` left the count unchanged (its `GATE-T1-G38-COUNT-UNCHANGED` asserts 9). Quick task `260909-wgm` removed the hook's reference when it rewrote the header, so `internal/check-version-tags.sh` is not among them |
 | `grep -v '^#' internal/check-version-tags.sh \| sha256sum` | `07d060ea42b7b05984ac642b0cf581d57f089703c69d9b3ffd44d4bd930394c2` — re-pinned to the post-`260909-wgm` tree (that quick task made the hook advisory, so its code changed); pins the hook's CODE while its header comment is rewritten |
 
 **Two measured facts about GitHub Actions itself**, both established with the real linters against
@@ -159,13 +159,19 @@ Alternative considered: a single shared `tags: - "*/v*"` block in `build.yml`.
 2. **Making it work needs a second derivation path** (parse the add-on name out of
    `GITHUB_REF_NAME`), i.e. new untested code in the one file whose failure breaks all nine
    builds at once.
-3. **The trigger it would preserve is already wrong.** Measured: 15 of 40 `<addon>/v*` tags
+3. **The trigger it would preserve is already wrong.** Measured: 15 of 42 `<addon>/v*` tags (re-measured 2026-09-10; the mismatch count of 15 did not move, the total did, because two tags were cut by hand on 2026-09-09)
    point at a commit whose `build.yaml` VERSION is not the tag's version, because
    `RELEASE.md`'s own flow creates and pushes the tag (step 1) BEFORE the version files are
    committed (step 2). A tag-triggered build therefore checks out the pre-bump tree and
-   republishes the PREVIOUS `CONFIG_VERSION` image. `RELEASE.md:93-95` currently claims the
-   opposite ("the tag-triggered leg … produces the canonical image for the tag"); that claim is
-   false and is corrected by D-02.
+   republishes the PREVIOUS `CONFIG_VERSION` image. The sentence in `.github/RELEASE.md`'s
+   double-build paragraph that once claimed the opposite — that the tag-triggered leg produces the
+   authoritative image for the tag — was removed by sibling `260909-rlm` at `833c176` and measures
+   **0** occurrences at `ba490aa`, so `D-02` no longer has it to correct. What stands at that anchor
+   after quick task `260910-0og` is the corrected causality from its F-11: neither leg is
+   authoritative, both read `build.yaml:args.VERSION` and `config.yaml:version`, and it is the latter
+   that becomes the published OCI image tag. `GATE-G3-1c`'s clause asserting that phrase is absent is
+   therefore a SATISFIED INVARIANT that must stay 0 — the same class as `G3-6`'s
+   `every workflow also triggers on` clause, and no longer work-proving for this item.
 4. **The double-build disappears.** `iac-runner`, `network-tools` and `terraform-bridge`
    currently build twice per release (paths + tag) for no benefit.
 
@@ -364,7 +370,7 @@ Non-negotiable. Any deviation is a defect.
     `tags:` inside `create_and_push_tag`'s docstring; the four `add_argument` declarations; and
     `create_and_push_tag`'s signature line byte-unchanged.
   - `.github/RELEASE.md` (rlm `A*`, `B*`, `C*`, `H*`, `X1`): inside `## Tag schema` —
-    `--no-tag`, `base-image-update`, `2026-09-09`, `15 of the 40`, `authentik/v2026.8.1`,
+    `--no-tag`, `base-image-update`, `2026-09-09`, `15 of the 42`, `authentik/v2026.8.1`,
     `meridian/v1.59.0`, `terraform-bridge/v0.2.0`, `git show`; inside
     `### What this means operationally` — `human`, `GITHUB_TOKEN` and the cross-reference
     `Auto-update path`; inside `## Auto-update path` — `internal/dispatch-builds.sh`,
@@ -475,7 +481,26 @@ tree, and G3-6's `every workflow also triggers on == 0` clause is now pre-satisf
 work-proving. Task 3's remaining scope in that file is the `build.yml` mention alone. The wave-3
 baseline rule stated at the top of this section is precisely what caught it.
 
-Record all three lists in the SUMMARY so a verifier re-running the batch's full gate set knows
+## 4. A NON-sibling change that landed against both target documents
+
+Quick task **260910-0og** — also not a member of batch `260909-rli`, so also absent from
+`depends_on` — applied the eleven findings of `260909-rlm-VERIFICATION.md` to `.github/RELEASE.md`
+and `docs/AUTO_UPDATE_GUIDE.md`, the two documents this item also edits. Three consequences for
+this plan, all already applied above:
+
+1. **The tag statistic was re-measured**, so every pin and gate naming the old total was re-pinned:
+   the `L-18` preserve list, Task 3's `<precondition>`, Task 3's action item 1, `GATE-G3-1c` and the
+   `G3-1b/G3-1c` calibration row. `2026-09-09` still stands on the page, because `260910-0og` kept
+   both measurement dates deliberately.
+2. **`G3-8`'s baseline was re-recorded** from a stale 2 to the 9 measured in the tree. The gate
+   itself is `== 0` and baseline-independent, so it did not change — only the recorded starting
+   count did.
+3. **It also edited `.github/workflows/auto-update.yml` and
+   `.github/workflows/base-image-update.yml`** — four comment lines in each, correcting a false
+   `actions: write` exclusivity claim. Neither file appears in this plan's `files_modified` and no
+   gate here reads their comment text, so there is no collision.
+
+Record all four lists in the SUMMARY so a verifier re-running the batch's full gate set knows
 which reds are expected and why.
 </sibling_supersession>
 
@@ -1029,7 +1054,7 @@ every add-on directory is byte-equal to `build.yml`'s own empty-input `addons` o
 <task type="auto">
   <name>Task 3: Record the tag-trigger decision in RELEASE.md and retire the eight prose sites the deletion falsified</name>
   <files>.github/RELEASE.md, README.md, docs/DEVELOPMENT.md, docs/WEBHOOK_SETUP.md, docs/UPDATE_VERSION.md, docs/AUTO_UPDATE_GUIDE.md, internal/check-version-tags.sh, internal/update-version.py, .github/workflows/_build-template.yml</files>
-  <precondition>**Siblings rll and rlm have landed** — assert all four, and HALT on any failure, because this task edits prose they wrote and L-18 pins their literals: `grep -qF '15 of the 40' .github/RELEASE.md` (rlm's Tag-schema subsection), `grep -qF 'internal/dispatch-builds.sh' docs/AUTO_UPDATE_GUIDE.md` (rlm's Task 2 rewrite), `grep -qF 'Pushed tag: {tag}' internal/update-version.py` and `grep -c 'will trigger' internal/update-version.py` returning 0 (rll's Task 2). **The nine-row add-on table in `.github/RELEASE.md` is still intact** — `grep -c -E '^\| (authentik|coding-assistants|gatus|iac-runner|markdown-renderer|meridian|network-tools|phone-logger|terraform-bridge) ' .github/RELEASE.md` is 9; G3-2 rewrites that table into two columns and cannot do so if rlm left it in another shape. **Then MEASURE, do not assume, the two counts this task drives to zero** — `grep -rnIF '.github/workflows/build-' --exclude-dir=.planning --exclude-dir=.git --exclude-dir=__pycache__ --exclude-dir='.venv*' . | wc -l` (3 at `5b41d49`, higher after rlm plants more; the `-I` and the two extra excludes are mandatory — `py_compile`, which G3-7c and rll's own gate both run, leaves a `.pyc` under `internal/__pycache__/` that still carries the pre-edit docstring, and `grep -rn` counts a binary match as a line) and `grep -cF 'gh workflow run build-' .github/RELEASE.md docs/AUTO_UPDATE_GUIDE.md` — and record both in the SUMMARY as the measured starting point. **Quick task `260909-wgm` has landed** — `grep -qF 'release marker' internal/check-version-tags.sh`; HALT on failure, because rewriting a header that has not yet been corrected would produce a different edit than item 6 describes. `.github/RELEASE.md` should still contain the headings `### Why the split`, `### What this means operationally` and `### Re-enabling a tag trigger`; if any is gone, do NOT guess — re-read the file, locate whatever now describes the tag-trigger split, and edit that instead. Every anchor below is heading or phrase text, never a line number, for exactly this reason.</precondition>
+  <precondition>**Siblings rll and rlm have landed** — assert all four, and HALT on any failure, because this task edits prose they wrote and L-18 pins their literals: `grep -qF '15 of the 42' .github/RELEASE.md` (rlm's Tag-schema subsection), `grep -qF 'internal/dispatch-builds.sh' docs/AUTO_UPDATE_GUIDE.md` (rlm's Task 2 rewrite), `grep -qF 'Pushed tag: {tag}' internal/update-version.py` and `grep -c 'will trigger' internal/update-version.py` returning 0 (rll's Task 2). **The nine-row add-on table in `.github/RELEASE.md` is still intact** — `grep -c -E '^\| (authentik|coding-assistants|gatus|iac-runner|markdown-renderer|meridian|network-tools|phone-logger|terraform-bridge) ' .github/RELEASE.md` is 9; G3-2 rewrites that table into two columns and cannot do so if rlm left it in another shape. **Then MEASURE, do not assume, the two counts this task drives to zero** — `grep -rnIF '.github/workflows/build-' --exclude-dir=.planning --exclude-dir=.git --exclude-dir=__pycache__ --exclude-dir='.venv*' . | wc -l` (3 at `5b41d49`, higher after rlm plants more; the `-I` and the two extra excludes are mandatory — `py_compile`, which G3-7c and rll's own gate both run, leaves a `.pyc` under `internal/__pycache__/` that still carries the pre-edit docstring, and `grep -rn` counts a binary match as a line) and `grep -cF 'gh workflow run build-' .github/RELEASE.md docs/AUTO_UPDATE_GUIDE.md` — and record both in the SUMMARY as the measured starting point. **Quick task `260909-wgm` has landed** — `grep -qF 'release marker' internal/check-version-tags.sh`; HALT on failure, because rewriting a header that has not yet been corrected would produce a different edit than item 6 describes. `.github/RELEASE.md` should still contain the headings `### Why the split`, `### What this means operationally` and `### Re-enabling a tag trigger`; if any is gone, do NOT guess — re-read the file, locate whatever now describes the tag-trigger split, and edit that instead. Every anchor below is heading or phrase text, never a line number, for exactly this reason.</precondition>
   <read_first>
 `.github/RELEASE.md` in full **as it stands after rlm** — the tag schema and rlm's new
 tag-guarantee subsection, the nine-row trigger table, the two rationale subsections, the
@@ -1062,7 +1087,7 @@ because rll rewrote two of its string literals one wave ago and this task rewrit
    Add a subsection whose heading is exactly `### Tags do not trigger builds` (gate G3-1 greps
    that heading verbatim) carrying D-01's decision and its four reasons. For the tag/version
    off-by-one, CROSS-REFERENCE rlm's tag-guarantee subsection rather than restating its numbers
-   (L-18): rlm already wrote the dated `15 of the 40` measurement with a `git show` reproduce
+   (L-18): rlm already wrote the dated `15 of the 42` measurement with a `git show` reproduce
    command, and a second copy is a second thing to drift. For the three add-ons whose trigger was
    live the rate is 1 of 8, which rlm did not write and this subsection may state. State
    plainly that the tag is now a release marker only, that `internal/check-version-tags.sh` still
@@ -1206,7 +1231,7 @@ Two rules that keep the gates satisfiable, both learned from earlier plans in th
   <verify>
     <automated>f=.github/RELEASE.md; [ "$(grep -c '| active *|' "$f")" -eq 0 ] && [ "$(grep -c 'tag-trigger temporarily disabled' "$f")" -eq 0 ] && [ "$(grep -c 'Re-enabling a tag trigger' "$f")" -eq 0 ] && [ "$(grep -c '^### Tags do not trigger builds$' "$f")" -ge 1 ] && [ "$(grep -cF 'build.yml' "$f")" -ge 1 ] && [ "$(grep -c 'Supervisor image source' "$f")" -ge 1 ] && grep -q '287c79f' "$f" && grep -q '60e7835' "$f" && echo GATE-G3-1-PASS</automated>
     <automated>f=.github/RELEASE.md; a=$(sed -n '/^## Auto-update path$/,$p' "$f"); [ "$(printf '%s' "$a" | wc -c)" -ge 200 ] && [ "$(printf '%s\n' "$a" | grep -cF 'gh workflow run build-')" -eq 0 ] && [ "$(printf '%s\n' "$a" | grep -cF 'build.yml')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF 'internal/dispatch-builds.sh')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF 'GITHUB_TOKEN')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF 'workflow_dispatch')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF 'docs.github.com/actions/using-workflows/triggering-a-workflow')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF 'docs/AUTO_UPDATE_GUIDE.md')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF 'Auto Update')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF -- '--no-tag')" -ge 1 ] && echo GATE-G3-1b-PASS</automated>
-    <automated>f=.github/RELEASE.md; [ "$(grep -cF '15 of the 40' "$f")" -ge 1 ] && [ "$(grep -cF 'terraform-bridge/v0.2.0' "$f")" -ge 1 ] && [ "$(grep -cF 'git show' "$f")" -ge 1 ] && [ "$(grep -cF 'base-image-update' "$f")" -ge 1 ] && [ "$(grep -c '^### Why the split$' "$f")" -eq 1 ] && [ "$(grep -cF 'all seven' "$f")" -eq 1 ] && [ "$(grep -cF 'canonical image for the tag' "$f")" -eq 0 ] && o=$(sed -n '/^### What this means operationally$/,/^## Standard release flow$/p' "$f") && [ "$(printf '%s' "$o" | wc -c)" -ge 200 ] && [ "$(printf '%s\n' "$o" | grep -cF 'human')" -ge 1 ] && [ "$(printf '%s\n' "$o" | grep -cF 'GITHUB_TOKEN')" -ge 1 ] && [ "$(printf '%s\n' "$o" | grep -cF 'Auto-update path')" -ge 1 ] && echo GATE-G3-1c-PASS</automated>
+    <automated>f=.github/RELEASE.md; [ "$(grep -cF '15 of the 42' "$f")" -ge 1 ] && [ "$(grep -cF 'terraform-bridge/v0.2.0' "$f")" -ge 1 ] && [ "$(grep -cF 'git show' "$f")" -ge 1 ] && [ "$(grep -cF 'base-image-update' "$f")" -ge 1 ] && [ "$(grep -c '^### Why the split$' "$f")" -eq 1 ] && [ "$(grep -cF 'all seven' "$f")" -eq 1 ] && [ "$(grep -cF 'canonical image for the tag' "$f")" -eq 0 ] && o=$(sed -n '/^### What this means operationally$/,/^## Standard release flow$/p' "$f") && [ "$(printf '%s' "$o" | wc -c)" -ge 200 ] && [ "$(printf '%s\n' "$o" | grep -cF 'human')" -ge 1 ] && [ "$(printf '%s\n' "$o" | grep -cF 'GITHUB_TOKEN')" -ge 1 ] && [ "$(printf '%s\n' "$o" | grep -cF 'Auto-update path')" -ge 1 ] && echo GATE-G3-1c-PASS</automated>
     <automated>f=.github/RELEASE.md; for a in authentik coding-assistants gatus iac-runner markdown-renderer meridian network-tools phone-logger terraform-bridge; do grep -q "| $a " "$f" || { echo "MISSING ROW $a"; exit 1; }; done; [ "$(grep -c 'local build' "$f")" -ge 2 ] && echo GATE-G3-2-PASS</automated>
     <automated>[ "$(grep -cF 'Images are built by the per-add-on workflows' README.md)" -eq 0 ] && [ "$(grep -cF '`build.yml`' README.md)" -ge 1 ] && [ "$(grep -cF '**/config.*' README.md)" -ge 1 ] && [ "$(grep -cF 'gh workflow run build-' README.md)" -eq 0 ] && echo GATE-G3-3-PASS</automated>
     <automated>f=docs/DEVELOPMENT.md; [ "$(grep -c 'per-addon callers' "$f")" -eq 0 ] && [ "$(grep -c 'per-addon .tags:. pattern' "$f")" -eq 0 ] && [ "$(grep -cF '| `build.yml`' "$f")" -ge 1 ] && grep -q '32633538391' "$f" && echo GATE-G3-4-PASS</automated>
@@ -1417,10 +1442,10 @@ Every gate in this plan was executed before the plan was finalised, against the 
 | G3-5 | `seven per-addon` = **1**; `fires on the tag push` = **1** |
 | G3-6 | `every workflow also triggers on` = **0** — quick task `260909-wgm` drove it from 1 to 0, so that clause is **already satisfied** and survives only as an invariant that must stay 0, no longer work-proving for this item. `grep -q 'ghcr'` was and remains an invariant. `grep -q 'build\.yml'` is the ONE clause still work-proving, because that workflow is this item's own deliverable and `260909-wgm` deliberately does not name it. Code-only sha256 re-pinned to `07d060ea…0394c2`, the post-`260909-wgm` baseline |
 | G3-7 | `per-addon build workflows` = **1**; `^def ` signature-line sha256 = `1aca4cb3…4b66dc8c`; the four `add_argument` counts = 1 each; `py_compile` rc=0. **The docstring-stripped AST hash originally pinned here (`883f0834…866e0b`) was measured correct at `5b41d49` and then ABANDONED** — rll splits one `print(f"…")` into three statements and this item rewrites them again, so the pin is invalidated by correct work in two independent places. See `<sibling_supersession>` |
-| G3-1b, G3-1c | rlm has not landed at `5b41d49`: `## Auto-update path` is 263 bytes with no dispatch mention, and `15 of the 40` is absent (**0**) — both gates fail. They stay work-proving after rlm, because the sentences this item rewrites are the ones rlm writes |
+| G3-1b, G3-1c | rlm has not landed at `5b41d49`: `## Auto-update path` is 263 bytes with no dispatch mention, and `15 of the 42` is absent (**0**) — both gates fail. They stay work-proving after rlm, because the sentences this item rewrites are the ones rlm writes |
 | G3-7a/b/c | `G3-7a` is work-proving (the falsified prose is present at baseline). `G3-7b` and `G3-7c` are INVARIANTS in the same class as `G1-2`: both measured **rc=0 on the unmodified tree** and both must stay rc=0 — they go red the moment a `^def ` signature, the argparse surface, `--help`, or the two `--no-tag --dry-run` orderings move. That is the point: they hold the executable surface still while the prose changes |
 | G3-10 | `docs/AUTO_UPDATE_GUIDE.md` at `5b41d49` contains **0** of `build.yml`, `internal/dispatch-builds.sh`, `GITHUB_TOKEN`, `workflow_dispatch`, `actions: write`, `notify-ha.sh`, `--no-tag`, `ERRORS=1`, `RELEASE.md` and the docs.github.com link (all measured) → fails. rlm plants all ten; this gate's remaining teeth after rlm are its two negative clauses, which rlm's own text trips |
-| G3-8 | full-path `.github/workflows/build-` references outside `.planning/` = **2** after quick task `260909-wgm` (RELEASE.md:103, update-version.py:203; `260909-wgm` removed the third when it rewrote the hook's header), and **higher at wave 3**: rlm plants at least one more in `.github/RELEASE.md`'s `## Auto-update path` and at least one in `docs/AUTO_UPDATE_GUIDE.md`, and rll's docstring may add one. `gh workflow run build-` = **0** at `5b41d49`, ≥1 in each of those two files after rlm. The gate is `== 0`, so it is baseline-independent; Task 3's `<precondition>` measures the actual starting counts rather than trusting these |
+| G3-8 | full-path `.github/workflows/build-` references outside `.planning/` = **9 references, measured 2026-09-10** at `ba490aa`, by file: `.github/RELEASE.md` x3, `docs/AUTO_UPDATE_GUIDE.md` x3, `internal/dispatch-builds.sh` x2, `internal/update-version.py` x1 (per-file counts, not line numbers — both docs are prettier-reflowed). The earlier record of **2** was measured before wave 3 and cited a `.github/RELEASE.md` line number that no longer resolves; sibling `260909-rlm` planted six of the nine, and quick task `260910-0og` left the count unchanged (its `GATE-T1-G38-COUNT-UNCHANGED` asserts 9). `gh workflow run build-` = **0** at `5b41d49`, ≥1 in each of those two files after rlm. The gate is `== 0`, so it is baseline-independent; Task 3's `<precondition>` measures the actual starting counts rather than trusting these |
 | G3-9 | `invoked by build-<addon>.yml` = **1** |
 
 **Run B — the spec implemented literally.** `<reference_implementation>` was written to a scratch
