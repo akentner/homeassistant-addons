@@ -9,6 +9,7 @@ arch:
   # - armhf
   # - armv7
   # - i386
+image: "ghcr.io/akentner/homeassistant-addons/{arch}-meridian"
 url: "https://github.com/akentner/homeassistant-addons"
 startup: "application"
 boot: "auto"

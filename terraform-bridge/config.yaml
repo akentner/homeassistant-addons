@@ -5,6 +5,7 @@ slug: "terraform-bridge"
 init: false
 arch:
   - amd64
+image: "ghcr.io/akentner/homeassistant-addons/{arch}-terraform_bridge"
 url: "https://github.com/akentner/homeassistant-addons"
 startup: "application"
 boot: "manual"

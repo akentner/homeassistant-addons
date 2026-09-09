@@ -5,6 +5,7 @@ slug: "markdown-renderer"
 init: false
 arch:
   - amd64
+image: "ghcr.io/akentner/homeassistant-addons/{arch}-markdown_renderer"
 url: "https://github.com/akentner/homeassistant-addons"
 startup: "application"
 boot: "auto"
