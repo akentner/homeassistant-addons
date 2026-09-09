@@ -1,9 +1,19 @@
 #!/usr/bin/env bash
-# Pre-push hook for the per-addon build workflows (.github/workflows/build-<addon>.yml):
-# every workflow also triggers on `git push` of an `<addon>/v*` tag, so a matching
-# tag must exist locally or on origin for every config.yaml/build.yaml change that
-# lands in main. Without a matching tag the HA supervisor refresh sees the new version
-# in the store but the image at ghcr.io does not exist -> 404 -> "Unknown error".
+# Pre-push advisory: reports every add-on whose bumped config.yaml/build.yaml
+# version is about to reach main without a matching `<addon>/v<version>` tag.
+# It reports only — it never fails the push.
+#
+# Why it does not block: the tag does not cause the build. Images are published
+# by internal/dispatch-builds.sh via `workflow_dispatch`, driven by
+# .github/workflows/auto-update.yml and .github/workflows/base-image-update.yml.
+# The control that catches a genuinely missing image is
+# .github/workflows/verify-image-availability.yml: four times daily, with no
+# registry credential (an authenticated probe would certify an image the
+# Supervisor itself cannot pull), it re-checks that every version a config.yaml
+# advertises is anonymously pullable from ghcr.io.
+#
+# The tag's remaining role is as a release marker, and a release marker must not
+# block a push.
 # Install via ./internal/setup-hooks.sh.
 
 set -e
@@ -46,21 +56,25 @@ if [[ -z "$modified_addons" ]]; then
     exit 0
 fi
 
-errored=0
+# Advisory counter. Increment ONLY with the arithmetic-expansion assignment
+# form used below: the arithmetic-COMMAND form evaluates to a non-zero status
+# whenever the pre-increment value is 0 — which is exactly the first warning —
+# and `set -e` would then abort the hook.
+missing_tags=0
 
 # Add-ons the Home Assistant Supervisor builds locally from their Dockerfile.
 #
 # Why an entry is on this list: the add-on's config.yaml declares no top-level
 # `image:` key, so the Supervisor never pulls a prebuilt image from ghcr.io and
-# builds the add-on locally instead. The 404-on-update this hook guards against
-# therefore cannot occur, and an `<addon>/v<version>` release tag publishes
+# builds the add-on locally instead. There is no ghcr.io image for such an
+# add-on to be missing, and an `<addon>/v<version>` release tag publishes
 # nothing the Supervisor consumes.
 #
 # What takes an entry off this list: the add-on gaining a top-level `image:`
-# key. From then on the Supervisor pulls a prebuilt image and the tag
-# requirement genuinely applies again. The drift guard inside the loop below
-# detects that case, warns and enforces anyway — but the array must still be
-# corrected.
+# key. From then on the Supervisor pulls a prebuilt image, so the release
+# marker is meaningful for it again. The drift guard inside the loop below
+# detects that case, warns, and falls through to the advisory tag report — but
+# the array must still be corrected by hand.
 #
 # Why this is an explicit allowlist and not a test for a missing `image:` key:
 # authentik also lacks the key while publishing ghcr.io images via its build
@@ -116,7 +130,7 @@ while IFS= read -r addon_dir; do
 
     # Add-ons built locally by the Supervisor need no release tag (see
     # LOCAL_BUILD_ADDONS above). config.yaml is re-read on every push so a
-    # stale allowlist entry cannot silently disable the ghcr-404 guard.
+    # stale allowlist entry cannot silently mask a drifted add-on.
     if is_local_build "$addon_dir"; then
         # Anchored at ^ and requiring a non-blank value: an indented sub-key,
         # a commented `# image:` line or an empty value cannot satisfy it, and
@@ -128,8 +142,8 @@ while IFS= read -r addon_dir; do
             echo ""
             echo "⚠️  $addon_dir is on LOCAL_BUILD_ADDONS but its config.yaml declares"
             echo "   a top-level 'image:' key. The Supervisor now pulls a prebuilt"
-            echo "   image from ghcr.io, so the release tag is required again."
-            echo "   Enforcing the tag requirement despite the allowlist entry."
+            echo "   image from ghcr.io, so the release marker is meaningful for it"
+            echo "   again. Falling through to the advisory tag report below."
             echo "   Remove '$addon_dir' from LOCAL_BUILD_ADDONS in"
             echo "   internal/check-version-tags.sh."
             echo ""
@@ -156,14 +170,15 @@ while IFS= read -r addon_dir; do
     fi
 
     echo ""
-    echo "❌ $addon_dir: no matching tag for version '$config_version' (expected $primary_tag)"
+    echo "⚠️  $addon_dir: no release tag for version '$config_version' (expected $primary_tag)"
     if [[ -n "$build_version" && "$build_version" != "$config_version" ]]; then
         echo "   Legacy format $legacy_tag also missing."
     fi
     echo ""
-    echo "   The build workflow for $addon_dir triggers on a '<addon>/v*' tag push."
-    echo "   Without $primary_tag, HA-Store-Refresh sees the new version but the"
-    echo "   Docker image at ghcr.io doesn't exist → 404 on update."
+    echo "   This is advisory only — the push continues. The image is published by"
+    echo "   internal/dispatch-builds.sh via workflow_dispatch, not by this tag, and"
+    echo "   .github/workflows/verify-image-availability.yml is the control that"
+    echo "   catches a genuinely missing image. The tag is a release marker."
     echo ""
     echo "   Fix options:"
     echo "     make release ADDON=$addon_dir VERSION=$config_version"
@@ -171,13 +186,13 @@ while IFS= read -r addon_dir; do
     echo "     git tag -a $primary_tag -m '$addon_dir: $config_version'"
     echo "     git push origin $primary_tag"
     echo ""
-    errored=1
+    missing_tags=$((missing_tags + 1))
 done <<< "$modified_addons"
 
-if [[ "$errored" -ne 0 ]]; then
-    echo "🚫 Pre-push check failed — see errors above"
-    echo "   To bypass this check (not recommended): git push --no-verify"
-    exit 1
+if [[ "$missing_tags" -ne 0 ]]; then
+    echo ""
+    echo "ℹ️  $missing_tags add-on(s) above have no release tag. This is advisory"
+    echo "   only — the push continues."
 fi
 
 exit 0

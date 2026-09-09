@@ -414,7 +414,8 @@ remediation_denied() {
 # config.yaml parsing
 #
 # grep/sed/awk only. The YAML query CLI is unusable here for two independent
-# reasons documented at check-version-tags.sh:121-126: HA config.yaml files
+# reasons documented in check-version-tags.sh's `image:` grep justification:
+# HA config.yaml files
 # carry custom tags that require its unsafe mode, and the build installed on
 # this host has no eval subcommand at all.
 # ---------------------------------------------------------------------------
