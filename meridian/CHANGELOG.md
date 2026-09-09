@@ -1,3 +1,55 @@
+## [1.69.0](https://github.com/rynfar/meridian/compare/meridian-v1.68.0...meridian-v1.69.0) (2026-09-09)
+
+### Features
+
+- **messages:** honour the client's max_tokens, behind a flag ([#982](https://github.com/rynfar/meridian/issues/982))
+  ([15529b1](https://github.com/rynfar/meridian/commit/15529b120b07aa8b493681986dd9b995f2294dbe))
+- **session:** let an operator pin the host identity ([#987](https://github.com/rynfar/meridian/issues/987))
+  ([b5f73ae](https://github.com/rynfar/meridian/commit/b5f73aeda59e6ec52118491ef6fc5e8bd41eef35))
+- **telemetry:** let MERIDIAN_QUIET suppress the startup banner ([#993](https://github.com/rynfar/meridian/issues/993))
+  ([0e773b5](https://github.com/rynfar/meridian/commit/0e773b56b4db4563f39cb05b18f221c964dbc977))
+
+### Bug Fixes
+
+- **codex:** keep auto-defer off for Codex requests ([#975](https://github.com/rynfar/meridian/issues/975))
+  ([dabd969](https://github.com/rynfar/meridian/commit/dabd969b9685677a613e3b518be0100f6ac90604))
+- **errors:** classify the per-tier refusal that ends in prose ([#974](https://github.com/rynfar/meridian/issues/974))
+  ([94e88cf](https://github.com/rynfar/meridian/commit/94e88cf097ca32eb59005e7dd4007b810c1eca2f))
+- **health:** refuse to serve, and say so, without a boot identity
+  ([#985](https://github.com/rynfar/meridian/issues/985))
+  ([264cfc3](https://github.com/rynfar/meridian/commit/264cfc3aac4964e98685b0b84ec43fa7d625c43a))
+- **lineage:** name the block edit in the mismatch diagnostic ([#981](https://github.com/rynfar/meridian/issues/981))
+  ([c3ea178](https://github.com/rynfar/meridian/commit/c3ea178b894f92a15da6b3625237230df4c47fc8))
+- **passthrough:** arm the early-stop tracker on the adapter's own namespace
+  ([#998](https://github.com/rynfar/meridian/issues/998))
+  ([0538a98](https://github.com/rynfar/meridian/commit/0538a98b7ab0ec4e44b13880e609c8f578b3b1ad))
+- **passthrough:** give each adapter its own client-tool namespace
+  ([#983](https://github.com/rynfar/meridian/issues/983))
+  ([99fc2d7](https://github.com/rynfar/meridian/commit/99fc2d7aea23dab18a4c79b2cc47d3cdb33b1a16))
+- **passthrough:** keep a client tool named mcp__oc__* callable ([#969](https://github.com/rynfar/meridian/issues/969))
+  ([282cbb0](https://github.com/rynfar/meridian/commit/282cbb0bd314b935195dc40bc209acb07131dfe0))
+- **passthrough:** keep the Claude Code tool-loop exemption behind a gateway
+  ([#995](https://github.com/rynfar/meridian/issues/995))
+  ([7375351](https://github.com/rynfar/meridian/commit/7375351162e4166c85bb6469ddd2ab766283a4ef))
+- **passthrough:** pin the auto-defer decision per session ([#991](https://github.com/rynfar/meridian/issues/991))
+  ([68c0eca](https://github.com/rynfar/meridian/commit/68c0eca60a99f1f44ce066607d2041c5a5410bf9))
+- **responses:** carry Codex namespace and custom tools through to Claude
+  ([#976](https://github.com/rynfar/meridian/issues/976))
+  ([907a00e](https://github.com/rynfar/meridian/commit/907a00ee80a076314965cad114628e8f529d537b))
+- **responses:** keep a mid-conversation developer message out of the system prompt
+  ([#978](https://github.com/rynfar/meridian/issues/978))
+  ([4a031b9](https://github.com/rynfar/meridian/commit/4a031b97ff8e5aecdef7d006490ef9df22569a1d))
+- **responses:** key a Codex turn by its thread, not the parent's cache key
+  ([#977](https://github.com/rynfar/meridian/issues/977))
+  ([03fe571](https://github.com/rynfar/meridian/commit/03fe5716526b206c934db9c9d32333634ce7daab))
+- **session:** name the reason on every lineage divergence ([#994](https://github.com/rynfar/meridian/issues/994))
+  ([ac8bd6c](https://github.com/rynfar/meridian/commit/ac8bd6c2c0fc06aa56e0fdd24e4d70063c600669))
+- **session:** say when a session fingerprint has degraded ([#992](https://github.com/rynfar/meridian/issues/992))
+  ([824bbbf](https://github.com/rynfar/meridian/commit/824bbbfa6805ba939057ca5321135adc306f9010))
+- **setup:** ship a compiled OpenCode V1 plugin for Node-based hosts
+  ([#988](https://github.com/rynfar/meridian/issues/988))
+  ([d075cc7](https://github.com/rynfar/meridian/commit/d075cc7c896cff934e9a9d0d5e327e63b57a4968))
+
 ## [1.68.0](https://github.com/rynfar/meridian/compare/meridian-v1.67.0...meridian-v1.68.0) (2026-09-05)
 
 ### Features
