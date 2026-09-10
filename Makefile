@@ -114,11 +114,31 @@ validate-dockerfiles: ## Validate ARG-before-FROM scope in all Dockerfiles
 	@echo "🔍 Validating Dockerfile ARG scope..."
 	./internal/validate-dockerfile-args.sh
 
+# docker-build-check implements the WIDER of this repo's two deliberate definitions of "add-on":
+# must pass Dockerfile linting -- any directory carrying config.yaml + Dockerfile, top level OR under
+# tools/. validate-addons above implements the narrower one (is a shipped add-on) at depth 1 on purpose;
+# both are correct and unifying them is not a fix.
+#
+# Why wider here: tools/test-addon/ is a real build target -- the Phase 14 verify suite installs, starts
+# and uninstalls it ("live test target for the Phase 14 verify suite", slug local_test-addon), so its
+# Dockerfile genuinely gets built and must lint. It is nested under tools/ precisely so it is NOT
+# advertised as a repository add-on, which is why it is not held to the shipped-add-on structural
+# contract that validate-addons enforces.
+#
+# The ruleset here is STRICTER than the pre-commit hadolint hook: DL3008 (unpinned apt packages) and
+# DL3006 are NOT in this target's --ignore list, while the hook suppresses DL3008 -- that is the whole
+# reason the old depth-1 discovery was a real gap. Globs (*/ tools/*/) not find: the recipe concatenates
+# the loop variable with "Dockerfile" and strips a trailing slash for the echo, so a find list (no
+# trailing slash) would silently look for "tools/test-addonDockerfile". An unmatched tools/*/ glob stays
+# literal in POSIX sh and the [ -f ... ] guards skip it. Known, unclosed boundary, not an oversight:
+# this target's ARG-before-FROM half runs internal/validate-dockerfile-args.sh, whose
+# find . -maxdepth 2 -name "Dockerfile" (line 64) matches ./<dir>/Dockerfile only, so that half covers 9
+# while hadolint below covers 10; closing it would change make check-all via validate-dockerfiles.
 docker-build-check: ## Check Dockerfile correctness without a full build (hadolint + ARG scope validation)
 	@echo "🐳 Checking Dockerfile correctness (no full build required)..."
 	@echo "  Running hadolint (full ruleset, including DL3006 ARG-before-FROM)..."
 	@FAILED=0; \
-	for addon_dir in */; do \
+	for addon_dir in */ tools/*/; do \
 		if [ -f "$${addon_dir}config.yaml" ] && [ -f "$${addon_dir}Dockerfile" ]; then \
 			echo "  Checking $${addon_dir%/}..."; \
 			if ! hadolint \
