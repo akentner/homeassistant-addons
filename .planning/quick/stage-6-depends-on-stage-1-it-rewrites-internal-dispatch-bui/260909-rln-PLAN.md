@@ -48,6 +48,7 @@ must_haves:
     - "addon-display-name and addon-description reaching _build-template.yml are read from <addon>/config.yaml name:/description:, so the 8-of-9 description drift measured on the deleted callers cannot recur (D-04)."
     - "An automated version bump issues exactly ONE workflow_dispatch naming every changed add-on, and never a dispatch whose addons value is empty — empty means all nine (D-05)."
     - "Pushing an <addon>/v* tag builds nothing at all; the version-bump commit's paths: trigger, the bump workflows' dispatch, or an explicit workflow_dispatch are the only build paths (D-01)."
+    - "ADDED POST-EXECUTION (D-08): a human push that changes ANY file inside an add-on directory -- run.sh, a *.py helper, nginx.conf, or any Go source that `COPY . .` pulls in -- produces a build for exactly that add-on, matching the <addon>/** coverage of the nine deleted callers. Measured: 205 of the 232 tracked files inside add-on directories were unreachable by the paths: list this plan originally drafted."
     - "No file outside .planning/ references .github/workflows/build-<addon>.yml as a live path (D-06)."
     - "No prose a sibling wrote one or two waves earlier survives describing per-add-on dispatch: 260909-rlm's `## Auto-update path` in .github/RELEASE.md and its docs/AUTO_UPDATE_GUIDE.md rewrite both describe ONE build.yml dispatch carrying a list, and 260909-rll's two internal/update-version.py prose blocks no longer claim a per-caller `tags:` trigger exists (D-06, L-18)."
     - "git revert of the switch-over commit restores all nine callers and today's exact build behaviour in one step, with build.yml left in place and still dispatchable (D-03)."
@@ -121,7 +122,9 @@ these; do NOT contradict them.
 | `PyYAML` and the `on:` key | `yaml.safe_load` parses the workflow key `on:` as the **boolean `True`** (YAML 1.1). Every gate below therefore reads it as `d.get('on', d.get(True))`. A gate written as `d['on']` raises `KeyError` and would report a false failure. |
 | `.actionlint.yml` | excludes only SC2086/SC2129/SC2001 in `run:` blocks; `config-variables:` is **empty** so any `vars.*` is flagged; only `ubuntu-latest` allowed |
 | `lint.yml:91-95` shell-lint step | ends in `\|\| echo "No shell scripts to check"` — **non-blocking**. Do not write a gate that depends on repo-wide strict shellcheck passing (22 pre-existing findings, per sibling rlj). |
-| non-add-on paths matched by the new `paths:` globs | `.planning/config.json`, `terraform-provider-homeassistant/build.yaml`, `tools/test-addon/{config.yaml,build.yaml,Dockerfile}` — all three are rejected by the derivation (see `<gate_calibration>` S5/S6), so they cost a ~15 s no-op `detect` job and never a build |
+| non-add-on paths matched by the `paths:` filter | **NONE, re-measured 2026-09-10 after D-08.** The drafted extension-scoped globs matched `.planning/config.json`, `.github/**` manifests, `terraform-provider-homeassistant/build.yaml` and `tools/test-addon/{config.yaml,build.yaml,Dockerfile}`, each costing a ~15 s no-op `detect` job. The directory-scoped filter excludes all of them: over all 537 tracked files, exactly the 232 inside the nine add-on directories match and nothing else does (`G2-2b`) |
+| top-level inventory (measured in this worktree) | 9 add-on dirs; 4 non-add-on dirs (`docs`, `internal`, `terraform-provider-homeassistant`, `tools`); 5 dotdirs (`.claude`, `.devcontainer`, `.github`, `.planning`, `.vscode`) — the dotdir list is open-ended, which is why `!.*/**` negates them as a class rather than by name |
+| GitHub `paths:` negation semantics | Verified against docs.github.com (workflow-syntax) on 2026-09-10, NOT assumed: order matters, a `!` pattern after a positive match excludes, at least one non-`!` pattern is required, and `*`/`[`/`!`-leading patterns must be quoted in YAML |
 | `.prettierignore` / `.markdownlint-cli2.yaml` | both exclude `.planning/` — this plan file is not reformatted or linted |
 | live full-path references to a deleted caller (`.github/workflows/build-`, excluding the nine files and `.planning/`) | **9 references, measured 2026-09-10** at `ba490aa`, by file: `.github/RELEASE.md` x3, `docs/AUTO_UPDATE_GUIDE.md` x3, `internal/dispatch-builds.sh` x2, `internal/update-version.py` x1. Per-file counts rather than line numbers, because both target docs are prettier-reflowed. The earlier record of **2** was stale twice over: it cited a `.github/RELEASE.md` line number that no longer resolves, and the count itself had grown — sibling `260909-rlm` planted six of the nine. Quick task `260910-0og` left the count unchanged (its `GATE-T1-G38-COUNT-UNCHANGED` asserts 9). Quick task `260909-wgm` removed the hook's reference when it rewrote the header, so `internal/check-version-tags.sh` is not among them |
 | `grep -v '^#' internal/check-version-tags.sh \| sha256sum` | `07d060ea42b7b05984ac642b0cf581d57f089703c69d9b3ffd44d4bd930394c2` — re-pinned to the post-`260909-wgm` tree (that quick task made the hook advisory, so its code changed); pins the hook's CODE while its header comment is rewritten |
@@ -175,10 +178,23 @@ Alternative considered: a single shared `tags: - "*/v*"` block in `build.yml`.
 4. **The double-build disappears.** `iac-runner`, `network-tools` and `terraform-bridge`
    currently build twice per release (paths + tag) for no benefit.
 
-Coverage after removal is complete: `paths:` on `main` covers human pushes;
+Coverage after removal: `paths:` on `main` covers human pushes;
 `internal/dispatch-builds.sh` covers the automated bumps whose pushes create no runs at all
 (sibling rlj); `workflow_dispatch` with the `addons` input covers ad-hoc rebuilds and is a
 strictly better manual path than pushing a tag.
+
+> **CORRECTED POST-EXECUTION (2026-09-10).** This paragraph originally claimed that coverage was
+> "complete" and that "`paths:` on `main` covers human pushes". **That claim was FALSE as drafted**,
+> because the `paths:` list this plan specified was extension-scoped (`**/config.*`, `**/build.*`,
+> `**/Dockerfile`) while the nine callers it replaced were directory-scoped (`<addon>/**`). Every
+> non-manifest build input — `run.sh`, `nginx.conf`, `*.py`, and for `iac-runner` and
+> `terraform-bridge` the whole Go module via `COPY . .` — fell outside it, so a human pushing
+> source-only changes produced NO build while the store kept advertising the same version against a
+> stale image. Measured: **205 tracked files inside add-on directories** were reachable by the
+> callers and unreachable by the drafted filter, and real history contains ~12 such commits
+> (e.g. `9caad88`, four Go files under `iac-runner/`, no manifest). The fix is recorded in **D-08**
+> below; `L-2`, `G2-2`, `G3-3`, `T-rln-05`, `a-2`, `a-4` and the `<reference_implementation>` were
+> all re-pointed. The claim now holds because the filter is directory-scoped.
 
 **What this means for `internal/check-version-tags.sh`** (called out explicitly, as the item
 requires): the hook's header currently justifies itself with a causal chain — *the tag triggers
@@ -263,10 +279,18 @@ the add-on store shows the user.
 
 rlj's **L-3** locks the derive-mode expression to `git diff --name-only $BASE_SHA..HEAD` piped
 through `cut -d/ -f1 | sort -u`, unfiltered, and rlj's GATE-T1-6 asserts the derived set equals an
-independently recomputed copy of exactly that pipeline. This plan does NOT change it, even though
-`build.yml`'s `paths:` filter is narrower. The asymmetry is deliberate and safe in one direction
-only: the script is *more* eager than the paths filter (a README-only bump path can still produce
-a dispatch), never less, so no build can be missed. Gate G2-8 re-runs rlj's GATE-T1-6 unchanged.
+independently recomputed copy of exactly that pipeline. This plan does NOT change it.
+Gate G2-8 re-runs rlj's GATE-T1-6 unchanged.
+
+> **CORRECTED POST-EXECUTION (2026-09-10).** As drafted this paragraph went on to justify a
+> "deliberate asymmetry" between the script (unfiltered first path segment) and `build.yml`'s
+> narrower extension-scoped `paths:`, arguing the script was *more* eager so no build could be
+> missed. The reasoning was sound for the DISPATCH path and did not reach the HUMAN-push path,
+> where the narrow filter meant builds genuinely were missed (see the corrected paragraph in D-01
+> and D-08). **The asymmetry no longer exists**: D-08 makes `build.yml`'s push derivation take the
+> first path segment of every changed file and lean on the same manifest-triple test, so the
+> script and the workflow now share one definition rather than documenting a divergence. That is
+> strictly better than the asymmetry it replaces, and G2-5 is the assertion that keeps them equal.
 
 What does change: (a) the per-candidate classification test, because
 `.github/workflows/build-<name>.yml` no longer exists — it becomes the
@@ -305,6 +329,71 @@ INVARIANTS rather than a hash (G3-7): rll adds print statements to that file and
 then rewrite them, so any whole-file or whole-AST pin is invalidated by correct work — see
 `<sibling_supersession>`. L-18 lists the sibling literals Task 3 must preserve.
 
+## D-08 — ADDED POST-EXECUTION: `paths:` is DIRECTORY-scoped and the push derivation is unfiltered.
+
+Recorded 2026-09-10, after the three tasks landed and before the merge, because a coverage gap in
+the drafted `paths:` list was found by the coordinator and confirmed by measurement. It is a defect
+in this plan, not a trade-off this plan considered — the drafted filter silently under-triggered.
+
+**The gap.** The nine deleted callers triggered on `paths: <addon>/**`. The drafted replacement
+triggered on `**/config.*`, `**/build.*`, `**/Dockerfile`. Every add-on's Dockerfile COPYs
+non-manifest files, so those files were build inputs that no longer triggered a build:
+
+| Add-on | Non-manifest build inputs (measured from its Dockerfile) |
+|---|---|
+| `terraform-bridge`, `iac-runner` | **`COPY . .`** — the entire Go module |
+| `coding-assistants` | 5 CLI scripts, `index.html`, `info.html`, `nginx.conf` |
+| `gatus` | `run.sh`, `generate_config.py`, `nginx.conf` |
+| `network-tools` | `arping_scan.py`, `mdns_scan.py`, `run.sh`, `nginx.conf` |
+| `markdown-renderer` | `run.sh`, `generate_nginx.py`, `_git_sync.py` |
+| `meridian` | `run.sh`, `nginx.conf` |
+| `phone-logger` | `run.sh`, `generate_config.py` |
+| `authentik` | `run.sh` (19 `COPY` lines total) |
+
+Measured: **205 of the 232 tracked files inside add-on directories** were reachable by the callers
+and unreachable by the drafted filter. Real history holds ~12 such commits; `9caad88` changed four
+Go files under `iac-runner/` and no manifest, and `iac-runner/Dockerfile:25` is `COPY . .`.
+Consequence: a human pushing source-only changes got NO build, the store kept advertising the same
+version, and the image behind it went stale — the same failure class this batch exists to close,
+inverted. Verified by extracting the detect body and running it: the drafted derivation returns
+`[]` for `9caad88`; the fixed one returns `["iac-runner"]`.
+
+**The fix, in two parts.**
+
+1. `paths:` becomes directory-scoped: base `"*/**"`, then `!`-negations. Alternatives rejected:
+   growing the extension list (unbounded, and `COPY . .` has no extension set); enumerating the
+   nine add-on directories (forbidden — L-4 and G1-6 ban an add-on name in any non-comment line of
+   `build.yml`, and it would re-create the duplication this item deletes). The negation set is
+   `!.*/**` plus the four non-add-on top-level directories (`docs`, `internal`,
+   `terraform-provider-homeassistant`, `tools`).
+   - `!.*/**` is one pattern covering **every** dotdir, present and future. It is provably safe
+     rather than merely convenient: the derivation's name-shape gate requires `^[a-z0-9]` as the
+     first character, so no add-on directory can ever begin with a dot. It is also necessary —
+     GitHub's `*` matches a leading dot, so `.planning/**` matches `*/**`, and this repository
+     commits to `.planning/` constantly.
+   - The residual risk is directional and safe: a **new non-add-on** top-level directory that is
+     not negated costs one ~15 s no-op `detect` job and never a build, while a **new add-on**
+     directory is picked up with no CI edit at all — which is this item's whole purpose.
+2. The push-branch derivation drops the manifest regex and takes the first path segment of every
+   changed file, leaving the `config.yaml` + `build.yaml` + `Dockerfile` triple as the only
+   acceptance test. That is byte-for-byte the definition `internal/dispatch-builds.sh`,
+   `lint.yml:107-117`, `Makefile:201` and `check-version-tags.sh:37` already use, so D-05's
+   documented asymmetry is dissolved rather than described.
+
+**Negation semantics were verified, not assumed** (docs.github.com, workflow-syntax, fetched
+2026-09-10): "The order that you define paths patterns matters: A matching negative pattern
+(prefixed with `!`) after a positive match will exclude the path. A matching positive pattern after
+a negative match will include the path again"; "If you define a path with the `!` character, you
+must also define at least one path without the `!` character" (satisfied — `*/**`); and `*`, `[`,
+`!` must be quoted in YAML (all six patterns are quoted). `G2-2b` implements that documented
+algorithm and asserts the net filter over all 537 tracked files: all 232 add-on files included,
+all dotdir / non-add-on / root files excluded.
+
+**Bonus, measured:** the new filter is strictly better in BOTH directions. The drafted one also
+matched `.planning/config.json`, `.github/**` manifests, `tools/test-addon/*` and
+`terraform-provider-homeassistant/build.yaml`, spinning no-op `detect` jobs; the new one excludes
+all four. `T-rln-05` is re-pointed accordingly.
+
 ## D-07 — No `concurrency:` block in `build.yml`.
 
 Today's nine callers have none. Sibling rll (STAGE 4) owns the shared concurrency group and this
@@ -318,8 +407,12 @@ Non-negotiable. Any deviation is a defect.
 - **L-1** `build.yml` is the ONLY new workflow file. `_build-template.yml` stays the
   `workflow_call` target and its `on.workflow_call` inputs/secrets block is **byte-unchanged** —
   the only permitted edit to that file is its header comment (Task 3).
-- **L-2** `build.yml`'s `paths:` are exactly `"**/config.*"`, `"**/build.*"`, `"**/Dockerfile"`
-  and `branches:` is exactly `[main]`. No `tags:` key anywhere in the file (D-01).
+- **L-2** `build.yml`'s `paths:` are exactly `"*/**"`, `"!.*/**"`, `"!docs/**"`, `"!internal/**"`,
+  `"!terraform-provider-homeassistant/**"`, `"!tools/**"`, in that order (positive first — GitHub
+  resolves negations by order), and `branches:` is exactly `[main]`. No `tags:` key anywhere in the
+  file (D-01). **RE-POINTED POST-EXECUTION by D-08**; as drafted this pinned the extension-scoped
+  `"**/config.*"`, `"**/build.*"`, `"**/Dockerfile"`, which under-triggered on every source-only
+  push.
 - **L-3** The arch legs come from `<addon>/build.yaml` `build_from` keys, falling back to
   `<addon>/config.yaml` `arch:`. Never from a workflow input, a matrix literal or a hardcoded
   per-add-on list.
@@ -529,10 +622,18 @@ on:
   push:
     branches:
       - main
+    # RE-POINTED POST-EXECUTION by D-08. As drafted this read
+    #   - "**/config.*"
+    #   - "**/build.*"
+    #   - "**/Dockerfile"
+    # which under-triggered on every source-only push (205 measured files).
     paths:
-      - "**/config.*"
-      - "**/build.*"
-      - "**/Dockerfile"
+      - "*/**"
+      - "!.*/**"
+      - "!docs/**"
+      - "!internal/**"
+      - "!terraform-provider-homeassistant/**"
+      - "!tools/**"
   workflow_dispatch:
     inputs:
       addons:
@@ -578,13 +679,18 @@ jobs:
               echo "::notice::event before-sha unusable, diffing ${base} instead"
             fi
             changed=$(git diff --name-only "${base}..${HEAD_SHA}")
-            # Keep only the manifest paths the push trigger filters on, then the
-            # first path segment. The trailing fallback is mandatory: pipefail
-            # turns grep's no-match exit 1 into a failed assignment that set -e
-            # would abort on.
-            candidates=$(printf '%s\n' "$changed" \
-              | grep -E '^[^/]+/(config|build)\.[^/]+$|^[^/]+/Dockerfile$' \
-              | awk -F/ 'NF {print $1}' | sort -u) || candidates=""
+            # RE-POINTED POST-EXECUTION by D-08. As drafted this filtered the
+            # changed paths through the manifest regex
+            #   ^[^/]+/(config|build)\.[^/]+$|^[^/]+/Dockerfile$
+            # before taking the first segment, which discarded every
+            # source-only change. It now takes the first path segment of EVERY
+            # changed file and lets the manifest-triple test below decide --
+            # the same definition internal/dispatch-builds.sh uses.
+            #
+            # The trailing fallback is mandatory: pipefail turns grep's
+            # no-match exit 1 into a failed assignment that set -e would abort
+            # on.
+            candidates=$(printf '%s\n' "$changed" | cut -d/ -f1 | sort -u | grep -v '^$') || candidates=""
           elif [ -n "${ADDONS_INPUT:-}" ]; then
             candidates=$(printf '%s' "$ADDONS_INPUT" | tr ',' ' ' | tr -s ' \t\n' '\n' | sed '/^$/d' | sort -u)
           else
@@ -709,7 +815,8 @@ Second discipline rule, learned from G3-3's original form: a negative grep must 
 LIVE-CLAIM sentence, never the bare noun phrase inside it. `per-add-on workflows` is the natural
 wording for a historically correct replacement ("the nine per-add-on workflows were replaced by
 build.yml"), so G3-3 greps the full clause `Images are built by the per-add-on workflows` and
-pairs it with a POSITIVE assertion that README names `build.yml` and the `**/config.*` glob. The
+pairs it with a POSITIVE assertion that README names `build.yml` and the directory-scoped filter
+(re-pointed by D-08; it named the `**/config.*` glob as drafted). The
 same rule produced G3-8's full-path convention and G3-10's `gh workflow run build-` command form:
 in every case the forbidden string is a live instruction, not a noun.
 -->
@@ -1006,11 +1113,64 @@ on = d.get('on', d.get(True))
 assert set(on) == {'push', 'workflow_dispatch'}, on
 p = on['push']
 assert p['branches'] == ['main'], p
-assert p['paths'] == ['**/config.*', '**/build.*', '**/Dockerfile'], p
+assert p['paths'] == ['*/**', '!.*/**', '!docs/**', '!internal/**', '!terraform-provider-homeassistant/**', '!tools/**'], p
+assert not p['paths'][0].startswith('!'), 'GitHub requires a positive pattern before any negation'
 assert 'tags' not in p, p
 src = [l for l in open('.github/workflows/build.yml').read().splitlines() if not re.match(r'^\s*#', l)]
 assert not [l for l in src if re.match(r'^\s*tags:', l)], 'tags key present'
 print('GATE-G2-2-PASS')"</automated>
+    <automated>python3 -c "
+import re, subprocess, yaml, os, sys
+def rx(p):
+    o, i = ['^'], 0
+    while i < len(p):
+        c = p[i]
+        if c == '*':
+            if i + 1 < len(p) and p[i+1] == '*': o.append('.*'); i += 2; continue
+            o.append('[^/]*'); i += 1; continue
+        o.append(re.escape(c)); i += 1
+    return ''.join(o) + r'\$'
+def inc(path, pats):
+    s = False
+    for p in pats:
+        neg = p.startswith('!')
+        if re.match(rx(p[1:] if neg else p), path): s = not neg
+    return s
+wf = yaml.safe_load(open('.github/workflows/build.yml'))
+pats = wf.get('on', wf.get(True))['push']['paths']
+assert not pats[0].startswith('!'), 'GitHub requires a positive pattern first'
+files = subprocess.run(['git','ls-files'], capture_output=True, text=True, check=True).stdout.split()
+addons = sorted({f.split('/')[0] for f in files if f.endswith('/config.yaml') and f.count('/') == 1
+                 and os.path.isfile(f.split('/')[0] + '/build.yaml') and os.path.isfile(f.split('/')[0] + '/Dockerfile')})
+assert len(addons) == 9, addons
+bad = [f for f in files if (f.split('/')[0] in addons if '/' in f else False) != inc(f, pats)]
+assert not bad, bad[:10]
+mre = re.compile(r'^[^/]+/(config|build)\.[^/]+\$|^[^/]+/Dockerfile\$')
+for a in addons:
+    nm = [f for f in files if f.startswith(a + '/') and not mre.match(f)]
+    assert nm and inc(nm[0], pats), (a, nm[:3])
+print('GATE-G2-2b-PASS (%d files, %d add-ons, every add-on reachable via a non-manifest file)' % (len(files), len(addons)))"</automated>
+    <!-- GATE-G2-2b (ADDED POST-EXECUTION by D-08): evaluates build.yml's paths:
+         filter with GitHub's DOCUMENTED ordered-negation algorithm over every
+         tracked file, and asserts (a) at least one positive pattern precedes
+         the negations, (b) every file under an add-on directory is net-included,
+         (c) every file under a dotdir, a non-add-on top-level directory, or the
+         repository root is net-excluded, and (d) every add-on is reachable
+         through a NON-manifest file — which is the property the drafted filter
+         lacked. Self-contained: it derives the add-on set and the file list at
+         gate time, so it cannot go stale. -->
+    <automated>s=$(mktemp) &amp;&amp; o=$(mktemp) &amp;&amp; python3 -c "
+import yaml
+wf = yaml.safe_load(open('.github/workflows/build.yml'))
+st = [x for x in wf['jobs']['detect']['steps'] if x.get('id') == 'detect'][0]
+open('$s', 'w').write(st['run'])" &amp;&amp; g=$(git rev-parse 9caad88) &amp;&amp; : &gt;"$o" &amp;&amp; env GITHUB_OUTPUT="$o" EVENT_NAME=push BEFORE_SHA="$(git rev-parse "$g"^)" HEAD_SHA="$g" ADDONS_INPUT= bash "$s" &gt;/dev/null &amp;&amp; [ "$(grep '^addons=' "$o" | cut -d= -f2-)" = '["iac-runner"]' ] &amp;&amp; rm -f "$s" "$o" &amp;&amp; echo GATE-G2-2c-PASS</automated>
+    <!-- GATE-G2-2c (ADDED POST-EXECUTION by D-08): the regression probe for the
+         gap itself. 9caad88 changes four Go files under iac-runner/ and no
+         manifest; iac-runner/Dockerfile:25 is `COPY . .`, so those files ARE
+         build inputs. The drafted derivation returned []; this asserts
+         ["iac-runner"]. It fails the moment anyone reintroduces an extension
+         filter in the push branch. -->
+
     <automated>out=$(DRY_RUN=1 ./internal/dispatch-builds.sh meridian nonexistent-addon 2>/dev/null) && [ "$(printf '%s\n' "$out" | awk '$1=="ADDON"{print $2, $3}' | paste -sd'|' -)" = "meridian DRY_RUN|nonexistent-addon SKIPPED_NO_WORKFLOW" ] && $(printf '%s\n' "$out" | awk '/^DRY_RUN: /{n++} END{exit !(n==1)}') && printf '%s\n' "$out" | grep -q 'gh workflow run build\.yml' && ! printf '%s\n' "$out" | grep -q 'build-meridian\.yml' && DRY_RUN=1 ./internal/dispatch-builds.sh nonexistent-addon 2>&1 1>/dev/null | grep -q '^WARN' && echo GATE-G2-3a-PASS</automated>
     <automated>d=$(mktemp -d) && printf '#!/bin/sh\nprintf "%%s\\n" "$@" >"$GH_ARGS"\necho x >>"$GH_CALLS"\nexit 0\n' >"$d/gh" && chmod 755 "$d/gh" && GH_ARGS="$d/args" GH_CALLS="$d/calls" PATH="$d:$PATH" REF=main ./internal/dispatch-builds.sh meridian coding-assistants >"$d/out" 2>/dev/null && [ "$(wc -l <"$d/calls")" -eq 1 ] && [ "$(paste -sd' ' "$d/args")" = "workflow run build.yml --ref main -f addons=coding-assistants,meridian" ] && [ "$(awk '$1=="ADDON"{print $2, $3}' "$d/out" | paste -sd'|' -)" = "coding-assistants DISPATCHED|meridian DISPATCHED" ] && rm -rf "$d" && echo GATE-G2-3b-PASS</automated>
     <automated>d=$(mktemp -d) && printf '#!/bin/sh\necho x >>"$GH_CALLS"\nexit 1\n' >"$d/gh" && chmod 755 "$d/gh"; GH_CALLS="$d/calls" PATH="$d:$PATH" REF=main ./internal/dispatch-builds.sh meridian coding-assistants >"$d/out" 2>/dev/null; rc=$?; [ "$rc" -eq 1 ] && [ "$(wc -l <"$d/calls")" -eq 1 ] && [ "$(awk '$1=="ADDON"{print $3}' "$d/out" | sort -u)" = "FAILED" ] && rm -rf "$d" && echo GATE-G2-3c-PASS</automated>
@@ -1030,7 +1190,8 @@ open('$s', 'w').write(st['run'])" && env GITHUB_OUTPUT="$o" EVENT_NAME=workflow_
   <done>
 Zero `.github/workflows/build-*.yml` files remain, all nine deletions are staged,
 `build.yml` and `_build-template.yml` are both present, and `build.yml`'s `on:` is exactly
-`push` (branches `[main]`, the three manifest globs, **no** `tags`) plus `workflow_dispatch`, with
+`push` (branches `[main]`, the six directory-scoped patterns of L-2 with the positive one first,
+**no** `tags`) plus `workflow_dispatch`, with
 no `tags:` key on any non-comment line.
 
 `internal/dispatch-builds.sh` is mode 755, shellcheck-clean with NO `-e` flags, contains no
@@ -1124,8 +1285,9 @@ because rll rewrote two of its string literals one wave ago and this task rewrit
 2. **`README.md`** — in the Repository Conventions bullet, replace the clause that currently
    begins `Images are built by the per-add-on workflows` (naming `build-<addon>.yml` and a
    `push` to `main` touching `<addon>/**`) with the single-`build.yml` statement, and name the
-   narrower manifest-path trigger explicitly — the replacement must contain the literal
-   `**/config.*`, which is what G3-3 asserts positively. Keep the rest of the bullet (the
+   add-on-directory trigger explicitly — the replacement must contain the literal `*/**` AND tell
+   the reader that a non-manifest change (`run.sh`, a `*.py` helper, Go sources) rebuilds the image,
+   which is what G3-3 asserts positively after D-08 re-pointed it. Keep the rest of the bullet (the
    ghcr-404 warning, the pre-push hook, `LOCAL_BUILD_ADDONS`) intact. Note the gate shape:
    G3-3 negative-greps only that one long live-claim clause, never the bare noun phrase
    "per-add-on workflows" — a historically correct sentence is free to use it (for example
@@ -1146,7 +1308,7 @@ because rll rewrote two of its string literals one wave ago and this task rewrit
    two-events-per-leg behaviour is unchanged.
 5. **`docs/UPDATE_VERSION.md`** — the code-block comment "Build workflow fires on the tag push (or
    on push to main with files in coding-assistants/**)" is now false in both halves. Replace it
-   with the manifest-path trigger, and note that pushing the tag builds nothing.
+   with the add-on-directory trigger, and note that pushing the tag builds nothing.
 6. **`internal/check-version-tags.sh` header comment block** — the rationale correction this
    item originally owned has ALREADY been made by quick task `260909-wgm`, which downgraded the
    hook to advisory and rewrote the header to state the measured mechanism
@@ -1177,7 +1339,7 @@ because rll rewrote two of its string literals one wave ago and this task rewrit
    triggers separately per caller. Keep both literals `paths:` and `tags:` and the closing
    `Returns True on success.` line (rll's `GATE-T2-B` greps all four), and keep the file's total
    `RELEASE.md` count at two or more (`GATE-T2-A`) — but correct what they now describe: there is
-   one `build.yml`, its `paths:` trigger is on the manifest globs rather than an add-on directory,
+   one `build.yml`, its `paths:` trigger covers everything inside an add-on directory,
    and there is NO `tags:` trigger anywhere, so pushing this tag creates no workflow run for any
    add-on. Say what the tag IS: the release marker `internal/check-version-tags.sh` enforces and
    that `<addon>/v<version>` release notes hang off.
@@ -1233,7 +1395,12 @@ Two rules that keep the gates satisfiable, both learned from earlier plans in th
     <automated>f=.github/RELEASE.md; a=$(sed -n '/^## Auto-update path$/,$p' "$f"); [ "$(printf '%s' "$a" | wc -c)" -ge 200 ] && [ "$(printf '%s\n' "$a" | grep -cF 'gh workflow run build-')" -eq 0 ] && [ "$(printf '%s\n' "$a" | grep -cF 'build.yml')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF 'internal/dispatch-builds.sh')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF 'GITHUB_TOKEN')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF 'workflow_dispatch')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF 'docs.github.com/actions/using-workflows/triggering-a-workflow')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF 'docs/AUTO_UPDATE_GUIDE.md')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF 'Auto Update')" -ge 1 ] && [ "$(printf '%s\n' "$a" | grep -cF -- '--no-tag')" -ge 1 ] && echo GATE-G3-1b-PASS</automated>
     <automated>f=.github/RELEASE.md; [ "$(grep -cF '15 of the 42' "$f")" -ge 1 ] && [ "$(grep -cF 'terraform-bridge/v0.2.0' "$f")" -ge 1 ] && [ "$(grep -cF 'git show' "$f")" -ge 1 ] && [ "$(grep -cF 'base-image-update' "$f")" -ge 1 ] && [ "$(grep -c '^### Why the split$' "$f")" -eq 1 ] && [ "$(grep -cF 'all seven' "$f")" -eq 1 ] && [ "$(grep -cF 'canonical image for the tag' "$f")" -eq 0 ] && o=$(sed -n '/^### What this means operationally$/,/^## Standard release flow$/p' "$f") && [ "$(printf '%s' "$o" | wc -c)" -ge 200 ] && [ "$(printf '%s\n' "$o" | grep -cF 'human')" -ge 1 ] && [ "$(printf '%s\n' "$o" | grep -cF 'GITHUB_TOKEN')" -ge 1 ] && [ "$(printf '%s\n' "$o" | grep -cF 'Auto-update path')" -ge 1 ] && echo GATE-G3-1c-PASS</automated>
     <automated>f=.github/RELEASE.md; for a in authentik coding-assistants gatus iac-runner markdown-renderer meridian network-tools phone-logger terraform-bridge; do grep -q "| $a " "$f" || { echo "MISSING ROW $a"; exit 1; }; done; [ "$(grep -c 'local build' "$f")" -ge 2 ] && echo GATE-G3-2-PASS</automated>
-    <automated>[ "$(grep -cF 'Images are built by the per-add-on workflows' README.md)" -eq 0 ] && [ "$(grep -cF '`build.yml`' README.md)" -ge 1 ] && [ "$(grep -cF '**/config.*' README.md)" -ge 1 ] && [ "$(grep -cF 'gh workflow run build-' README.md)" -eq 0 ] && echo GATE-G3-3-PASS</automated>
+    <!-- GATE-G3-3 RE-POINTED POST-EXECUTION by D-08: the positive clause was
+         `grep -cF '**/config.*' README.md >= 1`, asserting README named the
+         extension-scoped glob. That glob is gone, so the assertion now names
+         the directory-scoped filter and the property that matters -- that
+         README tells the reader a non-manifest change rebuilds the image. -->
+    <automated>[ "$(grep -cF 'Images are built by the per-add-on workflows' README.md)" -eq 0 ] && [ "$(grep -cF '`build.yml`' README.md)" -ge 1 ] && [ "$(grep -cF '*/**' README.md)" -ge 1 ] && [ "$(grep -cF 'run.sh' README.md)" -ge 1 ] && [ "$(grep -cF '**/config.*' README.md)" -eq 0 ] && [ "$(grep -cF 'gh workflow run build-' README.md)" -eq 0 ] && echo GATE-G3-3-PASS</automated>
     <automated>f=docs/DEVELOPMENT.md; [ "$(grep -c 'per-addon callers' "$f")" -eq 0 ] && [ "$(grep -c 'per-addon .tags:. pattern' "$f")" -eq 0 ] && [ "$(grep -cF '| `build.yml`' "$f")" -ge 1 ] && grep -q '32633538391' "$f" && echo GATE-G3-4-PASS</automated>
     <automated>[ "$(grep -c 'seven per-addon' docs/WEBHOOK_SETUP.md)" -eq 0 ] && [ "$(grep -cF 'build.yml' docs/WEBHOOK_SETUP.md)" -ge 1 ] && [ "$(grep -c 'fires on the tag push' docs/UPDATE_VERSION.md)" -eq 0 ] && [ "$(grep -cF 'build.yml' docs/UPDATE_VERSION.md)" -ge 1 ] && echo GATE-G3-5-PASS</automated>
     <automated>f=internal/check-version-tags.sh; [ "$(grep -c 'every workflow also triggers on' "$f")" -eq 0 ] && grep -q 'build\.yml' "$f" && grep -q 'ghcr' "$f" && [ "$(grep -v '^#' "$f" | sha256sum | cut -d' ' -f1)" = "07d060ea42b7b05984ac642b0cf581d57f089703c69d9b3ffd44d4bd930394c2" ] && bash -n "$f" && shellcheck -e SC1091 -e SC2034 "$f" && echo GATE-G3-6-PASS</automated>
@@ -1277,7 +1444,8 @@ intact and stays inside 120 columns (G3-10).
 `README.md`, `docs/DEVELOPMENT.md`, `docs/WEBHOOK_SETUP.md` and `docs/UPDATE_VERSION.md` — none of
 which any sibling in this batch touches, so their baselines DO still hold — no longer carry the
 falsified sentences (each baseline 1, each now 0) and each names `build.yml`; `README.md` also
-names the manifest-path trigger literal `**/config.*` (baseline 0); `docs/DEVELOPMENT.md` has a
+names the add-on-directory trigger literal `*/**` (baseline 0, re-pointed by D-08);
+`docs/DEVELOPMENT.md` has a
 Job Timeouts row for `build.yml` (baseline 0) and still records the historical run `32633538391`.
 
 `internal/check-version-tags.sh` — untouched by every sibling (rll's L-11 excludes it
@@ -1331,7 +1499,7 @@ ASVS level 1; blocking threshold `high`. No `critical` or `high` threat is left 
 | T-rln-02 | Tampering | candidate name -> filesystem paths and matrix values | high | mitigate | Three independent barriers: (a) in push mode `awk -F/ '{print $1}'` keeps only the first path segment, so a derived candidate cannot contain `/` at all; (b) a name-shape gate `^[a-z0-9][a-z0-9._-]*$` rejects traversal- and metacharacter-shaped names (proved by G1-4e, which feeds `../../etc` and `.planning` and gets `[]`); (c) the authoritative gate — the `config.yaml`/`build.yaml`/`Dockerfile` triple must exist as regular files, so a crafted name resolves to nothing. Barrier (a) is absent in dispatch mode, which is why (b) and (c) are not optional. |
 | T-rln-03 | Elevation of Privilege | one workflow now able to build every add-on | medium | accept | The dispatch surface widens from "one add-on per workflow" to "any subset, or all". The actor set does not change: creating a `workflow_dispatch` still needs `actions: write` on the repository, which only the two bump jobs (sibling rlj) and repository writers hold. The worst outcome is a rebuild of already-published images from the same source, which is the same authority a writer has today by pushing nine dispatches. Accepted. |
 | T-rln-04 | Denial of Service | an empty `addons` value fanning out to all nine add-ons | medium | mitigate | L-12 plus gate G2-3d: with every candidate skipped the script performs ZERO `gh` invocations rather than one with an empty list. Empty-means-all remains reachable only by a deliberate human dispatch. |
-| T-rln-05 | Denial of Service | the widened `paths:` globs firing on non-add-on files | low | accept | `.planning/config.json`, `terraform-provider-homeassistant/build.yaml` and `tools/test-addon/*` match the globs and cost a ~15 s `detect` job that derives `[]` and skips the build job (measured, G1-4e/S6). The narrower `*/config.*` form was considered and rejected: the item specifies the `**/` globs, and the derivation already rejects the extra matches structurally. |
+| T-rln-05 | Denial of Service | the `paths:` filter firing on non-add-on files | low | mitigate | **RE-POINTED POST-EXECUTION by D-08, and the disposition improved from `accept` to `mitigate`.** As drafted, the extension-scoped globs matched `.planning/config.json`, `.github/**` manifests, `terraform-provider-homeassistant/build.yaml` and `tools/test-addon/*`, each costing a ~15 s no-op `detect` job — accepted at the time. The directory-scoped filter **excludes all four** (`!.*/**` plus the four non-add-on top-level directories), so the blast radius shrank rather than widened: measured over all 537 tracked files, exactly the 232 files inside the nine add-on directories trigger and nothing else does (`G2-2b`). The residual is directional and safe — a future non-add-on top-level directory that nobody negates costs one no-op `detect` job and never a build, while a future add-on directory is picked up with no CI edit. |
 | T-rln-06 | Repudiation | which add-on/arch a run built | low | mitigate | `name: ${{ matrix.addon }} (${{ matrix.arch }})` puts the add-on and arch in the job title, and the detect step emits a `::notice::` naming the derived set and leg count — both are what the post-merge proof reads. |
 | T-rln-07 | Information Disclosure | dispatch failure output | low | mitigate | Inherited from rlj and unchanged: the script never echoes `$GH_TOKEN` / `$GITHUB_TOKEN`, passes `gh`'s stderr through unmodified, and its `ERROR:` line names only the workflow, the ref and the add-on list. |
 | T-rln-08 | Spoofing | a build published from an unintended ref | low | mitigate | Unchanged from rlj: the ref is measured (`REF`, else `GITHUB_REF_NAME`, else `git rev-parse --abbrev-ref HEAD`) and a detached HEAD is a hard exit 1, never a silent fallback to `main`. |
@@ -1381,9 +1549,9 @@ simplified or staged as a "v1".
 | # | Source requirement (from the item text) | Req id | Task | Gate |
 |---|---|---|---|---|
 | a-1 | NEW `.github/workflows/build.yml`, one builder for all add-ons | a | T1 | GATE-G1-1 |
-| a-2 | trigger on push to main with `**/config.*`, `**/build.*`, `**/Dockerfile` | a | T2 | GATE-G2-2 |
+| a-2 | trigger on push to main covering every add-on directory (`"*/**"` minus the non-add-on dirs). **RE-POINTED by D-08**: the item text asked for `**/config.*`, `**/build.*`, `**/Dockerfile`, which is what the plan drafted and what proved to under-trigger — the nine callers it replaced were directory-scoped, so honouring the letter of the item text would have shipped the regression | a | T2 | GATE-G2-2, GATE-G2-2b |
 | a-3 | `detect-changed-addons` job deriving the list from `git diff` and emitting a JSON array via `jq -R -s -c` | a | T1 | GATE-G1-4d, GATE-G1-4c |
-| a-4 | derivation = changed manifest paths, then `awk -F/ 'NF {print $1}' \| sort -u` | a | T1 | GATE-G1-4d (independently recomputed from the same commit) |
+| a-4 | derivation = first path segment of every changed file, then the manifest-triple test. **RE-POINTED by D-08**: the item text asked for a manifest-path prefilter; dropping it is what closes the gap and what makes the workflow agree with `internal/dispatch-builds.sh` | a | T1 | GATE-G1-4d, GATE-G2-2c |
 | a-5 | build job matrix over the detected add-ons crossed with `[amd64, aarch64]`, SKIPPING undeclared legs | b | T1 | GATE-G1-4b (2 legs), GATE-G1-4a (1 leg), GATE-G1-4c (10 legs / 9 add-ons) |
 | b-1 | arch list from `build.yaml` `build_from` keys, falling back to `config.yaml` `arch:`, NEVER a workflow input | b | T1 | GATE-G1-6 (no arch literal), GATE-G1-4a/b/c |
 | b-2 | `addon-display-name` / `addon-description` read from `config.yaml`, not passed as hand-authored inputs | b | T1 | GATE-G1-4a (byte-equal to config.yaml), GATE-G1-6 (no name/description literal) |
@@ -1437,7 +1605,7 @@ Every gate in this plan was executed before the plan was finalised, against the 
 | G2-3a-g, G2-5, G2-6 | `internal/dispatch-builds.sh` does not exist yet (sibling rlj creates it) → fail |
 | G2-4 | rlj's own gate; passes only after rlj lands, and must keep passing here |
 | G3-1 | `\| active \|` rows = **9**; `tag-trigger temporarily disabled` = **2**; `Re-enabling a tag trigger` = **1**; `### Tags do not trigger builds` = **0**; literal `build.yml` in RELEASE.md = **0** |
-| G3-3 | `Images are built by the per-add-on workflows` in README.md = **1**; `**/config.*` = **0**; `gh workflow run build-` = **0**. The gate deliberately negative-greps only that whole live-claim clause, never the bare noun phrase `per-add-on workflows`, which a historically correct replacement sentence would legitimately use |
+| G3-3 | `Images are built by the per-add-on workflows` in README.md = **1**; `*/**` = **0**; `run.sh` = **0**; `gh workflow run build-` = **0**. The gate deliberately negative-greps only that whole live-claim clause, never the bare noun phrase `per-add-on workflows`, which a historically correct replacement sentence would legitimately use. **RE-POINTED by D-08**: as drafted the positive clause asserted the `**/config.*` glob, which the fix removes; it now also negative-greps that glob so the gap cannot be reintroduced in prose |
 | G3-4 | `per-addon callers` = **1**; `per-addon \`tags:\` pattern` = **1**; `\| \`build.yml\`` = **0** |
 | G3-5 | `seven per-addon` = **1**; `fires on the tag push` = **1** |
 | G3-6 | `every workflow also triggers on` = **0** — quick task `260909-wgm` drove it from 1 to 0, so that clause is **already satisfied** and survives only as an invariant that must stay 0, no longer work-proving for this item. `grep -q 'ghcr'` was and remains an invariant. `grep -q 'build\.yml'` is the ONE clause still work-proving, because that workflow is this item's own deliverable and `260909-wgm` deliberately does not name it. Code-only sha256 re-pinned to `07d060ea…0394c2`, the post-`260909-wgm` baseline |

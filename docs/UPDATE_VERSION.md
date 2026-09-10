@@ -118,6 +118,7 @@ make update-version ADDON=coding-assistants VERSION=1.0.0-2 NO_TAG=yes NO_PUSH=y
 # → pushes tag to origin
 
 # The tag push builds NOTHING. build.yml fires on a push to main touching
-# **/config.*, **/build.* or **/Dockerfile, so it is the commit of the
-# version files that publishes the image at ghcr.io/.../1.0.0-2.
+# anything inside an add-on directory, so it is the commit of the version
+# files that publishes the image at ghcr.io/.../1.0.0-2. (A source-only
+# change -- run.sh, a *.py helper, Go sources -- rebuilds it too.)
 ```

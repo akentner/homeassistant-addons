@@ -203,7 +203,7 @@ def create_and_push_tag(version: str, addon_name: str, push: bool = True, dry_ru
     release; it is not what builds the image. One workflow, build.yml, builds every
     add-on, and its triggers must not be conflated with this tag:
 
-    - paths: on a push to main touching '**/config.*', '**/build.*' or '**/Dockerfile'
+    - paths: on a push to main touching anything inside an add-on directory
       - so it is the COMMIT of the version files that builds, never this tag.
     - tags: no such trigger exists any more, for any add-on, anywhere.
 

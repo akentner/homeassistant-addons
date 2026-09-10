@@ -30,9 +30,17 @@ version itself. CalVer is supported (`authentik/v2026.8.0`); pre-release and sub
 (`v1.0.0-alpha45`, `v1.0.6-0`).
 
 A single workflow, `.github/workflows/build.yml`, builds every add-on in this repository. It triggers on a `push` to
-`main` that touches `**/config.*`, `**/build.*` or `**/Dockerfile`, and derives the add-on list, the architecture legs,
-the display name and the description from each add-on's own `config.yaml` and `build.yaml` — so nothing about an add-on
-is configured in CI, and CI cannot drift from what the add-on store advertises.
+`main` that touches **anything inside an add-on directory** — the filter is `paths: "*/**"` with the non-add-on
+top-level directories negated — and derives the add-on list, the architecture legs, the display name and the description
+from each add-on's own `config.yaml` and `build.yaml`, so nothing about an add-on is configured in CI and CI cannot
+drift from what the add-on store advertises.
+
+The filter is directory-scoped rather than manifest-scoped on purpose: every add-on's `Dockerfile` COPYs files that are
+not manifests — `run.sh`, `nginx.conf`, `*.py` helpers, and for `iac-runner` and `terraform-bridge` the whole Go module
+via `COPY . .` — so a filter matching only `config.yaml` / `build.yaml` / `Dockerfile` would let a source-only push land
+with no rebuild, leaving the store advertising a version whose image is stale. The `detect` job, not the filter, decides
+what is an add-on: a directory qualifies only if it holds all three of `config.yaml`, `build.yaml` and `Dockerfile`. A
+new add-on therefore needs no CI edit at all.
 
 | Add-on            | Supervisor image source |
 | ----------------- | ----------------------- |
@@ -96,7 +104,7 @@ the `Supervisor image source` column above, driven solely by the presence of a t
 
 The build is fired by the **bump commit**, never by the tag. When a human pushes step 2 of the release flow below
 (committing and pushing `config.yaml` / `build.yaml` / `README.md` to `main`), that push is what fires `build.yml`, via
-its manifest-path filter.
+its add-on-directory filter.
 
 That scoping is load-bearing. A push made by a GitHub Actions workflow with the default `GITHUB_TOKEN` creates no
 workflow runs at all, so the `paths:` filter never fires for an automated version bump and the automated path has to ask

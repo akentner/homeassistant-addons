@@ -123,9 +123,9 @@ make update-version ADDON=meridian VERSION=1.62.7
 ## 🔑 Why the workflow dispatches its own builds
 
 The workflow pushes to `main` using the default `GITHUB_TOKEN`, and GitHub creates **no** workflow runs for an event
-produced by that token. `build.yml` triggers on a `push` to `main` filtered by `paths: **/config.*`, `**/build.*`,
-`**/Dockerfile`, so its filter never fires for an automated bump. Left at that, an automated update publishes a manifest
-advertising a version whose image was never built.
+produced by that token. `build.yml` triggers on a `push` to `main` filtered by `paths: "*/**"` (every add-on directory,
+with the non-add-on top-level directories negated), so its filter never fires for an automated bump. Left at that, an
+automated update publishes a manifest advertising a version whose image was never built.
 
 `workflow_dispatch` is the documented exception: a dispatch event created with `GITHUB_TOKEN` does produce a run
 (<https://docs.github.com/actions/using-workflows/triggering-a-workflow>). So the workflow calls

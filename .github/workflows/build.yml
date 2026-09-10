@@ -10,10 +10,34 @@ on:
   push:
     branches:
       - main
+    # DIRECTORY-scoped, not extension-scoped. Every add-on's Dockerfile COPYs
+    # files that are not manifests — run.sh, nginx.conf, *.py, and for the two
+    # Go add-ons `COPY . .`, i.e. the whole module — so a filter that only
+    # matched config/build/Dockerfile would silently miss every source-only
+    # push and leave the store advertising a version whose image is stale.
+    # This reproduces the deleted callers' `<addon>/**` coverage exactly.
+    #
+    # The base pattern deliberately names no add-on: the `detect` job decides
+    # what is an add-on (the config.yaml + build.yaml + Dockerfile triple), so
+    # this filter only has to exclude what never can be one. Order matters and
+    # negations must follow the positive pattern (GitHub filter-pattern rules).
+    #
+    # `!.*/**` covers every dotdir at once, now and in future: an add-on
+    # directory can never start with a dot, because the derivation's
+    # name-shape gate requires `^[a-z0-9]` as the first character. Without it
+    # every `.planning/` commit would spin a no-op detect job.
+    #
+    # A NEW non-add-on top-level directory that is not listed here costs one
+    # ~15s no-op detect job and never a build; a new ADD-ON directory is
+    # picked up with no CI edit at all. The over-trigger direction is the safe
+    # one, and it is the direction this list errs in.
     paths:
-      - "**/config.*"
-      - "**/build.*"
-      - "**/Dockerfile"
+      - "*/**"
+      - "!.*/**"
+      - "!docs/**"
+      - "!internal/**"
+      - "!terraform-provider-homeassistant/**"
+      - "!tools/**"
   workflow_dispatch:
     inputs:
       addons:
@@ -66,13 +90,23 @@ jobs:
               echo "::notice::event before-sha unusable, diffing ${base} instead"
             fi
             changed=$(git diff --name-only "${base}..${HEAD_SHA}")
-            # Keep only the manifest paths the push trigger filters on, then the
-            # first path segment. The trailing fallback is mandatory: pipefail
-            # turns grep's no-match exit 1 into a failed assignment that set -e
-            # would abort on.
-            candidates=$(printf '%s\n' "$changed" \
-              | grep -E '^[^/]+/(config|build)\.[^/]+$|^[^/]+/Dockerfile$' \
-              | awk -F/ 'NF {print $1}' | sort -u) || candidates=""
+            # First path segment of EVERY changed file, then let the manifest
+            # triple test below decide what is an add-on. No extension filter:
+            # a source-only push (run.sh, *.py, *.conf, or any file under a Go
+            # add-on that `COPY . .` pulls in) must build, and enumerating
+            # build inputs per add-on is exactly the duplication this workflow
+            # exists to delete.
+            #
+            # This is byte-for-byte the definition internal/dispatch-builds.sh
+            # uses, and the same one lint.yml, the Makefile release target and
+            # internal/check-version-tags.sh use. Sharing it is what makes the
+            # script and this workflow unable to disagree about what an add-on
+            # is -- asserted by rln's G2-5.
+            #
+            # The trailing fallback is mandatory: pipefail turns grep's
+            # no-match exit 1 into a failed assignment that set -e would abort
+            # on.
+            candidates=$(printf '%s\n' "$changed" | cut -d/ -f1 | sort -u | grep -v '^$') || candidates=""
           elif [ -n "${ADDONS_INPUT:-}" ]; then
             candidates=$(printf '%s' "$ADDONS_INPUT" | tr ',' ' ' | tr -s ' \t\n' '\n' | sed '/^$/d' | sort -u)
           else

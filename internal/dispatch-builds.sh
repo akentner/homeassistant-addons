@@ -9,8 +9,8 @@
 # .github/workflows/base-image-update.yml (cron 07:00 UTC) — commit and push to
 # main using the default GITHUB_TOKEN. GitHub creates NO new workflow runs for
 # an event produced by that token. .github/workflows/build.yml triggers on
-# `push` to `main` with a manifest-path filter, so it never fires for an
-# automated bump. (Before build.yml this was nine separate build-<addon>.yml
+# `push` to `main` filtered to the add-on directories, so it never fires for
+# an automated bump. (Before build.yml this was nine separate build-<addon>.yml
 # callers, each filtered on `<addon>/**`; the same limitation applied to all.)
 #
 # Measured evidence (do not re-investigate — this is proven):

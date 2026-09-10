@@ -193,7 +193,9 @@ is wanted later, apply it by hand or reopen the branch — do not ignore it. `.g
 GitHub does not evaluate `paths` filters for tag pushes at all. No workflow in this repository triggers on a tag any
 more, so pushing an `<addon>/v*` tag schedules nothing — see `.github/RELEASE.md`, `### Tags do not trigger builds`, for
 why that trigger was removed rather than shared. A pure branch push to `main` that changes only workflow files does not
-match `build.yml`'s manifest `paths:` filter either. `workflow_dispatch` of `build.yml`, scoped by its `addons` input
+match `build.yml`'s `paths:` filter either — that filter is `"*/**"` with the non-add-on top-level directories negated,
+so it covers every file inside an add-on directory (a `run.sh` or Go-source change rebuilds the image) and nothing
+outside one. `workflow_dispatch` of `build.yml`, scoped by its `addons` input
 (`gh workflow run build.yml -f addons=network-tools`), is the reliable end-to-end verification — the verified run for
 the network-tools build is `32633538391`, which passed.
 
