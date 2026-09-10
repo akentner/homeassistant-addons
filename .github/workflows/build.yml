@@ -1,0 +1,173 @@
+# One builder for every add-on in this repository.
+#
+# Replaces the nine per-add-on callers, which were structurally identical and
+# differed only in name, the paths glob, three `with:` values and the arch
+# list. Every per-add-on value is now DERIVED from the add-on's own manifests,
+# so CI configuration cannot drift from what the add-on store advertises.
+name: Build Add-on
+
+on:
+  workflow_dispatch:
+    inputs:
+      addons:
+        description: "Add-on names to build, comma- or space-separated. Empty builds every add-on."
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  detect:
+    name: Detect add-ons to build
+    if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, 'nobuild') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      addons: ${{ steps.detect.outputs.addons }}
+      matrix: ${{ steps.detect.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The derivation diffs two commits, so the full history is required.
+          fetch-depth: 0
+
+      # Every event value the derivation needs arrives through this step's
+      # `env:` block below. Nothing from the event payload is interpolated into
+      # the `run:` body, so event-supplied text is always an environment value
+      # and never text spliced into a command line. That also makes the body
+      # extractable and executable locally, which is how it is gate-tested.
+      - name: Derive add-on build matrix
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          ADDONS_INPUT: ${{ inputs.addons }}
+        run: |
+          set -euo pipefail
+
+          # Architectures this builder can map to a docker platform. The order
+          # is the leg order; an add-on that does not declare one gets no leg
+          # for it. One add-on declares two legs today, the rest declare one.
+          SUPPORTED_ARCHS="amd64 aarch64"
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            base="${BEFORE_SHA:-}"
+            if [ -z "$base" ] || ! git rev-parse --verify --quiet "${base}^{commit}" >/dev/null 2>&1; then
+              base="${HEAD_SHA}^"
+              echo "::notice::event before-sha unusable, diffing ${base} instead"
+            fi
+            changed=$(git diff --name-only "${base}..${HEAD_SHA}")
+            # Keep only the manifest paths the push trigger filters on, then the
+            # first path segment. The trailing fallback is mandatory: pipefail
+            # turns grep's no-match exit 1 into a failed assignment that set -e
+            # would abort on.
+            candidates=$(printf '%s\n' "$changed" \
+              | grep -E '^[^/]+/(config|build)\.[^/]+$|^[^/]+/Dockerfile$' \
+              | awk -F/ 'NF {print $1}' | sort -u) || candidates=""
+          elif [ -n "${ADDONS_INPUT:-}" ]; then
+            candidates=$(printf '%s' "$ADDONS_INPUT" | tr ',' ' ' | tr -s ' \t\n' '\n' | sed '/^$/d' | sort -u)
+          else
+            candidates=$(for c in */config.yaml; do
+              if [ -f "$c" ]; then printf '%s\n' "${c%/config.yaml}"; fi
+            done | sort -u)
+          fi
+
+          matrix_file=$(mktemp)
+          accepted_file=$(mktemp)
+          CANDIDATES="$candidates" SUPPORTED_ARCHS="$SUPPORTED_ARCHS" \
+          MATRIX_FILE="$matrix_file" ACCEPTED_FILE="$accepted_file" python3 - <<'PY'
+          import json
+          import os
+          import re
+          import sys
+
+          import yaml
+
+          supported = os.environ["SUPPORTED_ARCHS"].split()
+          names = [c.strip() for c in os.environ["CANDIDATES"].splitlines() if c.strip()]
+          name_re = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+          include = []
+          accepted = []
+
+          for n in names:
+              if not name_re.match(n):
+                  print(f"::warning::ignoring '{n}': not a well-formed add-on directory name")
+                  continue
+              paths = {k: f"{n}/{k}" for k in ("config.yaml", "build.yaml", "Dockerfile")}
+              if not all(os.path.isfile(p) for p in paths.values()):
+                  print(f"::notice::ignoring '{n}': not an add-on directory")
+                  continue
+              with open(paths["config.yaml"], encoding="utf-8") as fh:
+                  cfg = yaml.safe_load(fh) or {}
+              with open(paths["build.yaml"], encoding="utf-8") as fh:
+                  bld = yaml.safe_load(fh) or {}
+              declared = list((bld.get("build_from") or {}).keys())
+              if not declared:
+                  declared = list(cfg.get("arch") or [])
+                  print(f"::warning::{n}: no build_from in build.yaml, using config.yaml arch: {declared}")
+              for a in declared:
+                  if a not in supported:
+                      print(f"::warning::{n}: declares unsupported arch '{a}', skipping that leg")
+              legs = [a for a in supported if a in declared]
+              if not legs:
+                  print(f"::warning::ignoring '{n}': declares no supported architecture")
+                  continue
+              display_name = cfg.get("name")
+              description = cfg.get("description")
+              if not display_name or not description:
+                  print(f"::error::{n}/config.yaml is missing name: or description:")
+                  sys.exit(1)
+              accepted.append(n)
+              for a in legs:
+                  include.append({
+                      "addon": n,
+                      "arch": a,
+                      "archs": json.dumps([a]),
+                      "display_name": display_name,
+                      "description": description,
+                  })
+
+          with open(os.environ["MATRIX_FILE"], "w", encoding="utf-8") as fh:
+              fh.write(json.dumps({"include": include}, separators=(",", ":")))
+          with open(os.environ["ACCEPTED_FILE"], "w", encoding="utf-8") as fh:
+              fh.write("\n".join(accepted))
+          PY
+
+          addons=$(jq -R -s -c 'split("\n") | map(select(length > 0))' <"$accepted_file")
+          matrix=$(cat "$matrix_file")
+          {
+            echo "addons=$addons"
+            echo "matrix=$matrix"
+          } >>"$GITHUB_OUTPUT"
+          echo "::notice::building $addons ($(jq '.include | length' "$matrix_file") legs)"
+
+  build:
+    needs: detect
+    # An empty `include` list is a hard matrix error, not zero jobs, so the
+    # build job must not exist at all when nothing is to be built.
+    if: ${{ needs.detect.outputs.addons != '[]' }}
+    # A matrix job's default display name concatenates every matrix value,
+    # including the full description, which would be unreadable.
+    name: ${{ matrix.addon }} (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    uses: ./.github/workflows/_build-template.yml
+    # No `timeout-minutes` on this job: a `uses:` job may not declare one
+    # (actionlint reports it as an error). The 45-minute cap lives in
+    # _build-template.yml and applies to every leg.
+    permissions:
+      contents: read
+      packages: write
+    with:
+      addon-name: ${{ matrix.addon }}
+      addon-display-name: ${{ matrix.display_name }}
+      addon-description: ${{ matrix.description }}
+      archs: ${{ matrix.archs }}
+    secrets:
+      HA_BASE_URL: ${{ secrets.HA_BASE_URL }}
+      HA_WEBHOOK_ID: ${{ secrets.HA_WEBHOOK_ID }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
