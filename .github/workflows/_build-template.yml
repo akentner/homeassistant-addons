@@ -1,9 +1,10 @@
-# Build template shared by every per-addon build workflow.
+# Build template shared by every add-on build.
 #
-# Reusable workflow (workflow_call) — invoked by build-<addon>.yml with
-# the per-addon inputs below. Keeps build matrix / QEMU / Buildx / GHCR
-# / HA notify boilerplate in one place; per-addon stubs only define
-# addon-name, display name, description and the arch matrix.
+# Reusable workflow (workflow_call) — invoked by build.yml, once per
+# add-on and arch leg, with inputs derived from the add-on's own
+# config.yaml / build.yaml. Keeps build matrix / QEMU / Buildx / GHCR
+# / HA notify boilerplate in one place; the caller hand-authors no
+# add-on name, display name, description or arch list.
 name: Build Add-on Template
 
 on:

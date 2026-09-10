@@ -87,9 +87,12 @@ A pre-commit hook automatically validates:
 ## GitHub Actions Reusable Build Workflows
 
 Builds run through a local reusable workflow. The template `.github/workflows/_build-template.yml` defines a single job
-that resolves the per-arch base image from `build.yaml`, logs into GHCR, and builds/pushes the multi-arch image. Seven
-per-addon callers (`build-<addon>.yml`) only set addon-name, display name, description, the arch matrix, and HA webhook
-secrets.
+that resolves the per-arch base image from `build.yaml`, logs into GHCR, and builds/pushes the multi-arch image. One
+caller, `.github/workflows/build.yml`, invokes it once per add-on and arch leg. That caller hand-authors none of the
+per-add-on values: its `detect` job reads the add-on list, the arch legs (from `build.yaml` `build_from`, falling back
+to `config.yaml` `arch:`), the display name and the description out of the add-on's own manifests, and passes them
+through the template's existing `workflow_call` inputs. The HA webhook secrets are still mapped by name at the call
+site.
 
 ### Permissions Contract
 
@@ -135,13 +138,20 @@ absorbs a cold cache or one stalled leg without burning a multi-hour runner bloc
 | Workflow                | Job            | Cap | Derived from            |
 | ----------------------- | -------------- | --- | ----------------------- |
 | `_build-template.yml`   | `build`        | 45  | aarch64 QEMU leg 13m28s |
+| `build.yml`             | `detect`       | 5   | manifest reads only     |
 | `auto-update.yml`       | `update`       | 20  | observed 8-28s          |
 | `base-image-update.yml` | `update`       | 15  | observed 11-15s         |
 | `lint.yml`              | `lint`         | 15  | observed 37-45s         |
 | `lint.yml`              | `lint-results` | 5   | reporting only          |
 | `opencode.yml`          | `opencode`     | 30  | no baseline; ceiling    |
 
-**Invariant:** the number of `timeout-minutes:` declarations must equal the number of jobs. The check is:
+One documented exception: a job that is a reusable-workflow call (`uses:`) may **not** declare `timeout-minutes` —
+actionlint rejects it, because only `name`, `uses`, `with`, `secrets`, `needs`, `if` and `permissions` are allowed
+there. `build.yml`'s `build` job is such a call, so it carries no cap of its own and every leg inherits the template's
+45 instead. Do not "fix" the apparent omission; it is a lint error.
+
+**Invariant:** the number of `timeout-minutes:` declarations must equal the number of jobs, minus any reusable-workflow
+call jobs. The check is:
 
 ```bash
 grep -rh 'timeout-minutes:' .github/workflows/*.yml | wc -l   # must equal job count
@@ -180,16 +190,19 @@ is wanted later, apply it by hand or reopen the branch — do not ignore it. `.g
 
 ### Trigger Pitfalls
 
-GitHub does not evaluate `paths` filters for tag pushes; the per-addon `tags:` pattern is evaluated independently, so a
-matching addon tag (for example `network-tools/v*`) can still trigger a build even when the push changes only
-`.github/workflows/**`. A pure branch push to `main` that changes only workflow files will not match the add-on `paths:`
-filters. Manual `workflow_dispatch` on a representative caller is the reliable end-to-end verification — the verified
-run for `build-network-tools.yml` is `32633538391`, which passed.
+GitHub does not evaluate `paths` filters for tag pushes at all. No workflow in this repository triggers on a tag any
+more, so pushing an `<addon>/v*` tag schedules nothing — see `.github/RELEASE.md`, `### Tags do not trigger builds`, for
+why that trigger was removed rather than shared. A pure branch push to `main` that changes only workflow files does not
+match `build.yml`'s `paths:` filter either — that filter is `"*/**"` with the non-add-on top-level directories negated,
+so it covers every file inside an add-on directory (a `run.sh` or Go-source change rebuilds the image) and nothing
+outside one. `workflow_dispatch` of `build.yml`, scoped by its `addons` input
+(`gh workflow run build.yml -f addons=network-tools`), is the reliable end-to-end verification — the verified run for
+the network-tools build is `32633538391`, which passed.
 
 This repository has also observed a trigger coupling that is not explained by the simple path rules: commit `3925f58`
 changed only `scripts/check-version-tags.sh`, yet five per-addon Build runs were scheduled. Do not infer filter behavior
-from one run; inspect the run list and the event payload when debugging triggers. Treat a representative dispatch as
-service-affecting because it can push images to GHCR and send HA webhooks.
+from one run; inspect the run list and the event payload when debugging triggers. Treat a dispatch as service-affecting
+because it can push images to GHCR and send HA webhooks.
 
 ### Verification Checklist
 

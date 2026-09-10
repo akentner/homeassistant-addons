@@ -200,15 +200,16 @@ def create_and_push_tag(version: str, addon_name: str, push: bool = True, dry_ru
     """Create an annotated git tag for the new version and push it to origin.
 
     Tag format is '<addon>/v<version>' (e.g. 'authentik/v2026.8.0'). The tag names the
-    release; it is not what builds the image. Each .github/workflows/build-<addon>.yml
-    carries two independent triggers and they must not be conflated:
+    release; it is not what builds the image. One workflow, build.yml, builds every
+    add-on, and its triggers must not be conflated with this tag:
 
-    - paths: on a push to main - active for all nine add-ons.
-    - tags: on '<addon>/v*' - active only for iac-runner, network-tools and
-      terraform-bridge; commented out for the other six.
+    - paths: on a push to main touching anything inside an add-on directory
+      - so it is the COMMIT of the version files that builds, never this tag.
+    - tags: no such trigger exists any more, for any add-on, anywhere.
 
-    So for most add-ons pushing this tag creates no workflow run at all. See
-    .github/RELEASE.md for the per-add-on table.
+    So pushing this tag creates no workflow run at all. What the tag IS: the release
+    marker internal/check-version-tags.sh reports on, and the ref a GitHub Release for
+    '<addon>/v<version>' hangs off. See .github/RELEASE.md.
 
     Returns True on success.
     """
@@ -278,8 +279,9 @@ def create_and_push_tag(version: str, addon_name: str, push: bool = True, dry_ru
         print(f"   Tag exists locally — push manually with: git push origin {tag}")
         return False
     print(f"🚀 Pushed tag: {tag}")
-    print("   A build runs only if that add-on's build-<addon>.yml has an active 'tags:'")
-    print("   trigger - six of the nine have it commented out. See .github/RELEASE.md.")
+    print("   The tag is a release marker and builds nothing. The image is published by")
+    print("   build.yml from the version-bump commit, by internal/dispatch-builds.sh, or")
+    print("   by an explicit workflow_dispatch. See .github/RELEASE.md.")
     return True
 
 
