@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 12
+open_count: 14
 waived_count: 0
 fixed_count: 4
-total_count: 16
-last_updated: 2026-09-10T20:19:37.570Z
+total_count: 18
+last_updated: 2026-09-10T20:58:57.980Z
 ---
 
 # Broken Windows Ledger
@@ -31,6 +31,8 @@ last_updated: 2026-09-10T20:19:37.570Z
 | 14 | quick-260910-u0m | deviation | zizmor.yml |  | 27 pre-existing zizmor findings deferred via 25 line-anchored ignore entries; 11 are template-injection in _build-template.yml. Fixes belong to Phase 8 CI/CD Hardening | open |  | 2026-09-10T20:19:37.232Z |  |
 | 15 | quick-260910-u0m | deviation | Makefile |  | tools/test-addon has config.yaml+Dockerfile but is invisible to docker-build-check and validate-addons (depth-2); validate-versions.sh does see it. Repo has two disagreeing definitions of add-on | open |  | 2026-09-10T20:19:37.399Z |  |
 | 16 | quick-260910-u0m | deviation | docs/DEVELOPMENT.md |  | gitleaks v8.30.1 default ruleset does not flag a bare AKIA access-key-id shape in file/diff mode (0/10 draws); re-verify controls on any pin bump | open |  | 2026-09-10T20:19:37.570Z |  |
+| 17 | quick-260910-vh7 | deviation | internal/verify-opencode-gate.py |  | verify-opencode-gate.py is not wired into .pre-commit-config.yaml or make check-all; the opencode.yml author gate has no automated regression check and must be verified by hand | open |  | 2026-09-10T20:58:57.815Z |  |
+| 18 | quick-260910-vh7 | deviation | zizmor.yml |  | unpinned-uses policies {"*": ref-pin} accepts a mutable ref such as @latest, so the pinning audit is blind to that class; deliberately not narrowed in 260910-vh7 | open |  | 2026-09-10T20:58:57.980Z |  |
 
 ````json
 [
@@ -224,6 +226,30 @@ last_updated: 2026-09-10T20:19:37.570Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-10T20:19:37.570Z",
+    "resolved_at": null
+  },
+  {
+    "id": 17,
+    "kind": "deviation",
+    "phase": "quick-260910-vh7",
+    "file": "internal/verify-opencode-gate.py",
+    "line": null,
+    "description": "verify-opencode-gate.py is not wired into .pre-commit-config.yaml or make check-all; the opencode.yml author gate has no automated regression check and must be verified by hand",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-10T20:58:57.815Z",
+    "resolved_at": null
+  },
+  {
+    "id": 18,
+    "kind": "deviation",
+    "phase": "quick-260910-vh7",
+    "file": "zizmor.yml",
+    "line": null,
+    "description": "unpinned-uses policies {\"*\": ref-pin} accepts a mutable ref such as @latest, so the pinning audit is blind to that class; deliberately not narrowed in 260910-vh7",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-10T20:58:57.980Z",
     "resolved_at": null
   }
 ]
