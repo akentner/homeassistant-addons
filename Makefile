@@ -118,14 +118,15 @@ docker-build-check: ## Check Dockerfile correctness without a full build (hadoli
 	@echo "🐳 Checking Dockerfile correctness (no full build required)..."
 	@echo "  Running hadolint (full ruleset, including DL3006 ARG-before-FROM)..."
 	@FAILED=0; \
-	for addon_dir in fritz-callmonitor2mqtt phone-logger meridian; do \
-		if [ -f "$${addon_dir}/Dockerfile" ]; then \
+	for addon_dir in */; do \
+		if [ -f "$${addon_dir}config.yaml" ] && [ -f "$${addon_dir}Dockerfile" ]; then \
+			echo "  Checking $${addon_dir%/}..."; \
 			if ! hadolint \
 				--ignore DL3018 \
 				--ignore DL3059 \
 				--ignore DL4006 \
 				--ignore DL3016 \
-				"$${addon_dir}/Dockerfile"; then \
+				"$${addon_dir}Dockerfile"; then \
 				FAILED=$$((FAILED + 1)); \
 			fi; \
 		fi; \
