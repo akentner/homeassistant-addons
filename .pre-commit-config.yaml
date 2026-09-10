@@ -128,6 +128,33 @@ repos:
         language: system
         always_run: true
         pass_filenames: false
+      # verify-opencode-gate proves the truth table of the job-level `if:` in `.github/workflows/opencode.yml` over
+      # 72 fixture rows. That `if:` is the ONLY control between a drive-by commenter on this PUBLIC repository and an
+      # `opencode` job whose environment holds an API key, so a future edit widening the author clause used to be able
+      # to land unnoticed. Now it goes red at commit time.
+      #
+      # Scoped with `files:` rather than `always_run: true`, on purpose. The verifier reads exactly ONE file, so that
+      # file changing IS the complete trigger set: every edit that widens the gate necessarily touches
+      # `opencode.yml`, so the narrow scope still fails closed for the threat. The verifier itself is in the regex so
+      # that an edit to the guard re-proves it against the live workflow. Deliberate consequence: DELETING the
+      # workflow does not fire the hook, because pre-commit passes no deleted paths — that is correct, since a deleted
+      # workflow cannot be triggered at all and there is nothing left to guard, whereas `always_run: true` would make
+      # the removal unshippable (the verifier exits 2 when the workflow is unreadable) and turn a legitimate deletion
+      # into a permanent red. Cost was NOT the reason — the run takes 0.08 s. The sibling `always_run` hooks
+      # (`validate-versions`, `validate-addon-config`) are always-run because they scan the whole repository for
+      # cross-file invariants; this one does not. CI coverage is unaffected: `make check-all` -> `lint` and
+      # `.github/workflows/lint.yml` both run `pre-commit run --all-files`, which passes every file, so the regex
+      # matches and the hook runs there too.
+      #
+      # `pass_filenames: false` is load bearing, not stylistic: the script's CLI is `--workflow` / `--job` / `--quiet`
+      # with NO positional argument, so a passed path would be an argparse error instead of a check.
+      - id: verify-opencode-gate
+        name: Verify opencode.yml comment-trigger author gate
+        description: Prove the job-level author_association denial in opencode.yml over 72 fixture rows
+        entry: python3 internal/verify-opencode-gate.py --quiet
+        language: system
+        files: ^(\.github/workflows/opencode\.yml|internal/verify-opencode-gate\.py)$
+        pass_filenames: false
       - id: verify-bridge-scaffold
         name: terraform-bridge scaffold verify
         description: Build the Bridge, assert <= 30 MiB image, JSON placeholder, SIGTERM drain, SIGHUP reopen
