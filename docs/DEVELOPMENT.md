@@ -84,6 +84,92 @@ A pre-commit hook automatically validates:
 - Consistency between version entries
 - Compliance with the subpatch format
 
+Versioning is not the whole of it: see `## Security Scanning` below for the two security hooks that also run on every
+commit and in CI.
+
+## Security Scanning
+
+Two security hooks run on every commit and, through `pre-commit run --all-files` in `.github/workflows/lint.yml`, in CI
+as well. Both are also reached by `make check-all` via its `lint` target, so both must stay offline and deterministic.
+
+### What runs
+
+- **`gitleaks`** (pinned `rev: v8.30.1`) scans the **staged diff**, not the working tree, with `--redact` so that a hit
+  never reaches the terminal log or the CI job log. Its allowlists live in `.gitleaks.toml`.
+- **`zizmor`** (pinned `zizmor==1.30.1`) audits workflow and composite-action YAML under `.github/` for security
+  problems `actionlint` does not look for at all: untrusted `${{ }}` interpolation into `run:` blocks, over-broad
+  `permissions:`, mutable action refs, and credential persistence through `actions/checkout`. It carries `--offline` on
+  its hook entry, and not cosmetically: zizmor performs online audits whenever `GH_TOKEN`, `GITHUB_TOKEN` or
+  `ZIZMOR_GITHUB_TOKEN` is set, which would make a `check-all` member environment-dependent.
+
+### What is not covered, and why
+
+**CVEs in the built GHCR images are deliberately out of scope.** This repository contains no upstream application source
+— every Dockerfile downloads its payload at build time — so the vulnerabilities live in the published images, not in the
+working tree. A filesystem scan here would find almost nothing, and an image scan needs a built image plus a
+network-fetched vulnerability database. That disqualifies it as a `check-all` member: see the policy comment above
+`verify-images` in the `Makefile`, which requires every member to be offline, deterministic, and to fail only for
+something in your own working tree.
+
+Also not covered: Go-module vulnerability scanning, SAST, and SBOM generation.
+
+**The secret scanner is a deliberate no-op in CI.** `lint.yml` runs `pre-commit run --all-files`, and nothing is ever
+staged in CI, while the hook scans the staged diff. Git history was instead covered once, by a full-history
+`gitleaks git` scan taken when the hook was introduced: it reported eight findings, all of them synthetic test fixtures
+or planning documents quoting those fixtures, so no credential rotation was required. Those eight findings are the
+entire reason `.gitleaks.toml` exists.
+
+**Detection is narrower than the rule list suggests, so verify rather than assume.** A bare AWS access key id shape
+(`AKIA` followed by sixteen uppercase alphanumerics) was measured as **not** detected by the v8.30.1 default ruleset in
+file or diff scan mode — zero hits in ten random draws — even though the `aws-access-token` rule is present in that
+ruleset and accepted by `--enable-rule`. A GitHub PAT shape (`ghp_` followed by thirty-six alphanumerics) is detected
+ten times out of ten. Whenever the gitleaks pin or `.gitleaks.toml` changes, plant a control secret and confirm the hook
+exits non-zero before trusting a green run.
+
+### The `[extend]` stanza is mandatory
+
+`.gitleaks.toml` begins with:
+
+```toml
+[extend]
+useDefault = true
+```
+
+Do not remove it. A `.gitleaks.toml` carrying only allowlists **replaces** the built-in ruleset instead of extending it:
+every rule silently disappears and the hook keeps reporting `Passed`, on every commit, forever. It is the single most
+dangerous edit that can be made to that file, and it produces no error of any kind.
+
+### Adding an allowlist entry for a legitimate false positive
+
+When a test fixture or a planning document legitimately needs a synthetic credential shape, add a narrow
+**path-and-rule-scoped** `[[allowlists]]` block to `.gitleaks.toml`: exact anchored `paths` regexes plus a `targetRules`
+list naming only the rule ids that actually fire there. A repo-wide `regexes` allowlist is not an option, and neither is
+a bare `^\.planning/` path prefix — planning documents are scanned even though `.prettierignore` excludes them, and a
+real secret pasted into some future planning document must still trip the hook. Fingerprint allowlisting is avoided too:
+a gitleaks fingerprint encodes a line number and goes stale on the next edit above it.
+
+### Why `zizmor.yml` relaxes the pinning audit
+
+`zizmor.yml` at the repository root relaxes exactly one audit, and only in one respect: `unpinned-uses` is configured
+with `policies: {"*": ref-pin}`, so it requires a symbolic ref but not a commit hash. That mirrors this repository's own
+documented policy — see `### Action Pinning` below, which makes floating-major refs deliberate and forbids SHA pins. The
+audit is **not** disabled: a bare `@main` or a missing ref is still an error. If that pinning policy ever changes, this
+relaxation must go with it. Every other audit stays enabled at full severity.
+
+Twenty-seven pre-existing workflow findings — `template-injection` in `_build-template.yml` foremost among them — are
+deferred through per-finding, line-anchored `ignore` entries in `zizmor.yml`, each carrying a comment that marks it a
+deferral rather than a disposition. That keeps the hook red for every **new** finding, which a `--min-severity` floor or
+an `|| true` wrapper would not do. Those entries match on the **basename** of the workflow file, not on its path. Being
+line-anchored, they go stale when a workflow shifts lines: the finding reappears and the hook goes red. That is
+deliberately fail-closed, so a stale suppression forces a re-triage instead of being carried along silently. The fixes
+are tracked in the open Phase 8 "CI/CD Hardening" work.
+
+### Highest-value follow-up
+
+A scheduled scan of the nine published GHCR images with results uploaded into GitHub Code Scanning. That is where the
+CVEs actually are, and Code Scanning is the right home for findings nobody can fix inside a pre-commit hook. It belongs
+to the open Phase 8 "CI/CD Hardening" work, not to the local hook set.
+
 ## GitHub Actions Reusable Build Workflows
 
 Builds run through a local reusable workflow. The template `.github/workflows/_build-template.yml` defines a single job
