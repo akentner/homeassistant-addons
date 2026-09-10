@@ -23,6 +23,7 @@ insertions
 
 - `.planning/milestones/v1.0-ROADMAP.md`
 - `.planning/milestones/v1.0-REQUIREMENTS.md`
+- `.planning/milestones/v1.0-phases/`
 
 ---
 

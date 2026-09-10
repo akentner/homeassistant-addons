@@ -14,6 +14,10 @@
 !.claude/hooks/
 !.claude/commands/
 
+# GSD transient runtime state (dispatch sentinel, milestone lock)
+.gsd/
+.planning/milestone.lock
+
 # AI agent state (skill installations, agent memory, run-continuation)
 .agents/
 .omo/
