@@ -231,7 +231,9 @@ release: ## Bump, validate, tag and push a release (usage: make release ADDON=au
 		echo "⚠️  'gh' CLI not found — GitHub Release must be created manually:"; \
 		echo "   gh release create $$TAG --generate-notes"; \
 	fi; \
-	echo "✅ Release $$TAG complete. The build workflow for $(ADDON) will pick it up on the tag push."
+	echo "✅ Release $$TAG complete. The tag is a release marker — pushing it builds nothing."; \
+	echo "   The image is built when you push the version-bump commit (build.yml paths trigger),"; \
+	echo "   or immediately with: gh workflow run build.yml -f addons=$(ADDON)"
 
 install-provider: ## Build and install terraform-provider-homeassistant for OpenTofu dev_overrides (usage: make install-provider [DESTDIR=/tmp/foo])
 	@if [ ! -f "terraform-provider-homeassistant/build.yaml" ]; then \

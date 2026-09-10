@@ -159,9 +159,10 @@ not practical.
   `_build-template.yml` once per add-on and arch leg), which fires on a `push` to `main` touching anything inside an
   add-on directory (`paths: "*/**"` minus the non-add-on directories) — so a change to `run.sh`, a `*.py` helper or a Go
   source file rebuilds the image, not just a manifest edit. Pushing the tag builds nothing. Without a pushed version
-  bump the HA store sees the new version but the image at `ghcr.io` does not exist → 404. A pre-push hook enforces that
-  any bumped version has a matching tag, except for the add-ons on the `LOCAL_BUILD_ADDONS` allowlist in
-  `internal/check-version-tags.sh` — those are built locally by the Supervisor and never pulled from `ghcr.io`.
+  bump the HA store sees the new version but the image at `ghcr.io` does not exist → 404. A pre-push hook reports, but
+  does not block, a bumped version with no matching tag; add-ons on the `LOCAL_BUILD_ADDONS` allowlist in
+  `internal/check-version-tags.sh` are skipped entirely — those are built locally by the Supervisor and never pulled
+  from `ghcr.io`.
 - **Auto-update for upstream wrappers** — add-ons that wrap an upstream project carry a `.upstream.yaml` and participate
   in the daily `Auto Update` GitHub Actions workflow. The workflow bumps `build.yaml` and `config.yaml` to the latest
   upstream release and adds the release notes to `CHANGELOG.md`.
