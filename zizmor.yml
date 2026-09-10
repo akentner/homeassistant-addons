@@ -1,0 +1,91 @@
+# zizmor configuration — GitHub Actions security audit.
+#
+# Consumed by the `zizmor` pre-commit hook (pinned `zizmor==1.30.1` in `.pre-commit-config.yaml`)
+# and therefore also by `make check-all` -> `lint` and by `.github/workflows/lint.yml`.
+# See docs/DEVELOPMENT.md, section `## Security Scanning`.
+#
+# Ignore entries below match on the BASENAME of the workflow file, not on its path: a
+# `.github/workflows/build.yml:198:11` entry is silently ignored, while `build.yml:198:11` matches.
+# Verified empirically against 1.30.1; do not "fix" these into full paths.
+
+rules:
+  # This repository pins actions to floating-major SYMBOLIC refs (@v7, @v4, @v6) and deliberately
+  # never to commit SHAs, so that Renovate keeps raising major bumps and dependency drift stays
+  # visible. See docs/DEVELOPMENT.md, section `### Action Pinning` (lines 174-188) — that policy is
+  # the entire justification for this relaxation. `ref-pin` still requires SOME symbolic pin, so a
+  # bare `@main` or a missing ref remains an error; only the hash-pin requirement is dropped. This
+  # is deliberately NOT `unpinned-uses: disable: true`. If the pinning policy changes, this goes.
+  unpinned-uses:
+    config:
+      policies:
+        "*": ref-pin
+
+  # ----------------------------------------------------------------------------------------------
+  # DEFERRALS — 27 pre-existing findings, 25 entries (two locations are each reported twice).
+  #
+  # These are deferrals, NOT dispositions: nobody has decided any of them is acceptable. They exist
+  # so the hook stays RED for every NEW finding while the existing ones are fixed separately, which
+  # a `--min-severity` floor, a persona downgrade, a severity remap or an `|| true` wrapper would
+  # not do — those silence the future along with the present. Fixes are tracked in the open Phase 8
+  # "CI/CD Hardening" work; the findings are recorded verbatim in
+  # .planning/quick/260910-u0m-enable-security-scanning-in-pre-commit-g/260910-u0m-SUMMARY.md.
+  #
+  # Entries are line- and column-anchored on purpose. When a workflow shifts lines the entry goes
+  # stale, the finding reappears and the hook goes red. That is fail-closed and intended: it forces
+  # a re-triage instead of quietly carrying a suppression that no longer points at anything.
+  # ----------------------------------------------------------------------------------------------
+
+  # DEFERRED (help): `curl | bash`-style ad-hoc package installation inside a run block.
+  adhoc-packages:
+    ignore:
+      - lint.yml:58:11
+
+  # DEFERRED (help): actions/checkout leaves the credential in .git/config because
+  # `persist-credentials: false` is not set. Eight checkout steps, one per workflow.
+  artipacked:
+    ignore:
+      - _build-template.yml:70:9
+      - auto-update.yml:51:9
+      - base-image-update.yml:35:9
+      - build.yml:61:9
+      - lint.yml:22:9
+      - test-install-provider.yml:28:9
+      - test-terraform-provider.yml:24:9
+      - verify-image-availability.yml:48:9
+
+  # DEFERRED (error): setup-go caching on a tag-publishing workflow — runtime artifacts reachable
+  # by a cache-poisoning attack.
+  cache-poisoning:
+    ignore:
+      - test-terraform-provider.yml:28:9
+
+  # DEFERRED (warning): workflow- and job-level `permissions:` broader than the job needs, plus one
+  # workflow with no `permissions:` block at all (inheriting the repository default).
+  excessive-permissions:
+    ignore:
+      - lint.yml:1:1
+      - lint.yml:16:3
+      - lint.yml:160:3
+      - test-install-provider.yml:19:3
+      - test-terraform-provider.yml:14:3
+
+  # DEFERRED (help): an explicit `repository:` where GitHub's self-repository syntax applies.
+  self-repository:
+    ignore:
+      - build.yml:198:11
+
+  # DEFERRED (error/warning): `${{ inputs.* }}` and `${{ matrix.arch }}` interpolated straight into
+  # `run:` blocks in the reusable build template — 11 findings at 9 distinct locations
+  # (83:51 and 90:51 are each reported twice). This is the highest-severity group here and the one
+  # the follow-up should take first.
+  template-injection:
+    ignore:
+      - _build-template.yml:77:50
+      - _build-template.yml:81:52
+      - _build-template.yml:83:51
+      - _build-template.yml:83:82
+      - _build-template.yml:87:59
+      - _build-template.yml:90:51
+      - _build-template.yml:94:46
+      - _build-template.yml:98:46
+      - _build-template.yml:116:37

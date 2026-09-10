@@ -89,6 +89,24 @@ repos:
     hooks:
       - id: gitleaks
 
+  # zizmor audits workflow and composite-action YAML for security issues actionlint does not look
+  # for at all: untrusted `${{ }}` interpolation into `run:` blocks, over-broad `permissions:`, and
+  # mutable action refs. It is a `repo: local` hook because upstream publishes no
+  # `.pre-commit-hooks.yaml`, not by preference. `--offline` is mandatory, not cosmetic: zizmor runs
+  # online audits whenever GH_TOKEN / GITHUB_TOKEN / ZIZMOR_GITHUB_TOKEN is set, and this hook is
+  # reached by `make check-all` -> `lint`, whose members must all be offline and deterministic
+  # (see the policy comment in the Makefile above `verify-images`). Pre-existing findings are
+  # deferred per-finding in `zizmor.yml`; the hook stays red for any NEW one.
+  - repo: local
+    hooks:
+      - id: zizmor
+        name: Audit GitHub Actions workflows (zizmor)
+        description: Static security audit of workflow and composite-action YAML
+        entry: zizmor --offline
+        language: python
+        additional_dependencies: ["zizmor==1.30.1"]
+        files: ^\.github/(workflows/.+\.ya?ml|actions/.+/action\.ya?ml)$
+
   # Custom validation hooks
   - repo: local
     hooks:
