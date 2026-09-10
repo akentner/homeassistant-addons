@@ -6,9 +6,9 @@ current_phase: 17
 current_phase_name: Git Integration + Apply Job System
 current_plan: 7
 status: Ready to plan
-stopped_at: Completed quick task 260910-vh7 (opencode.yml author gate + immutable action pin)
-last_updated: "2026-09-10T20:58:48.103Z"
-state_head: 73898a40186e5e1cf771bfa2b4fb3406e368a8c4
+stopped_at: Completed quick task 260910-vyh (opencode gate pre-commit hook + docker-build-check coverage + add-on definition comments)
+last_updated: "2026-09-10T21:28:13.316Z"
+state_head: 1423b3c8f4e7144eec78ce27b9a2a4a3e737309d
 progress:
   total_phases: 7
   completed_phases: 2
@@ -360,6 +360,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260909-rll | Stop tagging the pre-bump commit (--no-tag) and serialize both bump workflows with a shared concurrency group; correct update-version.py's false tag-triggers-a-build prose | 2026-09-09 | ce932fa | .planning/quick/stage-4-depends-on-stage-1-same-workflow-files-fix-the-tag-o |
 | 260910-u0m | Security scanning in pre-commit: gitleaks (staged-diff secret scan, proven to fail on a planted control) + offline zizmor GitHub Actions audit with 27 per-finding deferrals; docker-build-check widened from 3 hardcoded names to 9 discovered add-ons | 2026-09-10 | 6b678c9 | .planning/quick/260910-u0m-enable-security-scanning-in-pre-commit-g |
 | 260910-vh7 | Harden opencode.yml: gate the comment trigger on author_association (OWNER/MEMBER/COLLABORATOR; CONTRIBUTOR denied because renovate[bot] reports it) and pin anomalyco/opencode/github from mutable @latest to @v1.18.30; truth-table verifier proves the gate over 72 rows | 2026-09-10 | 73898a4 | .planning/quick/260910-vh7-harden-opencode-yml-gate-the-comment-tri |
+| 260910-vyh | Wire the opencode gate verifier into pre-commit (now red at commit time on a widened author clause), lint tools/test-addon/Dockerfile in docker-build-check (9 -> 10), and name the two deliberate add-on definitions at all four discovery sites | 2026-09-10 | 1423b3c | .planning/quick/260910-vyh-close-the-docker-build-check-coverage-ga |
 | 260909-wgm    | Pre-push release-tag check: advisory instead of blocking, rationale corrected                 | 2026-09-09 | 2ba51a2 | [quick/260909-wgm-rework-internal-check-version-tags-sh-so](./quick/260909-wgm-rework-internal-check-version-tags-sh-so/) |
 | 260910-0og    | Apply the eleven 260909-rlm verification findings so RELEASE.md and AUTO_UPDATE_GUIDE.md are true      | 2026-09-10 | 176de25 | [quick/260910-0og-apply-the-eleven-260909-rlm-verification](./quick/260910-0og-apply-the-eleven-260909-rlm-verification/) |
 | 260909-rln    | Replace the nine per-add-on build workflows with one build.yml (batch 260909-rli, stage 6)     | 2026-09-10 | c560b5e | [quick/stage-6-depends-on-stage-1-it-rewrites-internal-dispatch-bui](./quick/stage-6-depends-on-stage-1-it-rewrites-internal-dispatch-bui/) |
@@ -370,9 +371,9 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 
 **Resume file:** None
 
-**Stopped at:** Completed quick task 260910-vh7 (opencode.yml author gate + immutable action pin)
+**Stopped at:** Completed quick task 260910-vyh (opencode gate pre-commit hook + docker-build-check coverage + add-on definition comments)
 
-Last session: 2026-09-10T20:58:47.899Z
+Last session: 2026-09-10T21:28:11.845Z
 
 ---
 
@@ -435,3 +436,6 @@ skipped; Phase 16 ready to plan_
 - [Phase 17]: quick-260910-vh7: opencode.yml job if: ANDs author_association in {OWNER,MEMBER,COLLABORATOR} with the body clause; CONTRIBUTOR denied because renovate[bot] already reports CONTRIBUTOR on this repo
 - [Phase 17]: quick-260910-vh7: anomalyco/opencode/github pinned to the exact tag @v1.18.30 as a documented exception to the floating-major policy - upstream publishes no major tag (v1 and v1.18 both 404)
 - [Phase 17]: quick-260910-vh7: internal/verify-opencode-gate.py proves the gate truth table from the live file and is deliberately NOT wired into pre-commit or make check-all - named deferral, promotion is an open follow-up
+- [Phase 17]: verify-opencode-gate is files:-scoped to opencode.yml + the verifier, not always_run — a workflow deletion deliberately does not fire it
+- [Phase 17]: docker-build-check hadolint discovery widened via the */ tools/*/ glob, not a find port, to preserve the trailing-slash concatenation contract
+- [Phase 17]: The repo has two deliberate add-on definitions (is a shipped add-on vs must pass validation/linting); all four discovery sites now name theirs — do not unify

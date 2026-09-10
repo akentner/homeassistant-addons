@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 14
+open_count: 15
 waived_count: 0
 fixed_count: 4
-total_count: 18
-last_updated: 2026-09-10T20:58:57.980Z
+total_count: 19
+last_updated: 2026-09-10T21:26:35.494Z
 ---
 
 # Broken Windows Ledger
@@ -33,6 +33,7 @@ last_updated: 2026-09-10T20:58:57.980Z
 | 16 | quick-260910-u0m | deviation | docs/DEVELOPMENT.md |  | gitleaks v8.30.1 default ruleset does not flag a bare AKIA access-key-id shape in file/diff mode (0/10 draws); re-verify controls on any pin bump | open |  | 2026-09-10T20:19:37.570Z |  |
 | 17 | quick-260910-vh7 | deviation | internal/verify-opencode-gate.py |  | verify-opencode-gate.py is not wired into .pre-commit-config.yaml or make check-all; the opencode.yml author gate has no automated regression check and must be verified by hand | open |  | 2026-09-10T20:58:57.815Z |  |
 | 18 | quick-260910-vh7 | deviation | zizmor.yml |  | unpinned-uses policies {"*": ref-pin} accepts a mutable ref such as @latest, so the pinning audit is blind to that class; deliberately not narrowed in 260910-vh7 | open |  | 2026-09-10T20:58:57.980Z |  |
+| 19 | quick-260910-vyh | deviation | Makefile |  | PLAN gate asserted 'make docker-build-check' exits 1; GNU Make 4.4.1 exits 2 for any failed recipe (measured 2 at HEAD 2406621 too). Replaced with a differential assertion (exit code equal to the HEAD-baseline Makefile) plus the finding-set diff. No code change needed. | open |  | 2026-09-10T21:26:35.494Z |  |
 
 ````json
 [
@@ -250,6 +251,18 @@ last_updated: 2026-09-10T20:58:57.980Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-10T20:58:57.980Z",
+    "resolved_at": null
+  },
+  {
+    "id": 19,
+    "kind": "deviation",
+    "phase": "quick-260910-vyh",
+    "file": "Makefile",
+    "line": null,
+    "description": "PLAN gate asserted 'make docker-build-check' exits 1; GNU Make 4.4.1 exits 2 for any failed recipe (measured 2 at HEAD 2406621 too). Replaced with a differential assertion (exit code equal to the HEAD-baseline Makefile) plus the finding-set diff. No code change needed.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-10T21:26:35.494Z",
     "resolved_at": null
   }
 ]
