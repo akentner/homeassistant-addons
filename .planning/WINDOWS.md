@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 10
+open_count: 8
 waived_count: 0
-fixed_count: 2
+fixed_count: 4
 total_count: 12
-last_updated: 2026-09-10T18:32:53.178Z
+last_updated: 2026-09-10T19:24:43.304Z
 ---
 
 # Broken Windows Ledger
@@ -25,8 +25,8 @@ last_updated: 2026-09-10T18:32:53.178Z
 | 8 | quick-260909-rlk | unrun-verify | .github/workflows/verify-image-availability.yml | 1 | The if: failure() HA-webhook leg has never executed. Run 34402464619 (workflow_dispatch, grace-minutes=0) was GREEN, so the notify step was correctly skipped: self-test, scan and checkout all succeeded. Proving the notify leg needs a genuinely red run, which requires a config.yaml version with no published image on the default branch - deliberately not manufactured. Everything else in the workflow is exercised: the self-test runs as its own step before the scan and passes all three probe directions. | open |  | 2026-09-09T20:41:32.937Z |  |
 | 9 | quick-260909-rll | deviation | .planning/quick/stage-4-depends-on-stage-1-same-workflow-files-fix-the-tag-o/260909-rll-PLAN.md | 191 | The GATE-T1-14 supersession leaves a 9-line unpinned window (auto-update.yml 115-123) where only one line is the intended edit. A verifier's mutation probe injected shell code between the AUTO-02 and --check-release anchors and ALL replacement gates (GATE-T1-A..F) stayed green, while rlj's original whole-loop sha256 caught it. The shipped workflow is correct - this is a gap in the verification apparatus for future re-runs, not in the delivered code. Free fix: end Region A at the --check-release comment INCLUSIVE, leaving only comment text unpinned. Lesson: recomputing a hash proves a pin is correct; only mutation proves it catches. | open |  | 2026-09-09T20:55:30.424Z |  |
 | 10 | quick-260909-rli | lint-warning | .github/workflows/auto-update.yml | 114 | auto-update.yml prepends upstream release notes to <addon>/CHANGELOG.md and runs 'npx prettier --write' on it with the stated intent 'so lint.yml does not reject the commit' - but prettier does not fix bare URLs and markdownlint (MD034/no-bare-urls) is what rejects them. Measured: the 2026-09-09 authentik 2026.8.2 bump produced authentik/CHANGELOG.md:1 with a bare URL and 'make lint' exit 1. The previous entry (2026.8.1) already carried the URL wrapped in <>, so this has been hand-fixed before and recurs on every authentik release. It went unnoticed because GITHUB_TOKEN pushes trigger neither the build workflows (fixed by 260909-rlj) nor lint.yml (still open). Fix: pipe the release body through a bare-URL wrapper, or run markdownlint --fix on the changelog, before committing. | open |  | 2026-09-09T21:04:47.128Z |  |
-| 11 | quick-260909-rln | unmet-truth | Makefile | 234 | make release prints 'the build workflow will pick it up on the tag push'; after 260909-rln removed every tags: trigger this is false — the bump commit's build.yml run publishes the image | open |  | 2026-09-10T18:32:47.209Z |  |
-| 12 | quick-260909-rln | unmet-truth | README.md | 161 | README says the pre-push hook 'enforces' a matching tag; 260909-wgm made internal/check-version-tags.sh advisory (it never fails a push). Plan 260909-rln item 2 mandated keeping the rest of that bullet intact, so it was not changed here | open |  | 2026-09-10T18:32:53.178Z |  |
+| 11 | quick-260909-rln | unmet-truth | Makefile | 234 | make release prints 'the build workflow will pick it up on the tag push'; after 260909-rln removed every tags: trigger this is false — the bump commit's build.yml run publishes the image | fixed |  | 2026-09-10T18:32:47.209Z | 2026-09-10T19:24:43.131Z |
+| 12 | quick-260909-rln | unmet-truth | README.md | 161 | README says the pre-push hook 'enforces' a matching tag; 260909-wgm made internal/check-version-tags.sh advisory (it never fails a push). Plan 260909-rln item 2 mandated keeping the rest of that bullet intact, so it was not changed here | fixed |  | 2026-09-10T18:32:53.178Z | 2026-09-10T19:24:43.304Z |
 
 ````json
 [
@@ -157,10 +157,10 @@ last_updated: 2026-09-10T18:32:53.178Z
     "file": "Makefile",
     "line": 234,
     "description": "make release prints 'the build workflow will pick it up on the tag push'; after 260909-rln removed every tags: trigger this is false — the bump commit's build.yml run publishes the image",
-    "status": "open",
+    "status": "fixed",
     "reason": "",
     "recorded_at": "2026-09-10T18:32:47.209Z",
-    "resolved_at": null
+    "resolved_at": "2026-09-10T19:24:43.131Z"
   },
   {
     "id": 12,
@@ -169,10 +169,10 @@ last_updated: 2026-09-10T18:32:53.178Z
     "file": "README.md",
     "line": 161,
     "description": "README says the pre-push hook 'enforces' a matching tag; 260909-wgm made internal/check-version-tags.sh advisory (it never fails a push). Plan 260909-rln item 2 mandated keeping the rest of that bullet intact, so it was not changed here",
-    "status": "open",
+    "status": "fixed",
     "reason": "",
     "recorded_at": "2026-09-10T18:32:53.178Z",
-    "resolved_at": null
+    "resolved_at": "2026-09-10T19:24:43.304Z"
   }
 ]
 ````
