@@ -6,9 +6,9 @@ current_phase: 17
 current_phase_name: Git Integration + Apply Job System
 current_plan: 7
 status: Ready to plan
-stopped_at: "Completed 17-07-PLAN.md (Phase 17 code-complete: 8/8 plans)"
-last_updated: "2026-09-08T20:33:37.811Z"
-state_head: 1bcdd9aeb7b5418decca114a6dda29aafed9937a
+stopped_at: Completed quick task 260910-u0m (security scanning in pre-commit)
+last_updated: "2026-09-10T20:19:06.247Z"
+state_head: 6b678c959a148e740a26deca35492e6abf746fbe
 progress:
   total_phases: 7
   completed_phases: 2
@@ -335,6 +335,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | Phase 17 P06 | 19 min   | 3 tasks | 8 files |
 | Phase 17 P08 | 10 min   | 3 tasks | 7 files |
 | Phase 17 P07 | 25 min   | 4 tasks | 8 files |
+| Phase quick-260910-u0m P01 | 18min | 3 tasks | 5 files |
 
 ## Quick Tasks Completed
 
@@ -356,6 +357,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260909-rlj | Dispatch builds after automated version bumps (GITHUB_TOKEN pushes trigger no workflows) + BUILD_DATE fallback for dispatch-triggered runs | 2026-09-09 | 6fbe7a4 | .planning/quick/stage-1-2-urgent-land-first-one-commit-make-automated-versio |
 | 260909-rlk | Image-availability guard: internal/verify-image-availability.sh + 4x-daily scheduled workflow, proving the Supervisor pull invariant with a three-way ghcr probe and two anti-silent-pass safeguards | 2026-09-09 | a2b66fc | .planning/quick/stage-3-add-a-ci-guard-that-turns-the-silent-live-breaking-i |
 | 260909-rll | Stop tagging the pre-bump commit (--no-tag) and serialize both bump workflows with a shared concurrency group; correct update-version.py's false tag-triggers-a-build prose | 2026-09-09 | ce932fa | .planning/quick/stage-4-depends-on-stage-1-same-workflow-files-fix-the-tag-o |
+| 260910-u0m | Security scanning in pre-commit: gitleaks (staged-diff secret scan, proven to fail on a planted control) + offline zizmor GitHub Actions audit with 27 per-finding deferrals; docker-build-check widened from 3 hardcoded names to 9 discovered add-ons | 2026-09-10 | 6b678c9 | .planning/quick/260910-u0m-enable-security-scanning-in-pre-commit-g |
 | 260909-wgm    | Pre-push release-tag check: advisory instead of blocking, rationale corrected                 | 2026-09-09 | 2ba51a2 | [quick/260909-wgm-rework-internal-check-version-tags-sh-so](./quick/260909-wgm-rework-internal-check-version-tags-sh-so/) |
 | 260910-0og    | Apply the eleven 260909-rlm verification findings so RELEASE.md and AUTO_UPDATE_GUIDE.md are true      | 2026-09-10 | 176de25 | [quick/260910-0og-apply-the-eleven-260909-rlm-verification](./quick/260910-0og-apply-the-eleven-260909-rlm-verification/) |
 | 260909-rln    | Replace the nine per-add-on build workflows with one build.yml (batch 260909-rli, stage 6)     | 2026-09-10 | c560b5e | [quick/stage-6-depends-on-stage-1-it-rewrites-internal-dispatch-bui](./quick/stage-6-depends-on-stage-1-it-rewrites-internal-dispatch-bui/) |
@@ -366,9 +368,9 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 
 **Resume file:** None
 
-**Stopped at:** Completed 17-07-PLAN.md (Phase 17 code-complete: 8/8 plans)
+**Stopped at:** Completed quick task 260910-u0m (security scanning in pre-commit)
 
-Last session: 2026-09-08T12:37:49.668Z DOCS.md + README + pre-commit config) Resume file: None
+Last session: 2026-09-10T20:19:04.745Z
 
 ---
 
@@ -426,3 +428,5 @@ skipped; Phase 16 ready to plan_
   attributes the export to 17-07 but no Phase 17 requirement covers it and nothing in the repo implements it.
   Credential-env minimality is therefore trivially satisfied (empty); designing which variables to project belongs to
   Phase 19 SC-3's three-backend matrix.
+- [quick-260910-u0m]: Security scanning: gitleaks v8.30.1 + zizmor 1.30.1 as offline pre-commit hooks; both shipped with planted controls proving non-zero exit
+- [quick-260910-u0m]: gitleaks v8.30.1 does NOT detect a bare AKIA access-key-id shape in file/diff mode (0/10 draws); ghp_ shape used as the control instead (10/10)

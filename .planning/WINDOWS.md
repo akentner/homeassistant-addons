@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 8
+open_count: 12
 waived_count: 0
 fixed_count: 4
-total_count: 12
-last_updated: 2026-09-10T19:24:43.304Z
+total_count: 16
+last_updated: 2026-09-10T20:19:37.570Z
 ---
 
 # Broken Windows Ledger
@@ -27,6 +27,10 @@ last_updated: 2026-09-10T19:24:43.304Z
 | 10 | quick-260909-rli | lint-warning | .github/workflows/auto-update.yml | 114 | auto-update.yml prepends upstream release notes to <addon>/CHANGELOG.md and runs 'npx prettier --write' on it with the stated intent 'so lint.yml does not reject the commit' - but prettier does not fix bare URLs and markdownlint (MD034/no-bare-urls) is what rejects them. Measured: the 2026-09-09 authentik 2026.8.2 bump produced authentik/CHANGELOG.md:1 with a bare URL and 'make lint' exit 1. The previous entry (2026.8.1) already carried the URL wrapped in <>, so this has been hand-fixed before and recurs on every authentik release. It went unnoticed because GITHUB_TOKEN pushes trigger neither the build workflows (fixed by 260909-rlj) nor lint.yml (still open). Fix: pipe the release body through a bare-URL wrapper, or run markdownlint --fix on the changelog, before committing. | open |  | 2026-09-09T21:04:47.128Z |  |
 | 11 | quick-260909-rln | unmet-truth | Makefile | 234 | make release prints 'the build workflow will pick it up on the tag push'; after 260909-rln removed every tags: trigger this is false — the bump commit's build.yml run publishes the image | fixed |  | 2026-09-10T18:32:47.209Z | 2026-09-10T19:24:43.131Z |
 | 12 | quick-260909-rln | unmet-truth | README.md | 161 | README says the pre-push hook 'enforces' a matching tag; 260909-wgm made internal/check-version-tags.sh advisory (it never fails a push). Plan 260909-rln item 2 mandated keeping the rest of that bullet intact, so it was not changed here | fixed |  | 2026-09-10T18:32:53.178Z | 2026-09-10T19:24:43.304Z |
+| 13 | quick-260910-u0m | lint-warning | authentik/Dockerfile | 15 | hadolint DL3008 (pin apt-get versions) surfaced by the widened docker-build-check; not suppressed, not fixed (D-09) | open |  | 2026-09-10T20:19:37.063Z |  |
+| 14 | quick-260910-u0m | deviation | zizmor.yml |  | 27 pre-existing zizmor findings deferred via 25 line-anchored ignore entries; 11 are template-injection in _build-template.yml. Fixes belong to Phase 8 CI/CD Hardening | open |  | 2026-09-10T20:19:37.232Z |  |
+| 15 | quick-260910-u0m | deviation | Makefile |  | tools/test-addon has config.yaml+Dockerfile but is invisible to docker-build-check and validate-addons (depth-2); validate-versions.sh does see it. Repo has two disagreeing definitions of add-on | open |  | 2026-09-10T20:19:37.399Z |  |
+| 16 | quick-260910-u0m | deviation | docs/DEVELOPMENT.md |  | gitleaks v8.30.1 default ruleset does not flag a bare AKIA access-key-id shape in file/diff mode (0/10 draws); re-verify controls on any pin bump | open |  | 2026-09-10T20:19:37.570Z |  |
 
 ````json
 [
@@ -173,6 +177,54 @@ last_updated: 2026-09-10T19:24:43.304Z
     "reason": "",
     "recorded_at": "2026-09-10T18:32:53.178Z",
     "resolved_at": "2026-09-10T19:24:43.304Z"
+  },
+  {
+    "id": 13,
+    "kind": "lint-warning",
+    "phase": "quick-260910-u0m",
+    "file": "authentik/Dockerfile",
+    "line": 15,
+    "description": "hadolint DL3008 (pin apt-get versions) surfaced by the widened docker-build-check; not suppressed, not fixed (D-09)",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-10T20:19:37.063Z",
+    "resolved_at": null
+  },
+  {
+    "id": 14,
+    "kind": "deviation",
+    "phase": "quick-260910-u0m",
+    "file": "zizmor.yml",
+    "line": null,
+    "description": "27 pre-existing zizmor findings deferred via 25 line-anchored ignore entries; 11 are template-injection in _build-template.yml. Fixes belong to Phase 8 CI/CD Hardening",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-10T20:19:37.232Z",
+    "resolved_at": null
+  },
+  {
+    "id": 15,
+    "kind": "deviation",
+    "phase": "quick-260910-u0m",
+    "file": "Makefile",
+    "line": null,
+    "description": "tools/test-addon has config.yaml+Dockerfile but is invisible to docker-build-check and validate-addons (depth-2); validate-versions.sh does see it. Repo has two disagreeing definitions of add-on",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-10T20:19:37.399Z",
+    "resolved_at": null
+  },
+  {
+    "id": 16,
+    "kind": "deviation",
+    "phase": "quick-260910-u0m",
+    "file": "docs/DEVELOPMENT.md",
+    "line": null,
+    "description": "gitleaks v8.30.1 default ruleset does not flag a bare AKIA access-key-id shape in file/diff mode (0/10 draws); re-verify controls on any pin bump",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-10T20:19:37.570Z",
+    "resolved_at": null
   }
 ]
 ````
