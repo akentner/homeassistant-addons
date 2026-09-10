@@ -99,8 +99,9 @@ workflow run list, or subscribe to GitHub's own failed-run notifications.
 
 The build dispatch described below adds two more outcomes:
 
-- a changed directory with no `.github/workflows/build-<addon>.yml` is reported as a warning and does **not** fail the
-  run — usually it is not an add-on directory at all;
+- a changed directory that is not an add-on directory — no `config.yaml` + `build.yaml` + `Dockerfile` triple — is
+  reported as a warning and does **not** fail the run; that is the common case, because a bump commit also touches
+  non-add-on paths;
 - a dispatch that fails makes the run red, because the version bump is already on `main` at that point.
 
 ## 🎯 Manual Control
@@ -122,15 +123,17 @@ make update-version ADDON=meridian VERSION=1.62.7
 ## 🔑 Why the workflow dispatches its own builds
 
 The workflow pushes to `main` using the default `GITHUB_TOKEN`, and GitHub creates **no** workflow runs for an event
-produced by that token. Every `.github/workflows/build-<addon>.yml` triggers on a `push` to `main` filtered by
-`paths: <addon>/**`, so none of them ever fires for an automated bump. Left at that, an automated update publishes a
-manifest advertising a version whose image was never built.
+produced by that token. `build.yml` triggers on a `push` to `main` filtered by `paths: **/config.*`, `**/build.*`,
+`**/Dockerfile`, so its filter never fires for an automated bump. Left at that, an automated update publishes a manifest
+advertising a version whose image was never built.
 
 `workflow_dispatch` is the documented exception: a dispatch event created with `GITHUB_TOKEN` does produce a run
 (<https://docs.github.com/actions/using-workflows/triggering-a-workflow>). So the workflow calls
 `internal/dispatch-builds.sh` immediately after its `git push` (`auto-update.yml:167`). The script derives the changed
 add-on directories from `git diff --name-only "$BASE_SHA"..HEAD` — `BASE_SHA` being the pre-bump `HEAD` captured at the
-start of the step (`auto-update.yml:77`) — and issues one `gh workflow run build-<addon>.yml --ref <ref>` per add-on.
+start of the step (`auto-update.yml:77`) — and issues exactly **one** dispatch,
+`gh workflow run build.yml --ref <ref> -f addons=<comma list>`, carrying every changed add-on in a single call. An
+_empty_ `addons` value would mean "build every add-on", so the script never dispatches when no candidate qualifies.
 
 Creating a dispatch requires the `actions: write` permission, which the job requests explicitly (`auto-update.yml:49`).
 `base-image-update.yml:33` requests the same scope for the same reason; no other workflow in this repository does.
@@ -188,9 +191,9 @@ behaviour; recording the `auto` value instead would change nothing, because noth
      version_strip: "^v"
    ```
 
-3. **Add a build workflow.** Create `.github/workflows/build-<addon>.yml` alongside the existing callers. Discovery
-   alone is not enough: without that file the dispatch step skips the add-on with a warning and no image is ever built,
-   even though the version bump lands on `main`.
+3. **No build workflow to add.** `build.yml` picks the add-on up from its manifests, so the only requirement is the
+   `config.yaml` + `build.yaml` + `Dockerfile` triple every add-on has anyway. Miss one of the three and the dispatch
+   step skips the directory with a warning; get all three right and there is no CI file to touch at all.
 
 4. **Done.** The next daily run picks the directory up — no workflow edit required.
 
@@ -220,10 +223,10 @@ are alternatives, not active configuration.
 
 ### Webhook Integration
 
-`auto-update.yml` sends no webhook itself. The Home Assistant notification is sent by the build workflows: the reusable
-`_build-template.yml` calls `.github/scripts/notify-ha.sh`, which is documented in `docs/WEBHOOK_SETUP.md`. Because the
-dispatch step now makes those builds fire for automated bumps too, an automated update does reach that notification
-path.
+`auto-update.yml` sends no webhook itself. The Home Assistant notification is sent by the build: `build.yml` calls the
+reusable `_build-template.yml`, which calls `.github/scripts/notify-ha.sh`, documented in `docs/WEBHOOK_SETUP.md`.
+Because the dispatch step now makes that build fire for automated bumps too, an automated update does reach that
+notification path.
 
 ## ✅ Benefits
 

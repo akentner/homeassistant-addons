@@ -155,11 +155,12 @@ not practical.
 - **Three-file versioning scheme** — every add-on keeps `config.yaml` (with subpatch `X.Y.Z-N`), `build.yaml` (no
   subpatch, just `X.Y.Z`), and README badges (base `vX.Y.Z`) in sync. Use `make update-version ADDON=foo VERSION=1.2.3`
   to bump; manual edits will fail the `validate-versions.sh` pre-commit hook. The script **also creates and pushes the
-  `<addon>/v<version>` git tag**. Images are built by the per-add-on workflows (`build-<addon>.yml`, each calling the
-  reusable `_build-template.yml`), which fire on a `push` to `main` touching `<addon>/**`. Without a pushed version bump
-  the HA store sees the new version but the image at `ghcr.io` does not exist → 404. A pre-push hook enforces that any
-  bumped version has a matching tag, except for the add-ons on the `LOCAL_BUILD_ADDONS` allowlist in
-  `internal/check-version-tags.sh` — those are built locally by the Supervisor and never pulled from `ghcr.io`.
+  `<addon>/v<version>` git tag**. Images are built by one workflow, `build.yml` (calling the reusable
+  `_build-template.yml` once per add-on and arch leg), which fires on a `push` to `main` touching `**/config.*`,
+  `**/build.*` or `**/Dockerfile` — pushing the tag builds nothing. Without a pushed version bump the HA store sees the
+  new version but the image at `ghcr.io` does not exist → 404. A pre-push hook enforces that any bumped version has a
+  matching tag, except for the add-ons on the `LOCAL_BUILD_ADDONS` allowlist in `internal/check-version-tags.sh` — those
+  are built locally by the Supervisor and never pulled from `ghcr.io`.
 - **Auto-update for upstream wrappers** — add-ons that wrap an upstream project carry a `.upstream.yaml` and participate
   in the daily `Auto Update` GitHub Actions workflow. The workflow bumps `build.yaml` and `config.yaml` to the latest
   upstream release and adds the release notes to `CHANGELOG.md`.

@@ -1,8 +1,8 @@
 # GitHub → Home Assistant Webhook Setup
 
-This repository's build workflows (seven per-addon `build-<addon>.yml` callers, each invoking the reusable
-`_build-template.yml`) POST a JSON payload to a Home Assistant inbound webhook each time a build starts and each time it
-finishes. The caller invokes `.github/scripts/notify-ha.sh` from both steps, so the receiving HA automation sees two
+This repository's build workflow (one caller, `build.yml`, invoking the reusable `_build-template.yml` once per add-on
+and arch leg) POSTs a JSON payload to a Home Assistant inbound webhook each time a build starts and each time it
+finishes. The template invokes `.github/scripts/notify-ha.sh` from both steps, so the receiving HA automation sees two
 events per leg (one `started`, one `finished`). HA automations can react to those events to push notifications, update
 sensors, or trigger follow-on actions (e.g. restart the add-on after an update).
 

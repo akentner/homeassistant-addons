@@ -4,8 +4,11 @@
 # It reports only — it never fails the push.
 #
 # Why it does not block: the tag does not cause the build. Images are published
-# by internal/dispatch-builds.sh via `workflow_dispatch`, driven by
-# .github/workflows/auto-update.yml and .github/workflows/base-image-update.yml.
+# by .github/workflows/build.yml — either from the bump commit's own push to
+# main, or from the single `workflow_dispatch` internal/dispatch-builds.sh
+# issues on behalf of .github/workflows/auto-update.yml and
+# .github/workflows/base-image-update.yml, whose GITHUB_TOKEN pushes create no
+# runs of their own.
 # The control that catches a genuinely missing image is
 # .github/workflows/verify-image-availability.yml: four times daily, with no
 # registry credential (an authenticated probe would certify an image the

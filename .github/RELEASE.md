@@ -29,63 +29,80 @@ Examples:
 version itself. CalVer is supported (`authentik/v2026.8.0`); pre-release and subpatch suffixes are preserved
 (`v1.0.0-alpha45`, `v1.0.6-0`).
 
-Every per-addon build workflow (`build-<addon>.yml`) triggers on a `push` to `main` with changes under `<addon>/**`. A
-second trigger on `push` of a `<addon>/v*` tag exists in each file but is **commented out for all add-ons except
-network-tools, terraform-bridge and iac-runner**:
+A single workflow, `.github/workflows/build.yml`, builds every add-on in this repository. It triggers on a `push` to
+`main` that touches `**/config.*`, `**/build.*` or `**/Dockerfile`, and derives the add-on list, the architecture legs,
+the display name and the description from each add-on's own `config.yaml` and `build.yaml` — so nothing about an add-on
+is configured in CI, and CI cannot drift from what the add-on store advertises.
 
-| Add-on            | `paths:` on `main` | `<addon>/v*` tag | Supervisor image source |
-| ----------------- | ------------------ | ---------------- | ----------------------- |
-| authentik         | active             | disabled         | local build             |
-| coding-assistants | active             | disabled         | ghcr pull               |
-| gatus             | active             | disabled         | ghcr pull               |
-| iac-runner        | active             | **active**       | local build             |
-| markdown-renderer | active             | disabled         | ghcr pull               |
-| meridian          | active             | disabled         | ghcr pull               |
-| network-tools     | active             | **active**       | ghcr pull               |
-| phone-logger      | active             | disabled         | ghcr pull               |
-| terraform-bridge  | active             | **active**       | ghcr pull               |
+| Add-on            | Supervisor image source |
+| ----------------- | ----------------------- |
+| authentik         | local build             |
+| coding-assistants | ghcr pull               |
+| gatus             | ghcr pull               |
+| iac-runner        | local build             |
+| markdown-renderer | ghcr pull               |
+| meridian          | ghcr pull               |
+| network-tools     | ghcr pull               |
+| phone-logger      | ghcr pull               |
+| terraform-bridge  | ghcr pull               |
 
 The `Supervisor image source` column reports whether that add-on's `config.yaml` declares a top-level `image:` key:
 `ghcr pull` means it does, so the Supervisor fetches the prebuilt image from ghcr.io; `local build` means it does not,
-so the Supervisor builds the add-on's `Dockerfile` itself. This axis is independent of the tag-trigger split in the two
-columns to its left — an add-on can have its tag trigger disabled and still be pulled, or enabled and still be built
-locally.
+so the Supervisor builds the add-on's `Dockerfile` itself. That axis says nothing about how or when the image is built;
+it is driven solely by the presence of that one key.
 
-This split is deliberate. In the six callers whose tag trigger is disabled, the `tags:` block holds the in-file comment
-`# tag-trigger temporarily disabled (see .github/RELEASE.md)` — this section is what that comment resolves to. The three
-add-ons with an active `tags:` block carry no such comment, so the comment is a marker of the disabled state rather than
-a fixture of every caller.
+### Tags do not trigger builds
+
+Pushing an `<addon>/v*` tag builds nothing at all. `build.yml` carries no `tags:` trigger, and the per-caller `tags:`
+blocks that used to carry one were deleted along with the callers. A single shared `*/v*` pattern was considered and
+rejected, for four reasons in descending order of weight:
+
+1. **It would produce green no-op runs.** `build.yml` derives its add-on set by diffing `github.event.before` against
+   `github.sha`. On a newly created tag ref `github.event.before` is all zeros, so the derivation falls back to a
+   single-commit diff of the commit the tag points at — which, in the flow documented below, is the commit taken
+   _before_ the version files were changed. The run would report success and build nothing. A green no-op is strictly
+   worse than no trigger at all, because it looks like a build happened.
+2. **Making it work would need a second derivation path** — parsing the add-on name out of `GITHUB_REF_NAME` — that is,
+   new untested code in the one file whose failure now breaks every add-on's build at once.
+3. **The trigger it would preserve was already wrong.** The release procedure creates the tag before it commits the
+   version files, so a tag-triggered build checks out the pre-bump tree and republishes the previous image. See
+   `### What a tag guarantees` below for the measured rate; across the three add-ons whose tag trigger was still live it
+   was 1 of 8.
+4. **The double build disappears.** `iac-runner`, `network-tools` and `terraform-bridge` used to build twice per release
+   — once via `paths:`, once via `tags:` — for no benefit.
+
+The tag is now purely a release marker. `internal/check-version-tags.sh` still reports a version bump that reaches
+`main` without one, and `<addon>/v<version>` is still what a GitHub Release page hangs off. The image is published by
+the bump commit's own `build.yml` run, by the bump workflows' `internal/dispatch-builds.sh` dispatch, or by an explicit
+`workflow_dispatch` — see `### Rebuilding on demand` and `## Auto-update path`.
 
 ### Why the split
 
-Two commits, both on `main`, hold the rationale. They are quoted from their commit messages, not paraphrased:
+History, kept because it is the reason the tags exist at all. Two commits on `main` hold the rationale, quoted from
+their commit messages rather than paraphrased:
 
 - `287c79f` (`ci(build): temporarily disable tag-trigger in per-addon workflows`) disabled the tag trigger in all seven.
   After the historical tag migration, origin held 24 `<addon>/v<version>` tags pointing at commits that were no longer
   the source of truth for their add-on directory. Re-enabling tag pushes unconditionally would have re-fired a build for
   every one of those 24 tags — roughly 30 minutes of runner time rebuilding images that already existed, and overwriting
-  the ghcr.io images the HA Supervisor was serving, possibly with different content if any Dockerfile argument had
-  changed since.
+  the ghcr.io images the HA Supervisor was serving.
 - `60e7835` (`fix(network-tools): ship mdns_scan.py … ci(build-network-tools): re-enable tag-trigger`) re-enabled the
-  tag trigger for network-tools only. That add-on had just two tags (`v0.4.0`, `v0.2.3-1`) and `v0.4.0` already pointed
-  at near-current source, so the contained risk was much smaller than for the other six.
+  tag trigger for network-tools only, which had just two tags (`v0.4.0`, `v0.2.3-1`) and a much smaller blast radius.
 
-Both bullets are about CI triggers and nothing else. The tag-trigger split is a historical CI decision and must not be
-read as the pull-versus-local-build split; that axis is the `Supervisor image source` column above, and it is driven
-solely by the presence of a top-level `image:` key in `config.yaml`. Conflating the two axes is what made the
-operational paragraph below assert one consequence for add-ons that do not share it.
+Both bullets are about CI triggers and nothing else. Neither is about the pull-versus-local-build split; that axis is
+the `Supervisor image source` column above, driven solely by the presence of a top-level `image:` key in `config.yaml`.
 
 ### What this means operationally
 
-For the six add-ons with the tag-trigger disabled, pushing the tag alone does **not** build an image. When a human
-pushes step 2 of the release flow below (committing and pushing `config.yaml` / `build.yaml` / `README.md` to `main`),
-that push is what fires the build, via the `paths:` filter.
+The build is fired by the **bump commit**, never by the tag. When a human pushes step 2 of the release flow below
+(committing and pushing `config.yaml` / `build.yaml` / `README.md` to `main`), that push is what fires `build.yml`, via
+its manifest-path filter.
 
 That scoping is load-bearing. A push made by a GitHub Actions workflow with the default `GITHUB_TOKEN` creates no
 workflow runs at all, so the `paths:` filter never fires for an automated version bump and the automated path has to ask
 for its builds explicitly. See `## Auto-update path` for how it does that.
 
-What skipping step 2 actually costs depends on the image source, not on the tag trigger:
+What skipping step 2 actually costs depends on the image source:
 
 - **Add-ons whose `config.yaml` declares a top-level `image:` key** are pulled by the Supervisor: coding-assistants,
   gatus, markdown-renderer, meridian, network-tools, phone-logger and terraform-bridge. For these, skipping step 2
@@ -98,25 +115,26 @@ What skipping step 2 actually costs depends on the image source, not on the tag 
   against whatever `main` currently holds: skip step 2 and the add-on is built from un-bumped source while its tag
   claims the new version.
 
-`network-tools`, `terraform-bridge` and `iac-runner` are built twice when both the commit and the tag are pushed: once
-by the `paths:` trigger and once by the active `tags:` trigger. Neither leg is authoritative for the version the tag
-names — both read `build.yaml:args.VERSION` (`_build-template.yml:76`) and `config.yaml:version`
-(`_build-template.yml:80`) out of whatever ref they check out, and it is `config.yaml:version` that becomes the
-published OCI image tag (`_build-template.yml:176`). Because the release procedure tags before it commits (see
-`### What a tag guarantees` below), the tag's ref is the one that may still carry the older version, which makes the
-tag-triggered leg the leg more likely to build stale content. The `paths:` leg on `main` is the one that sees the bump.
+There is exactly one build per bump now, and it reads its version out of the ref it checks out: both
+`build.yaml:args.VERSION` (`_build-template.yml:76`) and `config.yaml:version` (`_build-template.yml:80`), and it is
+`config.yaml:version` that becomes the published OCI image tag (`_build-template.yml:176`). The bump commit on `main` is
+the ref that carries the new version; a tag cut before that commit does not (see `### What a tag guarantees` below),
+which is one of the reasons tags no longer trigger anything.
 
-### Re-enabling a tag trigger
+### Rebuilding on demand
 
-To re-enable for an add-on:
+To rebuild an add-on's image without changing a file:
 
-1. Inspect `git ls-remote --tags origin <addon>/v\*` and check whether any tag points at a commit that is no longer the
-   source of truth for `<addon>/**`. If yes, delete or move those tags first (rebuild cost compounds).
-2. Edit `.github/workflows/build-<addon>.yml`: remove the leading `#` from the two commented lines in the `tags:` block.
-3. Open a PR with the rationale and a roll-back plan if the rebuild would overwrite a published image unexpectedly.
+```bash
+gh workflow run build.yml -f addons=network-tools        # one add-on
+gh workflow run build.yml -f addons=gatus,meridian       # several
+gh workflow run build.yml                                # every add-on
+internal/dispatch-builds.sh network-tools                # local equivalent
+```
 
-The six callers carry the comment `# tag-trigger temporarily disabled (see .github/RELEASE.md)` for exactly this reason
-— anyone reading the comment and following the pointer now lands on a real explanation.
+An **empty** `addons` input builds every add-on, so omit it only when that is what you want.
+`internal/dispatch-builds.sh` is the same path the bump workflows take: it issues exactly one dispatch naming every
+add-on it was given, and `DRY_RUN=1` prints the command instead of running it.
 
 ### What a tag guarantees
 
@@ -252,17 +270,18 @@ same `internal/update-version.py` for every add-on that has a `.upstream.yaml`. 
 manual `make release`, for two reasons.
 
 **1. Its own push cannot start a build, so it asks for the builds explicitly.** The workflow commits and pushes to
-`main` with the default `GITHUB_TOKEN`, and GitHub creates no workflow runs for an event produced by that token — so the
-`paths:` filter in `.github/workflows/build-<addon>.yml` never fires for an automated bump. `workflow_dispatch` is the
-documented exception: a dispatch created with `GITHUB_TOKEN` does run
-(<https://docs.github.com/actions/using-workflows/triggering-a-workflow>). The workflow therefore runs
-`internal/dispatch-builds.sh` immediately after its `git push` (`auto-update.yml:166-167`), and requests the
-`actions: write` permission to do so (`auto-update.yml:49`). That script derives the changed add-on directories from
-`git diff --name-only "$BASE_SHA"..HEAD` and issues one `gh workflow run build-<addon>.yml --ref <ref>` per add-on. Two
-of its error semantics matter when reading a run log:
+`main` with the default `GITHUB_TOKEN`, and GitHub creates no workflow runs for an event produced by that token — so
+`build.yml`'s `paths:` filter never fires for an automated bump. `workflow_dispatch` is the documented exception: a
+dispatch created with `GITHUB_TOKEN` does run (<https://docs.github.com/actions/using-workflows/triggering-a-workflow>).
+The workflow therefore runs `internal/dispatch-builds.sh` immediately after its `git push` (`auto-update.yml:166-167`),
+and requests the `actions: write` permission to do so (`auto-update.yml:49`). That script derives the changed add-on
+directories from `git diff --name-only "$BASE_SHA"..HEAD` and issues exactly **one** dispatch —
+`gh workflow run build.yml --ref <ref> -f addons=<comma list>` — naming every changed add-on in one call. Two of its
+error semantics matter when reading a run log:
 
-- A candidate directory with no `.github/workflows/build-<addon>.yml` is reported as a warning and does **not** fail the
-  run. This is the common case, because a bump commit also touches non-add-on paths.
+- A candidate directory that is not an add-on directory — no `config.yaml` + `build.yaml` + `Dockerfile` triple — is
+  reported as a warning and does **not** fail the run. This is the common case, because a bump commit also touches
+  non-add-on paths.
 - A dispatch that fails makes the job exit non-zero. The bump is already on `main` by then, so a green run would hide a
   manifest advertising an image that was never built.
 
