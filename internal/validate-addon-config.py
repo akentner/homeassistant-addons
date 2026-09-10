@@ -102,6 +102,14 @@ def main() -> int:
         # Recursive scan to depth 2 so nested add-ons under `tools/`
         # (e.g. `tools/test-addon/`, the Phase 14 verify suite's live
         # test target) are auto-discovered alongside top-level add-ons.
+        #
+        # The definition this site implements is "must pass config-schema
+        # validation" -- the wider of the repo's two deliberate definitions
+        # of "add-on". The Makefile's validate-addons target implements the
+        # narrower "is a shipped add-on" on purpose and stays at depth 1,
+        # because tools/test-addon/ is nested precisely so it is not
+        # advertised as a repository add-on. Two deliberate definitions,
+        # both correct -- do not unify them.
         config_files = sorted(
             d / "config.yaml"
             for d in Path(".").iterdir()

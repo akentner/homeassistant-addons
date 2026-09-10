@@ -72,6 +72,18 @@ fix: ## Auto-fix all fixable issues
 	@echo "🔧 Auto-fixing all fixable issues..."
 	pre-commit run --all-files || echo "⚠️  Some issues may require manual fixing"
 
+# validate-addons implements the NARROWER of this repo's two deliberate definitions of "add-on":
+# is a shipped add-on -- the top-level directories this repository advertises to Home Assistant, held
+# to the structural required-files contract (config.yaml + Dockerfile + run.sh) plus a config.yaml that
+# parses and carries a 'name'. Hence the depth-1 glob below.
+#
+# Depth 1 is correct HERE, not an oversight: tools/test-addon/ is nested precisely so it is NOT
+# advertised as a repository add-on, so holding it to the shipped-add-on contract would assert
+# something untrue about it. Its config.yaml is nevertheless schema-validated already, by the explicit
+# tools/ pass in internal/validate-addon-config.py -- covered where coverage means something, excluded
+# where "shipped" is the question.
+#
+# docker-build-check below implements the wider definition (must pass Dockerfile linting) on purpose.
 validate-addons: ## Validate add-on configurations
 	@echo "✅ Validating add-on configurations..."
 	@for addon_dir in */; do \

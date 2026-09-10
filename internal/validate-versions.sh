@@ -85,6 +85,14 @@ validate_addon() {
 # `tools/test-addon/`, the Phase 14 verify suite's live test target) are
 # picked up alongside top-level add-on directories. Depth 2 covers every
 # nesting pattern used in this repo (top-level + tools/<name>/).
+#
+# The definition this site implements is "must pass version validation".
+# It is the wider of the repo's two deliberate definitions of "add-on";
+# the Makefile's validate-addons target implements the narrower
+# "is a shipped add-on" on purpose and stays at depth 1, because
+# tools/test-addon/ is nested precisely so it is not advertised as a
+# repository add-on. Two deliberate definitions, both correct -- do not
+# unify them.
 ADDON_DIRS=()
 mapfile -t ADDON_DIRS < <(find . -mindepth 1 -maxdepth 2 -type d \
     \( -name .git -o -name node_modules \) -prune -o \
