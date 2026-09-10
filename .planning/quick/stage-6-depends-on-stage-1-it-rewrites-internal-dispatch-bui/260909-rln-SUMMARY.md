@@ -55,15 +55,17 @@ decisions:
   - "D-04 honoured: zero add-on names, display names, descriptions or arch literals in any non-comment line of build.yml"
   - "D-07 honoured: no concurrency: block in build.yml"
 metrics:
-  duration: ~55m
+  duration: ~95m # 3 tasks (~55m) + the post-execution coverage fix (~40m)
   completed: 2026-09-10
   tasks: 3
-commits: 3
+commits: 5
 plan_head_before: 89e837548f95ab504abc230e398d5a84bda36f8b
 actuals:
-  tokens: 15418 # chars/4 over the realized diff (61,670 chars), the estimateTokens scale
+  tokens: 32466 # chars/4 over the realized diff (129,866 chars), the estimateTokens scale
   tasks: 3
-  commits: 3 # MEASURED: git rev-list --count 89e8375..HEAD
+  commits: 5 # MEASURED: git rev-list --count 89e8375..HEAD
+post_execution_fixes:
+  - "D-08: build.yml's paths: filter was extension-scoped and missed every source-only push (205 files). Fixed in 2a19285."
 ---
 
 # Quick 260909-rln: One `build.yml` Replacing Nine Per-Add-on Callers Summary
@@ -107,6 +109,8 @@ Every figure below was measured in this worktree before editing, not taken from 
 | latest actionlint                                            | v1.7.12          | **v1.7.12** ✓                                  |
 | anchor `7cc82f5` shape                                       | one add-on       | **`gatus/config.yaml` only** ✓                 |
 | anchor `8c6645f` shape                                       | `.planning`-only | **`.planning` only** ✓                         |
+| top-level dirs                                               | (not recorded)   | **9 add-on, 4 non-add-on** (`docs`, `internal`, `terraform-provider-homeassistant`, `tools`), **5 dotdirs** |
+| tracked files inside add-on dirs                             | (not recorded)   | **232**, of which **205** were unreachable by the drafted `paths:` filter — the D-08 gap |
 
 ### One measured divergence from the plan's re-pinned baseline — expected, not a defect
 
@@ -188,11 +192,105 @@ Also re-verified green after this item: `260910-0og`'s `GATE-T1-F4` (`15 of the 
 in `.github/RELEASE.md`) and its `C3-dated` preservation. `260910-0og`'s
 `GATE-T1-G38-COUNT-UNCHANGED` (asserts 9) is **expected red** — driving that count to 0 is this item's job.
 
+## POST-EXECUTION FINDING — the `paths:` filter under-triggered (fixed in `2a19285`)
+
+Found by the coordinator after the three tasks landed and **before** the merge; confirmed by
+measurement, fixed on the branch, and recorded in the plan as **D-08**. This is a defect in the
+plan as drafted, not a trade-off the plan weighed — it silently under-triggered.
+
+**The gap.** The nine deleted callers triggered on `paths: <addon>/**`. The plan specified — and
+Task 2 shipped — `**/config.*`, `**/build.*`, `**/Dockerfile`. But every add-on's Dockerfile COPYs
+non-manifest files, so those files were build inputs that no longer triggered a build:
+
+| Add-on | Non-manifest build inputs (measured from its Dockerfile) |
+| --- | --- |
+| `terraform-bridge`, `iac-runner` | **`COPY . .`** — the entire Go module (`iac-runner/Dockerfile:25`) |
+| `coding-assistants` | 5 CLI scripts, `index.html`, `info.html`, `nginx.conf` |
+| `gatus` | `run.sh`, `generate_config.py`, `nginx.conf` |
+| `network-tools` | `arping_scan.py`, `mdns_scan.py`, `run.sh`, `nginx.conf` |
+| `markdown-renderer` | `run.sh`, `generate_nginx.py`, `_git_sync.py` |
+| `meridian` | `run.sh`, `nginx.conf` |
+| `phone-logger` | `run.sh`, `generate_config.py` |
+| `authentik` | `run.sh` (19 `COPY` lines total) |
+
+**Measurement.** Of the 232 tracked files inside the nine add-on directories, **205 were reachable
+by the deleted callers and unreachable by the shipped filter.** Real history holds ~12 qualifying
+commits. Consequence: a human pushing source-only changes got no build, the store kept advertising
+the same version, and the image behind it went stale — the failure class this batch exists to
+close, inverted.
+
+**Proven on real history**, by extracting the detect body and executing it (the plan's own
+instrument):
+
+| Case | Old derivation | New derivation |
+| --- | --- | --- |
+| `9caad88` — 4 Go files under `iac-runner/`, no manifest (real) | `[]` **← the gap** | `["iac-runner"]` |
+| `meridian/run.sh` only (constructed; no such commit exists in history) | `[]` **← the gap** | `["meridian"]` + full 1-leg matrix |
+| `terraform-bridge/internal/auth/bind.go` only (constructed) | — | `["terraform-bridge"]` |
+| `8c6645f` — `.planning`-only (real) | `[]` | `[]` ✓ must not build |
+| `7cc82f5` — single manifest (real) | `[gatus]` | `["gatus"]` ✓ no regression |
+
+**The fix, two parts.** (1) `paths:` is directory-scoped: `"*/**"` then `"!.*/**"`, `"!docs/**"`,
+`"!internal/**"`, `"!terraform-provider-homeassistant/**"`, `"!tools/**"`. (2) The push derivation
+drops the manifest regex and takes the first path segment of every changed file, leaving the
+manifest triple as the only acceptance test — byte-for-byte the definition
+`internal/dispatch-builds.sh` uses, so **D-05's documented asymmetry is dissolved, not described**.
+
+`!.*/**` covers every dotdir as a class and is *provably* safe rather than convenient: the
+derivation's name-shape gate requires `^[a-z0-9]`, so no add-on directory can begin with a dot. It
+is also necessary — GitHub's `*` matches a leading dot, so `.planning/**` matches `*/**`, and this
+repo commits to `.planning/` constantly.
+
+**Negation semantics were verified, not assumed** (docs.github.com workflow-syntax, fetched
+2026-09-10): order matters and a `!` after a positive match excludes; at least one non-`!` pattern
+is required (satisfied by `*/**`); `*`/`[`/`!`-leading patterns must be quoted in YAML (all six
+are).
+
+**Bonus, measured — the new filter is strictly better in BOTH directions.** The old one also
+matched `.planning/config.json`, `.github/**` manifests, `tools/test-addon/*` and
+`terraform-provider-homeassistant/build.yaml`, spinning ~15 s no-op `detect` jobs. The new one
+excludes all four. `T-rln-05`'s disposition therefore improved from `accept` to `mitigate`.
+
+### Gates moved
+
+| Gate | Change |
+| --- | --- |
+| `L-2` | RE-POINTED: pins the six directory-scoped patterns, positive-first |
+| `G2-2` | RE-POINTED: asserts the new `paths:` list and that no negation precedes the positive pattern |
+| **`G2-2b`** | **NEW.** Implements GitHub's documented ordered-negation matcher and asserts the net filter over all 537 tracked files: all 232 add-on files included; every dotdir, non-add-on dir and root file excluded; and every add-on reachable via a NON-manifest file — the property the old filter lacked |
+| **`G2-2c`** | **NEW.** Regression probe for the gap itself: `9caad88` must derive `["iac-runner"]`. Fails the moment an extension filter returns to the push branch |
+| `G3-3` | RE-POINTED: the positive clause asserted the literal `**/config.*` in README; now asserts `*/**` and `run.sh`, and **negative**-greps `**/config.*` so the gap cannot reappear in prose |
+| `T-rln-05` | RE-POINTED, disposition `accept` → `mitigate` |
+| `a-2`, `a-4` | RE-POINTED in the coverage audit, each recording that the item text's literal wording is what proved to under-trigger |
+| `must_haves.truths` | Gained the coverage truth that was missing |
+| `D-05` | Asymmetry paragraph corrected — the asymmetry no longer exists |
+| line-178 claim | The false "coverage after removal is complete" claim corrected in the plan |
+
+### Mutation-proven (§3.1 — a passing gate proves correctness, only mutation proves it catches)
+
+Six probes in a scratch clone. Control passes before and after; each mutation fails for its own
+correct reason:
+
+| Mutation | Result |
+| --- | --- |
+| revert to the drafted extension-scoped `paths:` | `MISCLASSIFIED 211` |
+| drop `!.*/**` | `MISCLASSIFIED 228`, naming dotdir files |
+| negate an add-on directory (`!meridian/**`) | `MISCLASSIFIED 10`, all `meridian/` |
+| put negations before the positive pattern | `POSITIVE-PATTERN-FIRST VIOLATED` |
+| forget to negate `docs` | `MISCLASSIFIED 5`, all `docs/` |
+| revert the push derivation to the manifest regex | G2-2c: expected `["iac-runner"]`, got `[]` |
+
+A first attempt at these probes was **invalid** and is recorded rather than hidden: it used
+`git checkout -- build.yml` inside the clone to reset between mutations, which restored the clone's
+*committed* (still-drafted) file because the fix was uncommitted at the time — so mutations 3-5 all
+silently re-tested mutation 1. Corrected by resetting from a pristine copy of the working-tree file.
+
 ## Deviations from Plan
 
 ### None affecting the plan's instructions
 
-All three tasks executed as written, in the mandated L-14 order, as three commits.
+All three tasks executed as written, in the mandated L-14 order, as three commits. The fourth and
+fifth commits are the SUMMARY/ledger commit and the post-execution D-08 fix above.
 
 ### Two adjacent falsified claims found OUTSIDE the declared paths — deliberately not fixed
 
@@ -248,13 +346,37 @@ exercise the new dispatch path unattended.
 2. `gh workflow run build.yml -f addons=meridian` — expect exactly **one** leg, `meridian (amd64)`.
 3. End-to-end: one trivial `config.yaml` subpatch bump on a single add-on, pushed to `main`. Confirm ONE
    `Build Add-on` run whose matrix contains only that add-on.
-4. `docker manifest inspect ghcr.io/akentner/homeassistant-addons/amd64-<slug>:<config version>`
+4. **NEW, added by the D-08 fix and the one proof no offline gate can substitute for:** a
+   **source-only** push — e.g. a comment line in `meridian/run.sh`, or any file under
+   `iac-runner/internal/` — with **no manifest change**. Confirm a `Build Add-on` run fires and
+   that its matrix contains only that add-on. This is the exact case that produced NO run before
+   `2a19285`, and it is the only way to observe GitHub's own evaluation of the `"*/**"` +
+   `!`-negation filter (the offline `G2-2b` proves the set under GitHub's *documented* algorithm,
+   which is a different thing from GitHub's implementation).
+5. **Also new:** confirm the negations hold live — push a `.planning/`-only commit and a
+   `docs/`-only commit and confirm **no** `Build Add-on` run appears for either. If a run does
+   appear, the filter is over-triggering (harmless no-op, but it means `!.*/**` did not behave as
+   documented and the plan's D-08 justification needs revisiting).
+6. `docker manifest inspect ghcr.io/akentner/homeassistant-addons/amd64-<slug>:<config version>`
    (sibling `260909-rlk`'s `internal/verify-image-availability.sh` automates this).
 
-**If any step fails:** `git revert c560b5e` restores all nine callers, removes the push trigger and
-restores the per-add-on dispatch in one step, leaving `build.yml` present and still dispatchable for
-iteration. Do **not** attempt a forward fix on `main` while the builder is broken — the nine callers are
-the working fallback and reverting to them costs one command.
+**If any step fails — USE THIS EXACT COMMAND:**
+
+```bash
+git revert --no-edit 2a19285 c560b5e     # newest first
+```
+
+**Do NOT use `git revert c560b5e` alone.** It was the documented handle until the D-08 fix
+(`2a19285`) landed on the same `build.yml` and `internal/dispatch-builds.sh` regions. Both forms
+were measured in a scratch clone:
+
+| Command | Result |
+| --- | --- |
+| `git revert --no-edit c560b5e` | **CONFLICTS** on `.github/workflows/build.yml` and `internal/dispatch-builds.sh` |
+| `git revert --no-edit 2a19285 c560b5e` | **Clean.** Nine callers restored; `build.yml` present with `workflow_dispatch` as its only trigger (i.e. back to the Task-1 state, still dispatchable for iteration); `internal/dispatch-builds.sh` back to rlj's per-add-on shape |
+
+Do **not** attempt a forward fix on `main` while the builder is broken — the nine callers are the
+working fallback and reverting to them costs one command.
 
 ## Threat Flags
 
@@ -273,11 +395,17 @@ build call site alone, exactly as the deleted callers had it.
 
 ## Commits
 
-| Task | Commit    | Scope                                                                            |
-| ---- | --------- | -------------------------------------------------------------------------------- |
-| 1    | `1063603` | `ci`: add single build.yml builder, dispatch-only (1 file, +173)                  |
+| Task | Commit    | Scope                                                                             |
+| ---- | --------- | --------------------------------------------------------------------------------- |
+| 1    | `1063603` | `ci`: add single build.yml builder, dispatch-only (1 file, +173)                   |
 | 2    | `c560b5e` | `ci!`: the switch-over — push trigger, nine deletions, batched dispatch (11 files) |
-| 3    | `1b8bd8f` | `docs`: retire per-caller build/tag-trigger documentation (9 files)              |
+| 3    | `1b8bd8f` | `docs`: retire per-caller build/tag-trigger documentation (9 files)                |
+| —    | `121e569` | `docs`: SUMMARY + two WINDOWS ledger entries (2 files)                            |
+| —    | `2a19285` | `fix`: directory-scoped paths filter + unfiltered push derivation (9 files) — the D-08 coverage fix |
+
+`c560b5e` keeps its sha and remains the switch-over commit holding all nine deletions; the D-08 fix
+is additive on top rather than an amend, precisely so that sha stays valid as a reference. See the
+revert table above for the command that now works.
 
 ## Self-Check: PASSED
 
@@ -286,6 +414,11 @@ build call site alone, exactly as the deleted callers had it.
 - `.github/workflows/_build-template.yml` — FOUND
 - `internal/dispatch-builds.sh` — FOUND, mode 755, shellcheck-clean with no exclusions
 - commits `1063603`, `c560b5e`, `1b8bd8f` — all three FOUND in `git log`
-- `git rev-list --count 89e8375..HEAD` = **3**, matching the `commits:` frontmatter
-- `git diff --stat 89e8375..HEAD` = **20 files**, matching the 11-modified/9-deleted contract
-- `git status --porcelain` clean before the SUMMARY commit
+- `git rev-list --count 89e8375..HEAD` = **5**, matching the `commits:` frontmatter
+- `git diff --stat 89e8375..HEAD` = **21 files** (20 code/doc paths + the PLAN.md correction);
+  the 11-modified/9-deleted code contract is unchanged by the D-08 fix, which touched only files
+  already in the set
+- `git status --porcelain` clean before each commit
+- the revert command in this SUMMARY was **executed** in a scratch clone, not asserted:
+  `git revert --no-edit 2a19285 c560b5e` → rc=0, nine callers restored
+- `G2-2b` and `G2-2c` were **mutation-probed**, not merely observed passing

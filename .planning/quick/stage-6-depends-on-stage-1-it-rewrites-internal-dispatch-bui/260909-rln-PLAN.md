@@ -51,7 +51,7 @@ must_haves:
     - "ADDED POST-EXECUTION (D-08): a human push that changes ANY file inside an add-on directory -- run.sh, a *.py helper, nginx.conf, or any Go source that `COPY . .` pulls in -- produces a build for exactly that add-on, matching the <addon>/** coverage of the nine deleted callers. Measured: 205 of the 232 tracked files inside add-on directories were unreachable by the paths: list this plan originally drafted."
     - "No file outside .planning/ references .github/workflows/build-<addon>.yml as a live path (D-06)."
     - "No prose a sibling wrote one or two waves earlier survives describing per-add-on dispatch: 260909-rlm's `## Auto-update path` in .github/RELEASE.md and its docs/AUTO_UPDATE_GUIDE.md rewrite both describe ONE build.yml dispatch carrying a list, and 260909-rll's two internal/update-version.py prose blocks no longer claim a per-caller `tags:` trigger exists (D-06, L-18)."
-    - "git revert of the switch-over commit restores all nine callers and today's exact build behaviour in one step, with build.yml left in place and still dispatchable (D-03)."
+    - "git revert of the switch-over commit restores all nine callers and today's exact build behaviour, with build.yml left in place and still dispatchable (D-03). MEASURED POST-EXECUTION: because D-08's fix commit edits the same build.yml lines, the working form names BOTH shas newest-first -- `git revert --no-edit <d-08-sha> <task-2-sha>`. Verified in a scratch clone: that form is clean and restores all 9 callers with build.yml left workflow_dispatch-only; reverting the switch-over sha ALONE now conflicts on build.yml and internal/dispatch-builds.sh."
   artifacts:
     - ".github/workflows/build.yml — one detect job plus one matrix build job calling _build-template.yml; clean under actionlint v1.7.3 (pre-commit-pinned) AND the latest release, and under yamllint with the repo config"
     - "the nine .github/workflows/build-*.yml deleted; _build-template.yml's workflow_call input/secret contract byte-unchanged (header comment only)"
@@ -244,8 +244,13 @@ names three candidates. All three were evaluated against this repository:
   `push:` trigger, delete the nine, rewrite the script — as ONE commit. A true two-merge
   sequence is impossible here (a quick-batch item merges once), so what this buys is precise and
   worth stating plainly: **the whole risk surface is one revertible commit.**
-  `git revert <task-2-sha>` restores all nine callers and today's behaviour while leaving
-  `build.yml` present and dispatchable for iteration.
+  `git revert --no-edit <task-2-sha>` restores all nine callers and today's behaviour while leaving
+  `build.yml` present and dispatchable for iteration. **CORRECTED POST-EXECUTION:** D-08 added a
+  fifth commit editing the same `build.yml` and `internal/dispatch-builds.sh` regions, so the
+  revert must name both shas, newest first:
+  `git revert --no-edit <d-08-sha> <task-2-sha>`. Both forms were measured in a scratch clone —
+  the two-sha form is clean (nine callers back, `build.yml` left dispatch-only); the single-sha
+  form conflicts on both files. Do not paste the single-sha form into an incident.
 
 The residual risk the offline gates cannot cover is `startup_failure` from the dynamic matrix
 expression, the call-site `permissions`, or the named `secrets:` mappings —
@@ -1209,7 +1214,7 @@ rlj's derive-mode assertion still holds unchanged, and the dispatchable set the 
 every add-on directory is byte-equal to `build.yml`'s own empty-input `addons` output. `yamllint`,
 `pre-commit run --files` and a whole-repository run of the latest actionlint all pass.
   </done>
-  <reversibility rating="costly">This is the switch-over. A single `git revert` of this commit restores all nine callers, removes the push trigger and restores the per-add-on dispatch, leaving `build.yml` present and dispatchable — but between landing and revert, an automated bump could dispatch a builder that does not work, which is why `<verification>`'s post-merge dispatch proof is mandatory before the next 06:00 UTC cron.</reversibility>
+  <reversibility rating="costly">This is the switch-over. Reverting it restores all nine callers, removes the push trigger and restores the per-add-on dispatch, leaving `build.yml` present and dispatchable — but between landing and revert, an automated bump could dispatch a builder that does not work, which is why `<verification>`'s post-merge dispatch proof is mandatory before the next 06:00 UTC cron. **MEASURED POST-EXECUTION:** D-08's fix commit edits the same regions, so the revert must name both shas newest-first (`git revert --no-edit <d-08-sha> <task-2-sha>`); the single-sha form conflicts on `build.yml` and `internal/dispatch-builds.sh`.</reversibility>
 </task>
 
 <task type="auto">
@@ -1707,7 +1712,10 @@ GitHub at all. Do this BEFORE the next 06:00 UTC `auto-update` cron:
    ghcr.io/akentner/homeassistant-addons/amd64-<slug>:<config version>` (sibling 260909-rlk's
    `internal/verify-image-availability.sh` automates exactly this check).
 
-**If any step fails:** `git revert <task-2-commit>` restores all nine callers, removes the push
+**If any step fails:** `git revert --no-edit <d-08-commit> <task-2-commit>` — newest first, because
+the D-08 fix edits the same `build.yml` and `internal/dispatch-builds.sh` regions and reverting the
+switch-over alone conflicts on both (both forms measured in a scratch clone) — restores all nine
+callers, removes the push
 trigger and restores the per-add-on dispatch in one step, leaving `build.yml` in place and still
 dispatchable for iteration. Do not attempt a forward fix on `main` while the builder is broken —
 the nine callers are the working fallback and reverting to them costs one command.
