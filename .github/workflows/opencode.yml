@@ -8,11 +8,24 @@ on:
 
 jobs:
   opencode:
+    # Trust boundary: this repository is PUBLIC, so anyone with a GitHub account can
+    # post a comment. Matching only the comment body would let a drive-by commenter
+    # start a job that has MINIMAX_API_KEY in its environment. author_association is
+    # the trust signal carried on the comment payload of both triggers above, so the
+    # author clause is required and ANDed with the body clause.
+    # CONTRIBUTOR is deliberately NOT trusted: it only means "has had a pull request
+    # merged here" -- renovate[bot] already reports CONTRIBUTOR on this repository.
+    # The four body alternatives stay parenthesised as one group; without the parens
+    # the expression would degrade to "body-a || body-b || (body-c && author)" and the
+    # first two alternatives would still fire for an untrusted author.
     if: |
-      contains(github.event.comment.body, ' /oc') ||
+      (github.event.comment.author_association == 'OWNER' ||
+      github.event.comment.author_association == 'MEMBER' ||
+      github.event.comment.author_association == 'COLLABORATOR') &&
+      (contains(github.event.comment.body, ' /oc') ||
       startsWith(github.event.comment.body, '/oc') ||
       contains(github.event.comment.body, ' /opencode') ||
-      startsWith(github.event.comment.body, '/opencode')
+      startsWith(github.event.comment.body, '/opencode'))
     runs-on: ubuntu-latest
     # No completed run to measure (the job is comment-triggered and has
     # only ever been skipped). An agent run is unbounded by nature, so this
