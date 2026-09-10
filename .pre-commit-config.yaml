@@ -75,6 +75,20 @@ repos:
       - id: pretty-format-json
         args: [--autofix, --indent=2]
 
+  # Security scanning
+  #
+  # gitleaks scans the STAGED DIFF (`--staged`), not the working tree, so it costs nothing on a
+  # commit that touches no secrets, and `--redact` keeps any hit out of the terminal log and out of
+  # the CI job log. The upstream hook definition already supplies the entry and `pass_filenames` —
+  # do not restate or override them here. Consequence: this hook is a deliberate no-op in CI,
+  # because `lint.yml` runs `pre-commit run --all-files` with nothing staged; history coverage came
+  # from a one-time baseline scan instead. Allowlists live in `.gitleaks.toml` — see
+  # `docs/DEVELOPMENT.md`, section `## Security Scanning`.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
   # Custom validation hooks
   - repo: local
     hooks:

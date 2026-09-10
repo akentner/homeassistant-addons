@@ -1,0 +1,52 @@
+# gitleaks configuration for the Home Assistant Add-ons repository.
+#
+# Consumed by the `gitleaks` pre-commit hook (pinned v8.30.1 in `.pre-commit-config.yaml`).
+# See `docs/DEVELOPMENT.md`, section `## Security Scanning`, for what this scanner does and does
+# not cover.
+
+# MANDATORY. Without this stanza a .gitleaks.toml REPLACES the built-in ruleset instead of
+# extending it: every rule silently disappears and the hook keeps printing "Passed" forever. Never
+# remove it, and never trust a green run of this hook without re-planting a control secret first.
+[extend]
+useDefault = true
+
+# Allowlists are scoped by path AND by rule id. A repo-wide `regexes` allowlist, a bare
+# `^\.planning/` path prefix, and fingerprint entries are all deliberately NOT used: the first two
+# are too broad to keep a real secret from slipping through, and a fingerprint encodes a line
+# number that goes stale on the next edit above it.
+
+[[allowlists]]
+description = """
+iac-runner redaction and log-scrubbing test suites. These three files exist in order to carry \
+synthetic credential shapes: they feed the SEC-03 redactor and the logging scrubber the exact \
+literals those components must mask, and a test that cannot hold a credential-shaped string \
+cannot prove the masking works. The path is therefore the correct semantic boundary — any \
+future synthetic shape added to them is a false positive by construction. Rule scoping keeps \
+every other gitleaks rule live inside these same files.
+"""
+paths = [
+  '^iac-runner/internal/runs/redact_test\.go$',
+  '^iac-runner/internal/runs/output_test\.go$',
+  '^iac-runner/internal/logging/scrubbing_handler_test\.go$',
+]
+targetRules = [
+  "generic-api-key",
+  "private-key",
+]
+
+[[allowlists]]
+description = """
+Two GSD planning documents that quote the synthetic shapes above. 17-REVIEW.md quotes redactor \
+input/output pairs inside a redaction-coverage argument; 14-02-PLAN.md carries a deliberately \
+invalid bearer token used to provoke a 401 in an end-to-end probe. Allowlisted by exact path, \
+never by a `.planning/` prefix, so a real secret pasted into any other planning document still \
+trips the hook.
+"""
+paths = [
+  '^\.planning/phases/17-git-integration-apply-job-system/17-REVIEW\.md$',
+  '^\.planning/phases/14-real-ha-end-to-end-verification-operator-documentation/14-02-PLAN\.md$',
+]
+targetRules = [
+  "generic-api-key",
+  "curl-auth-header",
+]
