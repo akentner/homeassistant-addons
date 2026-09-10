@@ -90,7 +90,7 @@
     },
     {
       "client_id": null,
-      "commit": null,
+      "commit": "c560b5e",
       "depends_on": [
         "260909-rlj",
         "260909-rlm"
@@ -115,7 +115,7 @@
         "docs/AUTO_UPDATE_GUIDE.md"
       ],
       "quick_id": "260909-rln",
-      "status": "pending",
+      "status": "complete",
       "wave": 3,
       "worktree": null
     }

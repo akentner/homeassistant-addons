@@ -358,7 +358,9 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260909-rll | Stop tagging the pre-bump commit (--no-tag) and serialize both bump workflows with a shared concurrency group; correct update-version.py's false tag-triggers-a-build prose | 2026-09-09 | ce932fa | .planning/quick/stage-4-depends-on-stage-1-same-workflow-files-fix-the-tag-o |
 | 260909-wgm    | Pre-push release-tag check: advisory instead of blocking, rationale corrected                 | 2026-09-09 | 2ba51a2 | [quick/260909-wgm-rework-internal-check-version-tags-sh-so](./quick/260909-wgm-rework-internal-check-version-tags-sh-so/) |
 | 260910-0og    | Apply the eleven 260909-rlm verification findings so RELEASE.md and AUTO_UPDATE_GUIDE.md are true      | 2026-09-10 | 176de25 | [quick/260910-0og-apply-the-eleven-260909-rlm-verification](./quick/260910-0og-apply-the-eleven-260909-rlm-verification/) |
+| 260909-rln    | Replace the nine per-add-on build workflows with one build.yml (batch 260909-rli, stage 6)     | 2026-09-10 | c560b5e | [quick/stage-6-depends-on-stage-1-it-rewrites-internal-dispatch-bui](./quick/stage-6-depends-on-stage-1-it-rewrites-internal-dispatch-bui/) |
 | 260909-rlm | Make the CI documentation describe what the workflows really do | 2026-09-10 | 176de257f6cb5c8d5f5686c059102ee345563f43 | .planning/quick/stage-5-depends-on-stages-1-and-3-it-documents-what-they-cha |
+| 260909-rln | Replace the nine per-add-on build workflows with one build.yml | 2026-09-10 | c560b5e | .planning/quick/stage-6-depends-on-stage-1-it-rewrites-internal-dispatch-bui |
 
 ## Session Continuity
 
