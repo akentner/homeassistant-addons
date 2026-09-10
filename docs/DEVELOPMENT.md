@@ -164,6 +164,13 @@ line-anchored, they go stale when a workflow shifts lines: the finding reappears
 deliberately fail-closed, so a stale suppression forces a re-triage instead of being carried along silently. The fixes
 are tracked in the open Phase 8 "CI/CD Hardening" work.
 
+The relaxation has a blind spot worth naming, because it already cost something. A `ref-pin` policy is satisfied by
+_any_ symbolic ref, and `latest` is a symbolic ref — so `.github/workflows/opencode.yml` passed the `unpinned-uses`
+audit for its whole life while carrying `anomalyco/opencode/github@latest`, a ref its upstream owner could repoint at
+will, in a job holding `MINIMAX_API_KEY`. The audit that exists to catch mutable refs did not catch that one. The
+relaxation is deliberately left untouched here: narrowing it (per-repository policies, or an explicit deny for `latest`
+/ `main` / `master`) is an open follow-up, not part of the change that pinned that one workflow.
+
 ### Highest-value follow-up
 
 A scheduled scan of the nine published GHCR images with results uploaded into GitHub Code Scanning. That is where the
@@ -273,6 +280,16 @@ versions appeared after the close (`docker/login-action` v4.5.1 → v4.6.0, `doc
 If a Renovate bump is unwanted, record why in a comment and let it close itself on a future baseline. If a closed bump
 is wanted later, apply it by hand or reopen the branch — do not ignore it. `.github/renovate.json` carries no
 `ignoreDeps` / `allowedVersions` entries, by design: the accidental close is not encoded as policy.
+
+**One documented exception:** `.github/workflows/opencode.yml` pins `anomalyco/opencode/github` to the exact tag
+`@v1.18.30`, not a floating major. Upstream publishes no major tag at all — `git/ref/tags/v1` and `git/ref/tags/v1.18`
+both return 404 — so `@v1` is not a ref that exists. The previous value was `@latest`, which is mutable: the upstream
+owner could repoint it and change what executes while `MINIMAX_API_KEY` is already in the job environment. An exact tag
+is the only immutable option that is not a commit SHA, and Renovate's `github-actions` manager still raises bumps
+against exact tags, so drift stays visible the same way it does for the floating majors. If upstream ever starts
+publishing a major tag, this pin should go back to `@v1`. The other half of that workflow's hardening — the
+`author_association` gate on its comment trigger — is guarded by `internal/verify-opencode-gate.py`, which re-derives
+the gate's truth table from the workflow file and turns red if the author clause is ever removed.
 
 ### Trigger Pitfalls
 

@@ -43,7 +43,13 @@ jobs:
           persist-credentials: false
 
       - name: Run opencode
-        uses: anomalyco/opencode/github@latest
+        # Exact-tag pin, a documented exception to the floating-major policy in
+        # docs/DEVELOPMENT.md `### Action Pinning`: anomalyco/opencode publishes no
+        # major tag (git/ref/tags/v1 -> 404), so @v1 does not exist. A mutable ref
+        # would let the upstream owner change what executes with MINIMAX_API_KEY
+        # already in this environment. An exact tag is the only immutable, non-SHA
+        # option and Renovate's github-actions manager still raises bumps against it.
+        uses: anomalyco/opencode/github@v1.18.30
         env:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
         with:
