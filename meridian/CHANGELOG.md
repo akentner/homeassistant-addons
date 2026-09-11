@@ -1,3 +1,18 @@
+## [1.70.0](https://github.com/rynfar/meridian/compare/meridian-v1.69.0...meridian-v1.70.0) (2026-09-10)
+
+### Features
+
+- add Polytoken harness adapter ([#1010](https://github.com/rynfar/meridian/issues/1010))
+  ([3db622f](https://github.com/rynfar/meridian/commit/3db622fa90fb261fe431916fbbd624a4fc55d1d5))
+- discover Meridian models in OpenCode V2 ([#1004](https://github.com/rynfar/meridian/issues/1004))
+  ([7028c69](https://github.com/rynfar/meridian/commit/7028c6979dca77e3d65c46c8b66cb1b421b942b8))
+
+### Bug Fixes
+
+- **errors:** classify a disabled subscription entitlement as billing
+  ([#1012](https://github.com/rynfar/meridian/issues/1012))
+  ([c3dc227](https://github.com/rynfar/meridian/commit/c3dc22791d71baffa3e1f91d93a1b3e4d9d62c91))
+
 ## [1.69.0](https://github.com/rynfar/meridian/compare/meridian-v1.68.0...meridian-v1.69.0) (2026-09-09)
 
 ### Features
