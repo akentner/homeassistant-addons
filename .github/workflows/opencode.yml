@@ -49,7 +49,7 @@ jobs:
         # would let the upstream owner change what executes with MINIMAX_API_KEY
         # already in this environment. An exact tag is the only immutable, non-SHA
         # option and Renovate's github-actions manager still raises bumps against it.
-        uses: anomalyco/opencode/github@v1.18.30
+        uses: anomalyco/opencode/github@v2.0.2
         env:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
         with:
