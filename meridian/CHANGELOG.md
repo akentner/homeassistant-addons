@@ -1,3 +1,11 @@
+## [1.71.1](https://github.com/rynfar/meridian/compare/meridian-v1.71.0...meridian-v1.71.1) (2026-09-12)
+
+### Bug Fixes
+
+- **opencode:** admit a plugin-less client's concurrent turns instead of refusing them
+  ([#1031](https://github.com/rynfar/meridian/issues/1031))
+  ([2e118a9](https://github.com/rynfar/meridian/commit/2e118a92ba69e17b92637ee47e1c76f211cd25bd))
+
 ## [1.70.0](https://github.com/rynfar/meridian/compare/meridian-v1.69.0...meridian-v1.70.0) (2026-09-10)
 
 ### Features
