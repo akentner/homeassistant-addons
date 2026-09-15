@@ -10,7 +10,7 @@ ARG TOFU_VERSION=1.10.6
 # Stage 1: Go build — produces a static binary that runs on Alpine/musl with
 # no libc/glibc mismatch (CGO_ENABLED=0). Multi-stage keeps the runtime image
 # under 60 MiB uncompressed (OPS-05 mirror from terraform-bridge).
-FROM golang:1.25-alpine AS builder
+FROM golang:1.27-alpine AS builder
 
 ARG RUNNER_VERSION
 
