@@ -74,6 +74,7 @@ Secrets are configured via the HA Add-on Configuration tab (not `secrets.yaml`).
 | `log_level`                           | enum   | `info`     | bashio → LiteLLM log level (`debug`/`info`/`warning`/`error`)                 |
 | `master_key`                          | secret | (auto-gen) | Master key — leave blank for auto-gen, or paste a `sk-…` string               |
 | `salt_key`                            | secret | (auto-gen) | Salt key — leave blank for auto-gen (no `sk-` prefix)                         |
+| `ingress_origin`                      | string | `""`       | HA origin for ingress framing (see "HA Ingress" below)                        |
 | `providers.openai_api_key`            | secret | `""`       | OpenAI API key                                                                |
 | `providers.anthropic_api_key`         | secret | `""`       | Anthropic API key                                                             |
 | `providers.google_api_key`            | secret | `""`       | Google AI Studio API key                                                      |
@@ -109,6 +110,27 @@ models:
 mapping is in `PROVIDER_ENV_VARS` inside `generate_config.py`; `provider="minimax"` → `${MINIMAX_API_KEY}`. Unknown
 providers fall back to `${CUSTOM_API_KEY}`. Set the key in the `providers.<name>_api_key` Configuration-tab field; the
 runtime export happens in `run.sh` after `generate_config.py` runs.
+
+## HA Ingress
+
+The litellm UI uses `Content-Security-Policy: frame-ancestors 'none'` (hardcoded in litellm 1.101.0's
+`ProxyServer.setup_csp_headers` — no upstream config knob). That blocks HA Supervisor's ingress iframe embedding with:
+
+> Refused to display '<https://ha-nextgen.akentner.de/>' in a frame because an ancestor violates the following Content
+> Security Policy directive: "frame-ancestors 'none'".
+
+Set `ingress_origin` to your **bare** HA origin (no trailing slash, no path) to allow the ingress iframe:
+
+| Value                            | Effect                                                                                                          |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `""` (empty / unset)             | CSP stays `frame-ancestors 'none'` — ingress blocked. Direct port (`:4000`) and HA Conversation API still work. |
+| `https://ha-nextgen.akentner.de` | CSP becomes `frame-ancestors 'self' https://ha-nextgen.akentner.de` — HA sidebar iframe loads.                  |
+| Any other origin                 | Same as above with that origin trusted.                                                                         |
+
+The wrapper at `/app/run_litellm.py` subclasses `litellm.proxy.proxy_server.ProxyServer` and overrides
+`setup_csp_headers()` with an HTTP middleware that rewrites the `frame-ancestors` directive when `INGRESS_ORIGIN` is
+set. `run.sh` reads `ingress_origin` via `bashio::config` and exports it as `INGRESS_ORIGIN` before launching the
+wrapper. Restart the add-on after changing this field (the middleware is registered once at proxy startup).
 
 ## Postgres Tuning
 

@@ -174,6 +174,22 @@ python3 /app/generate_config.py
 # lets the trap deliver signals to the captured PID. This is the standard bash
 # idiom for signal-trapped daemon supervision without s6-overlay.
 bashio::log.info "Starting LiteLLM on :4000..."
-litellm --config /data/litellm_config.yaml &
+
+# HA ingress requires litellm's CSP `frame-ancestors` to include the HA
+# origin. litellm 1.101.0 hardcodes `frame-ancestors 'none'` in
+# ProxyServer.setup_csp_headers(); run_litellm.py is a thin wrapper that
+# subclasses ProxyServer and overrides that method to honour
+# INGRESS_ORIGIN. Empty INGRESS_ORIGIN preserves the upstream CSP
+# (no ingress — fine for direct-port usage or HA Conversation API).
+INGRESS_ORIGIN=$(bashio::config 'ingress_origin' '')
+export INGRESS_ORIGIN
+if [ -n "${INGRESS_ORIGIN}" ]; then
+    bashio::log.info "Ingress framing allowed for origin: ${INGRESS_ORIGIN}"
+fi
+
+# We can't easily capture the PID after `exec` (the shell is replaced), so we use
+# a background + wait pattern: launch litellm in background, capture PID, then wait.
+# This allows the signal trap to forward SIGTERM/SIGHUP to the right process.
+python3 /app/run_litellm.py &
 LITELLM_PID=$!
 wait "${LITELLM_PID}"

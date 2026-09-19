@@ -86,6 +86,14 @@ RUN python3 -m pip install --no-cache-dir --no-index --break-system-packages \
 # generate_config.py runs in run.sh to translate HA options.json -> LiteLLM YAML
 COPY generate_config.py /app/generate_config.py
 
+# run_litellm.py wraps litellm's ProxyServer.setup_csp_headers() so HA
+# Supervisor ingress iframes aren't blocked by litellm's hardcoded
+# `frame-ancestors 'none'` (upstream source: litellm/proxy/proxy_server.py
+# in the 1.101.0 tag — no upstream config knob to override it). run.sh
+# exports $INGRESS_ORIGIN before invoking this script.
+COPY run_litellm.py /app/run_litellm.py
+RUN chmod +x /app/run_litellm.py
+
 # Add-on startup script
 COPY run.sh /run.sh
 RUN chmod +x /run.sh
