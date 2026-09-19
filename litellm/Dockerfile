@@ -78,7 +78,7 @@ RUN python3 -m pip install --no-cache-dir --no-index --break-system-packages \
     # `/` has no schema.prisma. Without prisma generate, the runtime
     # fails at litellm.proxy startup with "Failed to import Prisma client"
     # because the engine binaries aren't downloaded.
-    && LITELLM_PRISMA_SCHEMA="$(python3 -c "import litellm, os; print(os.path.join(os.path.dirname(litellm.__file__), 'proxy/prisma/schema.prisma'))")" \
+    && LITELLM_PRISMA_SCHEMA="$(python3 -c "import litellm, os; print(os.path.join(os.path.dirname(litellm.__file__), 'proxy/schema.prisma'))")" \
     && echo "Prisma schema: ${LITELLM_PRISMA_SCHEMA}" \
     && prisma generate --schema="${LITELLM_PRISMA_SCHEMA}" \
     && rm -rf /wheels
