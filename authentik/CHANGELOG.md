@@ -1,4 +1,4 @@
-See https://docs.goauthentik.io/docs/releases/2026.8#fixed-in-202683
+See <https://docs.goauthentik.io/docs/releases/2026.8#fixed-in-202683>
 
 ## What's Changed
 
@@ -22,7 +22,7 @@ See https://docs.goauthentik.io/docs/releases/2026.8#fixed-in-202683
 - web/flows: fix hardcoded locale in identification stage's `OR_LIST_FORMATTERS` (#26017)
 - web/scim: Add gitlab compatibility option to form (#26154)
 
-**Full Changelog**: https://github.com/goauthentik/authentik/compare/version/2026.8.2...version/2026.8.3
+**Full Changelog**: <https://github.com/goauthentik/authentik/compare/version/2026.8.2...version/2026.8.3>
 
 See <https://docs.goauthentik.io/docs/releases/2026.8#fixed-in-202682>
 
