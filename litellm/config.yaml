@@ -1,6 +1,6 @@
 name: "LiteLLM"
 description: "OpenAI-compatible API gateway with bundled PostgreSQL — virtual keys, spend tracking, model routing."
-version: "0.1.0-10"
+version: "0.1.0-11"
 slug: "litellm"
 init: false
 arch:

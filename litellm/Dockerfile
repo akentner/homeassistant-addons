@@ -67,7 +67,14 @@ RUN python3 -m pip install --no-cache-dir --no-index --break-system-packages \
         "litellm[proxy]==${LITELLM_VERSION}" \
         "psycopg[binary]==3.2.*" \
         "prisma==0.*" \
-    && prisma generate \
+    # prisma generate needs the schema.prisma file. litellm ships its
+    # Prisma schema inside the installed package at litellm/proxy/prisma/
+    # schema.prisma — point prisma at it explicitly. Without --schema,
+    # prisma generate fails with "Could not find Prisma Schema" because
+    # the workdir `/` has no schema.prisma.
+    && LITELLM_PRISMA_SCHEMA="$(python3 -c "import litellm.proxy.prisma, os; print(os.path.join(os.path.dirname(litellm.proxy.prisma.__file__), 'schema.prisma'))")" \
+    && echo "Prisma schema: ${LITELLM_PRISMA_SCHEMA}" \
+    && prisma generate --schema="${LITELLM_PRISMA_SCHEMA}" \
     && rm -rf /wheels
 
 # generate_config.py runs in run.sh to translate HA options.json -> LiteLLM YAML
