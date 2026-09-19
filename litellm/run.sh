@@ -74,7 +74,15 @@ export LITELLM_SALT_KEY="${SALT_KEY}"
 PG_PASS_FILE=/data/.pg_password
 if [ ! -f "${PG_PASS_FILE}" ]; then
     bashio::log.info "Generating PostgreSQL password..."
-    tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 40 > "${PG_PASS_FILE}"
+    # openssl rand -hex 20 → 40-char hex (a-f + 0-9) — alphanumeric
+    # subset, fits the postgres password field. Uses the same
+    # pattern as master_key/salt_key above; avoids the
+    # `tr ... | head ... > file` pipeline that triggers SIGPIPE
+    # on the head-close → pipefail would propagate exit 141 →
+    # set -e would exit the script silently right after the
+    # bashio::log.info line. (bashio sets `set -o pipefail` in
+    # its init.)
+    openssl rand -hex 20 > "${PG_PASS_FILE}"
     chmod 600 "${PG_PASS_FILE}"
 fi
 PG_PASS=$(cat "${PG_PASS_FILE}")
