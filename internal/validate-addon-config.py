@@ -6,6 +6,17 @@ from pathlib import Path
 
 import yaml
 
+# Register Home Assistant custom YAML tags as scalar placeholders so the
+# validator can parse add-on configs that reference !secret / !include / !env_var.
+# HA Supervisor resolves these at install time; for schema validation we only
+# care that the structure parses and the declared keys are present.
+def _ha_custom_tag(loader: yaml.Loader, _suffix: yaml.Node) -> str:
+    return ""
+
+
+for _tag in ("!secret", "!include", "!env_var", "!include_dir_named", "!include_dir_list"):
+    yaml.UnsafeLoader.add_constructor(_tag, _ha_custom_tag)
+
 VALID_ARCH = {"aarch64", "amd64", "armhf", "armv7", "i386"}
 VALID_STARTUP = {"application", "initialize", "system", "once", "services"}
 VALID_BOOT = {"auto", "manual", "manual_only"}
