@@ -2,13 +2,13 @@
 gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: opentofu-bridge
-current_phase: 17
-current_phase_name: Git Integration + Apply Job System
-current_plan: 7
+current_phase: 20
+current_phase_name: litellm-addon
+current_plan: 1
 status: Ready to plan
 stopped_at: Phase 20 context gathered
-last_updated: "2026-09-19T14:49:19.387Z"
-state_head: 2a0f81b096dbcbdef465739fe6dadd8122af2da5
+last_updated: "2026-09-19T16:47:28.890Z"
+state_head: 7f4ae3b6dfb4012c85d5a1b422e35fbdac611dcb
 progress:
   total_phases: 7
   completed_phases: 2
@@ -24,7 +24,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-31)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Phase 17 — Git Integration + Apply Job System
+tracking. **Current focus:** Phase 20 — litellm-addon
 
 ## Milestone v1.0 — COMPLETE
 
@@ -106,9 +106,9 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Current Plan: 7 Total Plans in Phase: 8
+Current Plan: 1
 
-Phase: 17 (Git Integration + Apply Job System) — EXECUTING COMPLETE (7 atomic commits landed on main; live-HA empirical
+Phase: 20 (litellm-addon) — EXECUTING
 exercise deferred to operator runtime as documented in 14-VERIFICATION.md — preflight returns 1 in this env: no tofu, no
 Provider binary, /healthz unreachable). OPS-04 surface delivered: `tools/test-addon/` (5 files) +
 `internal/verify-bridge-e2e/` (_lib.sh + 00-happy-path.sh + 12 error-code scenarios + 99-cleanup) +

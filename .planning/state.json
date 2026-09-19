@@ -86,7 +86,7 @@
     {
       "name": "Git + Apply Jobs",
       "number": "17",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "name": "MQTT + HA Entities",
@@ -99,5 +99,5 @@
       "status": "pending"
     }
   ],
-  "updated_at": "2026-09-08T10:14:54.479Z"
+  "updated_at": "2026-09-19T16:47:28.939Z"
 }
