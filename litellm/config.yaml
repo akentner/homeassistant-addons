@@ -1,6 +1,6 @@
 name: "LiteLLM"
 description: "OpenAI-compatible API gateway with bundled PostgreSQL — virtual keys, spend tracking, model routing."
-version: "0.1.0-0"
+version: "0.1.0-1"
 slug: "litellm"
 init: false
 arch:
@@ -31,13 +31,13 @@ health_check:
 
 options:
   log_level: "info"
-  master_key: !secret litellm_master_key
-  salt_key: !secret litellm_salt_key
+  master_key: ""
+  salt_key: ""
   providers:
-    openai_api_key: !secret openai_api_key
-    anthropic_api_key: !secret anthropic_api_key
-    google_api_key: !secret google_api_key
-    azure_api_key: !secret azure_api_key
+    openai_api_key: ""
+    anthropic_api_key: ""
+    google_api_key: ""
+    azure_api_key: ""
   models: []
   postgres:
     shared_buffers: "64MB"

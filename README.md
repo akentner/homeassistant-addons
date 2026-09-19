@@ -111,14 +111,14 @@ Conversation and homelab apps._
 
 Bundles [LiteLLM][litellm-upstream] (OpenAI-compatible API gateway for 100+ LLM providers) and PostgreSQL (state store
 for virtual keys + spend logs + model definitions) in a single container. Persists a master key with one-time auto-gen
-log-on first-start (operator copies to `secrets.yaml` for HA Conversation integration). Drop-in `api_base` for the
+log-on first-start (operator pastes the logged `sk-…` key into the add-on Configuration tab). Drop-in `api_base` for the
 standard `openai_conversation:` integration in HA Core.
 
 **Features:**
 
 - 100+ LLM providers (OpenAI, Anthropic, Google, Azure, Ollama, Bedrock) routable through one `master_key`
 - Bundled PostgreSQL — no external database add-on needed
-- HA Conversation integration via `api_base: !secret litellm_api_base`
+- HA Conversation integration via the add-on Configuration tab (master_key + provider keys set there)
 - Direct LAN/Tailscale access on port 4000 + HA Ingress for Swagger UI
 - Postgres tuning via SIGHUP-reload (`shared_buffers`, `log_min_duration_statement`)
 - Daily auto-update tracking LiteLLM upstream via `.upstream.yaml`

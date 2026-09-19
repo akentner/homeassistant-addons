@@ -18,39 +18,31 @@ PostgreSQL. This add-on bundles LiteLLM + PostgreSQL in a single HA Supervisor a
 
 ## First Start
 
-On the first start, run.sh generates a master key and logs it via `bashio::log.notice` (one-time emission). Subsequent
+On the first start, `run.sh` generates a master key and logs it via `bashio::log.notice` (one-time emission). Subsequent
 restarts reload the key from `/data/.litellm_master_key` silently.
 
 1. Open the add-on log in the HA UI.
 2. Find the line reading `litellm_master_key=sk-…` (64 hex chars after the `sk-` prefix).
-3. Copy the full string (including `sk-`) into `~/.homeassistant/secrets.yaml` as:
-
-   ```yaml
-   litellm_master_key: sk-...
-   ```
-
-4. Restart the add-on. Subsequent restarts will load the key from `secrets.yaml` via `!secret litellm_master_key`
-   resolution; the auto-gen branch in run.sh is skipped.
+3. Go to **Settings → Add-ons → LiteLLM → Configuration** and paste the full string (including `sk-`) into the
+   `master_key` field.
+4. Restart the add-on. Subsequent restarts will load the key from the Configuration tab; the auto-gen branch in `run.sh`
+   is skipped.
 
 Salt key follows the identical pattern (key is in `/data/.litellm_salt_key`; log line is `litellm_salt_key=…` without
-`sk-` prefix).
+`sk-` prefix; enter in the `salt_key` field of the Configuration tab).
 
 ## HA Conversation Integration
 
-Add this to your HA Core `configuration.yaml`:
+After the master key is set in the add-on's Configuration tab, add this to your HA Core `configuration.yaml`:
 
 ```yaml
 openai_conversation:
-  api_base: !secret litellm_api_base
-  api_key: !secret litellm_master_key
+  api_base: http://litellm:4000/v1
+  api_key: sk-...
 ```
 
-Where `secrets.yaml` has:
-
-```yaml
-litellm_api_base: http://litellm:4000/v1
-litellm_master_key: sk-...
-```
+Where `sk-...` is the master key you pasted into the Configuration tab (or read directly from
+`/data/.litellm_master_key` if you set up HA secrets externally).
 
 The `litellm:4000` hostname is HA Supervisor's DNS for the add-on (HA-OS-version-specific; works on 2026.x and later).
 Alternative: use the direct LAN/Tailscale URL (see below).
@@ -73,19 +65,23 @@ The Swagger UI is also accessible via Ingress at `https://<ha-host>/api/hassio_i
 
 ## Options
 
-| Option                                | Type   | Default                      | Description                                                                   |
-| ------------------------------------- | ------ | ---------------------------- | ----------------------------------------------------------------------------- |
-| `log_level`                           | enum   | `info`                       | bashio → LiteLLM log level (`debug`/`info`/`warning`/`error`)                 |
-| `master_key`                          | secret | `!secret litellm_master_key` | Master key (auto-gen fallback)                                                |
-| `salt_key`                            | secret | `!secret litellm_salt_key`   | Salt key (auto-gen fallback)                                                  |
-| `providers.openai_api_key`            | secret | `!secret openai_api_key`     | OpenAI API key                                                                |
-| `providers.anthropic_api_key`         | secret | `!secret anthropic_api_key`  | Anthropic API key                                                             |
-| `providers.google_api_key`            | secret | `!secret google_api_key`     | Google AI Studio API key                                                      |
-| `providers.azure_api_key`             | secret | `!secret azure_api_key`      | Azure OpenAI API key                                                          |
-| `models`                              | list   | `[]`                         | List of `{name, provider, api_base?, api_key?, model_name?, litellm_params?}` |
-| `postgres.shared_buffers`             | string | `64MB`                       | Postgres `shared_buffers` setting (SIGHUP-reloadable)                         |
-| `postgres.max_connections`            | int    | `20`                         | Postgres `max_connections` setting (**restart required**)                     |
-| `postgres.log_min_duration_statement` | int    | `1000`                       | Query log threshold (ms; SIGHUP-reloadable; `0` = log all)                    |
+Secrets are configured via the HA Add-on Configuration tab (not `secrets.yaml`). The empty-string defaults trigger the
+`run.sh` auto-gen branch for `master_key` and `salt_key`; provider keys without a value cause LiteLLM to log a clear
+"missing API key" error for the affected model.
+
+| Option                                | Type   | Default    | Description                                                                   |
+| ------------------------------------- | ------ | ---------- | ----------------------------------------------------------------------------- |
+| `log_level`                           | enum   | `info`     | bashio → LiteLLM log level (`debug`/`info`/`warning`/`error`)                 |
+| `master_key`                          | secret | (auto-gen) | Master key — leave blank for auto-gen, or paste a `sk-…` string               |
+| `salt_key`                            | secret | (auto-gen) | Salt key — leave blank for auto-gen (no `sk-` prefix)                         |
+| `providers.openai_api_key`            | secret | `""`       | OpenAI API key                                                                |
+| `providers.anthropic_api_key`         | secret | `""`       | Anthropic API key                                                             |
+| `providers.google_api_key`            | secret | `""`       | Google AI Studio API key                                                      |
+| `providers.azure_api_key`             | secret | `""`       | Azure OpenAI API key                                                          |
+| `models`                              | list   | `[]`       | List of `{name, provider, api_base?, api_key?, model_name?, litellm_params?}` |
+| `postgres.shared_buffers`             | string | `64MB`     | Postgres `shared_buffers` setting (SIGHUP-reloadable)                         |
+| `postgres.max_connections`            | int    | `20`       | Postgres `max_connections` setting (**restart required**)                     |
+| `postgres.log_min_duration_statement` | int    | `1000`     | Query log threshold (ms; SIGHUP-reloadable; `0` = log all)                    |
 
 Model name regex: `^[a-zA-Z0-9._:/+-]{1,256}$` (allows `/` for LiteLLM path syntax like
 `bedrock/anthropic.claude-3-5-sonnet`).
@@ -146,7 +142,8 @@ git tag.
 
 ### "401 Unauthorized" from a model
 
-The provider key (`openai_api_key`, `anthropic_api_key`, …) is missing. Add it to `secrets.yaml` and restart the add-on.
+The provider key (`openai_api_key`, `anthropic_api_key`, …) is missing. Set it in **Settings → Add-ons → LiteLLM →
+Configuration** (under the `providers.*_api_key` field) and restart the add-on.
 
 ### Postgres won't start
 
@@ -159,8 +156,8 @@ Check `/data/postgresql.log` (in the add-on log viewer or via the HA terminal ad
 ### Master-key reset
 
 Delete `/data/.litellm_master_key` and restart the add-on. A new master key is auto-generated and logged via
-`bashio::log.notice`. **Warning:** this invalidates all existing client sessions; update `secrets.yaml` and restart any
-clients using the old key.
+`bashio::log.notice`. **Warning:** this invalidates all existing client sessions; update the `master_key` field in the
+add-on Configuration tab and restart any clients using the old key.
 
 ### HA-Supervisor-DNS hostname check
 

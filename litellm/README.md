@@ -19,8 +19,8 @@ with HA Ingress for Swagger UI access from the HA UI sidebar.
   persist across restarts
 - **100+ LLM providers** — OpenAI, Anthropic, Google, Azure, Ollama, Bedrock, custom OpenAI-compatible endpoints, all
   routable through one `master_key`
-- **Master-key auto-generation** — first-start emits a one-time log line with the plaintext key; operator copies it to
-  `secrets.yaml` for HA Conversation integration
+- **Master-key auto-generation** — first-start emits a one-time log line with the plaintext key; operator pastes it into
+  the add-on Configuration tab for HA Conversation integration
 - **HA Conversation integration** — drop-in `api_base` for the standard `openai_conversation:` integration in HA Core
 - **Direct LAN/Tailscale access** — port 4000/tcp on the HA host; HA Ingress for Swagger UI
 - **Postgres tuning** — `shared_buffers` + `log_min_duration_statement` apply via SIGHUP-reload (no restart);
@@ -40,13 +40,10 @@ with HA Ingress for Swagger UI access from the HA UI sidebar.
 
 1. Open the add-on log in the HA UI.
 2. Find the line reading `litellm_master_key=sk-…` (64 hex chars after the `sk-` prefix).
-3. Copy the full string (including `sk-`) into `~/.homeassistant/secrets.yaml` as:
-
-   ```yaml
-   litellm_master_key: sk-...
-   ```
-
-4. Restart the add-on. Subsequent restarts load the key from `secrets.yaml` via `!secret litellm_master_key` resolution.
+3. Go to **Settings → Add-ons → LiteLLM → Configuration** and paste the full string (including `sk-`) into the
+   `master_key` field.
+4. Restart the add-on. Subsequent restarts load the key from the Configuration tab; the auto-gen branch in `run.sh` is
+   skipped.
 
 ## Configuration
 
