@@ -42,11 +42,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
         libssl3 \
         libffi8 \
+        python3 \
+        python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# LiteLLM runtime (from wheelhouse)
+# LiteLLM runtime (from wheelhouse). Use python3 -m pip (not bare `pip`)
+# because python3-pip installs pip3 but not a `pip` shim on Debian Trixie.
 COPY --from=litellm-builder /wheels /wheels
-RUN pip install --no-cache-dir --no-index --find-links=/wheels \
+RUN python3 -m pip install --no-cache-dir --no-index --find-links=/wheels \
         "litellm[proxy]==${LITELLM_VERSION}" \
         "psycopg[binary]==3.2.*" \
     && rm -rf /wheels
