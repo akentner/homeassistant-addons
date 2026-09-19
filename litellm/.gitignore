@@ -1,0 +1,3 @@
+# HA Supervisor bind-mounts this at runtime; ignore accidental commits
+/data
+/data/

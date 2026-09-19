@@ -102,6 +102,25 @@ S3-compatible backend, or a local file. Manual REST trigger only (`POST /v1/plan
 - `homeassistant_api: true` + `mqtt:need` service for the Phase 18 MQTT Discovery wiring (sensors + buttons)
 - `host_network: true` for SSH to homelab servers via Tailscale IPs
 
+### [LiteLLM](./litellm)
+
+![Supports amd64 Architecture][amd64-shield]
+
+_OpenAI-compatible API gateway with bundled PostgreSQL for HA Conversation and homelab apps._
+
+Local OpenAI-compatible API on port 4000 backed by [LiteLLM][litellm-upstream] — virtual keys, spend tracking, and
+multi-provider model routing in a single container. Bundles PostgreSQL for virtual-key state and spend logs. Use it as
+the `api_base` for HA's `openai_conversation` integration or any homelab client that speaks the OpenAI HTTP protocol.
+
+**Features:**
+
+- OpenAI-compatible HTTP API on `:4000` (LAN/Tailscale) + Ingress for the Swagger UI in HA
+- Master/Salt-Key auto-gen with persistent `/data/.litellm_*_key` files (chmod 600, `openssl rand -hex 32`)
+- Provider keys via `!secret` (`openai`, `anthropic`, `google`, `azure`); per-model key override
+- PostgreSQL state store (no external DB add-on required)
+- `map: backup:rw` — `/data/postgresql`, master/salt keys, and config included in HA snapshots
+- Daily upstream tracking via `.upstream.yaml` (`BerriAI/litellm`, `version_pattern: sync`)
+
 ### [Gatus](./gatus)
 
 ![Supports amd64 Architecture][amd64-shield]
@@ -229,6 +248,7 @@ This repository uses automated linting enforced by pre-commit hooks and GitHub A
 [ha-rest-integration]: https://www.home-assistant.io/integrations/rest/
 [ha-addons-docs]: https://developers.home-assistant.io/docs/add-ons
 [gatus-upstream]: https://github.com/TwiN/gatus
+[litellm-upstream]: https://github.com/BerriAI/litellm
 [markdownlint-cli2]: https://github.com/DavidAnson/markdownlint-cli2
 [actionlint]: https://github.com/rhysd/actionlint
 [hadolint]: https://github.com/hadolint/hadolint

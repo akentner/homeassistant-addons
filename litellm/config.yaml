@@ -1,0 +1,66 @@
+name: "LiteLLM"
+description: "OpenAI-compatible API gateway with bundled PostgreSQL — virtual keys, spend tracking, model routing."
+version: "0.1.0-0"
+slug: "litellm"
+init: false
+arch:
+  - amd64
+url: "https://github.com/akentner/homeassistant-addons"
+startup: "application"
+boot: "manual"
+host_network: false
+ingress: true
+ingress_port: 4000
+image: "ghcr.io/akentner/homeassistant-addons/{arch}-litellm"
+ports:
+  4000/tcp: 4000
+ports_description:
+  4000/tcp: "OpenAI-compatible API (HTTP) — direct port for LAN/Tailscale clients"
+map:
+  - type: addon_config
+    read_only: false
+    path: /addon_config
+  - type: backup
+    read_only: false
+panel_icon: "mdi:brain"
+panel_title: "LiteLLM"
+health_check:
+  endpoint: "http://localhost:4000/health/liveliness"
+  interval: 30
+  timeout: 5
+
+options:
+  log_level: "info"
+  master_key: !secret litellm_master_key
+  salt_key: !secret litellm_salt_key
+  providers:
+    openai_api_key: !secret openai_api_key
+    anthropic_api_key: !secret anthropic_api_key
+    google_api_key: !secret google_api_key
+    azure_api_key: !secret azure_api_key
+  models: []
+  postgres:
+    shared_buffers: "64MB"
+    max_connections: 20
+    log_min_duration_statement: 1000
+
+schema:
+  log_level: "list(debug|info|warning|error)?"
+  master_key: "password?"
+  salt_key: "password?"
+  providers:
+    openai_api_key: "password?"
+    anthropic_api_key: "password?"
+    google_api_key: "password?"
+    azure_api_key: "password?"
+  models:
+    - name: "match(^[a-zA-Z0-9._:/+-]{1,256}$)"
+      provider: "str?"
+      api_base: "url?"
+      api_key: "password?"
+      model_name: "str?"
+      litellm_params: "str?"
+  postgres:
+    shared_buffers: "str?"
+    max_connections: "int(5,200)?"
+    log_min_duration_statement: "int(0,60000)?"

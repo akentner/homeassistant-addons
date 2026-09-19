@@ -1,0 +1,6 @@
+build_from:
+  amd64: "ghcr.io/home-assistant/amd64-base-debian:trixie"
+
+args:
+  VERSION: "0.1.0"
+  LITELLM_VERSION: "1.40.0"
