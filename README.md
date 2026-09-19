@@ -106,20 +106,22 @@ S3-compatible backend, or a local file. Manual REST trigger only (`POST /v1/plan
 
 ![Supports amd64 Architecture][amd64-shield]
 
-_OpenAI-compatible API gateway with bundled PostgreSQL for HA Conversation and homelab apps._
+_OpenAI-compatible API gateway with bundled PostgreSQL — virtual keys, spend tracking, and model routing for HA
+Conversation and homelab apps._
 
-Local OpenAI-compatible API on port 4000 backed by [LiteLLM][litellm-upstream] — virtual keys, spend tracking, and
-multi-provider model routing in a single container. Bundles PostgreSQL for virtual-key state and spend logs. Use it as
-the `api_base` for HA's `openai_conversation` integration or any homelab client that speaks the OpenAI HTTP protocol.
+Bundles [LiteLLM][litellm-upstream] (OpenAI-compatible API gateway for 100+ LLM providers) and PostgreSQL (state store
+for virtual keys + spend logs + model definitions) in a single container. Persists a master key with one-time auto-gen
+log-on first-start (operator copies to `secrets.yaml` for HA Conversation integration). Drop-in `api_base` for the
+standard `openai_conversation:` integration in HA Core.
 
 **Features:**
 
-- OpenAI-compatible HTTP API on `:4000` (LAN/Tailscale) + Ingress for the Swagger UI in HA
-- Master/Salt-Key auto-gen with persistent `/data/.litellm_*_key` files (chmod 600, `openssl rand -hex 32`)
-- Provider keys via `!secret` (`openai`, `anthropic`, `google`, `azure`); per-model key override
-- PostgreSQL state store (no external DB add-on required)
-- `map: backup:rw` — `/data/postgresql`, master/salt keys, and config included in HA snapshots
-- Daily upstream tracking via `.upstream.yaml` (`BerriAI/litellm`, `version_pattern: sync`)
+- 100+ LLM providers (OpenAI, Anthropic, Google, Azure, Ollama, Bedrock) routable through one `master_key`
+- Bundled PostgreSQL — no external database add-on needed
+- HA Conversation integration via `api_base: !secret litellm_api_base`
+- Direct LAN/Tailscale access on port 4000 + HA Ingress for Swagger UI
+- Postgres tuning via SIGHUP-reload (`shared_buffers`, `log_min_duration_statement`)
+- Daily auto-update tracking LiteLLM upstream via `.upstream.yaml`
 
 ### [Gatus](./gatus)
 
