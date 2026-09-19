@@ -53,10 +53,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # this is the standard escape hatch since the container IS its own
 # isolated environment.
 COPY --from=litellm-builder /wheels /wheels
+# Install litellm + psycopg + prisma. prisma is NOT a transitive dep of
+# litellm[proxy] (litellm ships it as a separate optional dep that's only
+# pulled when you `pip install litellm[prisma]`). The wheelhouse builds
+# `prisma==0.*` for the codegen client; without installing it here,
+# litellm.proxy fails at startup with `No module named 'prisma'`. The
+# `prisma generate` post-install is needed to fetch the engine binary
+# (not part of the wheel; downloaded on first install).
 RUN python3 -m pip install --no-cache-dir --no-index --break-system-packages \
         --find-links=/wheels \
         "litellm[proxy]==${LITELLM_VERSION}" \
         "psycopg[binary]==3.2.*" \
+        "prisma==0.*" \
+    && prisma generate \
     && rm -rf /wheels
 
 # generate_config.py runs in run.sh to translate HA options.json -> LiteLLM YAML
