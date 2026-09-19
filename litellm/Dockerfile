@@ -13,7 +13,8 @@ RUN pip wheel --wheel-dir=/wheels \
         "psycopg[binary]==3.2.*" \
         "prisma==0.*"
 
-# Stage 2: HA Debian base + PostgreSQL + LiteLLM
+# Stage 2: HA Debian base + PGDG-postgres-16 + LiteLLM
+# PGDG repo + PostgreSQL 16 (NOT Debian-default postgresql-15) — see PLAN.md Q7
 FROM ${BUILD_FROM}
 
 ARG VERSION
@@ -22,9 +23,16 @@ ARG LITELLM_VERSION
 WORKDIR /
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        postgresql \
-        postgresql-client \
         curl \
+        ca-certificates \
+        gnupg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        postgresql-16 \
+        postgresql-client-16 \
         jq \
         bash \
         libssl3 \
