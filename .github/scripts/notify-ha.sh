@@ -42,7 +42,13 @@
 set -u
 
 EVENT="${1:-${NOTIFY_EVENT:-finished}}"
-PAYLOAD="${2:-${NOTIFY_PAYLOAD:-{}}}"
+# NOTE: the nested default MUST NOT be written as ${NOTIFY_PAYLOAD:-{}} — the
+# first brace closes the expansion and the second is appended literally, so
+# every payload gained a trailing "}". Home Assistant then failed to parse it
+# (orjson "unexpected content after document"), the webhook trigger never
+# fired, and async_handle_webhook still answered HTTP 200 — a silent no-op.
+PAYLOAD="${2:-${NOTIFY_PAYLOAD-}}"
+[ -n "$PAYLOAD" ] || PAYLOAD='{}'
 
 if [[ -z "${HA_BASE_URL:-}" || -z "${HA_WEBHOOK_ID:-}" ]]; then
     echo "::notice::HA_BASE_URL or HA_WEBHOOK_ID not set, skipping HA notification"
