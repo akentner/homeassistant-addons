@@ -48,8 +48,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # LiteLLM runtime (from wheelhouse). Use python3 -m pip (not bare `pip`)
 # because python3-pip installs pip3 but not a `pip` shim on Debian Trixie.
+# --break-system-packages is required because Debian Trixie marks the
+# system python3 as externally-managed (PEP 668); in a Docker container
+# this is the standard escape hatch since the container IS its own
+# isolated environment.
 COPY --from=litellm-builder /wheels /wheels
-RUN python3 -m pip install --no-cache-dir --no-index --find-links=/wheels \
+RUN python3 -m pip install --no-cache-dir --no-index --break-system-packages \
+        --find-links=/wheels \
         "litellm[proxy]==${LITELLM_VERSION}" \
         "psycopg[binary]==3.2.*" \
     && rm -rf /wheels
