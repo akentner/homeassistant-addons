@@ -189,18 +189,25 @@ RUN pip wheel --wheel-dir=/wheels \
         "prisma==0.*"
 ```
 
-Stage 2 — HA-debian base + postgres + LiteLLM (mirrors `authentik/Dockerfile`):
+Stage 2 — HA-debian base + PGDG-postgres-16 + LiteLLM (mirrors `authentik/Dockerfile`):
 
 ```dockerfile
 FROM ${BUILD_FROM}
 ARG VERSION
 ARG LITELLM_VERSION
 
-# apt-get pattern from authentik (lines 15-25)
+# PGDG repo + PostgreSQL 16 (NOT Debian-default postgresql-15) — see open_questions #7
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        postgresql \
-        postgresql-client \
         curl \
+        ca-certificates \
+        gnupg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        postgresql-16 \
+        postgresql-client-16 \
         jq \
         bash \
         libssl3 \
@@ -499,29 +506,41 @@ These questions block splitting into GSD executable plans. Resolve before invoki
    HA-OS version (2026.x), or do we need a different hostname pattern? Check via
    `kubectl exec`/`ha addons info litellm` after first install. (The internal-DNS hostname is HA-version-specific.)
 
-3. **Tailscale reachability from HA-OS add-on** — if user wants LiteLLM to call Ollama on `pve` via Tailscale IP,
-   is the Tailscale add-on installed on `haos-op3050-1`? If not, the `ollama` model provider in Options can't
-   actually route. Decide: document as prerequisite, or stub out the network reachability test.
+3. **Tailscale reachability from HA-OS add-on** — RESOLVED 2026-09-19 (empirical check via SSH on
+   `haos-op3050-1.shrimp-halfbeak.ts.net`): **Tailscale add-on installed and healthy** — slug
+   `a0d7b954_tailscale`, `Up 6 hours (healthy)`. Ollama-on-`pve`-via-Tailscale-IP routing is therefore a viable
+   `provider: ollama` model in Options. Open sub-question (deferred to Phase 19): does the LiteLLM add-on
+   container share the Tailscale interface, or does it need its own Tailscale ACL allowlist for outbound
+   connections? Document in DOCS.md as: "Ollama-via-Tailscale-IP routing requires that the LiteLLM container can
+   reach Tailscale interfaces — typically automatic when Tailscale add-on runs with default settings; verify
+   in your environment."
 
 4. **TLS termination** — direct port 4000 is plain HTTP. For Tailscale-only LAN use that's fine (Tailscale
    encrypts). For any direct LAN exposure (no Tailscale), the operator must put a reverse proxy in front. Document
    in DOCS.md, or add Caddy/Traefik via separate add-on?
 
 5. **Prisma migrations on LiteLLM upgrade** — does upgrading `LITELLM_VERSION` (via Renovate bump) require manual
-   `prisma migrate deploy` step, or does the LiteLLM entrypoint handle this automatically? Empirical check needed
-   before Phase 19 E2E.
+   `prisma migrate deploy` step, or does the LiteLLM entrypoint handle this automatically? **DEFERRED to Phase 19
+   E2E** (user decision 2026-09-19): not blocking for plan-splitting. Verification recipe: two consecutive
+   `podman run` invocations against the same `/data` volume with two different LiteLLM versions, observe whether
+   the second start applies pending migrations or fails on a missing column. Three outcomes documented (auto /
+   `run.sh`-patch / manual-SQL dealbreaker) — captured here for Phase 19 reference.
 
 6. **`prometheus_multiproc_dir`** — authentik sets this to a writable tmp dir (line 84-86 of authentik/run.sh).
    Does LiteLLM have an equivalent multiprocess metric requirement when run via uvicorn --workers? Decide based on
    whether we run uvicorn with `--workers > 1` (we probably don't — single-worker keeps the schema simple).
 
-7. **Postgres version drift** — Debian Trixie's `postgresql` package is 15.x; LiteLLM upstream expects 16+
-   (LiteLLM 1.40+ prisma schema may require 16). Verify Debian Trixie ships PG 16 by 2026-09; if not, fall back to
-   PGDG apt repo (`apt.postgresql.org`) for PG 16.
+7. **Postgres version** — DECIDED 2026-09-19: **PGDG repo + PostgreSQL 16** (not Debian Trixie's default 15.x).
+   Rationale: LiteLLM upstream expects PG 16+ for current Prisma schema; using the Debian-default PG 15 risks
+   future schema-drift when LiteLLM releases use PG-16-only features. Implementation captured in Dockerfile
+   section 2 below — `apt.postgresql.org` repo + signed keyring + `postgresql-16` package instead of generic
+   `postgresql`. ~50KB image growth, defensible against upstream drift.
 
-8. **`password?` schema with `!secret`** — does HA Supervisor's schema parser actually accept `!secret` references
-   in `options:` defaults combined with `password?` in `schema:`? Empirical test on a test add-on before
-   LITELLM-04 plan execution.
+8. **`password?` schema with `!secret`** — DEFERRED to Phase 19 E2E (user decision 2026-09-19). Empirical
+   verification recipe: Mini-Test-Add-on with `options.x: !secret nonexistent`, schema `str?`. If Supervisor
+   fails cleanly with "secret not found" → Pattern validiert. If crashes → fall back to `str?` + empty default +
+   auto-gen. If `password?` is the requirement (masked UI input), separate recipe with `password?` + `!secret`
+   on the same Mini-Test-Add-on.
 
 9. **Master-key surface discipline** — when auto-generated, the master-key plaintext is logged via `bashio::log`.
    Is that acceptable for the v1.5 release, or do we want a `/data/.litellm_master_key`-only approach with the
