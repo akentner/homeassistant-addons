@@ -126,6 +126,17 @@ jobs:
               continue
             }
 
+            # D-30: post-processing — sync args.LITELLM_VERSION to the new VERSION for
+            # add-ons that declare it (currently only `litellm`). The sed is guarded
+            # so add-ons without LITELLM_VERSION (gatus, meridian, iac-runner,
+            # network-tools, phone-logger, coding-assistants, etc.) skip this step
+            # entirely. Keeps update-version.py single-purpose (no Python change).
+            if grep -q '^  LITELLM_VERSION:' "$addon_dir/build.yaml"; then
+              sed -i "s|LITELLM_VERSION: \"$current_version\"|LITELLM_VERSION: \"$latest_version\"|" \
+                "$addon_dir/build.yaml"
+              echo "INFO: synced args.LITELLM_VERSION to $latest_version for $addon_name"
+            fi
+
             # Detect actual file changes (AUTO-04) — script exits 0 for both updated AND no-op
             if git diff --quiet; then
               echo "INFO: no file changes after update-version.py for $addon_name"
