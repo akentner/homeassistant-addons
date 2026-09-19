@@ -11,7 +11,7 @@ FROM python:3.13-slim-bookworm AS litellm-builder
 # (BUILD_FROM/VERSION/BUILD_ARCH/BUILD_DATE/BUILD_NAME/BUILD_DESCRIPTION/BUILD_REF/
 # BUILD_REPOSITORY/BUILD_VERSION); addon-specific args from build.yaml are not
 # forwarded, so this default keeps the build self-sufficient.
-ARG LITELLM_VERSION=1.40.0
+ARG LITELLM_VERSION=1.101.0
 
 RUN pip wheel --wheel-dir=/wheels \
         "litellm[proxy]==${LITELLM_VERSION}" \

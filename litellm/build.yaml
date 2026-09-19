@@ -3,4 +3,4 @@ build_from:
 
 args:
   VERSION: "0.1.0"
-  LITELLM_VERSION: "1.40.0"
+  LITELLM_VERSION: "1.101.0"
