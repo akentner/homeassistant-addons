@@ -4,17 +4,17 @@ milestone: v1.3
 milestone_name: opentofu-bridge
 current_phase: 20
 current_phase_name: litellm-addon
-current_plan: 1
-status: Ready to plan
-stopped_at: Phase 20 context gathered
-last_updated: "2026-09-19T16:47:28.890Z"
-state_head: 7f4ae3b6dfb4012c85d5a1b422e35fbdac611dcb
+current_plan: 4
+status: Phase 20 execution complete
+stopped_at: Phase 20 execution complete (4/4 plans landed, 21 commits ahead of origin/main)
+last_updated: "2026-09-19T18:33:27Z"
+state_head: 9fc21f4e9469359b9eab48d2578d8cecec66fa0a
 progress:
-  total_phases: 7
-  completed_phases: 2
-  total_plans: 15
-  completed_plans: 15
-  percent: 29
+  total_phases: 19
+  completed_phases: 12
+  total_plans: 31
+  completed_plans: 27
+  percent: 63
 ---
 
 # Project State
@@ -66,8 +66,9 @@ write per wave. 08-04 documents the end state and therefore runs last.
 
 ## Milestone v1.3 opentofu-bridge — PLANNING
 
-Roadmap: 7 phases (9-15), 46 requirements mapped. Source: `research/SUMMARY.md` + `REQUIREMENTS.md`. Status: roadmap
-approved; Phase 9 ready to plan. v1.3 runs in parallel with v1.2 Phase 8 gap-closure by explicit user decision.
+Roadmap: 7 phases (9-15) + Phase 20 (litellm-addon overflow, added 2026-09-19). 46 v1.3 requirements + 10 LITELLM-* mapped.
+Source: `research/SUMMARY.md` + `REQUIREMENTS.md` + 2026-09-19 litellm design session. Status: roadmap approved;
+Phase 9-12 shipped; Phase 20 just completed (4/4 plans). v1.3 runs in parallel with v1.2 Phase 8 gap-closure by explicit user decision.
 
 | Phase | Name                                                   | Status                                 | Completed                                                                                                                                                 |
 | ----- | ------------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -78,6 +79,7 @@ approved; Phase 9 ready to plan. v1.3 runs in parallel with v1.2 Phase 8 gap-clo
 | 13    | Provider + Resource + Data Sources + Schema Handshake  | Not started                            | —                                                                                                                                                         |
 | 14    | Real-HA End-to-End Verification + Operator Docs        | Not started                            | —                                                                                                                                                         |
 | 15    | CI Hardening + Provider Install Workflow               | Not started                            | —                                                                                                                                                         |
+| 20    | litellm-addon (OpenAI-compatible API gateway)          | **Complete**                           | 2026-09-19 (plans 01-04; 21 commits ahead of origin/main; all 4 validators pass; DOCS.md + 4 verifier scripts + spike shipped; live-HA install deferred to operator runtime) |
 
 Phase dependency graph enforces: 9 → 10 → 11 → 12 → 13 → 14 → 15 (strictly serial). The empirical SUPERVISOR_TOKEN
 rotation spike (H-1 from PITFALLS) was the first deliverable of Phase 9; it is the lowest-confidence item blocking the
@@ -85,9 +87,7 @@ rest. Spike ran 2026-08-31 → `token_unchanged`; Phase 10 auth already implemen
 `internal/supervisor/client.go:84-91` — `RoundTrip → t.tokenFn()` reads `os.Getenv("SUPERVISOR_TOKEN")` on every
 outbound request). D-18 RESOLVED with defensive design; conservative re-verification deferred (see Todos).
 
-**v1.3 closure status:** 6 of 7 phases shipped end-to-end (`terraform-bridge/v0.3.0` + Provider `v0.3.0`). Phase 15
-release cut pending v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite (mechanically ready). Milestone closure call:
-`gsd-complete-milestone v1.3` after Phase 15 release.
+**v1.3 closure status:** 6 of 7 (originally planned) phases shipped end-to-end (`terraform-bridge/v0.3.0` + Provider `v0.3.0`); Phase 15 release cut pending v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite (mechanically ready). Phase 20 (litellm-addon) is an additional completed phase added on 2026-09-19 — its release image (`ghcr.io/akentner/homeassistant-addons/amd64-litellm:0.1.0`) builds but has not yet been pushed to ghcr.io. Milestone closure call: `gsd-complete-milestone v1.3` after Phase 15 release + Phase 20 image push.
 
 ## Milestone v1.4 iac-runner — PLANNING
 
@@ -106,9 +106,27 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Current Plan: 1
+Current Plan: 4 (Phase 20 complete — 4/4 plans landed)
 
-Phase: 20 (litellm-addon) — EXECUTING
+Phase: 20 (litellm-addon) — **EXECUTION COMPLETE** (2026-09-19)
+21 atomic commits on main (4 planning + 14 execution + 4 plan SUMMARYs). All 4 plans landed:
+
+- **Plan 01** (e0df1a1 / fcb14cd / 958ef21 / 493eb71 / f490894 / cebe063 / b6e6534): 4-file HA Supervisor scaffold
+  (config.yaml + build.yaml + Dockerfile + run.sh) + .upstream.yaml + .gitignore + README +
+  `litellm/generate_config.py` envelope + PGDG postgresql-16 alignment (PLAN.md Q7 fixup). All 4 validators
+  pass (validate-addon-config.py / yamllint / validate-dockerfile-args.sh / hadolint).
+- **Plan 02** (465838b / 2eadbdb / 9f3efbc): Master/Salt-Key lifecycle (D-11/D-12) with bashio::config → file → auto-gen
+  chain + signal-trap (D-10: TERM 30s drain + HUP log-reopen) + bashio log_level → LITELLM_LOG mapping (D-19) +
+  full generate_config.py expansion (6 providers with env-var secret references, no plaintext in YAML).
+- **Plan 03** (9be3e11 / bb8178f / 8adf831): Postgres tuning reload (`/data/postgresql/litellm-tuning.conf` +
+  include_if_exists + `pg_ctl reload`, SIGHUP-reloadable settings apply immediately) +
+  `auto-update.yml` guarded sed step that syncs `args.LITELLM_VERSION` to new `VERSION` (D-30 / Audit B2 fix).
+- **Plan 04** (af74157 / d8f8be1 / 9fc21f4): DOCS.md (181 lines, 11 sections — install, first-start master-key
+  retrieval, HA Conversation integration, options schema, postgres tuning with max_connections restart caveat,
+  backup/restore procedure, auto-update, troubleshooting) + 4 verifier/spike scripts
+  (scaffold / no-secret-leak / postgres-reset / secret-schema) + litellm/README.md polish + root README.md
+  LiteLLM entry polish.
+
 exercise deferred to operator runtime as documented in 14-VERIFICATION.md — preflight returns 1 in this env: no tofu, no
 Provider binary, /healthz unreachable). OPS-04 surface delivered: `tools/test-addon/` (5 files) +
 `internal/verify-bridge-e2e/` (_lib.sh + 00-happy-path.sh + 12 error-code scenarios + 99-cleanup) +
@@ -369,11 +387,11 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 
 ## Session Continuity
 
-**Resume file:** .planning/phases/20-litellm-addon/20-CONTEXT.md
+**Resume file:** .planning/phases/20-litellm-addon/20-04-SUMMARY.md
 
-**Stopped at:** Phase 20 context gathered
+**Stopped at:** Phase 20 (litellm-addon) execution complete — 4/4 plans landed, 21 commits ahead of origin/main
 
-Last session: 2026-09-19T14:49:19.130Z
+Last session: 2026-09-19T18:33:27Z
 
 ---
 

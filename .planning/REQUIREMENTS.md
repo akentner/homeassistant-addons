@@ -162,6 +162,54 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
 | **Phase 13: Provider + Resource + Data + Handshake**          | PROV-01, PROV-02, PROV-03, PROV-04, PROV-05, PROV-06, PROV-07, PROV-08, PROV-09, PROV-10, PROV-11, PROV-12, LIFE-02, LIFE-04, STATE-01 | 15    |
 | **Phase 14: Real-HA E2E + Operator Docs**                     | OPS-04                                                                                                                                 | 1     |
 | **Phase 15: CI + Provider Install**                           | TOFU-04                                                                                                                                | 1     |
+| **Phase 20: litellm-addon (OpenAI-compatible API gateway)**   | LITELLM-01, LITELLM-02, LITELLM-03, LITELLM-04, LITELLM-05, LITELLM-06, LITELLM-07, LITELLM-08, LITELLM-09, LITELLM-10                  | 10   |
+
+### LITELLM — Phase 20 (litellm-addon, OpenAI-compatible API gateway)
+
+- [x] **LITELLM-01**: `litellm/` add-on follows the established 4-file pattern (`config.yaml`, `build.yaml`,
+      `Dockerfile`, `run.sh`) consistent with every other add-on in the repo; `.upstream.yaml` points at
+      `BerriAI/litellm` with `version_pattern: v*` + `addon.version_pattern: sync` for daily auto-update
+- [x] **LITELLM-02**: Multi-stage Dockerfile — `python:3.13-slim-bookworm AS litellm-builder` (pip wheel
+      `litellm[proxy]` + `psycopg[binary]` + `prisma`) → `${BUILD_FROM}` HA-debian-trixie runtime; PGDG repo +
+      PostgreSQL 16 (per PLAN.md Q7 resolution); full OCI label block at end of Dockerfile
+- [x] **LITELLM-03**: `run.sh` bash-sequential startup — PostgreSQL init lifecycle (version detection,
+      initdb-if-missing, pg_hba.conf entry, pg_ctl start, pg_isready wait, idempotent user/db create) followed
+      by `python3 /app/generate_config.py` + `exec litellm --config /data/litellm_config.yaml`
+- [x] **LITELLM-04**: `config.yaml` schema with `models: []` default + per-provider `api_key: !secret …`
+      + `master_key: !secret litellm_master_key` + `salt_key: !secret litellm_salt_key` + `postgres: {}`
+      tuning block; `generate_config.py` routes each model's `api_key` to the right provider env-var
+      (`openai → ${OPENAI_API_KEY}`, `anthropic → ${ANTHROPIC_API_KEY}`, `google → ${GOOGLE_API_KEY}`,
+      `azure → ${AZURE_API_KEY}`, `ollama → no api_key`, `bedrock → AWS_*` chain, unknown → `CUSTOM_API_KEY`
+      fallback); keyless providers (ollama) emit no `api_key` field
+- [x] **LITELLM-05**: Master/Salt-Key lifecycle in `run.sh` — `bashio::config 'master_key'` → empty? file
+      fallback (`/data/.litellm_master_key`) → empty? auto-gen with `openssl rand -hex 32` + `sk-` prefix
+      (master only) + chmod 600 + `export LITELLM_MASTER_KEY`; identical pattern for salt key without
+      `sk-` prefix; auto-gen emits ONE `bashio::log.notice` line with the plaintext key (D-11/D-12
+      audit Q9 UX compromise); subsequent restarts reload silently
+- [x] **LITELLM-06**: Postgres tuning via `/data/postgresql/litellm-tuning.conf` (operator-tunable
+      `shared_buffers`, `log_min_duration_statement`, `max_connections` + hardcoded `effective_cache_size=256MB`
+      + `work_mem=4MB`) + `include_if_exists` directive in `postgresql.conf` (idempotent `grep -q` guard) +
+      `pg_ctl reload` to apply SIGHUP-reloadable settings immediately; `max_connections` change emits
+      `bashio::log.warning "... requires restart"` (D-15/D-16)
+- [x] **LITELLM-07**: Daily auto-update via `.upstream.yaml` + `.github/workflows/auto-update.yml` post-processing
+      step (guarded `sed`) that syncs `args.LITELLM_VERSION` to the new `VERSION` on every upstream bump
+      (D-30 / Audit B2 fix — keeps add-on version and upstream LiteLLM version in lockstep)
+- [x] **LITELLM-08**: `litellm/` add-on exposes port 4000/tcp on the HA host (LAN/Tailscale) + HA Ingress
+      (Swagger UI in HA UI sidebar); image `ghcr.io/akentner/homeassistant-addons/{arch}-litellm`;
+      `health_check` endpoint `http://localhost:4000/health/liveliness` with 30s interval / 5s timeout
+- [x] **LITELLM-09**: `litellm/DOCS.md` operator reference with all 11 sections (About, Install, First Start
+      master-key retrieval, HA Conversation Integration with `openai_conversation:` snippet + `!secret
+      litellm_api_base` + `!secret litellm_master_key`, Direct Port Access, Options schema with every
+      key, Postgres Tuning with max_connections restart caveat, Backup & Restore with `map: backup: rw`
+      + Postgres reset procedure, Auto-Update with `make release` manual override, Troubleshooting,
+      Spike Result); respects 120-char markdownlint line limit
+- [x] **LITELLM-10**: Root `README.md` LiteLLM entry polished (100+ providers, bundled PG, HA Conversation
+      integration, SIGHUP tuning, daily auto-update); `litellm/README.md` About/Features/Install/First
+      Start/Configuration sections + v0.1.0 badge + DOCS.md link; 4 verifier/spike scripts shipped
+      (`verify-litellm-scaffold.sh` for D-32 image build, `verify-litellm-no-secret-leak.sh` for D-33
+      master-key plaintext count = 1, `verify-litellm-postgres-reset.sh` for D-34 reset procedure,
+      `spike-litellm-secret-schema.sh` for D-35 `password?` + `!secret` empirical validation); all pass
+      shellcheck + are executable
 
 ### Per-requirement mapping
 
@@ -213,10 +261,20 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
 | TOFU-03   | Phase 9: Bridge Foundation + Token Rotation Spike         |
 | TOFU-04   | Phase 15: CI + Provider Install                           |
 | TOFU-05   | Phase 9: Bridge Foundation + Token Rotation Spike         |
+| LITELLM-01 | Phase 20: litellm-addon                                  |
+| LITELLM-02 | Phase 20: litellm-addon                                  |
+| LITELLM-03 | Phase 20: litellm-addon                                  |
+| LITELLM-04 | Phase 20: litellm-addon                                  |
+| LITELLM-05 | Phase 20: litellm-addon                                  |
+| LITELLM-06 | Phase 20: litellm-addon                                  |
+| LITELLM-07 | Phase 20: litellm-addon                                  |
+| LITELLM-08 | Phase 20: litellm-addon                                  |
+| LITELLM-09 | Phase 20: litellm-addon                                  |
+| LITELLM-10 | Phase 20: litellm-addon                                  |
 
 ### Coverage gaps and resolutions
 
-**None.** All 46 v1.3 requirements are mapped to exactly one phase. Two structural decisions taken during mapping:
+**None.** All 46 v1.3 + 10 LITELLM (Phase 20) = 56 requirements are mapped to exactly one phase. Two structural decisions taken during mapping:
 
 - **STATE-03 (per-slug write mutex)** assigned to Phase 12, not Phase 11/13 — mutex is defense-in-depth for cross-host
   concurrent applies and must exist BEFORE Provider surfaces destructive operations; pairing it with the write endpoints

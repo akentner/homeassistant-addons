@@ -97,7 +97,12 @@
       "name": "E2E + DOCS",
       "number": "19",
       "status": "pending"
+    },
+    {
+      "name": "litellm-addon",
+      "number": "20",
+      "status": "complete"
     }
   ],
-  "updated_at": "2026-09-19T16:47:28.939Z"
+  "updated_at": "2026-09-19T18:33:27Z"
 }
