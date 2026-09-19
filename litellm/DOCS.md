@@ -78,6 +78,7 @@ Secrets are configured via the HA Add-on Configuration tab (not `secrets.yaml`).
 | `providers.anthropic_api_key`         | secret | `""`       | Anthropic API key                                                             |
 | `providers.google_api_key`            | secret | `""`       | Google AI Studio API key                                                      |
 | `providers.azure_api_key`             | secret | `""`       | Azure OpenAI API key                                                          |
+| `providers.minimax_api_key`           | secret | `""`       | MiniMax API key (M3/MiniMax-Text/etc — see "Custom Providers" below)          |
 | `models`                              | list   | `[]`       | List of `{name, provider, api_base?, api_key?, model_name?, litellm_params?}` |
 | `postgres.shared_buffers`             | string | `64MB`     | Postgres `shared_buffers` setting (SIGHUP-reloadable)                         |
 | `postgres.max_connections`            | int    | `20`       | Postgres `max_connections` setting (**restart required**)                     |
@@ -85,6 +86,29 @@ Secrets are configured via the HA Add-on Configuration tab (not `secrets.yaml`).
 
 Model name regex: `^[a-zA-Z0-9._:/+-]{1,256}$` (allows `/` for LiteLLM path syntax like
 `bedrock/anthropic.claude-3-5-sonnet`).
+
+## Custom Providers (MiniMax, custom endpoints)
+
+The `providers.<name>_api_key` fields are shortcuts for the built-in litellm provider list. For any other
+OpenAI-compatible API (MiniMax, custom proxies, internal gateways, …) add a `models[]` entry with `provider` set to the
+matching key:
+
+```yaml
+models:
+  - name: "minimax-m3"
+    provider: "minimax"
+    api_base: "https://api.minimax.com/v1"
+    model_name: "minimax-M3"
+  - name: "internal-llama"
+    provider: "custom_openai"
+    api_base: "http://192.168.1.50:11434/v1"
+    model_name: "llama3.1"
+```
+
+`generate_config.py` resolves the per-model `api_key` field by mapping the `provider` value to an env-var name. The
+mapping is in `PROVIDER_ENV_VARS` inside `generate_config.py`; `provider="minimax"` → `${MINIMAX_API_KEY}`. Unknown
+providers fall back to `${CUSTOM_API_KEY}`. Set the key in the `providers.<name>_api_key` Configuration-tab field; the
+runtime export happens in `run.sh` after `generate_config.py` runs.
 
 ## Postgres Tuning
 

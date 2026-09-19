@@ -1,6 +1,6 @@
 name: "LiteLLM"
 description: "OpenAI-compatible API gateway with bundled PostgreSQL — virtual keys, spend tracking, model routing."
-version: "0.1.0-13"
+version: "0.1.0-14"
 slug: "litellm"
 init: false
 arch:
@@ -12,6 +12,7 @@ host_network: false
 ingress: true
 ingress_port: 4000
 image: "ghcr.io/akentner/homeassistant-addons/{arch}-litellm"
+icon: true
 ports:
   4000/tcp: 4000
 ports_description:
@@ -38,6 +39,7 @@ options:
     anthropic_api_key: ""
     google_api_key: ""
     azure_api_key: ""
+    minimax_api_key: ""
   models: []
   postgres:
     shared_buffers: "64MB"
@@ -53,6 +55,7 @@ schema:
     anthropic_api_key: "password?"
     google_api_key: "password?"
     azure_api_key: "password?"
+    minimax_api_key: "password?"
   models:
     - name: "match(^[a-zA-Z0-9._:/+-]{1,256}$)"
       provider: "str?"

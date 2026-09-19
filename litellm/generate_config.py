@@ -30,6 +30,7 @@ PROVIDER_ENV_VARS = {
     "anthropic": "ANTHROPIC_API_KEY",
     "google": "GOOGLE_API_KEY",
     "azure": "AZURE_API_KEY",
+    "minimax": "MINIMAX_API_KEY",
     # ollama + bedrock use a different key naming convention:
     # ollama needs no key (LAN-only), bedrock uses AWS_* env chain
     "ollama": None,
