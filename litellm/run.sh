@@ -2,14 +2,35 @@
 # shellcheck shell=bash
 set -e
 
-# ── Signal trap (Plan 02 expands the handler body with master/salt persistence + log-reopen) ─
+# ── Signal trap (per D-10, authentik/iac-runner precedent) ──────────────────
+# Trap installed BEFORE postgres init so SIGTERM during init still drains cleanly.
+# _on_term is invoked when bashio/bash sends SIGTERM during HA Supervisor restart;
+# we forward to litellm (PID1 after exec) and wait up to 30s for graceful drain.
 _on_term() {
-    bashio::log.info "Received SIGTERM — graceful drain (30s)..."
-    # Plan 02: forward to litellm PID + drain in-flight requests
-    sleep 1
+    bashio::log.notice "litellm.term.received — graceful drain (30s)..."
+    if [ -n "${LITELLM_PID:-}" ] && kill -0 "${LITELLM_PID}" 2>/dev/null; then
+        kill -TERM "${LITELLM_PID}" 2>/dev/null || true
+        # Wait up to 30s for graceful exit
+        for _ in $(seq 1 30); do
+            if ! kill -0 "${LITELLM_PID}" 2>/dev/null; then
+                break
+            fi
+            sleep 1
+        done
+        # If still alive after 30s, force-kill
+        if kill -0 "${LITELLM_PID}" 2>/dev/null; then
+            bashio::log.warning "litellm.term.timeout — forcing exit"
+            kill -KILL "${LITELLM_PID}" 2>/dev/null || true
+        fi
+    fi
+    exit 0
 }
 _on_hup() {
-    bashio::log.notice "Received SIGHUP — log-reopen (placeholder; Plan 02 wires litellm log-reopen)"
+    bashio::log.notice "litellm.log_reopen — forwarding SIGHUP to litellm"
+    if [ -n "${LITELLM_PID:-}" ] && kill -0 "${LITELLM_PID}" 2>/dev/null; then
+        # LiteLLM treats SIGHUP as log-reopen since 1.39; verified in Plan 04 E2E
+        kill -HUP "${LITELLM_PID}" 2>/dev/null || true
+    fi
 }
 trap _on_term TERM
 trap _on_hup HUP
@@ -17,6 +38,37 @@ trap _on_hup HUP
 # ── Options ──────────────────────────────────────────────────────────────────
 LOG_LEVEL=$(bashio::config 'log_level' 'info')
 export LITELLM_LOG="${LOG_LEVEL^^}"
+
+# ── Master/Salt-Key lifecycle (D-11, D-12) ──────────────────────────────────
+MASTER_KEY_FILE=/data/.litellm_master_key
+MASTER_KEY=$(bashio::config 'master_key' '')
+if [ -z "${MASTER_KEY}" ] && [ -f "${MASTER_KEY_FILE}" ]; then
+    MASTER_KEY=$(cat "${MASTER_KEY_FILE}")
+fi
+if [ -z "${MASTER_KEY}" ]; then
+    # One-time UX: log the plaintext so the operator can copy it into secrets.yaml.
+    # On subsequent restarts the file check above catches the persisted key silently.
+    bashio::log.notice "Generating master_key — copy from this log line to secrets.yaml as 'litellm_master_key:'"
+    MASTER_KEY="sk-$(openssl rand -hex 32)"
+    bashio::log.notice "litellm_master_key=${MASTER_KEY}"
+    echo "${MASTER_KEY}" > "${MASTER_KEY_FILE}"
+    chmod 600 "${MASTER_KEY_FILE}"
+fi
+export LITELLM_MASTER_KEY="${MASTER_KEY}"
+
+SALT_KEY_FILE=/data/.litellm_salt_key
+SALT_KEY=$(bashio::config 'salt_key' '')
+if [ -z "${SALT_KEY}" ] && [ -f "${SALT_KEY_FILE}" ]; then
+    SALT_KEY=$(cat "${SALT_KEY_FILE}")
+fi
+if [ -z "${SALT_KEY}" ]; then
+    bashio::log.notice "Generating salt_key — copy from this log line to secrets.yaml as 'litellm_salt_key:'"
+    SALT_KEY="$(openssl rand -hex 32)"
+    bashio::log.notice "litellm_salt_key=${SALT_KEY}"
+    echo "${SALT_KEY}" > "${SALT_KEY_FILE}"
+    chmod 600 "${SALT_KEY_FILE}"
+fi
+export LITELLM_SALT_KEY="${SALT_KEY}"
 
 # ── PostgreSQL password (persistent; chmod 600; idempotent) ────────────────────
 PG_PASS_FILE=/data/.pg_password
@@ -58,12 +110,21 @@ su -s /bin/bash postgres \
     su -s /bin/bash postgres -c "psql -h 127.0.0.1 -c \"CREATE DATABASE litellm OWNER litellm;\""
 }
 
-# ── LiteLLM environment ──────────────────────────────────────────────────────
+# ── LiteLLM environment (exported BEFORE generate_config.py so it sees them) ─
 export DATABASE_URL="postgresql://litellm:${PG_PASS}@127.0.0.1:5432/litellm"
+export LITELLM_MASTER_KEY
+export LITELLM_SALT_KEY
 
-# ── Synthesize LiteLLM YAML from HA options.json (Python helper; Plan 02 expands) ─
+# ── Synthesize LiteLLM YAML from HA options.json (D-17) ──────────────────────
 python3 /app/generate_config.py
 
-# ── Start LiteLLM (PID1, foreground) ─────────────────────────────────────────
+# ── Start LiteLLM (background + wait — preserves signal-trap forwarding) ─────
+# We use background + wait instead of `exec` so the signal trap above can forward
+# SIGTERM/SIGHUP to the captured ${LITELLM_PID}. `exec` replaces the shell with
+# litellm, losing the trap; background + wait keeps the shell alive as PID1 and
+# lets the trap deliver signals to the captured PID. This is the standard bash
+# idiom for signal-trapped daemon supervision without s6-overlay.
 bashio::log.info "Starting LiteLLM on :4000..."
-exec litellm --config /data/litellm_config.yaml
+litellm --config /data/litellm_config.yaml &
+LITELLM_PID=$!
+wait "${LITELLM_PID}"
