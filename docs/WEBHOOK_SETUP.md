@@ -65,12 +65,12 @@ action:
 
 In your repository → Settings → Secrets and variables → Actions → New repository secret.
 
-| Secret                    | Value                                                                       | Required |
-| ------------------------- | --------------------------------------------------------------------------- | -------- |
-| `HA_BASE_URL`             | `https://ha-nextgen.akentner.de` (no trailing slash, no `/api/webhook/...`) | yes      |
-| `HA_WEBHOOK_ID`           | the random string from step 1                                               | yes      |
-| `CF_ACCESS_CLIENT_ID`     | Cloudflare Access service-token Client ID                                   | optional |
-| `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access service-token Client Secret                               | optional |
+| Secret                    | Value                                                                    | Required |
+| ------------------------- | ------------------------------------------------------------------------ | -------- |
+| `HA_BASE_URL`             | `https://webhook.akentner.de` (no trailing slash, no `/api/webhook/...`) | yes      |
+| `HA_WEBHOOK_ID`           | the random string from step 1                                            | yes      |
+| `CF_ACCESS_CLIENT_ID`     | Cloudflare Access service-token Client ID                                | optional |
+| `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access service-token Client Secret                            | optional |
 
 The webhook has no HMAC or payload signature. Its only secret is the webhook ID itself, so use a long random value.
 Transport-level protection comes from Cloudflare Access (see below), which is what prevents the path from being

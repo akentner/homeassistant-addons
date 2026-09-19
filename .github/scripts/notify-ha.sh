@@ -11,7 +11,7 @@
 # behind a reverse proxy; not acceptable for public exposure.
 #
 # Required env (set in GitHub Actions):
-#   HA_BASE_URL       - e.g. https://ha-nextgen.akentner.de (no trailing slash)
+#   HA_BASE_URL       - e.g. https://webhook.akentner.de (no trailing slash)
 #   HA_WEBHOOK_ID     - the webhook_id configured in HA (use a long random string)
 #
 # Optional env (set in GitHub Actions, omitted when unset):
