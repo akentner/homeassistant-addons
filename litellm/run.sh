@@ -102,7 +102,7 @@ if [ ! -f "${PG_DATA}/PG_VERSION" ]; then
 fi
 
 bashio::log.info "Starting PostgreSQL..."
-su -s /bin/bash postgres -c "${PG_BIN}/pg_ctl -D ${PG_DATA} -o '-h 127.0.0.1' -l /data/postgresql.log start"
+su -s /bin/bash postgres -c "${PG_BIN}/pg_ctl -D ${PG_DATA} -o '-h 127.0.0.1' -l /data/postgresql/postgresql.log start"
 
 until su -s /bin/bash postgres -c "${PG_BIN}/pg_isready -h 127.0.0.1" 2>/dev/null; do
     sleep 1
