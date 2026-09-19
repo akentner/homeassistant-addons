@@ -1,3 +1,32 @@
+## Meridian Desktop · macOS preview
+
+An optional desktop app for macOS on Apple Silicon, with native Liquid Glass, compact menu-bar controls, account
+switching and usage limits, request/cache statistics, logs, plugin installation, and service version management.
+
+- Download the **DMG** below and drag Meridian Desktop to Applications. A ZIP is also available.
+- Downloads are Developer ID signed and Apple notarized. `SHA256SUMS.txt` and `BUILD-INFO.txt` identify the files and
+  source commit.
+- Connect an existing service or let the app manage an isolated installation. Headless npm, Docker and Nix usage remains
+  supported.
+- Native notifications are off by default; enabling them selects failed automatic service recovery. Other categories are
+  optional.
+- Linux and Windows desktop releases are planned. Desktop app updates currently use a new download; the Versions page
+  manages the Meridian service.
+
+## [1.72.0](https://github.com/rynfar/meridian/compare/meridian-v1.71.1...meridian-v1.72.0) (2026-09-18)
+
+### Features
+
+- add optional macOS desktop manager ([#1046](https://github.com/rynfar/meridian/issues/1046))
+  ([4ab8cfc](https://github.com/rynfar/meridian/commit/4ab8cfc0a8973252920463e12bd1b7649b9ea9ff))
+
+### Bug Fixes
+
+- collect Windows sessions with the actual Node executor ([#1044](https://github.com/rynfar/meridian/issues/1044))
+  ([4c9ebbb](https://github.com/rynfar/meridian/commit/4c9ebbb672cb378339c5f7e888d68dd425034fdb))
+- **session:** take the bookkeeping off the request path ([#1036](https://github.com/rynfar/meridian/issues/1036))
+  ([596a0d8](https://github.com/rynfar/meridian/commit/596a0d8363a88302e52f33841286e22d1c6177fc))
+
 ## [1.71.1](https://github.com/rynfar/meridian/compare/meridian-v1.71.0...meridian-v1.71.1) (2026-09-12)
 
 ### Bug Fixes
