@@ -1,3 +1,90 @@
+## [1.73.0](https://github.com/rynfar/meridian/compare/meridian-v1.72.0...meridian-v1.73.0) (2026-09-19)
+
+### Features
+
+- **auth:** log every property Anthropic returns during authentication
+  ([#805](https://github.com/rynfar/meridian/issues/805), [#1083](https://github.com/rynfar/meridian/issues/1083))
+  ([944e797](https://github.com/rynfar/meridian/commit/944e79719f459d083f57607599d8b7f8d0ad038f))
+- **cli:** create profile when profile login names an unknown one
+  ([#1061](https://github.com/rynfar/meridian/issues/1061))
+  ([96a75ac](https://github.com/rynfar/meridian/commit/96a75ac5e7fcd83c80e66981fb37b1c6a30d245f))
+- **cli:** print dashboard when port is already serving Meridian
+  ([#1065](https://github.com/rynfar/meridian/issues/1065))
+  ([a80a15e](https://github.com/rynfar/meridian/commit/a80a15e227b5f292b177c1ef31d6af3d876009ac))
+- **dashboard:** dim and sort spent accounts on dashboard and desktop
+  ([#776](https://github.com/rynfar/meridian/issues/776), [#777](https://github.com/rynfar/meridian/issues/777),
+  [#1077](https://github.com/rynfar/meridian/issues/1077))
+  ([f1bb2d5](https://github.com/rynfar/meridian/commit/f1bb2d5f0a0bf90a51dca4fb8df639ec6d81888e))
+- **dev:** MERIDIAN_CREDENTIALS_READONLY, for a second instance on shared credentials
+  ([#1064](https://github.com/rynfar/meridian/issues/1064))
+  ([b7b820e](https://github.com/rynfar/meridian/commit/b7b820e9d5f42f1bff7693aa7b2cf8347a51024b))
+- **health:** /livez and /readyz liveness and readiness probes ([#1072](https://github.com/rynfar/meridian/issues/1072))
+  ([0d3d30c](https://github.com/rynfar/meridian/commit/0d3d30c24a9090db3b8db769a732f59ec824d78d))
+- **profiles:** follow mode with active profile and roster adoption
+  ([#782](https://github.com/rynfar/meridian/issues/782), [#806](https://github.com/rynfar/meridian/issues/806),
+  [#1085](https://github.com/rynfar/meridian/issues/1085))
+  ([dacc1b1](https://github.com/rynfar/meridian/commit/dacc1b1bbcf6b6d5c7b51f77a67e56a5f6a70af7))
+- **profiles:** rename profile with alias redirect and desktop parity
+  ([#841](https://github.com/rynfar/meridian/issues/841), [#1079](https://github.com/rynfar/meridian/issues/1079))
+  ([fe9c69d](https://github.com/rynfar/meridian/commit/fe9c69d1e514fadd65e8fcbaf157b0336927d63f))
+- **profiles:** reorder profile pool by drag or keyboard with desktop parity
+  ([#775](https://github.com/rynfar/meridian/issues/775), [#1078](https://github.com/rynfar/meridian/issues/1078))
+  ([2268eef](https://github.com/rynfar/meridian/commit/2268eef0532dec04aa734aee73a4a1b3e43d8192))
+- **profiles:** say what plan an account is on, and how much usage it buys
+  ([#803](https://github.com/rynfar/meridian/issues/803))
+  ([ce68af8](https://github.com/rynfar/meridian/commit/ce68af8f8785087afaac054258e9d1eda2122185))
+- **profiles:** show the organization an account belongs to, and its details on hover
+  ([#822](https://github.com/rynfar/meridian/issues/822), [#1082](https://github.com/rynfar/meridian/issues/1082))
+  ([7651b3e](https://github.com/rynfar/meridian/commit/7651b3ea8bfb2f7b57bc0d93720a60dfb785acf0))
+- **proxy:** support OpenCode V2 beta-19271 and document beta host policy
+  ([#1060](https://github.com/rynfar/meridian/issues/1060))
+  ([303ce0d](https://github.com/rynfar/meridian/commit/303ce0d02137b6f703d7a036743257facf56ff1c))
+- **routing:** say when an account is refusing, and route around it
+  ([#1075](https://github.com/rynfar/meridian/issues/1075))
+  ([a5596f2](https://github.com/rynfar/meridian/commit/a5596f25003beb8608f82f7bb4e485308ec146b3))
+- **settings:** overhaul settings layout with routing first, harness tabs, and telemetry storage
+  ([#778](https://github.com/rynfar/meridian/issues/778), [#779](https://github.com/rynfar/meridian/issues/779),
+  [#849](https://github.com/rynfar/meridian/issues/849), [#1080](https://github.com/rynfar/meridian/issues/1080))
+  ([1ff2c67](https://github.com/rynfar/meridian/commit/1ff2c678b8206d2e4fa4d8df7aebb5ef3e9e3259))
+- **telemetry:** show route chain, refusal load, and retention in dashboard and desktop
+  ([#1076](https://github.com/rynfar/meridian/issues/1076))
+  ([cfe1303](https://github.com/rynfar/meridian/commit/cfe13038fa147acdc9585ca9b054522e6179a99f))
+- **usage:** keep last good usage reading and mark cached facts
+  ([#1071](https://github.com/rynfar/meridian/issues/1071))
+  ([46c1056](https://github.com/rynfar/meridian/commit/46c105631c46b9f6b78abde2b199008fd55b291b))
+
+### Bug Fixes
+
+- **claude-code:** allow concurrent turn admission for headless sessions
+  ([#1043](https://github.com/rynfar/meridian/issues/1043)) ([#1056](https://github.com/rynfar/meridian/issues/1056))
+  ([189c12e](https://github.com/rynfar/meridian/commit/189c12eca5b428c6d15f30caf5f8ea82c1ac9a0b))
+- **config:** make MERIDIAN_CONFIG_DIR relocate the directory, not one file in it
+  ([#1066](https://github.com/rynfar/meridian/issues/1066))
+  ([c07cefd](https://github.com/rynfar/meridian/commit/c07cefd4226ec3cbd1ccde5dd3176978c10b3ebd))
+- **e2e:** guard against proxy teardown stragglers in opencode v2 package gate
+  ([#1028](https://github.com/rynfar/meridian/issues/1028)) ([#1059](https://github.com/rynfar/meridian/issues/1059))
+  ([fc12d2c](https://github.com/rynfar/meridian/commit/fc12d2cea1cca61004f6321d109e5e87763ac154))
+- **errors:** recognize 'your extra usage' billing refusal phrasing
+  ([#1054](https://github.com/rynfar/meridian/issues/1054))
+  ([4a00fca](https://github.com/rynfar/meridian/commit/4a00fca5f5af73431bbf6fd3c8c995c4552994bd))
+- **openai:** resume a session-keyed chat completions conversation instead of packing its history
+  ([75d0c50](https://github.com/rynfar/meridian/commit/75d0c5072774bd33ba992a14ce923ecfec4d6430))
+- **passthrough:** accept pi 0.85+ effort system messages in continuation validation
+  ([#1057](https://github.com/rynfar/meridian/issues/1057))
+  ([b973679](https://github.com/rynfar/meridian/commit/b9736798c55f066ee8a41a8cc7af60e80914ed39))
+- **passthrough:** suppress scratchpad via prompt note instead of SESSION_KIND=bg
+  ([#1049](https://github.com/rynfar/meridian/issues/1049))
+  ([f432f0a](https://github.com/rynfar/meridian/commit/f432f0afc6078e722cbbd8cc91314676550bf172))
+- **profiles:** persist and backfill account plan at headless login and refresh
+  ([#1070](https://github.com/rynfar/meridian/issues/1070))
+  ([85f87f7](https://github.com/rynfar/meridian/commit/85f87f740d5a2e54c2c6c87b200d160d69654f74))
+- **profiles:** verify stored credential token and surface sign-in required in desktop
+  ([#1069](https://github.com/rynfar/meridian/issues/1069))
+  ([1cfd980](https://github.com/rynfar/meridian/commit/1cfd98054ff885b9bd1b07aae301961ffd97b662))
+- **session:** recognize structured Environment CWD and strip reminder noise
+  ([#1052](https://github.com/rynfar/meridian/issues/1052))
+  ([54859ed](https://github.com/rynfar/meridian/commit/54859ed4800cd7c18bcc86ce61ad38fabf8f971a))
+
 ## Meridian Desktop · macOS preview
 
 An optional desktop app for macOS on Apple Silicon, with native Liquid Glass, compact menu-bar controls, account
