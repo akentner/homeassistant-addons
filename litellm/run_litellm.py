@@ -76,4 +76,19 @@ if INGRESS_ORIGIN:
         return await call_next(request)
 
 
-uvicorn.run(app, host="0.0.0.0", port=4000, log_level="info")
+uvicorn.run(
+    app,
+    host="0.0.0.0",
+    port=4000,
+    log_level="info",
+    # HA Supervisor ingress proxies over the internal Docker HTTP
+    # network and forwards X-Forwarded-Proto: https. Without
+    # proxy_headers=True uvicorn (and therefore Litellm) ignores
+    # that header and sees the request as plain http://, which
+    # makes Litellm's UI render iframe src as
+    # http://ha-nextgen.akentner.de/ui/ — browsers then block it
+    # as mixed content (parent page is https://, iframe is http://).
+    # Trusting proxy headers fixes the scheme Litellm uses for
+    # absolute-URL generation in its UI.
+    proxy_headers=True,
+)
