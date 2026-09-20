@@ -1,13 +1,13 @@
 name: "LiteLLM"
 description: "OpenAI-compatible API gateway with bundled PostgreSQL — virtual keys, spend tracking, model routing."
-version: "0.1.0-15"
+version: "0.1.0-16"
 slug: "litellm"
 init: false
 arch:
   - amd64
 url: "https://github.com/akentner/homeassistant-addons"
 startup: "application"
-boot: "manual"
+boot: "auto"
 host_network: false
 ingress: true
 ingress_port: 4000
