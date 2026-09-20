@@ -111,6 +111,30 @@ if [ ! -f "${PG_DATA}/PG_VERSION" ]; then
     echo "host litellm litellm 127.0.0.1/32 md5" >> "${PG_DATA}/pg_hba.conf"
 fi
 
+# Re-assert postgres ownership on the entire data dir. Defense-in-depth
+# for two failure modes:
+#
+# 1. UID drift across container rebuilds. Debian's postgresql-16 postinst
+#    assigns the postgres user a UID at install time; if the HA base
+#    image rebuilds between add-on versions and the postgres UID shifts,
+#    the data dir persisted under /data retains files owned by the OLD
+#    UID. initdb is skipped on upgrade (PG_VERSION exists), so the new
+#    postgres user never re-chowns anything. Result: postgres can't open
+#    postgresql.conf ("Permission denied") even though `ls -l` shows
+#    ownership as postgres:postgres — the UID underneath doesn't match.
+#
+# 2. HA Supervisor /data mounts with restrictive ACLs (BTRFS subvolume,
+#    custom overlay options). When root creates files inside the data
+#    dir and chowns them, the underlying UID/GID write-out can be
+#    re-mapped by the mount's idmapping layer, leaving the files
+#    effectively owned by a different (or no) UID from postgres's POV.
+#    A fresh chown -R re-applies the mapping deterministically.
+#
+# Idempotent on healthy installs (same-UID chown is a no-op). Costs one
+# recursive walk of /data/postgresql per startup — a few ms at typical
+# litellm DB sizes.
+chown -R postgres:postgres "${PG_DATA}"
+
 bashio::log.info "Starting PostgreSQL..."
 if ! su -s /bin/bash postgres -c "${PG_BIN}/pg_ctl -D ${PG_DATA} -w -o '-h 127.0.0.1' -l ${PG_DATA}/postgresql.log start"; then
     # pg_ctl's "could not start server" is the only symptom it prints — the
