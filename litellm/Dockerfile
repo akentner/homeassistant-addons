@@ -127,6 +127,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gnupg gnupg-l10n gpg gpg-agent dirmngr \
         sqv tempio \
         2>/dev/null || true \
+    # postgresql-client-16 ships 21 client binaries (psql, createdb,
+    # pg_dump, …) as symlinks to /usr/share/postgresql-common/pg_wrapper —
+    # a Perl script that picks the right cluster version based on env
+    # vars or /etc/postgresql-common/user_clusters. We deleted Perl, so
+    # every pg_* invocation dies with 'cannot execute: required file
+    # not found'. We don't use multi-cluster features (only one cluster
+    # ever, the local /data/postgresql), so re-point each symlink at the
+    # real binary under /usr/lib/postgresql/16/bin/. This is what
+    # `update-alternatives --remove pg_wrapper ...` does internally on
+    # a Debian system without postgresql-common, just done explicitly
+    # since we deleted the package.
+    && for tool in psql createdb createuser dropdb clusterdb \
+                  pg_dump pg_dumpall pg_restore pg_isready pg_basebackup \
+                  vacuumdb reindexdb pgbench pg_archivecleanup \
+                  pg_receivewal pg_recvlogical createlang droplang \
+                  pg_receivexlog; do \
+           ln -sf /usr/lib/postgresql/16/bin/${tool} /usr/bin/${tool}; \
+       done \
     # Disable Postgres JIT. PGDG postgresql-16 depends on libllvm19 (124M)
     # + libz3-4 (27M) for the llvmjit provider, which dynamically loads
     # libLLVM.so at runtime when JIT-compiling expressions. For our homelab
