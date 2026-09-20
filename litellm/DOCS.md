@@ -31,6 +31,34 @@ restarts reload the key from `/data/.litellm_master_key` silently.
 Salt key follows the identical pattern (key is in `/data/.litellm_salt_key`; log line is `litellm_salt_key=…` without
 `sk-` prefix; enter in the `salt_key` field of the Configuration tab).
 
+## Adding Models
+
+Models are managed **through the litellm UI** (UI → Models → Add Model), not via HA Configuration. The add-on sets
+`STORE_MODEL_IN_DB=True` by default — model definitions persist in PostgreSQL and survive restarts. Provider API keys
+are also entered in the litellm UI (UI → Models → Add Model → Credentials) and stored in the same DB.
+
+The litellm UI is reachable at:
+
+- **HA Ingress:** HA sidebar → LiteLLM
+- **Direct port:** `http://<ha-host>:4000/ui` (Swagger UI is at `http://<ha-host>:4000/`)
+
+Provider-specific notes:
+
+| Provider  | `api_base` (if custom)                 | `api_key` source                                                  |
+| --------- | -------------------------------------- | ----------------------------------------------------------------- |
+| OpenAI    | (default)                              | [platform.openai.com](https://platform.openai.com)                |
+| Anthropic | (default)                              | [console.anthropic.com](https://console.anthropic.com)            |
+| Google    | (default)                              | [aistudio.google.com](https://aistudio.google.com)                |
+| Azure     | `https://<resource>.openai.azure.com/` | Azure portal                                                      |
+| MiniMax   | `https://api.minimax.com/v1`           | MiniMax dashboard                                                 |
+| Ollama    | `http://<ollama-host>:11434/v1`        | (none — LAN-only)                                                 |
+| Bedrock   | (default)                              | AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (set via `env.litellm`) |
+| Custom    | `https://<your-endpoint>/v1`           | Custom                                                            |
+
+For providers not listed in litellm's native provider list (MiniMax, custom OpenAI-compatible endpoints, internal
+gateways), select **OpenAI-compatible** in the UI and set `api_base` to the endpoint root. litellm uses the OpenAI
+client class internally with the custom base.
+
 ## HA Conversation Integration
 
 After the master key is set in the add-on's Configuration tab, add this to your HA Core `configuration.yaml`:
@@ -69,47 +97,68 @@ Secrets are configured via the HA Add-on Configuration tab (not `secrets.yaml`).
 `run.sh` auto-gen branch for `master_key` and `salt_key`; provider keys without a value cause LiteLLM to log a clear
 "missing API key" error for the affected model.
 
-| Option                                | Type   | Default    | Description                                                                   |
-| ------------------------------------- | ------ | ---------- | ----------------------------------------------------------------------------- |
-| `log_level`                           | enum   | `info`     | bashio → LiteLLM log level (`debug`/`info`/`warning`/`error`)                 |
-| `master_key`                          | secret | (auto-gen) | Master key — leave blank for auto-gen, or paste a `sk-…` string               |
-| `salt_key`                            | secret | (auto-gen) | Salt key — leave blank for auto-gen (no `sk-` prefix)                         |
-| `ingress_origin`                      | string | `""`       | HA origin for ingress framing (see "HA Ingress" below)                        |
-| `providers.openai_api_key`            | secret | `""`       | OpenAI API key                                                                |
-| `providers.anthropic_api_key`         | secret | `""`       | Anthropic API key                                                             |
-| `providers.google_api_key`            | secret | `""`       | Google AI Studio API key                                                      |
-| `providers.azure_api_key`             | secret | `""`       | Azure OpenAI API key                                                          |
-| `providers.minimax_api_key`           | secret | `""`       | MiniMax API key (M3/MiniMax-Text/etc — see "Custom Providers" below)          |
-| `models`                              | list   | `[]`       | List of `{name, provider, api_base?, api_key?, model_name?, litellm_params?}` |
-| `postgres.shared_buffers`             | string | `64MB`     | Postgres `shared_buffers` setting (SIGHUP-reloadable)                         |
-| `postgres.max_connections`            | int    | `20`       | Postgres `max_connections` setting (**restart required**)                     |
-| `postgres.log_min_duration_statement` | int    | `1000`     | Query log threshold (ms; SIGHUP-reloadable; `0` = log all)                    |
+| Option                                | Type   | Default    | Description                                                             |
+| ------------------------------------- | ------ | ---------- | ----------------------------------------------------------------------- |
+| `log_level`                           | enum   | `info`     | bashio → LiteLLM log level (`debug`/`info`/`warning`/`error`)           |
+| `master_key`                          | secret | (auto-gen) | Master key — leave blank for auto-gen, or paste a `sk-…` string         |
+| `salt_key`                            | secret | (auto-gen) | Salt key — leave blank for auto-gen (no `sk-` prefix)                   |
+| `ingress_origin`                      | string | `""`       | HA origin for ingress framing (see "HA Ingress" below)                  |
+| `env.litellm[]`                       | list   | `[]`       | Extra env vars exported into the litellm process (see "Extra Env Vars") |
+| `env.postgres[]`                      | list   | `[]`       | Extra env vars inlined into every postgres invocation                   |
+| `env.valkey[]`                        | list   | `[]`       | Extra env vars exported into the valkey-server process                  |
+| `postgres.shared_buffers`             | string | `64MB`     | Postgres `shared_buffers` setting (SIGHUP-reloadable)                   |
+| `postgres.max_connections`            | int    | `20`       | Postgres `max_connections` setting (**restart required**)               |
+| `postgres.log_min_duration_statement` | int    | `1000`     | Query log threshold (ms; SIGHUP-reloadable; `0` = log all)              |
 
-Model name regex: `^[a-zA-Z0-9._:/+-]{1,256}$` (allows `/` for LiteLLM path syntax like
-`bedrock/anthropic.claude-3-5-sonnet`).
+Each `env.*` list entry has two fields: `name` (UPPER_SNAKE_CASE POSIX env-var name) and `value` (string).
 
-## Custom Providers (MiniMax, custom endpoints)
+## Extra Env Vars
 
-The `providers.<name>_api_key` fields are shortcuts for the built-in litellm provider list. For any other
-OpenAI-compatible API (MiniMax, custom proxies, internal gateways, …) add a `models[]` entry with `provider` set to the
-matching key:
+Use the `env.{litellm,postgres,valkey}` lists to set additional environment variables on each service. Each entry is a
+`{name, value}` pair. Example:
 
 ```yaml
-models:
-  - name: "minimax-m3"
-    provider: "minimax"
-    api_base: "https://api.minimax.com/v1"
-    model_name: "minimax-M3"
-  - name: "internal-llama"
-    provider: "custom_openai"
-    api_base: "http://192.168.1.50:11434/v1"
-    model_name: "llama3.1"
+env:
+  litellm:
+    - name: "LITELLM_LOG"
+      value: "DEBUG"
+    - name: "AWS_ACCESS_KEY_ID"
+      value: "AKIA..."
+    - name: "AWS_SECRET_ACCESS_KEY"
+      value: "..."
+  postgres:
+    - name: "POSTGRES_INITDB_ARGS"
+      value: "--encoding=UTF8 --locale=C"
+  valkey:
+    - name: "VALKEY_PASSWORD"
+      value: "..."
 ```
 
-`generate_config.py` resolves the per-model `api_key` field by mapping the `provider` value to an env-var name. The
-mapping is in `PROVIDER_ENV_VARS` inside `generate_config.py`; `provider="minimax"` → `${MINIMAX_API_KEY}`. Unknown
-providers fall back to `${CUSTOM_API_KEY}`. Set the key in the `providers.<name>_api_key` Configuration-tab field; the
-runtime export happens in `run.sh` after `generate_config.py` runs.
+### `env.litellm`
+
+Exported into the litellm process environment **before** the wrapper starts. Useful for any litellm env var not exposed
+as an add-on option (UI login, telemetry, cache TTLs, AWS creds for Bedrock, etc.). Reference: the [litellm proxy
+docs][litellm-env] list every supported variable.
+
+`STORE_MODEL_IN_DB=True` is **always** exported by default — overriding it via `env.litellm` is supported but disables
+DB-backed model management (the UI will reject `/model/new` with an error if you set it to `False`).
+
+### `env.postgres`
+
+Inlined as `KEY=VALUE` prefixes into every `su -s /bin/bash postgres -c "..."` invocation (initdb, pg_ctl, psql). The
+postgres server itself reads very few env vars at runtime — most useful entries are **libpq defaults** for the psql
+client (PGUSER, PGHOST, PGDATABASE, PGPORT, PGOPTIONS, PGSSLMODE, …) and `POSTGRES_INITDB_ARGS` for first-start init.
+
+Note: `PGUSER`/`PGHOST`/etc. only affect psql commands inside this container (DB/user creation, `SHOW max_connections`).
+They do **not** propagate to litellm, which connects via the explicit
+`DATABASE_URL=postgresql://litellm:…@127.0.0.1:5432/litellm`.
+
+### `env.valkey`
+
+Exported into the run.sh shell so `valkey-server` inherits them. valkey-server honors very few env-driven knobs natively
+— `VALKEY_PASSWORD` is the most useful, though the add-on does not currently translate it into `--requirepass` (the
+server is bound to `127.0.0.1` only, so auth is optional). The list exists for future expansion and operator
+experimentation.
 
 ## HA Ingress
 
@@ -151,7 +200,7 @@ This add-on uses `map: backup: rw` to include all `/data` contents in HA Supervi
 - `/data/.litellm_master_key` — persisted master key (chmod 600)
 - `/data/.litellm_salt_key` — persisted salt key (chmod 600)
 - `/data/.pg_password` — persisted Postgres password (chmod 600)
-- `/data/litellm_config.yaml` — synthesized LiteLLM config
+- `/data/litellm_config.yaml` — minimal litellm config (DB-stored models survive via the Postgres backup above)
 
 ### Postgres Reset Procedure
 
@@ -162,7 +211,8 @@ If the Postgres cluster becomes corrupted or you want to start fresh:
 3. Start the add-on. `initdb` runs automatically on first start (idempotent — only runs when
    `/data/postgresql/PG_VERSION` is missing).
 4. The litellm user and database are recreated automatically.
-5. Spend logs and virtual keys are LOST (acceptable; restore from HA backup to recover).
+5. Spend logs and virtual keys are LOST (acceptable; restore from HA backup to recover). Model definitions are also lost
+   — re-add them via the litellm UI.
 
 The master key, salt key, and Postgres password persist across the reset (separate files, not affected by
 `rm -rf /data/postgresql`).
@@ -186,10 +236,15 @@ git tag.
 
 ## Troubleshooting
 
+### "Failed to add model: ApiError: Set 'STORE_MODEL_IN_DB=True' in your env…"
+
+This add-on sets `STORE_MODEL_IN_DB=True` by default, so this error means the running container predates the fix (or you
+explicitly set `STORE_MODEL_IN_DB=False` in `env.litellm`). Update the add-on, remove the override, and restart.
+
 ### "401 Unauthorized" from a model
 
-The provider key (`openai_api_key`, `anthropic_api_key`, …) is missing. Set it in **Settings → Add-ons → LiteLLM →
-Configuration** (under the `providers.*_api_key` field) and restart the add-on.
+The provider key is missing in the litellm UI (UI → Models → your model → Credentials). Open the model entry, paste the
+key, save. Restart is **not** required — litellm reloads model credentials live.
 
 ### Postgres won't start
 
@@ -222,3 +277,4 @@ Pending — see `internal/spike-litellm-secret-schema.sh`. Run the spike once on
 document the result here.
 
 [litellm]: https://github.com/BerriAI/litellm
+[litellm-env]: https://docs.litellm.ai/docs/proxy/env_vars

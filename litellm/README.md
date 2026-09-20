@@ -19,10 +19,14 @@ with HA Ingress for Swagger UI access from the HA UI sidebar.
   persist across restarts
 - **100+ LLM providers** — OpenAI, Anthropic, Google, Azure, Ollama, Bedrock, custom OpenAI-compatible endpoints, all
   routable through one `master_key`
+- **DB-backed model management** — `STORE_MODEL_IN_DB=True` by default; add and edit models via the litellm UI (HA
+  Ingress or direct port), no add-on restart needed
 - **Master-key auto-generation** — first-start emits a one-time log line with the plaintext key; operator pastes it into
   the add-on Configuration tab for HA Conversation integration
 - **HA Conversation integration** — drop-in `api_base` for the standard `openai_conversation:` integration in HA Core
 - **Direct LAN/Tailscale access** — port 4000/tcp on the HA host; HA Ingress for Swagger UI
+- **Extra env vars per service** — `env.{litellm,postgres,valkey}` lists let you set arbitrary additional env vars on
+  each backing service (litellm proxy vars, libpq defaults, valkey knobs)
 - **Postgres tuning** — `shared_buffers` + `log_min_duration_statement` apply via SIGHUP-reload (no restart);
   `max_connections` requires restart (documented)
 - **Auto-update** — daily 06:00 UTC bumps the upstream LiteLLM pin via `.upstream.yaml`; manual override via

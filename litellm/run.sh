@@ -70,6 +70,55 @@ if [ -z "${SALT_KEY}" ]; then
 fi
 export LITELLM_SALT_KEY="${SALT_KEY}"
 
+# ── Extra env vars (operator-supplied via env.{litellm,postgres,valkey}) ─────
+# Each list entry is {name, value}. Schema restricts `name` to POSIX env-var
+# shape (UPPER_SNAKE_CASE); `value` is unconstrained string so secrets work.
+# Applied BEFORE postgres/valkey/litellm start so every service sees them.
+#
+# Default: STORE_MODEL_IN_DB=True so models can be managed via the litellm UI
+# (the `/model/new` endpoint requires this — without it, adding a model in the
+# UI fails with "Set 'STORE_MODEL_IN_DB=True' in your env to enable this feature").
+export STORE_MODEL_IN_DB="True"
+
+if jq -e '.env.litellm | type == "array" and length > 0' /data/options.json >/dev/null 2>&1; then
+    while IFS= read -r entry; do
+        _name=$(echo "${entry}" | jq -r '.name')
+        _value=$(echo "${entry}" | jq -r '.value')
+        export "${_name}=${_value}"
+        bashio::log.info "env.litellm: ${_name} set"
+    done < <(jq -c '.env.litellm[]' /data/options.json)
+fi
+
+# Postgres env vars are inlined into each `su -s /bin/bash postgres -c "..."`
+# invocation via postgres_run() below — shell exports from this run.sh do NOT
+# propagate across the `su` boundary. Useful env vars here are mostly libpq
+# defaults for psql (PGUSER/PGHOST/PGOPTIONS/PGSSLMODE/...) and POSTGRES_INITDB_ARGS.
+# Values are shell-escaped via printf %q so embedded spaces / quotes don't break
+# the command parsing (e.g. POSTGRES_INITDB_ARGS="--encoding=UTF8 --locale=C").
+postgres_env_prefix=""
+if jq -e '.env.postgres | type == "array" and length > 0' /data/options.json >/dev/null 2>&1; then
+    while IFS= read -r entry; do
+        _name=$(echo "${entry}" | jq -r '.name')
+        _value=$(echo "${entry}" | jq -r '.value')
+        _escaped=$(printf '%q' "${_value}")
+        postgres_env_prefix+="${_name}=${_escaped} "
+        bashio::log.info "env.postgres: ${_name} set (inlined into pg_ctl/initdb/psql)"
+    done < <(jq -c '.env.postgres[]' /data/options.json)
+    postgres_env_prefix="${postgres_env_prefix% }"
+fi
+
+# Valkey env vars — exported into run.sh's shell so the valkey-server child
+# inherits them (valkey-server honors very few env-driven knobs natively; we
+# pass them through for operator experimentation).
+if jq -e '.env.valkey | type == "array" and length > 0' /data/options.json >/dev/null 2>&1; then
+    while IFS= read -r entry; do
+        _name=$(echo "${entry}" | jq -r '.name')
+        _value=$(echo "${entry}" | jq -r '.value')
+        export "${_name}=${_value}"
+        bashio::log.info "env.valkey: ${_name} set"
+    done < <(jq -c '.env.valkey[]' /data/options.json)
+fi
+
 # ── PostgreSQL password (persistent; chmod 600; idempotent) ────────────────────
 PG_PASS_FILE=/data/.pg_password
 if [ ! -f "${PG_PASS_FILE}" ]; then
@@ -92,6 +141,19 @@ PG_VERSION=$(find /usr/lib/postgresql/ -maxdepth 1 -mindepth 1 -type d | sort -V
 PG_BIN="/usr/lib/postgresql/${PG_VERSION}/bin"
 PG_DATA=/data/postgresql
 
+# Run a command as the postgres user with operator-supplied env vars inlined
+# as `KEY=VALUE` prefixes on the su -c command (postgres launches via
+# `su -s /bin/bash postgres -c "..."`, and shell exports from run.sh do NOT
+# cross that boundary). The env-prefix format is the bash builtin way to set
+# per-command env vars without calling `env` — same semantics, one less fork.
+postgres_run() {
+    if [ -n "${postgres_env_prefix:-}" ]; then
+        su -s /bin/bash postgres -c "${postgres_env_prefix} $*"
+    else
+        su -s /bin/bash postgres -c "$*"
+    fi
+}
+
 mkdir -p "${PG_DATA}"
 chown postgres:postgres "${PG_DATA}"
 # Pre-create postgresql.log as root + chown to postgres. Some HA
@@ -107,7 +169,7 @@ chmod 644 "${PG_DATA}/postgresql.log"
 
 if [ ! -f "${PG_DATA}/PG_VERSION" ]; then
     bashio::log.info "Initializing PostgreSQL ${PG_VERSION} database..."
-    su -s /bin/bash postgres -c "${PG_BIN}/initdb -D ${PG_DATA} --encoding=UTF8 --locale=C"
+    postgres_run "${PG_BIN}/initdb -D ${PG_DATA} --encoding=UTF8 --locale=C"
     echo "host litellm litellm 127.0.0.1/32 md5" >> "${PG_DATA}/pg_hba.conf"
 fi
 
@@ -136,7 +198,7 @@ fi
 chown -R postgres:postgres "${PG_DATA}"
 
 bashio::log.info "Starting PostgreSQL..."
-if ! su -s /bin/bash postgres -c "${PG_BIN}/pg_ctl -D ${PG_DATA} -w -o '-h 127.0.0.1' -l ${PG_DATA}/postgresql.log start"; then
+if ! postgres_run "${PG_BIN}/pg_ctl -D ${PG_DATA} -w -o '-h 127.0.0.1' -l ${PG_DATA}/postgresql.log start"; then
     # pg_ctl's "could not start server" is the only symptom it prints — the
     # real error is in the postgres server's logfile (the -l path). Surface it
     # in the bashio log so operators can diagnose without SSH'ing into the
@@ -154,12 +216,11 @@ fi
 bashio::log.info "PostgreSQL ready."
 
 # Create database and user on first start (idempotent)
-su -s /bin/bash postgres \
-    -c "psql -h 127.0.0.1 -tAc \"SELECT 1 FROM pg_roles WHERE rolname='litellm'\"" 2>/dev/null \
+postgres_run "psql -h 127.0.0.1 -tAc \"SELECT 1 FROM pg_roles WHERE rolname='litellm'\"" 2>/dev/null \
     | grep -q 1 || {
     bashio::log.info "Creating litellm PostgreSQL user and database..."
-    su -s /bin/bash postgres -c "psql -h 127.0.0.1 -c \"CREATE USER litellm WITH PASSWORD '${PG_PASS}';\""
-    su -s /bin/bash postgres -c "psql -h 127.0.0.1 -c \"CREATE DATABASE litellm OWNER litellm;\""
+    postgres_run "psql -h 127.0.0.1 -c \"CREATE USER litellm WITH PASSWORD '${PG_PASS}';\""
+    postgres_run "psql -h 127.0.0.1 -c \"CREATE DATABASE litellm OWNER litellm;\""
 }
 
 # ── Postgres tuning (D-15, D-16) ────────────────────────────────────────────
@@ -193,12 +254,12 @@ if ! grep -q "include_if_exists = 'litellm-tuning.conf'" "${PG_DATA}/postgresql.
 fi
 
 # Apply SIGHUP-reloadable settings immediately
-su -s /bin/bash postgres -c "${PG_BIN}/pg_ctl -D ${PG_DATA} reload"
+postgres_run "${PG_BIN}/pg_ctl -D ${PG_DATA} reload"
 bashio::log.info "postgres.tuning.applied shared_buffers=${SHARED_BUFFERS} log_min_duration_statement=${LOG_MIN_DURATION}"
 
 # Detect max_connections change — if the operator changed it, the new value
 # requires a Postgres restart (not SIGHUP-reloadable).
-CURRENT_MAX_CONNECTIONS=$(su -s /bin/bash postgres -c "psql -h 127.0.0.1 -tAc 'SHOW max_connections'" 2>/dev/null | tr -d ' ' || echo "?")
+CURRENT_MAX_CONNECTIONS=$(postgres_run "psql -h 127.0.0.1 -tAc 'SHOW max_connections'" 2>/dev/null | tr -d ' ' || echo "?")
 if [ "${CURRENT_MAX_CONNECTIONS}" != "${NEW_MAX_CONNECTIONS}" ]; then
     bashio::log.warning "postgres.tuning.max_connections=${NEW_MAX_CONNECTIONS} requires restart — current value remains ${CURRENT_MAX_CONNECTIONS}"
 fi
@@ -228,27 +289,30 @@ done
 export REDIS_URL="redis://127.0.0.1:6379"
 bashio::log.info "Valkey ready on 127.0.0.1:6379 (data dir /data/valkey)"
 
-# ── LiteLLM environment (exported BEFORE generate_config.py so it sees them) ─
+# ── LiteLLM environment (exported before launching the wrapper) ──────────────
 export DATABASE_URL="postgresql://litellm:${PG_PASS}@127.0.0.1:5432/litellm"
 export LITELLM_MASTER_KEY
 export LITELLM_SALT_KEY
 
-# Provider API keys — generate_config.py writes \${PROVIDER_API_KEY} references
-# into /data/litellm_config.yaml (see PROVIDER_ENV_VARS in generate_config.py);
-# Litellm resolves these at startup. Without explicit export here, the
-# references resolve to empty strings and Litellm logs "401 Unauthorized"
-# for every model that uses a provider API key.
-for p in openai anthropic google azure minimax; do
-    _key=$(bashio::config "providers.${p}_api_key" '')
-    if [ -n "${_key}" ]; then
-        # ${p^^} uppercases the provider name: minimax → MINIMAX_API_KEY.
-        export "${p^^}_API_KEY=${_key}"
-        bashio::log.info "Exported ${p^^}_API_KEY from providers.${p}_api_key"
-    fi
-done
-
-# ── Synthesize LiteLLM YAML from HA options.json (D-17) ──────────────────────
-python3 /app/generate_config.py
+# ── Minimal LiteLLM config — models live in the DB (STORE_MODEL_IN_DB=True) ──
+# The ConfigFlow previously supported models[] + providers.*_api_key here, but
+# those entries were never honoured — generate_config.py wrote them into
+# model_list, while litellm's /model/new UI only persists via the DB. The
+# operator-visible UX was: "I configured a model in HA, but it's not loaded."
+# Removing the options here and forcing DB-backed models makes the UI the
+# single source of truth. master_key/salt_key reference env-vars — never
+# inline plaintext (D-11/D-12 invariant).
+cat > /data/litellm_config.yaml <<EOF
+model_list: []
+general_settings:
+  telemetry: false
+  store_model_in_db: true
+litellm_settings:
+  master_key: \${LITELLM_MASTER_KEY}
+  salt_key: \${LITELLM_SALT_KEY}
+  drop_params: true
+EOF
+chmod 600 /data/litellm_config.yaml
 
 # ── Start LiteLLM (background + wait — preserves signal-trap forwarding) ─────
 # We use background + wait instead of `exec` so the signal trap above can forward

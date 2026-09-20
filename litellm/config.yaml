@@ -1,6 +1,6 @@
 name: "LiteLLM"
 description: "OpenAI-compatible API gateway with bundled PostgreSQL — virtual keys, spend tracking, model routing."
-version: "1.101.0-7"
+version: "1.101.0-10"
 slug: "litellm"
 init: false
 arch:
@@ -35,13 +35,10 @@ options:
   master_key: ""
   salt_key: ""
   ingress_origin: ""
-  providers:
-    openai_api_key: ""
-    anthropic_api_key: ""
-    google_api_key: ""
-    azure_api_key: ""
-    minimax_api_key: ""
-  models: []
+  env:
+    litellm: []
+    postgres: []
+    valkey: []
   postgres:
     shared_buffers: "64MB"
     max_connections: 20
@@ -52,19 +49,16 @@ schema:
   master_key: "password?"
   salt_key: "password?"
   ingress_origin: "str?"
-  providers:
-    openai_api_key: "password?"
-    anthropic_api_key: "password?"
-    google_api_key: "password?"
-    azure_api_key: "password?"
-    minimax_api_key: "password?"
-  models:
-    - name: "match(^[a-zA-Z0-9._:/+-]{1,256}$)"
-      provider: "str?"
-      api_base: "url?"
-      api_key: "password?"
-      model_name: "str?"
-      litellm_params: "str?"
+  env:
+    litellm:
+      - name: "match(^[A-Z][A-Z0-9_]*$)"
+        value: "str"
+    postgres:
+      - name: "match(^[A-Z][A-Z0-9_]*$)"
+        value: "str"
+    valkey:
+      - name: "match(^[A-Z][A-Z0-9_]*$)"
+        value: "str"
   postgres:
     shared_buffers: "str?"
     max_connections: "int(5,200)?"

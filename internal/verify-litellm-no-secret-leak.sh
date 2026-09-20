@@ -5,7 +5,7 @@ set -euo pipefail
 
 IMAGE_TAG="litellm-verify:local"
 CONTAINER_NAME="litellm-no-leak-verify"
-SYNTHETIC_OPTIONS='{"log_level":"info","master_key":"","salt_key":"","providers":{},"models":[],"postgres":{"shared_buffers":"64MB","max_connections":20,"log_min_duration_statement":1000}}'
+SYNTHETIC_OPTIONS='{"log_level":"info","master_key":"","salt_key":"","env":{"litellm":[],"postgres":[],"valkey":[]},"postgres":{"shared_buffers":"64MB","max_connections":20,"log_min_duration_statement":1000}}'
 
 # Materialize synthetic options.json (no real secrets) so the container has a valid /data/options.json
 echo "${SYNTHETIC_OPTIONS}" > /tmp/litellm-verify-options.json
