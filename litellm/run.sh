@@ -112,11 +112,21 @@ if [ ! -f "${PG_DATA}/PG_VERSION" ]; then
 fi
 
 bashio::log.info "Starting PostgreSQL..."
-su -s /bin/bash postgres -c "${PG_BIN}/pg_ctl -D ${PG_DATA} -o '-h 127.0.0.1' -l /data/postgresql/postgresql.log start"
-
-until su -s /bin/bash postgres -c "${PG_BIN}/pg_isready -h 127.0.0.1" 2>/dev/null; do
-    sleep 1
-done
+if ! su -s /bin/bash postgres -c "${PG_BIN}/pg_ctl -D ${PG_DATA} -w -o '-h 127.0.0.1' -l ${PG_DATA}/postgresql.log start"; then
+    # pg_ctl's "could not start server" is the only symptom it prints — the
+    # real error is in the postgres server's logfile (the -l path). Surface it
+    # in the bashio log so operators can diagnose without SSH'ing into the
+    # container to read /data/postgresql/postgresql.log.
+    bashio::log.error "pg_ctl failed to start. Tail of ${PG_DATA}/postgresql.log:"
+    if [ -r "${PG_DATA}/postgresql.log" ]; then
+        tail -n 50 "${PG_DATA}/postgresql.log" | while IFS= read -r line; do
+            bashio::log.error "  ${line}"
+        done
+    else
+        bashio::log.error "  (logfile not readable — check permissions on ${PG_DATA})"
+    fi
+    exit 1
+fi
 bashio::log.info "PostgreSQL ready."
 
 # Create database and user on first start (idempotent)
