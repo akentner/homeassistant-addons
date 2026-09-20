@@ -60,12 +60,19 @@ if INGRESS_ORIGIN:
 # Root redirect: GET / → /ui (only when INGRESS_ORIGIN is set,
 # otherwise direct-port users get the upstream default which is
 # the Swagger UI at /). 307 preserves the request method for
-# relative links from the redirected page.
+# relative links from the redirected page. URL is RELATIVE
+# ("ui", no leading slash) — an absolute path ("/ui") would
+# resolve against the browser's origin (e.g.
+# https://ha-nextgen.akentner.de/ui) and miss the
+# /api/hassio_ingress/litellm/ ingress prefix → 404 from HA.
+# Relative resolution against the current URL keeps the
+# ingress path: https://ha-nextgen.akentner.de/api/hassio_ingress/
+# litellm/ui.
 if INGRESS_ORIGIN:
     @app.middleware("http")
     async def root_redirect_to_ui(request, call_next):
         if request.url.path in ("/", ""):
-            return RedirectResponse(url="/ui", status_code=307)
+            return RedirectResponse(url="ui", status_code=307)
         return await call_next(request)
 
 
