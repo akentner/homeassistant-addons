@@ -203,9 +203,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         # the C locale throughout, and locales are pre-compiled by the
         # base image. Drop (~300K).
         /usr/bin/localedef \
-        # valkey-check-rdb / valkey-check-aof: valkey diagnostic tools,
-        # never invoked at runtime (~6M).
-        /usr/bin/valkey-check-rdb /usr/bin/valkey-check-aof \
+        # valkey-check-aof / valkey-check-rdb: valkey-server ships these as
+        # multi-call binaries for the SERVER itself (identical md5sum,
+        # argv[0] dispatch picks the mode — valkey-server → symlinks to one
+        # of these, server mode runs). Deleting them silently breaks
+        # `valkey-server --daemonize yes` with 'No such file or
+        # directory' even though the symlink looks fine. KEEP at least
+        # one — we keep both for the cost (~6M) since dropping the second
+        # one saves only ~3M and complicates the symlink target.
         # valkey-benchmark: not invoked at runtime (~600K).
         /usr/bin/valkey-benchmark \
         # openssl CLI: NOT removable — run.sh uses `openssl rand -hex`
