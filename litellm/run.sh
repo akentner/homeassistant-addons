@@ -159,10 +159,49 @@ if [ "${CURRENT_MAX_CONNECTIONS}" != "${NEW_MAX_CONNECTIONS}" ]; then
     bashio::log.warning "postgres.tuning.max_connections=${NEW_MAX_CONNECTIONS} requires restart — current value remains ${CURRENT_MAX_CONNECTIONS}"
 fi
 
+# ── Valkey (Redis-compatible) for multi-worker rate-limit / router-state /
+# cache-invalidation sync. Without a Redis, Litellm with >1 uvicorn worker
+# enforces limits once per worker and can overspend. We run Valkey as a
+# background daemon inside the container, bound to 127.0.0.1, with a
+# persistent data dir under /data so state survives restarts. Litellm
+# auto-discovers REDIS_URL (also REDIS_HOST/REDIS_PORT). Daemonized so
+# the run.sh signal-trap remains the only foreground-process supervisor.
+mkdir -p /data/valkey
+valkey-server \
+    --daemonize yes \
+    --bind 127.0.0.1 \
+    --port 6379 \
+    --dir /data/valkey \
+    --logfile /data/valkey/valkey.log \
+    --pidfile /data/valkey/valkey.pid
+# Wait for the socket to accept connections (max 5s)
+for _ in $(seq 1 10); do
+    if (echo > /dev/tcp/127.0.0.1/6379) 2>/dev/null; then
+        break
+    fi
+    sleep 0.5
+done
+export REDIS_URL="redis://127.0.0.1:6379"
+bashio::log.info "Valkey ready on 127.0.0.1:6379 (data dir /data/valkey)"
+
 # ── LiteLLM environment (exported BEFORE generate_config.py so it sees them) ─
 export DATABASE_URL="postgresql://litellm:${PG_PASS}@127.0.0.1:5432/litellm"
 export LITELLM_MASTER_KEY
 export LITELLM_SALT_KEY
+
+# Provider API keys — generate_config.py writes \${PROVIDER_API_KEY} references
+# into /data/litellm_config.yaml (see PROVIDER_ENV_VARS in generate_config.py);
+# Litellm resolves these at startup. Without explicit export here, the
+# references resolve to empty strings and Litellm logs "401 Unauthorized"
+# for every model that uses a provider API key.
+for p in openai anthropic google azure minimax; do
+    _key=$(bashio::config "providers.${p}_api_key" '')
+    if [ -n "${_key}" ]; then
+        # ${p^^} uppercases the provider name: minimax → MINIMAX_API_KEY.
+        export "${p^^}_API_KEY=${_key}"
+        bashio::log.info "Exported ${p^^}_API_KEY from providers.${p}_api_key"
+    fi
+done
 
 # ── Synthesize LiteLLM YAML from HA options.json (D-17) ──────────────────────
 python3 /app/generate_config.py

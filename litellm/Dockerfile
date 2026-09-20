@@ -46,6 +46,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-pip \
         nodejs \
         npm \
+        valkey-server \
     && rm -rf /var/lib/apt/lists/*
 
 # LiteLLM runtime (from wheelhouse). Use python3 -m pip (not bare `pip`)

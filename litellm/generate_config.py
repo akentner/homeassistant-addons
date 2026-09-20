@@ -88,8 +88,19 @@ def _build_model_entry(model: dict) -> dict:
         else:
             api_key_ref = f"${{{env_var}}}"
 
-    # Build the model_list entry per LiteLLM schema
-    litellm_params: dict = {"model": upstream_model}
+    # Build the model_list entry per LiteLLM schema. Unknown providers
+    # (e.g., MiniMax, custom_openai, any OpenAI-compatible API not in the
+    # native provider list) need to be rewritten to use the OpenAI client
+    # with a custom api_base — otherwise Litellm fails with
+    # "Unknown provider: minimax" at config-parse time. The "openai/"
+    # model prefix tells Litellm which client class to instantiate; api_base
+    # routes the actual HTTP request to the right endpoint.
+    NATIVE_LITELLM_PROVIDERS = {"openai", "anthropic", "google", "azure", "ollama", "bedrock"}
+    if provider.lower() not in NATIVE_LITELLM_PROVIDERS:
+        litellm_model_id = f"openai/{upstream_model}"
+    else:
+        litellm_model_id = upstream_model
+    litellm_params: dict = {"model": litellm_model_id}
     if api_key_ref:
         litellm_params["api_key"] = api_key_ref
     if api_base:
