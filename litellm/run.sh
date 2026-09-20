@@ -94,6 +94,16 @@ PG_DATA=/data/postgresql
 
 mkdir -p "${PG_DATA}"
 chown postgres:postgres "${PG_DATA}"
+# Pre-create postgresql.log as root + chown to postgres. Some HA
+# Supervisor setups (BTRFS subvolume, custom ACLs on /data) block
+# O_CREAT for non-root users even when the parent dir is owned
+# by them — pg_ctl then fails at startup with "Permission denied"
+# on its -l logfile. Creating the file here (as root) and chown-ing
+# to postgres means pg_ctl only ever opens (O_WRONLY|O_APPEND),
+# never creates, so the restrictive ACL never blocks.
+: > "${PG_DATA}/postgresql.log"
+chown postgres:postgres "${PG_DATA}/postgresql.log"
+chmod 644 "${PG_DATA}/postgresql.log"
 
 if [ ! -f "${PG_DATA}/PG_VERSION" ]; then
     bashio::log.info "Initializing PostgreSQL ${PG_VERSION} database..."
