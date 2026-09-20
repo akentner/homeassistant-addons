@@ -50,7 +50,7 @@ with HA Ingress for Swagger UI access from the HA UI sidebar.
 See [DOCS.md][docs] for the full options schema, the HA Conversation integration snippet, the Postgres reset procedure,
 and troubleshooting.
 
-[release-shield]: https://img.shields.io/badge/version-v0.1.0-blue.svg
+[release-shield]: https://img.shields.io/badge/version-v1.101.0-blue.svg
 [release]: https://github.com/akentner/homeassistant-addons/tree/litellm/v0.1.0
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
 [amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
