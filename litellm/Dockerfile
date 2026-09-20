@@ -94,6 +94,14 @@ COPY generate_config.py /app/generate_config.py
 COPY run_litellm.py /app/run_litellm.py
 RUN chmod +x /app/run_litellm.py
 
+# Sidebar + Apps-overview icon. HA Supervisor auto-detects icon.png
+# at the add-on root if present (network-tools, gatus, meridian all
+# ship one). 256x256 PNG, transparent BG, neural-net theme.
+COPY icon.png /app/icon.png
+# HA reads the icon from a well-known path inside the addon_data
+# mount (not from /app). Symlink so HA finds it.
+RUN mkdir -p /data && ln -sf /app/icon.png /data/icon.png
+
 # Add-on startup script
 COPY run.sh /run.sh
 RUN chmod +x /run.sh
