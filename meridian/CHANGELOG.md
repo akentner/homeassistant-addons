@@ -1,3 +1,10 @@
+## [1.74.0](https://github.com/rynfar/meridian/compare/meridian-v1.73.0...meridian-v1.74.0) (2026-09-20)
+
+### Features
+
+- add subscription-backed Antigravity runtime and provider UI ([#1074](https://github.com/rynfar/meridian/issues/1074))
+  ([5f1bbf9](https://github.com/rynfar/meridian/commit/5f1bbf9810a9c75468542799141120e6829baa7c))
+
 ## [1.73.0](https://github.com/rynfar/meridian/compare/meridian-v1.72.0...meridian-v1.73.0) (2026-09-19)
 
 ### Features
