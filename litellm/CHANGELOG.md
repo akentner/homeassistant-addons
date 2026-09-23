@@ -12,6 +12,55 @@ key:
 ```bash
 cosign verify \
   --key https://raw.githubusercontent.com/BerriAI/litellm/0112e53046018d726492c814b3644b7d376029d0/cosign.pub \
+  ghcr.io/berriai/litellm:v1.102.1
+```
+
+**Verify using the release tag (convenience):**
+
+Tags are protected in this repository and resolve to the same key. This option is easier to read but relies on tag
+protection rules:
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/v1.102.1/cosign.pub \
+  ghcr.io/berriai/litellm:v1.102.1
+```
+
+Expected output:
+
+```
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - The signatures were verified against the specified public key
+```
+
+---
+
+## What's Changed
+
+- fix(anthropic): backport #42152 and #42288 to stable/1.102.x for v1.102.1 by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/42538
+- feat(typesafe): backport the jev change set to stable/1.102.x for v1.102.1 by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/42595
+- chore(release): backport #42388 and #41462 to stable/1.102.x by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/42618
+
+**Full Changelog**: https://github.com/BerriAI/litellm/compare/v1.102.0...v1.102.1
+
+## Verify Docker Image Signature
+
+All LiteLLM Docker images are signed with [cosign](https://docs.sigstore.dev/cosign/overview/). Every release is signed
+with the same key introduced in
+[commit `0112e53`](https://github.com/BerriAI/litellm/commit/0112e53046018d726492c814b3644b7d376029d0).
+
+**Verify using the pinned commit hash (recommended):**
+
+A commit hash is cryptographically immutable, so this is the strongest way to ensure you are using the original signing
+key:
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/0112e53046018d726492c814b3644b7d376029d0/cosign.pub \
   ghcr.io/berriai/litellm:v1.101.0
 ```
 
