@@ -1,3 +1,10 @@
+## [1.76.5](https://github.com/rynfar/meridian/compare/meridian-v1.76.4...meridian-v1.76.5) (2026-09-24)
+
+### Bug Fixes
+
+- support released OpenCode V2 host ([#1148](https://github.com/rynfar/meridian/issues/1148))
+  ([1a5e1a2](https://github.com/rynfar/meridian/commit/1a5e1a2b43311527650fc834d7d777abc5620141))
+
 ## [1.76.1](https://github.com/rynfar/meridian/compare/meridian-v1.76.0...meridian-v1.76.1) (2026-09-23)
 
 ### Bug Fixes
