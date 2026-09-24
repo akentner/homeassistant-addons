@@ -51,5 +51,5 @@ See [DOCS.md][docs] for full configuration reference and alerting examples.
 [gatus]: https://github.com/TwiN/gatus
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-production-green.svg
-[release-shield]: https://img.shields.io/badge/version-v5.36.0-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v5.36.0
+[release-shield]: https://img.shields.io/badge/version-v5.37.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v5.37.0
