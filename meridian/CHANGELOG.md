@@ -1,3 +1,10 @@
+## [1.76.6](https://github.com/rynfar/meridian/compare/meridian-v1.76.5...meridian-v1.76.6) (2026-09-25)
+
+### Bug Fixes
+
+- launch Windows SDK gate with Node for OpenCode V2 ([#1153](https://github.com/rynfar/meridian/issues/1153))
+  ([c6372b3](https://github.com/rynfar/meridian/commit/c6372b3a1551f3029e772c73b8346104b85426be))
+
 ## [1.76.5](https://github.com/rynfar/meridian/compare/meridian-v1.76.4...meridian-v1.76.5) (2026-09-24)
 
 ### Bug Fixes
