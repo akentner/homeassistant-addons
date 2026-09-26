@@ -37,4 +37,5 @@ schema:
     - name: str
       uri: str
       enabled: bool?
+      location: str?
   log_level: "list(debug|info|warning|error)?"

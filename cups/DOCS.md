@@ -13,13 +13,14 @@
 
 ## Printers
 
-Each entry in the `printers` list is an object with three fields:
+Each entry in the `printers` list is an object with four fields:
 
-| Field     | Type    | Default | Description                                                                                          |
-| --------- | ------- | ------- | ---------------------------------------------------------------------------------------------------- |
-| `name`    | `str`   | —       | Printer queue name registered with CUPS (`lpadmin -p <name>`)                                        |
-| `uri`     | `str`   | —       | Device URI CUPS uses to reach the printer. See [Supported URI schemes](#supported-uri-schemes) below |
-| `enabled` | `bool?` | `true`  | Whether this printer entry is registered at startup                                                  |
+| Field      | Type    | Default | Description                                                                                            |
+| ---------- | ------- | ------- | ------------------------------------------------------------------------------------------------------ |
+| `name`     | `str`   | —       | Printer queue name registered with CUPS (`lpadmin -p <name>`)                                          |
+| `uri`      | `str`   | —       | Device URI CUPS uses to reach the printer. See [Supported URI schemes](#supported-uri-schemes) below   |
+| `enabled`  | `bool?` | `true`  | Whether this printer entry is registered at startup                                                    |
+| `location` | `str?`  | —       | Optional CUPS Location string (`lpadmin -L <location>`, e.g. `"Office"`). Omitted entirely when unset. |
 
 ### Supported URI schemes
 
@@ -33,6 +34,7 @@ printers:
   - name: "office-ipp"
     uri: "ipp://192.168.1.50:631/ipp/print"
     enabled: true
+    location: "Office"
   - name: "jetdirect-printer"
     uri: "socket://192.168.1.51:9100"
     enabled: true
@@ -119,6 +121,14 @@ performs a live IPP capability query against the device at registration time —
 unreachable when the add-on (re)starts would fail to register at all, which defeats the point of a persistent print
 queue for a home printer that isn't always on. The generic driver registers the queue unconditionally; CUPS only
 contacts the device when a job is actually printed.
+
+**Printer `location` is passed through to `lpadmin -L` (optional, per-printer).** Each `printers[]` entry may set an
+optional `location` string (e.g. `"Office"`, `"Kitchen"`) shown by CUPS's own web UI and `lpstat -l -p <name>`.
+`generate_config.py`'s `build_printer_registration()` appends `-L "<location>"` to that printer's `lpadmin` argv only
+when `location` is present and non-empty -- an empty/omitted value is skipped entirely (not passed as `-L ""`), since an
+empty string would actively clear a location a user set manually via the web UI. The value is validated against
+`LOCATION_RE` (printable ASCII, no quotes/control characters) before use; an invalid value is skipped with a WARNING
+rather than aborting that printer's registration entirely.
 
 ## Migrating from f1c878cb_cups
 

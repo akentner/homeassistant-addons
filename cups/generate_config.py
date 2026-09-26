@@ -30,7 +30,10 @@ Reads /data/options.json and generates:
     `detect_tailscale_subnet`.
   - /tmp/register-printers.sh: one `lpadmin` invocation per valid printers[]
     entry, built from a quoted argv list (never an interpolated shell string) so
-    a malformed name or uri cannot inject extra shell commands (T-21-01).
+    a malformed name or uri cannot inject extra shell commands (T-21-01). Each
+    entry's optional `location` field is passed through as `-L <location>`
+    when present, letting CUPS show a human-readable per-printer location
+    string (e.g. "Office").
 """
 
 import ipaddress
@@ -92,6 +95,14 @@ IFACE_RE = re.compile(r"^[A-Za-z0-9@.:_-]{1,15}$")
 SERVER_ALIAS_TOKEN_RE = re.compile(r"^(\*|[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?)$")
 
 PROC_NET_ROUTE = "/proc/net/route"
+
+# Matches a CUPS printer Location string (lpadmin -L). Conservative
+# printable-ASCII-minus-quotes allowlist -- defense in depth alongside the
+# argv-array construction in build_printer_registration (T-21-01's
+# no-interpolated-shell-string mitigation already prevents injection via
+# shlex.quote, but this closes the door on control characters or values that
+# would otherwise render oddly in `lpstat -l`/the HA UI).
+LOCATION_RE = re.compile(r"^[A-Za-z0-9 ,.\-_/()]{1,127}$")
 
 # Tailscale's standard Linux interface name -- not configurable by the user
 # (Tailscale itself does not support renaming it), so this is a fixed check
@@ -526,7 +537,12 @@ def build_printer_registration(options: dict) -> str:
 
     Invalid entries (bad name, unsupported uri scheme) are skipped and logged
     rather than crashing lpadmin or the whole add-on. `enabled` defaults to
-    true when absent (D-04's discretion default).
+    true when absent (D-04's discretion default). An optional `location`
+    field (e.g. "Office") is passed through as `lpadmin -L <location>` when
+    present and non-empty -- omitted entirely when absent, since an empty
+    `-L ""` would just clear any location a user might set later via the web
+    UI. An invalid `location` value is skipped (with a WARNING) but does not
+    abort registration of the rest of that printer's fields.
     """
     printers = options.get("printers") or []
     lines = ["#!/bin/sh", "set -e", ""]
@@ -572,6 +588,18 @@ def build_printer_registration(options: dict) -> str:
         # queue unconditionally; CUPS only contacts the device when a job is
         # actually printed.
         argv = ["lpadmin", "-p", name, "-v", uri, "-E", "-m", "drv:///sample.drv/generic.ppd"]
+
+        location = str(entry.get("location", "") or "").strip()
+        if location:
+            if LOCATION_RE.match(location):
+                argv += ["-L", location]
+            else:
+                print(
+                    f"WARNING: skipping location for printer '{name}' -- invalid value "
+                    f"{location!r}, must match {LOCATION_RE.pattern}",
+                    flush=True,
+                )
+
         lines.append(" ".join(shlex.quote(a) for a in argv))
         lines.append(f'echo "registered printer: {name}"')
 

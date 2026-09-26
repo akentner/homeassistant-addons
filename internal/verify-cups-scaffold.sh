@@ -28,7 +28,7 @@ cat > "${DATA_DIR}/options.json" <<'JSON'
   "avahi_use_ipv6": false,
   "server_aliases": "cups-verify.example.ts.net",
   "printers": [
-    {"name": "testprinter", "uri": "ipp://192.0.2.10:631/ipp/print", "enabled": true}
+    {"name": "testprinter", "uri": "ipp://192.0.2.10:631/ipp/print", "enabled": true, "location": "Office"}
   ],
   "log_level": "info"
 }
@@ -167,6 +167,15 @@ if echo "${CUPSD_CONF}" | grep -qF "100.64.0.0/10"; then
     yellow "   NOTE: 100.64.0.0/10 Allow rule present -- this environment unexpectedly has tailscale0"
 else
     green "   PASS: no 100.64.0.0/10 Allow rule (no tailscale0 interface in this environment, as expected)"
+fi
+
+yellow "Checking printer location (lpadmin -L)..."
+if docker exec "${CONTAINER_NAME}" lpstat -l -p testprinter 2>/dev/null | grep -qF "Location: Office"; then
+    green "   PASS: testprinter shows configured location 'Office'"
+else
+    red "   FAIL: testprinter does not show 'Location: Office'"
+    docker exec "${CONTAINER_NAME}" lpstat -l -p testprinter 2>&1 || true
+    FAIL=1
 fi
 
 yellow "Checking for legacy-unicast reflector slot exhaustion (D-08)..."
