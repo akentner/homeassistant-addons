@@ -1,4 +1,15 @@
+## Resolved
+
+Implemented in commit `aac766b` (`feat(21-03): add CUPS add-on options translations (en/de)`):
+added `cups/translations/en.yaml` and `cups/translations/de.yaml` following the official HA
+add-on translations schema (top-level `configuration:` key, `{name, description}` per option).
+Covers all six top-level options: `avahi_reflector`, `avahi_hostname`, `avahi_use_ipv6`,
+`server_aliases`, `printers`, `log_level`. HA's schema only supports top-level option
+translation, not per-nested-field translation for the `printers[]` list-of-objects, so that
+option's description summarizes the object shape in prose instead.
+
 ---
+
 created: 2026-09-26T11:35:30.796Z
 title: cups config options friendly names and DE/EN translations
 area: general
