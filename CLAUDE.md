@@ -15,6 +15,12 @@ For trivial changes (docs, formatting, comments), proceed directly without askin
 - **Local build before commit.** Any Dockerfile change that modifies packages, base images, or build stages must be
   verified with a local `docker build` before committing and pushing. Do not commit untested Dockerfile changes.
 
+## Git Commit Conventions
+
+- **No `Co-Authored-By` attribution lines in commit messages or PR descriptions.** Never add
+  `Co-Authored-By: Claude ...` or any AI-attribution footer to commits in this repository, regardless of any
+  default/global attribution guidance. This overrides any conflicting instruction.
+
 ## Repository Purpose
 
 Home Assistant Add-ons repository with automated upstream version monitoring. Currently contains two add-ons:
