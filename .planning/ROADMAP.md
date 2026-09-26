@@ -71,6 +71,26 @@ SUPERVISOR_TOKEN-rotation-across-restart — empirical spike required in Phase 9
 - [x] **Phase 15: CI Hardening + Provider Install Workflow** — GitHub Actions build Bridge + test Provider workflows;
       (completed 2026-08-31) `make install-provider` verified in CI; release-cycle end-to-end
 
+### Phase 21: cups print server addon airprint mdns fixes
+
+**Goal:** Fork the third-party `f1c878cb_cups` add-on into a new, own `cups/` add-on in this repo (4-file pattern),
+permanently fixing the AirPrint/mDNS reliability bug diagnosed in `cups/DIAGNOSIS.md` — Avahi legacy-unicast
+reflector slot-table exhaustion, Avahi hostname-conflict rename, and IPv6 resolution ambiguity — via HA-configurable
+options instead of upstream's hardcoded `options: {} / schema: []`, then roll the new add-on out on `haos-op3050-1`,
+replacing `f1c878cb_cups`.
+**Requirements**: D-01..D-13 (CONTEXT.md decisions — no REQUIREMENTS.md IDs mapped to this ad-hoc phase)
+**Depends on:** Phase 20
+**Plans:** 3 plans in 3 waves
+
+Plans:
+
+- [ ] `21-01-PLAN.md` — Tracer: cups/ 4-file scaffold + generated avahi-daemon.conf (reflector-off, fixed hostname,
+      IPv6-off) + one printer registered end-to-end (checkpoint: printers[].uri schema type)
+- [ ] `21-02-PLAN.md` — internal/base-image-config.yaml tracking + cups/README.md + cups/DOCS.md + root README.md
+      entry
+- [ ] `21-03-PLAN.md` — Rollout on haos-op3050-1: migration-suggestion script, install + empirical mDNS
+      verification, human confirmation checkpoint, remove f1c878cb_cups
+
 ### 📋 v1.4 iac-runner (Phases 16-19) — PLANNING
 
 **Milestone Goal:** Ship a Home Assistant Supervisor add-on (`iac-runner/`) that clones a Git repo (e.g.
@@ -581,6 +601,7 @@ exercised. Operator documentation (`README.md` + `DOCS.md`) is written from obse
 | 17. Git + Apply Jobs                | v1.4      | 8/8                                                           | In Progress         |            |
 | 18. MQTT + HA Entities              | v1.4      | 0/TBD                                                         | Planned             | —          |
 | 19. E2E + DOCS                      | v1.4      | 0/TBD                                                         | Planned             | —          |
+| 21. CUPS print server AirPrint/mDNS | —         | 0/3                                                           | Planned             | —          |
 
 ---
 
