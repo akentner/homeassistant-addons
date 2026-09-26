@@ -88,9 +88,9 @@ Assistant via a REST sensor.
 
 _Share printers via CUPS with AirPrint/mDNS discovery that actually keeps working._
 
-Forked from the third-party `f1c878cb_cups` add-on after diagnosing an Avahi legacy-unicast reflector slot-exhaustion
-bug that silently broke AirPrint discovery over time. Ships with the reflector disabled, a fixed mDNS hostname, and IPv6
-mDNS resolution disabled by default — the permanent fix for that reliability bug, not just a restart workaround.
+Shares printers via CUPS with a permanent fix for known Avahi mDNS reliability issues, not just a restart workaround.
+Ships with the reflector disabled by default (configurable via `avahi_reflector`), a fixed mDNS hostname, and IPv6 mDNS
+resolution disabled by default.
 
 **Features:**
 

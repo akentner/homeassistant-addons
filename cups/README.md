@@ -6,11 +6,10 @@ Share printers via CUPS with AirPrint/mDNS discovery that actually keeps working
 
 ## About
 
-This add-on shares one or more printers via CUPS, advertised over mDNS/DNS-SD for AirPrint discovery. It was forked from
-the third-party `f1c878cb_cups` add-on after diagnosing a specific Avahi reflector slot-exhaustion bug that silently
-broke AirPrint discovery over time (see `DIAGNOSIS.md` in this repository's `cups/` working notes for the full
-investigation). The fixes for that bug — and two related mDNS reliability issues — are baked in as this add-on's shipped
-defaults, not left as something an operator has to discover and configure.
+This add-on shares one or more printers via CUPS, advertised over mDNS/DNS-SD for AirPrint discovery. It ships with
+fixes for a handful of known Avahi mDNS reliability issues (legacy-unicast reflector slot exhaustion, hostname-conflict
+rename, IPv6 resolution ambiguity) baked in as shipped defaults, not left as something an operator has to discover and
+configure. The Avahi reflector's behavior is configurable via the `avahi_reflector` option — see below.
 
 ## Features
 

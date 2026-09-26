@@ -1,8 +1,8 @@
 name: "CUPS"
 description: >-
-  CUPS print server with AirPrint support. Includes a permanent fix for the Avahi mDNS reliability
-  bug diagnosed in DIAGNOSIS.md — legacy-unicast reflector slot exhaustion, hostname-conflict
-  rename, and IPv6 resolution ambiguity are all resolved by a generated avahi-daemon.conf.
+  CUPS print server with AirPrint support. Ships with a permanent fix for common Avahi mDNS
+  reliability issues — legacy-unicast reflector slot exhaustion, hostname-conflict rename, and
+  IPv6 resolution ambiguity are all resolved by a generated avahi-daemon.conf.
 version: "0.1.0-4"
 slug: "cups"
 init: false
