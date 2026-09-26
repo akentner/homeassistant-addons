@@ -1,3 +1,10 @@
+## [1.77.1](https://github.com/rynfar/meridian/compare/meridian-v1.77.0...meridian-v1.77.1) (2026-09-26)
+
+### Bug Fixes
+
+- separate lifecycle admission from external lock deadlines ([#1159](https://github.com/rynfar/meridian/issues/1159))
+  ([da28f1e](https://github.com/rynfar/meridian/commit/da28f1e81fc3a0c9b0e8abe159a9e0153d88534f))
+
 ## [1.76.6](https://github.com/rynfar/meridian/compare/meridian-v1.76.5...meridian-v1.76.6) (2026-09-25)
 
 ### Bug Fixes
