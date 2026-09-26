@@ -1,5 +1,7 @@
 # CUPS Add-on Configuration
 
+Add-on icon is the official CUPS project logo (github.com/apple/cups), used under its Apache License 2.0.
+
 ## Add-on Options
 
 | Option            | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
