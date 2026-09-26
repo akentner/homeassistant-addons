@@ -1,0 +1,9 @@
+build_from:
+  amd64: "ghcr.io/home-assistant/amd64-base:3.24"
+
+# No downloaded upstream binary to pin (CUPS/Avahi come from apk, D-06) — this
+# VERSION arg is the add-on's own release version, required by
+# internal/validate-versions.sh even though cups/Dockerfile has no `ARG VERSION`
+# to consume it (mirrors network-tools/build.yaml exactly).
+args:
+  VERSION: "0.1.0"
