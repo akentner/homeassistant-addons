@@ -1,4 +1,13 @@
+## Resolved
+
+Implemented in commit `d0a8378` (`feat(21-03): add CUPS add-on store icon`): added
+`cups/icon.png`, a 128x128 8-bit RGBA PNG matching the `meridian/icon.png` precedent.
+Generated programmatically with Pillow (`uv run --with pillow`) rather than downloading any
+third-party image, to avoid licensing risk -- a solid deep-teal rounded-square background with
+a bold white printer silhouette and a small wifi/mDNS-style arc.
+
 ---
+
 created: 2026-09-26T11:35:30.796Z
 title: CUPS add-on brand icon nachliefern
 area: general
