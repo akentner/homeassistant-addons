@@ -24,6 +24,7 @@ options:
   avahi_reflector: false
   avahi_hostname: "cups"
   avahi_use_ipv6: false
+  server_aliases: "*"
   printers: []
   log_level: "info"
 
@@ -31,6 +32,7 @@ schema:
   avahi_reflector: "bool?"
   avahi_hostname: "str?"
   avahi_use_ipv6: "bool?"
+  server_aliases: "str?"
   printers:
     - name: str
       uri: str

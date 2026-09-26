@@ -26,6 +26,7 @@ cat > "${DATA_DIR}/options.json" <<'JSON'
   "avahi_reflector": false,
   "avahi_hostname": "cups-verify",
   "avahi_use_ipv6": false,
+  "server_aliases": "cups-verify.example.ts.net",
   "printers": [
     {"name": "testprinter", "uri": "ipp://192.0.2.10:631/ipp/print", "enabled": true}
   ],
@@ -136,6 +137,14 @@ if echo "${CUPSD_CONF}" | grep -A3 '<Location /admin>' | grep -q 'Require user @
     green "   PASS: /admin still requires @SYSTEM auth (network scoping did not touch auth)"
 else
     red "   FAIL: /admin auth requirement missing or altered -- this must never change"
+    FAIL=1
+fi
+
+yellow "Checking cupsd.conf ServerAlias (Host-header validation fix)..."
+if echo "${CUPSD_CONF}" | grep -qF "ServerAlias cups-verify.example.ts.net"; then
+    green "   PASS: ServerAlias emitted for the configured server_aliases value"
+else
+    red "   FAIL: missing 'ServerAlias cups-verify.example.ts.net' -- cupsd would reject that Host header with 400"
     FAIL=1
 fi
 

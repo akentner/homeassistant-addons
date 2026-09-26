@@ -7,6 +7,7 @@
 | `avahi_reflector` | `false` | Disabled by default. Avahi's legacy-unicast reflector keeps a fixed-size in-memory slot table that fills up under sustained legacy-unicast mDNS traffic (e.g. from a mesh Wi-Fi repeater) and silently drops all further mDNS queries once full, including resolves of this add-on's own advertised printers — the exact bug this add-on exists to fix. Only re-enable this if the add-on is run WITHOUT `host_network: true`, where reflection across network namespaces would actually be needed. |
 | `avahi_hostname`  | `cups`  | Fixed Avahi host-name, independent of the container's transient hostname. Prevents the auto-rename-on-conflict behavior (`<hostname>-2`) that made the printer's advertised mDNS name diverge from its actual resolvable address.                                                                                                                                                                                                                                                                   |
 | `avahi_use_ipv6`  | `false` | Disabled by default. Avahi may resolve the add-on's mDNS hostname to an IPv6 ULA address that is unreachable/unrouted for some client devices, independent of the reflector bug.                                                                                                                                                                                                                                                                                                                    |
+| `server_aliases`  | `*`     | Space- and/or comma-separated list of hostnames cupsd's embedded web server accepts in the HTTP `Host:` header (e.g. `haos-op3050-1.tailxxxx.ts.net` for Tailscale MagicDNS access). `*` (the default) accepts any Host header. See [Design notes](#design-notes) for why this is safe as a default.                                                                                                                                                                                                |
 | `printers`        | `[]`    | List of printers to register with CUPS at startup. See [Printers](#printers) below for the object shape.                                                                                                                                                                                                                                                                                                                                                                                            |
 | `log_level`       | `info`  | Log verbosity: `debug`, `info`, `warning`, `error`                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
@@ -73,6 +74,23 @@ project's no-extra-packages philosophy). The `/admin`, `/admin/conf`, `/admin/lo
 block are never touched -- only network reachability changes, the admin-auth boundary (`Require user @SYSTEM`) is
 untouched. If interface/IP detection fails for any reason, the add-on logs a WARNING and leaves `cupsd.conf` at its
 current content (the stock, loopback-only default) rather than crashing or writing a broken config.
+
+**cupsd's `Host:` header validation is separately widened via `ServerAlias` (configurable, `server_aliases`).** The
+LAN-scoping fix above (`Listen`/`Allow from <subnet>`) makes cupsd's port 631 _reachable_ from the LAN, but cupsd's
+embedded httpd applies a second, independent check: it validates the incoming HTTP `Host:` header against its own
+auto-detected hostname/IPs and returns `400 Bad Request` for anything else, unless a `ServerAlias` directive widens that
+accepted list. This was discovered when the CUPS web UI worked fine via direct LAN IP (`http://192.168.178.3:631/`,
+HTTP 200) but returned `400 Bad Request` via the host's Tailscale MagicDNS hostname
+(`http://haos-op3050-1.<magicdns-suffix>:631/`) — a Host-header rejection, not a network-reachability problem.
+`generate_config.py`'s `parse_server_aliases()` splits, validates, and de-duplicates the `server_aliases` option
+(space/comma-separated, matching this add-on's scalar-option convention — see `avahi_hostname`) and `build_cupsd_conf()`
+inserts the result as a `ServerAlias <token> [<token> ...]` line directly after the patched `Listen` line. The default
+is `"*"` (accept any Host header) rather than an empty/unset value, and this is deliberately safe: `ServerAlias` only
+gates which Host header names cupsd is willing to accept, not which networks can connect — the real access boundary is
+already the `Listen`/`Allow from <lan-subnet-cidr>` pair above, which `server_aliases` does not touch. Leaving this
+unset by default would just reintroduce the exact 400 bug for every fresh install (nobody knows to configure it until
+they hit the same failure), so `"*"` ships as the working-out-of-the-box default; set `server_aliases` explicitly if you
+want to restrict accepted hostnames to a known allowlist instead.
 
 **No slot-exhaustion watchdog (D-08).** There is no watchdog or log-monitoring for the
 `No slot available for legacy unicast reflection` message anywhere in this add-on. With `avahi_reflector: false` as the

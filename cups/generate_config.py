@@ -19,7 +19,11 @@ Reads /data/options.json and generates:
     device, which meant AirPrint clients could resolve the printer via mDNS
     but never actually connect to port 631 to print. `/admin`, `/admin/conf`,
     `/admin/log`, and every Policy block are left byte-for-byte untouched --
-    only network reachability changes, not the admin-auth boundary.
+    only network reachability changes, not the admin-auth boundary. Also
+    emits a `ServerAlias` directive from the `server_aliases` option so
+    cupsd's own separate Host-header validation accepts hostnames beyond its
+    auto-detected one (e.g. a Tailscale MagicDNS name) -- see
+    `parse_server_aliases`.
   - /tmp/register-printers.sh: one `lpadmin` invocation per valid printers[]
     entry, built from a quoted argv list (never an interpolated shell string) so
     a malformed name or uri cannot inject extra shell commands (T-21-01).
@@ -70,6 +74,18 @@ ALLOWED_URI_SCHEMES = {"ipp", "ipps", "socket", "usb", "dnssd", "lpd", "http"}
 # from kernel data rather than HA options -- kernel-assigned names are not
 # attacker-controlled, but the same validate-before-write discipline applies).
 IFACE_RE = re.compile(r"^[A-Za-z0-9@.:_-]{1,15}$")
+
+# Matches a single ServerAlias token: either the literal wildcard "*" (accept
+# any Host header value -- the pragmatic default, since Listen/Allow above
+# already scope network *reachability* to the detected LAN subnet;
+# ServerAlias only gates which Host header cupsd is willing to accept, not
+# which networks can connect) or a DNS-hostname-shaped value (letters,
+# digits, hyphens, dots -- covers Tailscale MagicDNS names like
+# haos-op3050-1.tailXXXX.ts.net as well as plain LAN hostnames). No
+# whitespace, semicolons, or other characters that could break the generated
+# cupsd.conf line (T-21-01-style defensive validation -- this value comes
+# from an HA add-on option, i.e. attacker-controlled if the UI is exposed).
+SERVER_ALIAS_TOKEN_RE = re.compile(r"^(\*|[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?)$")
 
 PROC_NET_ROUTE = "/proc/net/route"
 
@@ -191,7 +207,45 @@ def compute_subnet_cidr(ip: str, netmask: str) -> str | None:
     return str(network)
 
 
-def build_cupsd_conf(iface: str | None) -> str | None:
+def parse_server_aliases(raw: object) -> list[str]:
+    """Split, validate, and de-duplicate a `server_aliases` option value.
+
+    Accepts a single string of space- and/or comma-separated hostnames (this
+    add-on's schema convention for scalar options, see `avahi_hostname`)
+    rather than a list, since the `ServerAlias` cupsd directive itself takes
+    multiple space-separated values on one line.
+
+    Root cause this fixes (found on haos-op3050-1 while preparing for the
+    AirPrint physical test, after the LAN-scoping fix above already shipped):
+    cupsd's embedded httpd validates the incoming HTTP `Host:` header against
+    its own detected hostname/IPs and rejects anything else with `400 Bad
+    Request` -- unless `ServerAlias` widens that accepted list. Direct-IP
+    access (`http://192.168.178.3:631/`) already worked (the LAN-scoping fix
+    above), but the Tailscale MagicDNS hostname
+    (`haos-op3050-1.<magicdns-suffix>:631`) did not, because its Host header
+    never matched cupsd's auto-detected name.
+
+    Invalid tokens are skipped and logged rather than aborting the whole
+    add-on -- one bad hostname should not also lose the good ones.
+    """
+    tokens = re.split(r"[,\s]+", str(raw).strip())
+    valid: list[str] = []
+    for token in tokens:
+        if not token:
+            continue
+        if SERVER_ALIAS_TOKEN_RE.match(token):
+            if token not in valid:
+                valid.append(token)
+        else:
+            print(
+                f"WARNING: skipping invalid server_aliases token {token!r} -- must match "
+                f"{SERVER_ALIAS_TOKEN_RE.pattern}",
+                flush=True,
+            )
+    return valid
+
+
+def build_cupsd_conf(iface: str | None, options: dict) -> str | None:
     """Render a patched cupsd.conf scoping cupsd to the host's LAN interface.
 
     Root cause (found on haos-op3050-1 while preparing for the AirPrint
@@ -214,8 +268,16 @@ def build_cupsd_conf(iface: str | None) -> str | None:
         gains `Allow from <lan-subnet-cidr>` underneath the stock's
         `Order allow,deny` -- printing/web-UI works from the detected LAN
         subnet, not from arbitrary addresses
+    Also inserts a `ServerAlias` directive (from the `server_aliases` add-on
+    option, default `"*"`) directly after the patched `Listen` line -- see
+    `parse_server_aliases` for why this is needed (cupsd's Host-header
+    validation, a separate concern from the `Listen`/`Allow` network-
+    reachability fix above) and why `"*"` is a safe out-of-the-box default
+    (the real access boundary is already the detected LAN subnet's `Allow
+    from`, not the Host header check).
+
     `/admin`, `/admin/conf`, `/admin/log`, and every `<Policy>` block are
-    never touched by this function -- only the two lines above are patched,
+    never touched by this function -- only the lines above are patched,
     everything else in the stock file survives byte-for-byte.
 
     Returns None -- leaving CUPSD_CONF_PATH at its current (stock, loopback-
@@ -295,6 +357,21 @@ def build_cupsd_conf(iface: str | None) -> str | None:
         return None
 
     patched = LISTEN_LOCALHOST_RE.sub(f"Listen {ip}:631", template, count=1)
+
+    aliases = parse_server_aliases(options.get("server_aliases", "*"))
+    if aliases:
+        patched = patched.replace(
+            f"Listen {ip}:631",
+            f"Listen {ip}:631\nServerAlias {' '.join(aliases)}",
+            1,
+        )
+    else:
+        print(
+            "WARNING: no valid server_aliases tokens -- ServerAlias not written; cupsd may "
+            "reject Host headers that do not match its auto-detected hostname/IPs (400 Bad "
+            "Request)",
+            flush=True,
+        )
 
     location_match = LOCATION_ROOT_RE.search(patched)
     if location_match is None:
@@ -439,7 +516,7 @@ def main() -> None:
     Path(AVAHI_CONF_PATH).write_text(avahi_conf)
     print(f"Config written to {AVAHI_CONF_PATH}", flush=True)
 
-    cupsd_conf = build_cupsd_conf(detect_primary_interface())
+    cupsd_conf = build_cupsd_conf(detect_primary_interface(), options)
     if cupsd_conf is not None:
         Path(CUPSD_CONF_PATH).write_text(cupsd_conf)
         print(f"Config written to {CUPSD_CONF_PATH}", flush=True)
