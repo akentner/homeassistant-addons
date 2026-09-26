@@ -170,6 +170,11 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 
 ## Accumulated Context
 
+### Pending Todos
+
+- [2026-09-26] [general] CUPS add-on brand icon nachliefern — [todo file](.planning/todos/pending/2026-09-26-cups-add-on-brand-icon-nachliefern.md)
+- [2026-09-26] [general] cups config options friendly names and DE/EN translations — [todo file](.planning/todos/pending/2026-09-26-cups-config-options-friendly-names-and-de-en-translations.md)
+
 ### Roadmap Evolution
 
 - Phase 21 added: cups print server addon airprint mdns fixes
