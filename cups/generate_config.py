@@ -4,7 +4,11 @@
 Reads /data/options.json and generates:
   - /etc/avahi/avahi-daemon.conf: a minimal avahi-daemon.conf carrying the three
     permanent AirPrint/mDNS fixes (D-07 reflector off, D-10 IPv6 off, D-11 fixed
-    host-name) -- everything else is left to Avahi's compiled-in defaults.
+    host-name) -- everything else is left to Avahi's compiled-in defaults. It
+    also carries an auto-detected `allow-interfaces=` restriction (see
+    `detect_primary_interface`) that scopes Avahi to the host's real LAN NIC,
+    fixing a live hostname-rename loop discovered on haos-op3050-1 after D-11
+    shipped.
   - /tmp/register-printers.sh: one `lpadmin` invocation per valid printers[]
     entry, built from a quoted argv list (never an interpolated shell string) so
     a malformed name or uri cannot inject extra shell commands (T-21-01).
@@ -29,6 +33,66 @@ NAME_RE = re.compile(r"^[A-Za-z0-9-]{1,63}$")
 
 # CUPS device URI schemes this add-on is expected to support (D-03/D-04).
 ALLOWED_URI_SCHEMES = {"ipp", "ipps", "socket", "usb", "dnssd", "lpd", "http"}
+
+# Matches a Linux network interface name (IFNAMSIZ is 16 bytes including the
+# NUL terminator, so 15 usable chars; dots/colons/@ cover VLAN and macvlan
+# sub-interface naming). Defense-in-depth validation before writing an
+# auto-detected interface name into avahi-daemon.conf (T-21-01's
+# newline-injection concern, extended to a value this add-on derives itself
+# from kernel data rather than HA options -- kernel-assigned names are not
+# attacker-controlled, but the same validate-before-write discipline applies).
+IFACE_RE = re.compile(r"^[A-Za-z0-9@.:_-]{1,15}$")
+
+PROC_NET_ROUTE = "/proc/net/route"
+
+
+def detect_primary_interface() -> str | None:
+    """Return the interface name carrying the host's default IPv4 route.
+
+    Root cause (found on haos-op3050-1 after this add-on shipped D-11's fixed
+    hostname): this add-on runs `host_network: true`, so avahi-daemon binds to
+    EVERY host interface -- the real LAN NIC, the `hassio` and `docker0`
+    bridges, and every veth pair. HA Supervisor's own always-on
+    `hassio_multicast` service runs `mdns-repeater -f hassio` on the host
+    network, bridging mDNS traffic between the `hassio` bridge and the real
+    LAN interfaces. Avahi ends up seeing its own announcements re-injected via
+    a second interface, which looks exactly like another host claiming the
+    same hostname -- triggering RFC 6762 SS9's probe-conflict auto-rename
+    repeatedly (the observed cups-2, cups-3, ... cups-N loop that never
+    settles).
+
+    Scoping avahi to just the interface with a default route (the real LAN
+    NIC, e.g. `enp2s0`) excludes the bridges/veths the repeater bridges
+    onto/from, breaking the hairpin.
+
+    Reads /proc/net/route directly (Python stdlib only -- this image
+    deliberately does not carry an `ip`/`iproute2` binary) rather than
+    shelling out. Because `host_network: true` shares the host's network
+    namespace, /proc/net/route reflects the *host's* routing table, not a
+    container-private one.
+
+    Returns None -- rather than raising -- when no default route is found, so
+    a detection failure degrades to the pre-fix behavior (avahi listens on
+    every interface) instead of crashing the whole add-on.
+    """
+    path = Path(PROC_NET_ROUTE)
+    if not path.exists():
+        return None
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return None
+
+    # Header: Iface Destination Gateway Flags RefCnt Use Metric Mask MTU Window IRTT
+    # A default route's Destination field is the all-zero mask "00000000".
+    for line in lines[1:]:
+        fields = line.split()
+        if len(fields) < 2:
+            continue
+        iface, destination = fields[0], fields[1]
+        if destination == "00000000":
+            return iface
+    return None
 
 
 def load_options() -> dict:
@@ -62,6 +126,26 @@ def build_avahi_conf(options: dict) -> str:
         "[server]",
         f"host-name={hostname}",
         f"use-ipv6={'yes' if use_ipv6 else 'no'}",
+    ]
+
+    allow_iface = detect_primary_interface()
+    if allow_iface is None:
+        print(
+            "WARNING: could not detect a primary network interface (no default route in "
+            f"{PROC_NET_ROUTE}) -- avahi will listen on all interfaces, re-exposing the "
+            "hostname-rename-loop risk this fix addresses",
+            flush=True,
+        )
+    elif not IFACE_RE.match(allow_iface):
+        print(
+            f"WARNING: detected primary interface {allow_iface!r} failed validation against "
+            f"{IFACE_RE.pattern} -- avahi will listen on all interfaces (pre-fix behavior)",
+            flush=True,
+        )
+    else:
+        lines.append(f"allow-interfaces={allow_iface}")
+
+    lines += [
         "",
         "[reflector]",
         f"enable-reflector={'yes' if reflector else 'no'}",

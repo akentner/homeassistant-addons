@@ -101,6 +101,18 @@ for assertion in "host-name=cups-verify" "use-ipv6=no" "enable-reflector=no"; do
     fi
 done
 
+# allow-interfaces= is auto-detected at container startup from the default
+# route in /proc/net/route (see generate_config.py's detect_primary_interface
+# docstring) -- the exact interface name depends on Docker's own network
+# assignment for this container, so only the KEY's presence is asserted, not a
+# specific value.
+if echo "${AVAHI_CONF}" | grep -qE '^allow-interfaces='; then
+    green "   PASS: allow-interfaces= present (auto-detected primary interface)"
+else
+    red "   FAIL: missing allow-interfaces= -- avahi would listen on all interfaces"
+    FAIL=1
+fi
+
 yellow "Checking printer registration..."
 if docker exec "${CONTAINER_NAME}" lpstat -p testprinter 2>/dev/null | grep -q "testprinter"; then
     green "   PASS: testprinter registered"

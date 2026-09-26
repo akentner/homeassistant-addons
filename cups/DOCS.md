@@ -42,6 +42,20 @@ printers:
 
 ## Design notes
 
+**Avahi is auto-scoped to the host's primary network interface.** Because this add-on runs `host_network: true`,
+`avahi-daemon` binds to every host interface by default -- the real LAN NIC, HA Supervisor's internal `hassio`/`docker0`
+bridges, and every veth pair. Supervisor's own always-on `hassio_multicast` service bridges mDNS traffic between the
+`hassio` bridge and the real LAN via `mdns-repeater`, and with avahi listening on both sides of that bridge it sees its
+own announcements re-injected on a second interface -- which looks exactly like a hostname conflict with another host,
+triggering a continuous RFC 6762 §9 auto-rename loop (`cups`, `cups-2`, `cups-3`, ... `cups-N`, never settling). This
+was discovered live on `haos-op3050-1` after the fixed-hostname fix (D-11) shipped and initially appeared to fix
+nothing. `generate_config.py`'s `detect_primary_interface()` reads `/proc/net/route` at startup (stdlib only, no
+`ip`/`iproute2` binary) to find the interface carrying the default route -- the real LAN NIC -- and writes
+`allow-interfaces=<that interface>` into the generated `avahi-daemon.conf`, excluding the bridges/veths the repeater
+bridges onto/from and breaking the hairpin. This is not exposed as an add-on option: detection is automatic and
+host-independent, and a wrong manual value here would break Avahi entirely. If detection fails (no default route found),
+avahi falls back to listening on all interfaces -- the pre-fix behavior -- rather than the add-on refusing to start.
+
 **No slot-exhaustion watchdog (D-08).** There is no watchdog or log-monitoring for the
 `No slot available for legacy unicast reflection` message anywhere in this add-on. With `avahi_reflector: false` as the
 shipped default, this failure class cannot occur at all, so a watchdog for it would be dead code. If you re-enable
