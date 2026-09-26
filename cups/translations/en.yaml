@@ -1,0 +1,29 @@
+configuration:
+  avahi_reflector:
+    name: Avahi mDNS Reflector
+    description: >-
+      Legacy-unicast mDNS reflector (disabled by default to prevent a known
+      reliability bug).
+  avahi_hostname:
+    name: Avahi Hostname
+    description: >-
+      Fixed Avahi mDNS hostname, independent of the container's transient
+      hostname across restarts.
+  avahi_use_ipv6:
+    name: Avahi IPv6 Resolution
+    description: >-
+      Advertise the mDNS hostname over IPv6 too (disabled by default, since
+      the IPv6 address can be unreachable for some clients).
+  server_aliases:
+    name: Server Aliases
+    description: >-
+      Hostnames the CUPS web UI accepts in the HTTP Host header
+      (space/comma-separated; "*" accepts any host header).
+  printers:
+    name: Printers
+    description: >-
+      Printers to register with CUPS at startup. Each entry sets a queue
+      name, device URI, whether it's enabled, and an optional location.
+  log_level:
+    name: Log Level
+    description: Add-on log verbosity (debug, info, warning, error).
