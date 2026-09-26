@@ -82,6 +82,23 @@ Assistant via a REST sensor.
 - `host_network: true` for full Layer-2 access (raw ARP packets)
 - REST endpoint at `/arping_scan.json` consumable by the [REST integration][ha-rest-integration]
 
+### [CUPS Print Server](./cups)
+
+![Supports amd64 Architecture][amd64-shield]
+
+_Share printers via CUPS with AirPrint/mDNS discovery that actually keeps working._
+
+Forked from the third-party `f1c878cb_cups` add-on after diagnosing an Avahi legacy-unicast reflector slot-exhaustion
+bug that silently broke AirPrint discovery over time. Ships with the reflector disabled, a fixed mDNS hostname, and IPv6
+mDNS resolution disabled by default — the permanent fix for that reliability bug, not just a restart workaround.
+
+**Features:**
+
+- AirPrint-compatible printer sharing via CUPS, multiple printers from a single options list
+- Avahi mDNS reflector disabled by default — prevents the legacy-unicast slot-exhaustion bug
+- Fixed, stable mDNS hostname independent of the container's transient hostname across restarts
+- IPv6 mDNS resolution disabled by default
+
 ### [IaC Runner](./iac-runner)
 
 ![Supports amd64 Architecture][amd64-shield]
