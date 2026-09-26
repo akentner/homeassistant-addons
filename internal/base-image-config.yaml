@@ -39,3 +39,9 @@ addons:
     # BASE_VERSION is the Alpine version; PYTHON_VERSION is full (3.12.13) but tag uses major.minor
     version_pattern: 'ARG BASE_VERSION=(?P<alpine_version>\d+\.\d+).*?ARG PYTHON_VERSION=(?P<python_full>\d+\.\d+)\.\d+'
     tag_template: "{python_full}-alpine{alpine_version}"
+
+  cups:
+    image: "ghcr.io/home-assistant/amd64-base"
+    source_repo: "home-assistant/docker-base"
+    source_file: "alpine/Dockerfile"
+    version_pattern: 'ARG ALPINE_VERSION=(?P<version>\d+\.\d+)'
