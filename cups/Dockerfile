@@ -15,6 +15,13 @@ RUN apk add --no-cache \
     dbus \
     python3
 
+# Preserve the stock cupsd.conf exactly as shipped by the cups package, before
+# anything ever patches it. generate_config.py's build_cupsd_conf() always
+# patches FROM this pristine backup at every startup (never from the live
+# /etc/cups/cupsd.conf) so restarting the same long-lived container never
+# double-patches or drifts from the original template.
+RUN cp /etc/cups/cupsd.conf /etc/cups/cupsd.conf.stock
+
 COPY run.sh generate_config.py /
 
 # CUPS restricts admin operations (lpadmin) to members of the SystemGroup

@@ -113,6 +113,32 @@ else
     FAIL=1
 fi
 
+yellow "Checking /etc/cups/cupsd.conf network-scope fix..."
+CUPSD_CONF=$(docker exec "${CONTAINER_NAME}" cat /etc/cups/cupsd.conf)
+# In this test container (bridge network, not host_network), the interface
+# detected via /proc/net/route is the container's own veth/eth0 -- a real,
+# non-loopback IP assigned by Docker's network. Asserting it is no longer the
+# stock "Listen localhost:631" line is sufficient proof the patch applied;
+# proving actual LAN reachability requires the real haos-op3050-1 host.
+if echo "${CUPSD_CONF}" | grep -qE '^Listen [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:631$'; then
+    green "   PASS: cupsd Listen bound to a detected interface IP, not localhost-only"
+else
+    red "   FAIL: cupsd Listen is still localhost-only (or missing/malformed) -- AirPrint and the web UI would be unreachable from the LAN"
+    FAIL=1
+fi
+if echo "${CUPSD_CONF}" | grep -qE '^\s*Allow from [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$'; then
+    green "   PASS: top-level <Location /> scoped to the detected LAN subnet"
+else
+    red "   FAIL: missing 'Allow from <subnet>' in the top-level <Location /> block"
+    FAIL=1
+fi
+if echo "${CUPSD_CONF}" | grep -A3 '<Location /admin>' | grep -q 'Require user @SYSTEM'; then
+    green "   PASS: /admin still requires @SYSTEM auth (network scoping did not touch auth)"
+else
+    red "   FAIL: /admin auth requirement missing or altered -- this must never change"
+    FAIL=1
+fi
+
 yellow "Checking printer registration..."
 if docker exec "${CONTAINER_NAME}" lpstat -p testprinter 2>/dev/null | grep -q "testprinter"; then
     green "   PASS: testprinter registered"

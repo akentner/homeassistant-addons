@@ -56,6 +56,24 @@ bridges onto/from and breaking the hairpin. This is not exposed as an add-on opt
 host-independent, and a wrong manual value here would break Avahi entirely. If detection fails (no default route found),
 avahi falls back to listening on all interfaces -- the pre-fix behavior -- rather than the add-on refusing to start.
 
+**cupsd is scoped to the host's LAN interface, not left on `localhost` (network-reachability fix).** The stock Alpine
+`cups` package ships `cupsd.conf` with `Listen localhost:631` and a top-level `<Location />` block with no `Allow`
+directive beyond `Order allow,deny`. Because this add-on runs `host_network: true`, that `localhost` is the HOST's own
+loopback -- unreachable from any other device on the LAN or via Tailscale. This was discovered when the CUPS web UI
+didn't respond at `http://haos-op3050-1...:631/`, and matters even more for AirPrint itself: port 631 is cupsd's actual
+IPP printing port, so an AirPrint client that successfully resolves the printer via mDNS (D-11's fix) would still get
+connection-refused when it tried to send the print job. `generate_config.py`'s `build_cupsd_conf()` patches exactly two
+lines, read from a pristine stock backup (`/etc/cups/cupsd.conf.stock`, created once by the Dockerfile) so repeated
+add-on restarts on the same container never double-patch: the `Listen` line becomes `Listen <detected-lan-ip>:631`
+(bound to the specific interface IP detected the same way as the Avahi fix above, not an unrestricted `0.0.0.0`), and
+the top-level `<Location />` block gains `Allow from <detected-lan-subnet-cidr>` so printing/the web UI work from the
+LAN but not from arbitrary addresses. The interface's IPv4 address and netmask are read via `SIOCGIFADDR`/
+`SIOCGIFNETMASK` ioctl calls (stdlib `socket`+`fcntl`+`struct`, no `ip`/`iproute2` binary, consistent with this
+project's no-extra-packages philosophy). The `/admin`, `/admin/conf`, `/admin/log` Location blocks and every `<Policy>`
+block are never touched -- only network reachability changes, the admin-auth boundary (`Require user @SYSTEM`) is
+untouched. If interface/IP detection fails for any reason, the add-on logs a WARNING and leaves `cupsd.conf` at its
+current content (the stock, loopback-only default) rather than crashing or writing a broken config.
+
 **No slot-exhaustion watchdog (D-08).** There is no watchdog or log-monitoring for the
 `No slot available for legacy unicast reflection` message anywhere in this add-on. With `avahi_reflector: false` as the
 shipped default, this failure class cannot occur at all, so a watchdog for it would be dead code. If you re-enable

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Render /etc/avahi/avahi-daemon.conf and /tmp/register-printers.sh from HA add-on options.
+"""Render /etc/avahi/avahi-daemon.conf, /etc/cups/cupsd.conf, and
+/tmp/register-printers.sh from HA add-on options.
 
 Reads /data/options.json and generates:
   - /etc/avahi/avahi-daemon.conf: a minimal avahi-daemon.conf carrying the three
@@ -9,21 +10,48 @@ Reads /data/options.json and generates:
     `detect_primary_interface`) that scopes Avahi to the host's real LAN NIC,
     fixing a live hostname-rename loop discovered on haos-op3050-1 after D-11
     shipped.
+  - /etc/cups/cupsd.conf: patched (from a pristine stock backup, never the
+    live file -- see `build_cupsd_conf`) so cupsd's `Listen` directive and the
+    top-level `<Location />` access control are scoped to the host's real LAN
+    interface/subnet instead of the stock package's `localhost`-only default.
+    Because this add-on runs `host_network: true`, "localhost" inside the
+    container IS the host's own loopback -- unreachable from any other LAN
+    device, which meant AirPrint clients could resolve the printer via mDNS
+    but never actually connect to port 631 to print. `/admin`, `/admin/conf`,
+    `/admin/log`, and every Policy block are left byte-for-byte untouched --
+    only network reachability changes, not the admin-auth boundary.
   - /tmp/register-printers.sh: one `lpadmin` invocation per valid printers[]
     entry, built from a quoted argv list (never an interpolated shell string) so
     a malformed name or uri cannot inject extra shell commands (T-21-01).
 """
 
+import ipaddress
 import json
 import re
 import shlex
+import socket
+import struct
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
+try:
+    import fcntl
+except ImportError:  # pragma: no cover -- only unavailable off Linux/Unix
+    fcntl = None
+
 OPTIONS_PATH = "/data/options.json"
 AVAHI_CONF_PATH = "/etc/avahi/avahi-daemon.conf"
 REGISTER_SCRIPT_PATH = "/tmp/register-printers.sh"
+CUPSD_CONF_PATH = "/etc/cups/cupsd.conf"
+# Pristine copy of the stock cupsd.conf, written once (Dockerfile, or lazily
+# by this script on first run if the Dockerfile step is missing). Every
+# startup patches FROM this backup, never from the live CUPSD_CONF_PATH --
+# otherwise a restart of the same long-lived container would re-patch an
+# already-patched file (e.g. re-matching "Listen <ip>:631" against a regex
+# that only recognizes the stock "Listen localhost:631" line, silently
+# leaving cupsd unpatched on the second and every later boot).
+CUPSD_STOCK_CONF_PATH = "/etc/cups/cupsd.conf.stock"
 
 # Matches both a valid avahi host-name= value and a valid CUPS printer queue
 # name. No dots, slashes, whitespace, or shell metacharacters -- closes the
@@ -44,6 +72,24 @@ ALLOWED_URI_SCHEMES = {"ipp", "ipps", "socket", "usb", "dnssd", "lpd", "http"}
 IFACE_RE = re.compile(r"^[A-Za-z0-9@.:_-]{1,15}$")
 
 PROC_NET_ROUTE = "/proc/net/route"
+
+# Matches the stock Alpine cups package's top-level Listen directive -- the
+# thing this fix must replace. Anchored to the full line so a value that has
+# already been patched (e.g. "Listen 192.168.178.3:631") never matches,
+# reinforcing the stock-backup-based idempotency above.
+LISTEN_LOCALHOST_RE = re.compile(r"^Listen localhost:631\s*$", re.MULTILINE)
+
+# Matches the stock top-level `<Location />` block (CUPS's whole-server access
+# control, distinct from `<Location /admin>` etc. -- the literal "/>" only
+# appears for the root Location). Non-greedy body capture stops at this
+# block's own `</Location>` since CUPS's Location blocks are never nested.
+LOCATION_ROOT_RE = re.compile(r"(<Location />\n)(.*?)(\n</Location>)", re.DOTALL)
+
+# ioctl request numbers (Linux-specific, from <linux/sockios.h>) used by
+# get_iface_ipv4 below to read an interface's IPv4 address/netmask without an
+# `ip`/`iproute2` binary in the image.
+_SIOCGIFADDR = 0x8915
+_SIOCGIFNETMASK = 0x891B
 
 
 def detect_primary_interface() -> str | None:
@@ -93,6 +139,180 @@ def detect_primary_interface() -> str | None:
         if destination == "00000000":
             return iface
     return None
+
+
+def get_iface_ipv4(iface: str) -> tuple[str, str] | None:
+    """Return (ip, netmask) for `iface` via SIOCGIFADDR/SIOCGIFNETMASK ioctls.
+
+    Stdlib-only (socket + fcntl + struct) -- consistent with
+    `detect_primary_interface`, this image deliberately does not carry an
+    `ip`/`iproute2` binary. Returns None on any failure (no fcntl on this
+    platform, interface has no IPv4 address, permission denied, interface
+    does not exist, etc.) so callers degrade gracefully rather than crash.
+    """
+    if fcntl is None:
+        return None
+
+    def _query(sock: socket.socket, request: int) -> str | None:
+        # 256s buffer is the well-established recipe for these calls: the
+        # kernel only reads the first IFNAMSIZ (16) bytes of the ifreq name
+        # field but writes its response into the same buffer, so it must be
+        # large enough to hold the returned sockaddr too.
+        ifreq = struct.pack("256s", iface.encode("utf-8")[:15])
+        try:
+            result = fcntl.ioctl(sock.fileno(), request, ifreq)
+        except OSError:
+            return None
+        return socket.inet_ntoa(result[20:24])
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            ip = _query(sock, _SIOCGIFADDR)
+            netmask = _query(sock, _SIOCGIFNETMASK)
+    except OSError:
+        return None
+
+    if ip is None or netmask is None:
+        return None
+    return ip, netmask
+
+
+def compute_subnet_cidr(ip: str, netmask: str) -> str | None:
+    """Return e.g. "192.168.178.0/24" for an interface's IP + dotted netmask.
+
+    Returns None if `ip`/`netmask` do not form a valid IPv4 network (should
+    not happen for kernel-reported values, but this is written into a
+    security-relevant access-control directive, so refuse rather than guess).
+    """
+    try:
+        network = ipaddress.ip_network(f"{ip}/{netmask}", strict=False)
+    except ValueError:
+        return None
+    return str(network)
+
+
+def build_cupsd_conf(iface: str | None) -> str | None:
+    """Render a patched cupsd.conf scoping cupsd to the host's LAN interface.
+
+    Root cause (found on haos-op3050-1 while preparing for the AirPrint
+    physical test, D-12): this add-on ships the stock Alpine `cups` package's
+    cupsd.conf completely unmodified. Its `Listen localhost:631` line binds
+    BOTH the admin web UI and the actual IPP printing port to loopback --
+    and because this add-on runs `host_network: true`, that loopback is the
+    HOST's own loopback, not a container-private one. mDNS correctly
+    advertises the printer (D-11's fix), but any client outside the host --
+    every AirPrint client on the LAN -- gets connection-refused/unreachable
+    on port 631, so print jobs (and the web UI) never actually reach cupsd.
+
+    Patches exactly two things, read from the pristine stock backup (see
+    CUPSD_STOCK_CONF_PATH) so this is idempotent across restarts of the same
+    long-lived container:
+      - the top-level `Listen localhost:631` line becomes
+        `Listen <lan-ip>:631` (bound to the specific detected interface IP,
+        not an unrestricted `0.0.0.0`, since the goal is LAN-only exposure)
+      - the top-level `<Location />` block (whole-server access control)
+        gains `Allow from <lan-subnet-cidr>` underneath the stock's
+        `Order allow,deny` -- printing/web-UI works from the detected LAN
+        subnet, not from arbitrary addresses
+    `/admin`, `/admin/conf`, `/admin/log`, and every `<Policy>` block are
+    never touched by this function -- only the two lines above are patched,
+    everything else in the stock file survives byte-for-byte.
+
+    Returns None -- leaving CUPSD_CONF_PATH at its current (stock, loopback-
+    only) content -- when no interface was detected, no IPv4 address could be
+    read for it, no subnet could be computed, or the stock template does not
+    look like what this function expects to patch. Every one of those is
+    logged as a WARNING; none of them crashes the add-on.
+    """
+    stock_path = Path(CUPSD_STOCK_CONF_PATH)
+    if not stock_path.exists():
+        # Defensive fallback for an image built before this fix's Dockerfile
+        # step existed: back up whatever is live right now, so this and every
+        # later restart of this same container patches from the ORIGINAL
+        # stock content, not from an already-patched file.
+        current_path = Path(CUPSD_CONF_PATH)
+        if not current_path.exists():
+            print(
+                f"WARNING: neither {CUPSD_STOCK_CONF_PATH} nor {CUPSD_CONF_PATH} exist -- "
+                "cannot patch cupsd's network scope",
+                flush=True,
+            )
+            return None
+        try:
+            stock_path.write_text(current_path.read_text())
+        except OSError as exc:
+            print(f"WARNING: could not create cupsd.conf stock backup: {exc}", flush=True)
+            return None
+
+    try:
+        template = stock_path.read_text()
+    except OSError as exc:
+        print(f"WARNING: could not read {CUPSD_STOCK_CONF_PATH}: {exc}", flush=True)
+        return None
+
+    if iface is None:
+        print(
+            "WARNING: no primary network interface detected -- cupsd will keep listening on "
+            "localhost only; AirPrint clients and the web UI will be unreachable from the LAN",
+            flush=True,
+        )
+        return None
+
+    if not IFACE_RE.match(iface):
+        print(
+            f"WARNING: detected primary interface {iface!r} failed validation against "
+            f"{IFACE_RE.pattern} -- cupsd will keep listening on localhost only",
+            flush=True,
+        )
+        return None
+
+    addr = get_iface_ipv4(iface)
+    if addr is None:
+        print(
+            f"WARNING: could not determine an IPv4 address/netmask for interface {iface!r} -- "
+            "cupsd will keep listening on localhost only",
+            flush=True,
+        )
+        return None
+
+    ip, netmask = addr
+    subnet = compute_subnet_cidr(ip, netmask)
+    if subnet is None:
+        print(
+            f"WARNING: could not compute a subnet CIDR from {ip}/{netmask} -- cupsd will keep "
+            "listening on localhost only",
+            flush=True,
+        )
+        return None
+
+    if not LISTEN_LOCALHOST_RE.search(template):
+        print(
+            "WARNING: stock cupsd.conf does not contain the expected 'Listen localhost:631' "
+            "line -- refusing to patch an unrecognized template; cupsd will keep listening on "
+            "localhost only",
+            flush=True,
+        )
+        return None
+
+    patched = LISTEN_LOCALHOST_RE.sub(f"Listen {ip}:631", template, count=1)
+
+    location_match = LOCATION_ROOT_RE.search(patched)
+    if location_match is None:
+        print(
+            "WARNING: stock cupsd.conf does not contain the expected top-level '<Location />' "
+            "block -- Listen was patched but access control was not; cupsd is reachable on the "
+            "LAN with NO subnet restriction until this is fixed",
+            flush=True,
+        )
+        return patched
+
+    body = location_match.group(2)
+    patched = (
+        patched[: location_match.start(2)]
+        + f"{body}\n  Allow from {subnet}"
+        + patched[location_match.end(2) :]
+    )
+    return patched
 
 
 def load_options() -> dict:
@@ -218,6 +438,17 @@ def main() -> None:
     avahi_conf = build_avahi_conf(options)
     Path(AVAHI_CONF_PATH).write_text(avahi_conf)
     print(f"Config written to {AVAHI_CONF_PATH}", flush=True)
+
+    cupsd_conf = build_cupsd_conf(detect_primary_interface())
+    if cupsd_conf is not None:
+        Path(CUPSD_CONF_PATH).write_text(cupsd_conf)
+        print(f"Config written to {CUPSD_CONF_PATH}", flush=True)
+    else:
+        print(
+            f"{CUPSD_CONF_PATH} left unpatched (see WARNING above) -- likely still "
+            "localhost-only",
+            flush=True,
+        )
 
     register_script = build_printer_registration(options)
     script_path = Path(REGISTER_SCRIPT_PATH)

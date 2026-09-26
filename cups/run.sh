@@ -3,8 +3,12 @@
 
 log() { echo "[run.sh] $*" >&2; }
 
-# 1. Render /etc/avahi/avahi-daemon.conf + /tmp/register-printers.sh from HA
-#    options (D-09: a generated template, never a sed-patched static file).
+# 1. Render /etc/avahi/avahi-daemon.conf, /etc/cups/cupsd.conf (LAN-reachability
+#    scoping -- see generate_config.py's build_cupsd_conf docstring), and
+#    /tmp/register-printers.sh from HA options (D-09: a generated template,
+#    never a sed-patched static file). This must run before cupsd starts
+#    below so cupsd reads the patched Listen/Location directives on its very
+#    first startup, not the stock localhost-only defaults.
 python3 /generate_config.py
 
 # 2. D-Bus + Avahi need their runtime dirs (mirrors network-tools/run.sh).
