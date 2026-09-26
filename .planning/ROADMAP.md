@@ -80,9 +80,13 @@ options instead of upstream's hardcoded `options: {} / schema: []`, then roll th
 replacing `f1c878cb_cups`.
 **Requirements**: D-01..D-13 (CONTEXT.md decisions — no REQUIREMENTS.md IDs mapped to this ad-hoc phase)
 **Depends on:** Phase 20
-**Plans:** 3 plans in 3 waves
+**Plans:** 1/3 plans executed in 3 waves
 
 Plans:
+
+- [x] 21-01-PLAN.md
+- [ ] 21-02-PLAN.md
+- [ ] 21-03-PLAN.md
 
 - [ ] `21-01-PLAN.md` — Tracer: cups/ 4-file scaffold + generated avahi-daemon.conf (reflector-off, fixed hostname,
       IPv6-off) + one printer registered end-to-end (checkpoint: printers[].uri schema type)
@@ -601,7 +605,7 @@ exercised. Operator documentation (`README.md` + `DOCS.md`) is written from obse
 | 17. Git + Apply Jobs                | v1.4      | 8/8                                                           | In Progress         |            |
 | 18. MQTT + HA Entities              | v1.4      | 0/TBD                                                         | Planned             | —          |
 | 19. E2E + DOCS                      | v1.4      | 0/TBD                                                         | Planned             | —          |
-| 21. CUPS print server AirPrint/mDNS | —         | 0/3                                                           | Planned             | —          |
+| 21. CUPS print server AirPrint/mDNS | —         | 1/3 | In Progress|  |
 
 ---
 

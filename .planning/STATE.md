@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: opentofu-bridge
-current_phase: 20
-current_phase_name: litellm-addon
-current_plan: 4
+current_phase: 21
+current_phase_name: cups print server addon airprint mdns fixes
+current_plan: 1
 status: Phase 20 execution complete
 stopped_at: Phase 21 context gathered
-last_updated: "2026-09-26T09:19:03.697Z"
-state_head: 9baca7d9a5095a106b53f5d0385b428f2a2a2220
+last_updated: "2026-09-26T09:52:26.415Z"
+state_head: a77e7dc7897e6dc43db018d9853cfb9b3c81f650
 progress:
   total_phases: 8
   completed_phases: 12
-  total_plans: 15
+  total_plans: 18
   completed_plans: 27
   percent: 100
 ---
@@ -106,9 +106,9 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Current Plan: 4 (Phase 20 complete — 4/4 plans landed)
+Current Plan: 1
 
-Phase: 20 (litellm-addon) — **EXECUTION COMPLETE** (2026-09-19)
+Phase: 21 (cups print server addon airprint mdns fixes) — EXECUTING
 21 atomic commits on main (4 planning + 14 execution + 4 plan SUMMARYs). All 4 plans landed:
 
 - **Plan 01** (e0df1a1 / fcb14cd / 958ef21 / 493eb71 / f490894 / cebe063 / b6e6534): 4-file HA Supervisor scaffold
