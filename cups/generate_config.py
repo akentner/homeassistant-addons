@@ -23,7 +23,11 @@ Reads /data/options.json and generates:
     emits a `ServerAlias` directive from the `server_aliases` option so
     cupsd's own separate Host-header validation accepts hostnames beyond its
     auto-detected one (e.g. a Tailscale MagicDNS name) -- see
-    `parse_server_aliases`.
+    `parse_server_aliases`. If a `tailscale0` interface is present, a second
+    `Allow from 100.64.0.0/10` line is added to the same `<Location />` block
+    so Tailscale-routed clients (whose source IP is a CGNAT-range address
+    unrelated to the detected LAN subnet) are not rejected with 403 -- see
+    `detect_tailscale_subnet`.
   - /tmp/register-printers.sh: one `lpadmin` invocation per valid printers[]
     entry, built from a quoted argv list (never an interpolated shell string) so
     a malformed name or uri cannot inject extra shell commands (T-21-01).
@@ -88,6 +92,22 @@ IFACE_RE = re.compile(r"^[A-Za-z0-9@.:_-]{1,15}$")
 SERVER_ALIAS_TOKEN_RE = re.compile(r"^(\*|[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?)$")
 
 PROC_NET_ROUTE = "/proc/net/route"
+
+# Tailscale's standard Linux interface name -- not configurable by the user
+# (Tailscale itself does not support renaming it), so this is a fixed check
+# rather than a new add-on option.
+TAILSCALE_IFACE = "tailscale0"
+
+# Tailscale allocates every peer's IPv4 address from this CGNAT range (RFC
+# 6598, documented at https://tailscale.com/kb/1015/100.x-addresses). The
+# interface's OWN address is assigned with a /32 (point-to-point) netmask, so
+# computing a CIDR from tailscale0's own ip+netmask the same way as the LAN
+# detection below would only ever produce "<this-host's-own-tailscale-ip>/32"
+# -- permitting traffic FROM THIS HOST'S OWN TAILSCALE ADDRESS ONLY, never
+# from any other Tailscale peer (e.g. the phone actually placing the AirPrint
+# request). Allowing the well-known CGNAT range instead of a per-host
+# computed subnet is what actually fixes 403s from Tailscale-routed clients.
+TAILSCALE_CGNAT_CIDR = "100.64.0.0/10"
 
 # Matches the stock Alpine cups package's top-level Listen directive -- the
 # thing this fix must replace. Anchored to the full line so a value that has
@@ -207,6 +227,32 @@ def compute_subnet_cidr(ip: str, netmask: str) -> str | None:
     return str(network)
 
 
+def detect_tailscale_subnet() -> str | None:
+    """Return the Tailscale CGNAT CIDR if this host has a `tailscale0` interface.
+
+    Root cause this fixes (found on haos-op3050-1 during the physical AirPrint
+    test, after the LAN-scoping fix above already shipped): the user tested
+    Web-UI access over the REAL Tailscale-routed path (not just a Host-header
+    test) and got 403 Forbidden. `<Location />`'s `Allow from
+    <lan-subnet-cidr>` only permits the detected LAN subnet, but
+    Tailscale-routed traffic arrives with a `100.x.x.x` CGNAT-range source IP
+    via the `tailscale0` interface -- outside that CIDR entirely, a
+    completely separate network path from the LAN.
+
+    Uses the same stdlib ioctl-based detection as `get_iface_ipv4` (this image
+    deliberately carries no `ip`/`iproute2` binary), but does NOT compute a
+    CIDR from the interface's own address/netmask -- see `TAILSCALE_CGNAT_CIDR`
+    for why. Only the interface's PRESENCE is queried here.
+
+    Returns None -- degrading gracefully, not a hard failure -- if no
+    `tailscale0` interface exists (fcntl unavailable, interface absent, no
+    IPv4 assigned yet). Not every deployment runs Tailscale.
+    """
+    if get_iface_ipv4(TAILSCALE_IFACE) is None:
+        return None
+    return TAILSCALE_CGNAT_CIDR
+
+
 def parse_server_aliases(raw: object) -> list[str]:
     """Split, validate, and de-duplicate a `server_aliases` option value.
 
@@ -275,6 +321,15 @@ def build_cupsd_conf(iface: str | None, options: dict) -> str | None:
     reachability fix above) and why `"*"` is a safe out-of-the-box default
     (the real access boundary is already the detected LAN subnet's `Allow
     from`, not the Host header check).
+
+    If a `tailscale0` interface is present on the host, a SECOND `Allow from
+    100.64.0.0/10` line is added to the same `<Location />` block (CUPS's
+    `Order allow,deny` evaluates multiple `Allow from` lines independently --
+    standard syntax, not an error) -- see `detect_tailscale_subnet` for why
+    Tailscale-routed clients need this in addition to the LAN subnet's
+    `Allow from` line. If no `tailscale0` interface is found, this is skipped
+    with a log note, not a hard failure -- not every deployment runs
+    Tailscale.
 
     `/admin`, `/admin/conf`, `/admin/log`, and every `<Policy>` block are
     never touched by this function -- only the lines above are patched,
@@ -383,11 +438,26 @@ def build_cupsd_conf(iface: str | None, options: dict) -> str | None:
         )
         return patched
 
+    tailscale_subnet = detect_tailscale_subnet()
+    if tailscale_subnet:
+        print(
+            f"INFO: tailscale0 interface detected -- also allowing {tailscale_subnet} in the "
+            "top-level <Location /> block",
+            flush=True,
+        )
+    else:
+        print(
+            "INFO: no tailscale0 interface detected -- skipping the Tailscale Allow rule "
+            "(not every deployment runs Tailscale)",
+            flush=True,
+        )
+
     body = location_match.group(2)
+    allow_lines = f"{body}\n  Allow from {subnet}"
+    if tailscale_subnet:
+        allow_lines += f"\n  Allow from {tailscale_subnet}"
     patched = (
-        patched[: location_match.start(2)]
-        + f"{body}\n  Allow from {subnet}"
-        + patched[location_match.end(2) :]
+        patched[: location_match.start(2)] + allow_lines + patched[location_match.end(2) :]
     )
     return patched
 

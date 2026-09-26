@@ -157,6 +157,18 @@ else
     FAIL=1
 fi
 
+# CI runners (and this docker-bridge test container) have no tailscale0
+# interface, so the Tailscale Allow-from rule must gracefully skip here --
+# proving the ABSENCE of the rule is the correct assertion in this
+# environment. Actual presence is only provable on a host that really runs
+# Tailscale (haos-op3050-1), verified empirically outside this script.
+yellow "Checking Tailscale Allow rule graceful-skip (no tailscale0 in this environment)..."
+if echo "${CUPSD_CONF}" | grep -qF "100.64.0.0/10"; then
+    yellow "   NOTE: 100.64.0.0/10 Allow rule present -- this environment unexpectedly has tailscale0"
+else
+    green "   PASS: no 100.64.0.0/10 Allow rule (no tailscale0 interface in this environment, as expected)"
+fi
+
 yellow "Checking for legacy-unicast reflector slot exhaustion (D-08)..."
 CONTAINER_LOGS=$(docker logs "${CONTAINER_NAME}" 2>&1)
 if echo "${CONTAINER_LOGS}" | grep -q "No slot available for legacy unicast reflection"; then

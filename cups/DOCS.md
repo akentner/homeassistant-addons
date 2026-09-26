@@ -92,6 +92,22 @@ unset by default would just reintroduce the exact 400 bug for every fresh instal
 they hit the same failure), so `"*"` ships as the working-out-of-the-box default; set `server_aliases` explicitly if you
 want to restrict accepted hostnames to a known allowlist instead.
 
+**Tailscale-routed clients are separately allowed through the `<Location />` network boundary (auto-detected, not an
+option).** The LAN-scoping fix above widens `ServerAlias` for Host-header validation, but the actual
+network-reachability `Allow from <lan-subnet-cidr>` line still only covers the detected LAN subnet. This was discovered
+when the web UI worked over the LAN IP but returned `403 Forbidden` over the real Tailscale-routed path -- Tailscale
+traffic arrives with a `100.x.x.x` CGNAT-range source address (via the host's `tailscale0` interface), which is a
+completely different network than the LAN subnet. `generate_config.py`'s `detect_tailscale_subnet()` checks whether a
+`tailscale0` interface exists on the host (this add-on's `host_network: true` means the host's real interfaces are
+visible inside the container) and, if so, `build_cupsd_conf()` adds a second `Allow from 100.64.0.0/10` line to the same
+top-level `<Location />` block -- CUPS supports multiple `Allow from` lines under one `Order allow,deny`, each evaluated
+independently. `100.64.0.0/10` (RFC 6598) is Tailscale's documented CGNAT allocation for every peer's IPv4 address --
+deliberately NOT computed from `tailscale0`'s own interface address/netmask the way the LAN subnet is, because Tailscale
+assigns that interface a `/32` (point-to-point) address, which would only ever permit traffic from this host's own
+Tailscale IP, never from any other peer (e.g. the phone actually placing the AirPrint request). This is not exposed as
+an add-on option: detection is automatic, and a deployment without Tailscale simply skips it (logged, not a hard
+failure). `/admin`, `/admin/conf`, `/admin/log` are untouched -- same scope boundary as the LAN-scoping fix above.
+
 **No slot-exhaustion watchdog (D-08).** There is no watchdog or log-monitoring for the
 `No slot available for legacy unicast reflection` message anywhere in this add-on. With `avahi_reflector: false` as the
 shipped default, this failure class cannot occur at all, so a watchdog for it would be dead code. If you re-enable
