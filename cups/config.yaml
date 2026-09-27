@@ -3,7 +3,7 @@ description: >-
   CUPS print server with AirPrint support. Ships with a permanent fix for common Avahi mDNS
   reliability issues — legacy-unicast reflector slot exhaustion, hostname-conflict rename, and
   IPv6 resolution ambiguity are all resolved by a generated avahi-daemon.conf.
-version: "0.1.0-11"
+version: "0.1.0-12"
 slug: "cups"
 init: false
 arch:
@@ -28,7 +28,6 @@ options:
   admin_username: ""
   admin_password: ""
   printers: []
-  printer_presets: []
   log_level: "info"
 
 schema:
@@ -45,8 +44,4 @@ schema:
       location: str?
       driver: "list(generic|brlaser)?"
       driver_model: str?
-  printer_presets:
-    - printer: str
-      name: str
-      options: str
   log_level: "list(debug|info|warning|error)?"

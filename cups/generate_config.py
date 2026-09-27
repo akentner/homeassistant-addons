@@ -40,40 +40,6 @@ Reads /data/options.json and generates:
     behavior; `brlaser` defers to a runtime `lpinfo -m` lookup inside the
     generated script itself (see `build_brlaser_registration_snippet`) for
     Brother monochrome laser/LED printers with no real PostScript support.
-    A NEW top-level `printer_presets` list of objects (a sibling of
-    `printers[]`, not nested inside it) lets an operator declare named
-    AirPrint print presets per printer: each entry is `{printer, name,
-    options}`, where `printer` is a foreign-key string matching one of
-    the configured `printers[].name` values. `group_presets_by_printer()`
-    groups these top-level entries by their `printer` key before this
-    loop runs, and `build_preset_injection_snippet()` (see its docstring)
-    validates and renders each grouped printer's presets into Apple's
-    AirPrint PPD extension `*APPrinterPreset <slug>/<display-name>: "..."
-    *End` stanzas (see cups.org/doc/spec-ppd.html), injected into that
-    printer's live PPD after its own registration line above -- bundling
-    one or more of that printer's OWN already-existing PPD option/choice
-    pairs (e.g. Duplex + Resolution) into a single named entry iOS's
-    print sheet shows as a "Preset"/"Vorlage" list, instead of separate
-    Duplex/Resolution controls nested under "Optionen". `printer_presets`
-    is hoisted to a TOP-LEVEL list rather than nested inside `printers[]`
-    because HA's add-on options schema micro-language caps list/dict
-    nesting at depth two
-    (developers.home-assistant.io/docs/add-ons/configuration), and
-    `printers[]` is already a depth-two list-of-objects -- a nested
-    `presets[]` list-of-objects would be a third level and cannot be
-    expressed in `schema:`. A top-level list of objects is itself only
-    depth-two (list -> object with scalar fields), so `printer_presets`
-    is fully schema-valid and gives a real, repeatable list UI in the HA
-    options form. This REPLACES the earlier flattened `printers[].presets`
-    string field (shipped in 0.1.0-9/0.1.0-10) entirely -- a deliberate
-    breaking change, no migration shim. Injection always operates on a
-    TEMP copy of the printer's CURRENT on-disk PPD (`cp` then `cat >>`
-    then `lpadmin -P`, never editing `/etc/cups/ppd/<name>.ppd` in
-    place), so this is idempotent across restarts exactly like the
-    brlaser PPD resolution above: every start first (re)generates a
-    fresh, preset-free PPD for that printer, and only then does this
-    step append presets to that fresh copy -- never compounding
-    duplicate stanzas across restarts.
   - /tmp/fixup-printer-uuids.sh: present ONLY when at least one printer
     passed build_printer_registration()'s own validation gates -- patches
     each such printer's `UUID urn:uuid:...` line in the LIVE
@@ -222,33 +188,6 @@ GENERIC_PPD = "drv:///sample.drv/generic.ppd"
 # shlex.quote (T-21-01's no-interpolated-shell-string mitigation), this regex
 # is defense in depth against control characters/newlines.
 DRIVER_MODEL_RE = re.compile(r"^[A-Za-z0-9 ,.\-_/()]{1,127}$")
-
-# Matches a preset's display-name text (the part after the slash in an
-# *APPrinterPreset <slug>/<display-name>: line). Same conservative
-# printable-ASCII-minus-quotes allowlist as LOCATION_RE, but PPD
-# "keyword/text:" line syntax reserves "/" and ":" as delimiters -- a
-# display name containing either would corrupt the stanza's own syntax,
-# so both are excluded here (on top of LOCATION_RE's existing exclusion
-# of quotes/control characters). Same 127-char cap as LOCATION_RE.
-PRESET_NAME_RE = re.compile(r"^[A-Za-z0-9 ,.\-_()]{1,127}$")
-
-# Matches one "Key=Value" token inside a printers[].presets options
-# string. Key: a PPD option keyword -- starts with a letter, then
-# letters/digits (PPD keyword-length convention, capped at 40 chars).
-# Value: a PPD choice keyword -- starts alphanumeric, then
-# alnum/dot/underscore/hyphen (covers DuplexNoTumble, 1200x600dpi,
-# 600dpi, Auto), capped at 64 chars. This add-on does NOT verify these
-# against the printer's actual live PPD option list (that would require
-# a runtime lpoptions query per printer, out of scope) -- operators
-# discover valid Key/Value pairs themselves via `lpoptions -p <printer>
-# -l` (see cups/DOCS.md), the same command this add-on's DOCS.md already
-# points operators at for the duplex option.
-PRESET_OPTION_TOKEN_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]{0,39}=[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-
-# Matches the run of characters slugify_preset_id() collapses to a
-# single underscore when deriving a PPD keyword identifier from a
-# preset's display name.
-_PRESET_SLUG_SANITIZE_RE = re.compile(r"[^A-Za-z0-9_]+")
 
 # Tailscale's standard Linux interface name -- not configurable by the user
 # (Tailscale itself does not support renaming it), so this is a fixed check
@@ -452,187 +391,6 @@ def parse_server_aliases(raw: object) -> list[str]:
                 flush=True,
             )
     return valid
-
-
-def slugify_preset_id(name: str, used_slugs: set[str]) -> str:
-    """Derive a PPD keyword identifier from a preset's display `name`.
-
-    PPD keyword syntax (the slug half of `*APPrinterPreset <slug>/<name>:`)
-    is stricter than PRESET_NAME_RE's display-text allowlist, so this is
-    NEVER operator-authored directly: sanitizes to ASCII letters/digits/
-    underscore only (any run of other characters -- spaces, commas,
-    periods, hyphens, parentheses -- collapses to a single underscore),
-    lowercased for consistency, capped at 40 chars (matching
-    PRESET_OPTION_TOKEN_RE's own keyword-length convention). A result that
-    doesn't start with a letter (all characters stripped, or a leading
-    digit) is prefixed with `preset_` -- PPD keywords conventionally start
-    with a letter. Collisions against `used_slugs` (already-seen slugs for
-    THIS printer -- callers create a fresh set per printer, since PPD
-    keyword uniqueness only matters within one printer's own PPD file) are
-    de-duplicated by appending `_2`, `_3`, ... -- this is why this function
-    takes and mutates a shared `used_slugs` set across every preset on one
-    printer, not just a single name in isolation.
-    """
-    base = _PRESET_SLUG_SANITIZE_RE.sub("_", name.strip().lower()).strip("_")
-    if not base or not base[0].isalpha():
-        base = f"preset_{base}" if base else "preset"
-    base = base[:40]
-    slug = base
-    suffix = 2
-    while slug in used_slugs:
-        slug = f"{base}_{suffix}"[:40]
-        suffix += 1
-    used_slugs.add(slug)
-    return slug
-
-
-def build_preset_injection_snippet(name: str, presets: list[tuple[str, str]]) -> str | None:
-    """Render sh that injects validated *APPrinterPreset stanzas into a
-    printer's live PPD and reloads it into cupsd.
-
-    Root cause this fixes: Apple's AirPrint PPD extension *APPrinterPreset
-    (https://www.cups.org/doc/spec-ppd.html) lets a PPD declare named
-    presets bundling several of that printer's OWN existing PPD
-    option/choice pairs (e.g. Duplex + Resolution) into one entry iOS's
-    print sheet shows as a "Preset"/"Vorlage" list -- without it, iOS only
-    shows individual Duplex/Resolution controls nested under "Optionen".
-    brlaser's own driver-generated PPDs (and the generic sample.drv PPD)
-    ship with no such stanzas.
-
-    `presets` is a list of already-extracted `(preset_name, preset_options)`
-    pairs for THIS ONE printer, pre-filtered/grouped by the caller
-    (`group_presets_by_printer`) -- no flattened-string parsing happens
-    here anymore. Each pair is validated independently: an invalid `name`
-    (PRESET_NAME_RE) or any invalid options token (PRESET_OPTION_TOKEN_RE)
-    skips THAT preset alone (WARNING, never a partial stanza) --
-    validation failure on one preset never affects its siblings or the
-    printer's own registration. Surviving presets get a de-duplicated slug
-    via slugify_preset_id() (fresh `used_slugs` set per call -- PPD
-    keyword uniqueness only matters within one printer's own PPD file)
-    and are rendered into `*APPrinterPreset <slug>/<name>: "..." *End`
-    stanzas per the extension's documented syntax.
-
-    If at least one preset survives, returns a shell fragment that: guards
-    on `[ -f "$PPD_FILE" ]` first -- the brlaser branch's own PPD
-    registration is itself conditional on a runtime `lpinfo -m` match, so
-    the PPD may legitimately not exist yet; copies the LIVE PPD to a TEMP
-    file (never edits /etc/cups/ppd/<name>.ppd in place -- avoids a
-    same-file read/write race and guarantees every run starts from the
-    CURRENT on-disk PPD, so restarts never compound duplicate stanzas);
-    appends the stanzas via a `cat >> "$TMP" <<'PPD_PRESETS_EOF' ...
-    PPD_PRESETS_EOF` heredoc (quoted delimiter suppresses $/backtick
-    expansion -- defense in depth on top of the regex validation above,
-    which already excludes those characters by construction); reloads via
-    `lpadmin -p <name> -P "$TMP"` wrapped in an if/else (this script runs
-    under `set -e`, so a bare failing lpadmin would abort every
-    subsequent printer's registration -- the if/else keeps a reload
-    failure non-fatal and logged, matching this file's existing fail-open
-    posture); removes the temp file; logs one INFO line naming the
-    registered slugs, or WARNINGs for skipped presets.
-
-    Returns None -- writing nothing -- when `presets` is empty/absent,
-    or when every preset in it failed validation.
-    """
-    if not presets:
-        return None
-
-    quoted_name = shlex.quote(name)
-    used_slugs: set[str] = set()
-    stanza_blocks: list[str] = []
-    registered_slugs: list[str] = []
-
-    for preset_name, preset_options in presets:
-        if not PRESET_NAME_RE.match(preset_name):
-            print(
-                f"WARNING: skipping preset for printer '{name}' -- invalid name "
-                f"{preset_name!r}, must match {PRESET_NAME_RE.pattern}",
-                flush=True,
-            )
-            continue
-
-        tokens = preset_options.split()
-        if not tokens or not all(PRESET_OPTION_TOKEN_RE.match(t) for t in tokens):
-            print(
-                f"WARNING: skipping preset {preset_name!r} for printer '{name}' -- "
-                f"invalid or empty options {preset_options!r}, every token must match "
-                f"{PRESET_OPTION_TOKEN_RE.pattern}",
-                flush=True,
-            )
-            continue
-
-        slug = slugify_preset_id(preset_name, used_slugs)
-        option_lines = "\n".join(f"*{key} {value}" for key, value in (t.split("=", 1) for t in tokens))
-        stanza_blocks.append(f'*APPrinterPreset {slug}/{preset_name}: "\n{option_lines}\n"\n*End')
-        registered_slugs.append(slug)
-
-    if not stanza_blocks:
-        print(f"INFO: no valid presets for printer '{name}' -- skipping PPD preset injection", flush=True)
-        return None
-
-    stanza_text = "\n".join(stanza_blocks)
-    slugs_joined = ", ".join(registered_slugs)
-    return (
-        f'PPD_FILE="/etc/cups/ppd/{name}.ppd"\n'
-        f'if [ -f "$PPD_FILE" ]; then\n'
-        f'  TMP_PPD="/tmp/{name}-presets.ppd"\n'
-        f'  cp "$PPD_FILE" "$TMP_PPD"\n'
-        f"  cat >> \"$TMP_PPD\" <<'PPD_PRESETS_EOF'\n"
-        f"{stanza_text}\n"
-        f"PPD_PRESETS_EOF\n"
-        f'  if lpadmin -p {quoted_name} -P "$TMP_PPD"; then\n'
-        f'    echo "registered presets for printer {name}: {slugs_joined}"\n'
-        f"  else\n"
-        f'    echo "WARNING: lpadmin -P failed while registering presets for printer {name}" >&2\n'
-        f"  fi\n"
-        f'  rm -f "$TMP_PPD"\n'
-        f"else\n"
-        f'  echo "WARNING: PPD file $PPD_FILE not found -- skipping preset registration for printer '
-        f'{name}" >&2\n'
-        f"fi"
-    )
-
-
-def group_presets_by_printer(options: dict) -> dict[str, list[tuple[str, str]]]:
-    """Group the top-level `printer_presets` option list by its `printer` FK.
-
-    Reads `options.get("printer_presets") or []` and, for each entry,
-    skips with a WARNING (mirroring this file's existing
-    `if not isinstance(entry, dict):` skip pattern used for `printers[]`
-    entries) when the entry itself is not a dict, or when
-    `printer`/`name`/`options` are missing or not strings. Surviving
-    entries are appended as `(str(entry["name"]), str(entry["options"]))`
-    pairs into a dict keyed by `str(entry["printer"])`.
-
-    Does NOT validate name/options against PRESET_NAME_RE/
-    PRESET_OPTION_TOKEN_RE itself -- build_preset_injection_snippet()
-    still does that per-pair validation exactly as before; this
-    function's only job is grouping raw pairs by their `printer`
-    foreign key. A `printer` value that does not match any CURRENTLY
-    CONFIGURED printer name is not an error at grouping time -- this
-    function has no visibility into which printer names are valid, it
-    just groups by whatever string is there. build_printer_registration()
-    naturally only ever looks up names it is actually iterating over, so
-    an unmatched entry simply never gets consumed here -- main() surfaces
-    a WARNING for that case separately (see main()'s own printer_presets
-    FK check).
-    """
-    grouped: dict[str, list[tuple[str, str]]] = {}
-    for entry in options.get("printer_presets") or []:
-        if not isinstance(entry, dict):
-            print(f"WARNING: skipping non-object printer_presets[] entry: {entry!r}", flush=True)
-            continue
-        printer = entry.get("printer")
-        name = entry.get("name")
-        preset_options = entry.get("options")
-        if not isinstance(printer, str) or not isinstance(name, str) or not isinstance(preset_options, str):
-            print(
-                f"WARNING: skipping printer_presets[] entry with missing/non-string "
-                f"printer/name/options: {entry!r}",
-                flush=True,
-            )
-            continue
-        grouped.setdefault(printer, []).append((str(name), str(preset_options)))
-    return grouped
 
 
 def build_cupsd_conf(iface: str | None, options: dict) -> str | None:
@@ -995,7 +753,6 @@ def build_printer_registration(options: dict) -> tuple[str, list[str]]:
     printers = options.get("printers") or []
     lines = ["#!/bin/sh", "set -e", ""]
     registered_names: list[str] = []
-    presets_by_printer = group_presets_by_printer(options)
 
     for entry in printers:
         if not isinstance(entry, dict):
@@ -1063,9 +820,6 @@ def build_printer_registration(options: dict) -> tuple[str, list[str]]:
                 continue
             lines.append(build_brlaser_registration_snippet(name, uri, driver_model, location))
             registered_names.append(name)
-            preset_snippet = build_preset_injection_snippet(name, presets_by_printer.get(name, []))
-            if preset_snippet is not None:
-                lines.append(preset_snippet)
             continue
 
         # driver == "generic": argv-array construction, never an interpolated
@@ -1088,9 +842,6 @@ def build_printer_registration(options: dict) -> tuple[str, list[str]]:
         lines.append(" ".join(shlex.quote(a) for a in argv))
         lines.append(f'echo "registered printer: {name}"')
         registered_names.append(name)
-        preset_snippet = build_preset_injection_snippet(name, presets_by_printer.get(name, []))
-        if preset_snippet is not None:
-            lines.append(preset_snippet)
 
     lines.append("")
     return "\n".join(lines), registered_names
@@ -1385,15 +1136,6 @@ def main() -> None:
     script_path.write_text(register_script)
     script_path.chmod(0o755)
     print(f"Config written to {REGISTER_SCRIPT_PATH}", flush=True)
-
-    presets_by_printer = group_presets_by_printer(options)
-    for printer_name in presets_by_printer:
-        if printer_name not in registered_printer_names:
-            print(
-                f"WARNING: printer_presets entry references printer {printer_name!r}, which is not "
-                "a currently configured/registered printer -- these presets will never be applied",
-                flush=True,
-            )
 
     uuid_fixup_script = build_printer_uuid_fixup_script(registered_printer_names)
     if uuid_fixup_script is not None:
