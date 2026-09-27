@@ -6,11 +6,11 @@ current_phase: 21
 current_phase_name: cups print server addon airprint mdns fixes
 current_plan: 1
 status: Phase 20 execution complete
-stopped_at: Phase 21 context gathered
-last_updated: "2026-09-27T22:14:38.843Z"
-state_head: ee0e85970c1a39ee5e11b959d1d3d17fff2ce7fb
+stopped_at: Phase 22 context gathered
+last_updated: "2026-09-27T22:59:27.897Z"
+state_head: 68950c549b42569dcbf9ffaac448505925dd9a3a
 progress:
-  total_phases: 8
+  total_phases: 9
   completed_phases: 12
   total_plans: 18
   completed_plans: 27
@@ -406,11 +406,11 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 
 ## Session Continuity
 
-**Resume file:** .planning/phases/21-cups-print-server-addon-airprint-mdns-fixes/21-CONTEXT.md
+**Resume file:** .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-CONTEXT.md
 
-**Stopped at:** Phase 21 context gathered
+**Stopped at:** Phase 22 context gathered
 
-Last session: 2026-09-26T09:19:03.468Z
+Last session: 2026-09-27T22:59:27.651Z
 
 ---
 
