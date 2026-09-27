@@ -44,4 +44,5 @@ schema:
       location: str?
       driver: "list(generic|brlaser)?"
       driver_model: str?
+      presets: str?
   log_level: "list(debug|info|warning|error)?"
