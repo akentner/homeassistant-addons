@@ -586,20 +586,41 @@ def build_brlaser_registration_snippet(name: str, uri: str, driver_model: str, l
     hardcodes a guessed identifier: `driver_model` is a free-text search term
     (e.g. "MFC-7460DN") the operator supplies in the add-on options, matched
     with a literal (non-regex) case-insensitive substring search (`grep -iF`)
-    against the live `lpinfo -m` listing. Zero matches or more than one match
-    is a hard skip with a clear log message -- never a silent guess at which
-    PPD is "close enough".
+    against the live `lpinfo -m` listing. Zero matches (after the retry loop
+    below) or more than one match is a hard skip with a clear log message --
+    never a silent guess at which PPD is "close enough".
+
+    Retries `lpinfo -m` itself (up to 5 attempts, 1s apart) while it returns
+    no match at all -- found on a real deployment (haos-op3050-1): even after
+    run.sh's own `lpstat -r`-based readiness wait reports cupsd accepting
+    connections, `lpinfo -m`'s driver enumeration can still transiently come
+    back empty for the first second or so cupsd is up. Because an empty
+    match is NOT a script failure (it is caught and logged, not raised),
+    run.sh's outer retry-the-whole-script loop never re-attempts it -- so
+    without this inner retry, that transient race would permanently skip a
+    correctly-configured printer's registration until the add-on's next
+    restart. A `driver_model` that never matches (a real misconfiguration,
+    not a timing race) still exhausts these retries and is skipped with a
+    WARNING exactly as before.
     """
     quoted_model = shlex.quote(driver_model)
     quoted_name = shlex.quote(name)
     quoted_uri = shlex.quote(uri)
     location_arg = f" -L {shlex.quote(location)}" if location else ""
     return (
-        f'PPD_MATCH=$(lpinfo -m 2>/dev/null | grep -iF -- {quoted_model} || true)\n'
+        f'PPD_MATCH=""\n'
+        f'PPD_ATTEMPT=0\n'
+        f'while [ "$PPD_ATTEMPT" -lt 5 ]; do\n'
+        f'  PPD_MATCH=$(lpinfo -m 2>/dev/null | grep -iF -- {quoted_model} || true)\n'
+        f'  [ -n "$PPD_MATCH" ] && break\n'
+        f'  PPD_ATTEMPT=$((PPD_ATTEMPT + 1))\n'
+        f'  sleep 1\n'
+        f'done\n'
         f'PPD_MATCH_COUNT=$(printf \'%s\\n\' "$PPD_MATCH" | grep -c . || true)\n'
         f'if [ -z "$PPD_MATCH" ]; then\n'
-        f'  echo "WARNING: no brlaser PPD matched {quoted_model} for printer {quoted_name} -- '
-        f'skipping registration (is brlaser installed? try a shorter driver_model search term)" >&2\n'
+        f'  echo "WARNING: no brlaser PPD matched {quoted_model} for printer {quoted_name} after '
+        f'5 attempts -- skipping registration (is brlaser installed? try a shorter driver_model '
+        f'search term)" >&2\n'
         f'elif [ "$PPD_MATCH_COUNT" -gt 1 ]; then\n'
         f'  echo "WARNING: {quoted_model} matched more than one brlaser PPD for printer '
         f'{quoted_name} -- refusing to guess, skipping registration. Matches:" >&2\n'
