@@ -393,6 +393,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260909-rln    | Replace the nine per-add-on build workflows with one build.yml (batch 260909-rli, stage 6)     | 2026-09-10 | c560b5e | [quick/stage-6-depends-on-stage-1-it-rewrites-internal-dispatch-bui](./quick/stage-6-depends-on-stage-1-it-rewrites-internal-dispatch-bui/) |
 | 260909-rlm | Make the CI documentation describe what the workflows really do | 2026-09-10 | 176de257f6cb5c8d5f5686c059102ee345563f43 | .planning/quick/stage-5-depends-on-stages-1-and-3-it-documents-what-they-cha |
 | 260909-rln | Replace the nine per-add-on build workflows with one build.yml | 2026-09-10 | c560b5e | .planning/quick/stage-6-depends-on-stage-1-it-rewrites-internal-dispatch-bui |
+| 260927-i1m | network-tools: mdns_scan.py hostname-stability (churn/rename-loop) detection — persisted per-monitor state, new hostname_change_count MQTT-discovery sensor | 2026-09-27 | 64db4bc | [quick/260927-i1m-add-hostname-stability-churn-rename-loop](./quick/260927-i1m-add-hostname-stability-churn-rename-loop/) |
 
 ## Session Continuity
 
