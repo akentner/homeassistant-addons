@@ -66,7 +66,9 @@ make update-version ADDON=<addon-name> VERSION=1.7.2
 make update-version ADDON=<addon-name> VERSION=1.7.2-1
 ```
 
-The tool updates `config.yaml`, `build.yaml`, and `README.md` badges, then creates and pushes the git tag.
+The tool updates `config.yaml`, `build.yaml`, and `README.md` badges, then creates and pushes the git tag — but only
+once those files are committed (it defers tagging and tells you to commit first if they're still dirty; see
+[Commit-before-tag ordering](UPDATE_VERSION.md#commit-before-tag-ordering)).
 
 ## Auto-Update System
 

@@ -196,6 +196,27 @@ def check_github_release(version: str, addon_name: str) -> bool:
         return False
 
 
+def files_have_uncommitted_changes(paths: list) -> bool:
+    """Return True if any of the given paths carry uncommitted changes in git.
+
+    Scoped to exactly these paths via `git status --porcelain -- <paths>` so the
+    check is blind to any OTHER unrelated dirty file elsewhere in the working
+    tree (e.g. an in-progress edit to a different add-on). Nonexistent paths are
+    skipped rather than passed to git, which would otherwise report them as
+    untracked-and-therefore-dirty for the wrong reason.
+    """
+    import subprocess
+
+    existing = [str(p) for p in paths if p.exists()]
+    if not existing:
+        return False
+    result = subprocess.run(
+        ["git", "status", "--porcelain", "--"] + existing,
+        capture_output=True, text=True
+    )
+    return bool(result.stdout.strip())
+
+
 def create_and_push_tag(version: str, addon_name: str, push: bool = True, dry_run: bool = False) -> bool:
     """Create an annotated git tag for the new version and push it to origin.
 
@@ -424,32 +445,61 @@ Examples:
     else:
         print(f"ℹ️  {success_count}/{total_files} files needed updating (others already matched target)")
 
+    # `git tag` always points at HEAD. The edits above are still UNCOMMITTED
+    # working-tree changes at this point in the same invocation, so tagging
+    # unconditionally here would tag the PRE-bump commit — a tag that lies
+    # about which commit actually holds the version it names. This happened
+    # for real, twice, in one day (260927-r2j, 260927-vbk quick tasks): an
+    # annotated tag was created+pushed against a commit whose config.yaml
+    # still read the OLD version, and had to be manually deleted and
+    # recreated. Refuse instead of guessing: if the exact files this script
+    # writes are still dirty, defer tagging. A caller who commits and
+    # re-runs lands in the success_count == 0 branch above with a clean
+    # tree, so the tag path below then correctly tags HEAD.
+    tag_action = "skipped_no_tag"
     if not args.no_tag:
-        print()
-        print("🏷️  Creating and pushing git tag...")
-        tag_ok = create_and_push_tag(
-            config_new,
-            args.addon_name,
-            push=not args.no_push,
-            dry_run=False,
-        )
-        if not tag_ok:
+        version_file_paths = [addon_dir / "config.yaml", addon_dir / "build.yaml", addon_dir / "README.md"]
+        if args.addon_name == "terraform-bridge":
+            version_file_paths.append(Path("terraform-provider-homeassistant") / "build.yaml")
+
+        if files_have_uncommitted_changes(version_file_paths):
+            tag_action = "skipped_dirty"
             print()
-            print("⚠️  Tag push failed — push manually:")
-            print(f"   git push origin {args.addon_name}/v{config_new}")
-            return 1
+            print("⚠️  Version files changed but not yet committed — refusing to tag the wrong commit.")
+            print(f"   Commit them first: git add {args.addon_name} && git commit -m 'chore: update {args.addon_name} to v{args.new_version}'")
+            print(f"   Then re-run to create the tag against the correct commit:")
+            print(f"   make update-version ADDON={args.addon_name} VERSION={args.new_version}")
+            print("   (the re-run is a no-op for the file edits themselves — they already match the")
+            print("    target — and will correctly tag HEAD once the working tree is clean)")
+        else:
+            print()
+            print("🏷️  Creating and pushing git tag...")
+            tag_ok = create_and_push_tag(
+                config_new,
+                args.addon_name,
+                push=not args.no_push,
+                dry_run=False,
+            )
+            if not tag_ok:
+                print()
+                print("⚠️  Tag push failed — push manually:")
+                print(f"   git push origin {args.addon_name}/v{config_new}")
+                return 1
+            tag_action = "created"
 
     print("\n💡 Next steps:")
     print("   • Run 'make validate-versions' to verify")
     print("   • Run 'make check-all' for full validation")
     print(f"   • Commit: git add {args.addon_name} && git commit -m 'chore: update {args.addon_name} to v{args.new_version}'")
-    if args.no_tag:
-        # The tag was deliberately not created, so do not suggest pushing one
-        # that does not exist — the release step creates it.
+    if tag_action == "created":
+        print(f"   • Push:  git push origin main {args.addon_name}/v{config_new}")
+    elif tag_action == "skipped_dirty":
+        print(f"   • Push:  git push origin main   (tag deferred until the working tree is clean — see above; "
+              f"re-run make update-version ADDON={args.addon_name} VERSION={args.new_version} after committing to create it)")
+    else:
+        # args.no_tag was passed deliberately, so do not suggest pushing a tag that does not exist.
         print(f"   • Push:  git push origin main   (tag skipped; release with: "
               f"make update-version ADDON={args.addon_name} VERSION={args.new_version})")
-    else:
-        print(f"   • Push:  git push origin main {args.addon_name}/v{config_new}")
     return 0
 
 

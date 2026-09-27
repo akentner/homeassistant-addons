@@ -13,8 +13,39 @@ The script keeps three files in sync and creates the matching git tag:
 | `build.yaml`  | nested `args.VERSION`    | `VERSION: "1.0.0"`   |
 | `README.md`   | shield badge + tree link | `v1.0.0`             |
 
-After updating files, it **creates and pushes the git tag `<addon>/v<config_version>`** (subpatch-suffixed) by default.
-See [Git tag format](#git-tag-format) below for why.
+After updating files, it **creates and pushes the git tag `<addon>/v<config_version>`** (subpatch-suffixed) by default —
+but only once the working tree for these three files is clean (i.e. the version bump is already committed, or this run
+made no changes because the files already matched the target). If the files it just wrote are still uncommitted, it
+defers tagging and tells you to commit first, then re-run. See [Commit-before-tag ordering](#commit-before-tag-ordering)
+for why, and [Git tag format](#git-tag-format) below for the tag format itself.
+
+## Commit-before-tag ordering
+
+`git tag` always points at whatever commit is currently `HEAD`. The three file edits above happen in the same invocation
+as the tag step but only produce **uncommitted working-tree changes** — not a commit. If the tool tagged unconditionally
+right after writing the files, the tag would point at HEAD as it was _before_ this run, i.e. a commit that does **not**
+yet contain the version bump.
+
+This bit this repo twice for real in one day (2026-09-27, `260927-r2j` and `260927-vbk` quick tasks): an annotated tag
+was created and pushed against a commit whose `config.yaml` still read the OLD version, and had to be manually deleted
+and recreated after the fact.
+
+The tool checks `git status --porcelain` scoped to exactly `config.yaml`/`build.yaml`/`README.md` (and, for
+`terraform-bridge`, the co-located Provider's `build.yaml`) before tagging:
+
+- **Dirty** (these files have uncommitted changes): tagging is deferred. The tool prints a message telling you to commit
+  the version bump first, then re-run `make update-version` — the re-run is a no-op for the file edits (they already
+  match the target) and, with a clean tree, proceeds straight to a correct tag.
+- **Clean** (either you already committed, or this run made no file changes because the target version was already in
+  place): tagging proceeds immediately, since HEAD now provably holds the version the tag names.
+
+Practical effect: a bump-then-tag flow now needs two steps, not one:
+
+```bash
+make update-version ADDON=<addon-name> VERSION=<X.Y.Z-N>
+git add <addon-name> && git commit -m "chore: update <addon-name> to v<X.Y.Z-N>"
+make update-version ADDON=<addon-name> VERSION=<X.Y.Z-N>   # no-op file-wise, now tags HEAD correctly
+```
 
 ## Choosing the right `VERSION=` value
 
@@ -97,6 +128,9 @@ If `config.yaml` is already at the target version, the script is a no-op (prints
 canonical way to **confirm** a subpatch bump — the manual-editing instruction is deprecated; prefer the tool even for
 subpatch-only changes so the bump is recorded the same way as a SemVer bump.
 
+A no-op run against an already-clean working tree is also exactly how the tool creates the tag on a second invocation —
+see [Commit-before-tag ordering](#commit-before-tag-ordering).
+
 ## Cross-artifact bumping (terraform-bridge)
 
 When bumping `terraform-bridge`, the script also touches `terraform-provider-homeassistant/build.yaml`'s `VERSION` field
@@ -111,9 +145,14 @@ Go module, not a separately-released add-on. Both Bridge and Provider share one 
 # Confirm the bump without touching the tag yet
 make update-version ADDON=coding-assistants VERSION=1.0.0-2 NO_TAG=yes NO_PUSH=yes
 
+# Commit the version-bump files BEFORE tagging -- git tag always points at
+# HEAD, and HEAD is still the pre-bump commit until this commit lands.
+git add coding-assistants && git commit -m "chore: update coding-assistants to v1.0.0-2"
+
 # When ready to ship:
 ./internal/update-version.py coding-assistants 1.0.0-2
-# → updates files (no-op since already at target)
+# → files already match target (no-op)
+# → working tree for these files is now clean, so it's safe to tag
 # → creates local tag coding-assistants/v1.0.0-2
 # → pushes tag to origin
 
