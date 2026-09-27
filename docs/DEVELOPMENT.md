@@ -76,6 +76,109 @@ Add-ons using `version_pattern: "sync"` in `.upstream.yaml` benefit from:
 - Automatic update of `config.yaml`
 - Automatic reset of subpatch to `-0`
 
+## Add-on Presentation & Metadata
+
+Add-ons are also judged by how they present in the Supervisor UI and by how well their metadata communicates changes and
+config options to the user. This section covers icon/logo conventions, per-add-on translations, and CHANGELOG.md
+practice, plus a handful of hard-won operational lessons from add-ons built in this repo.
+
+### Icon & Logo
+
+| File       | Format | Aspect ratio                | Recommended size | Shown at                            |
+| ---------- | ------ | --------------------------- | ---------------- | ----------------------------------- |
+| `icon.png` | PNG    | 1:1 (square) — **enforced** | 128x128px        | Add-on store list                   |
+| `logo.png` | PNG    | flexible                    | ~250x100px       | Top of the add-on's own detail page |
+
+(source: developers.home-assistant.io/docs/add-ons/presentation/)
+
+1. **`icon.png`'s hard rule is the aspect ratio, not the pixel count.** HA requires a square (1:1) icon; 128x128px is
+   only the _recommended_ size. `litellm/icon.png` ships at 512x512 and is still valid because it stays square — don't
+   assume every icon in this repo is literally 128x128px, and don't treat a larger square icon as broken.
+2. **`logo.png` is optional but recommended** for add-ons with real upstream branding. As of this writing, `cups` and
+   `gatus` ship one; the rest have `icon.png` only (or neither). Add a logo when the upstream project has distinct brand
+   assets worth showing.
+3. **Prefer the upstream project's own official brand assets over inventing new ones.** Precedent: `cups`'s `icon.png`
+   originally shipped a placeholder ("UNIX PRINTING SYSTEM" text mark referencing the archived `apple/cups` project); it
+   was replaced with the current upstream mark from `github.com/OpenPrinting/cups` (`desktop/cups-128.png` used as-is
+   for `icon.png`, `desktop/cups-256.png` composited onto a 250x100 transparent canvas for `logo.png`).
+4. **When compositing a square source onto a non-square logo canvas, preserve aspect ratio** — scale and center on a
+   transparent background. Never stretch or distort the source to fill the target rectangle.
+5. **Always cite the actual current upstream repo** in the add-on's DOCS.md/README.md attribution line (not an archived
+   predecessor), and name the license the asset is used under (e.g. Apache License 2.0 for CUPS's marks).
+
+### Translations
+
+Convention (established by `cups`): `{addon}/translations/en.yaml` and `{addon}/translations/de.yaml`, each with a
+top-level `configuration:` key mapping every `config.yaml` option name to a `name:` (short label) and `description:`
+(fuller explanation — use YAML `>-` folded style for longer text):
+
+```yaml
+configuration:
+  log_level:
+    name: Log Level
+    description: Add-on log verbosity (debug, info, warning, error).
+```
+
+1. **Language parity is required.** Every option key present in `en.yaml` must have a matching key in `de.yaml`, and
+   vice versa.
+2. **Keep translations in sync with option semantics, not just written once at option-creation time.** Precedent: when
+   `cups`'s `log_level` option's default and behavior changed in a same-day quick task, both `en.yaml` and `de.yaml`
+   were updated in the same change — a stale translation describing old behavior is a real, recurring risk.
+3. **A `translations/` directory is not yet universal in this repo.** As of this writing only `cups/translations/`
+   exists; other add-ons rely on plain `config.yaml` schema without translated labels. That fallback is acceptable for
+   an add-on with no `translations/` directory yet — don't retrofit a full translations setup as a side effect of an
+   unrelated change, but add it when meaningfully expanding that add-on's options.
+
+### CHANGELOG.md
+
+Convention (Keep-a-Changelog style, confirmed via `network-tools/CHANGELOG.md`): `## [X.Y.Z-N] - YYYY-MM-DD` version
+headers matching `config.yaml`'s own subpatch-inclusive version string (not `build.yaml`'s upstream-only version), with
+`### Added` / `### Changed` / `### Fixed` subsections as applicable, and reference-style compare links at the bottom:
+
+```markdown
+[Unreleased]: https://github.com/akentner/homeassistant-addons/compare/<addon>/vX.Y.Z-N...HEAD
+[X.Y.Z-N]: https://github.com/akentner/homeassistant-addons/compare/<addon>/vPREV...<addon>/vX.Y.Z-N
+```
+
+1. **Every version bump gets a CHANGELOG.md entry in the same commit/task**, describing the actual user-visible change —
+   and, for a bug fix, briefly the root cause if it adds useful context for future readers. Not just "bump version".
+   Precedent: `network-tools`'s mDNS-conflict fix entry explains both the fix and why an initially-tried alternative
+   (`disable-publishing=yes`) was empirically insufficient.
+2. **Keep the `[Unreleased]` link's compare-base updated** to point at the new latest version tag when a new version
+   section is added, so it doesn't silently point at a stale prior release.
+3. **Not every add-on has one yet.** As of this writing, 8 of 11 add-ons carry a `CHANGELOG.md` (`authentik`,
+   `coding-assistants`, `gatus`, `litellm`, `markdown-renderer`, `meridian`, `network-tools`, `phone-logger`); `cups`,
+   `iac-runner`, and `terraform-bridge` do not — start one on that add-on's next version bump rather than backfilling
+   history retroactively.
+
+### Other Operational Lessons
+
+A handful of real bugs fixed in this repo generalize into rules worth following in any add-on:
+
+1. **Options-schema nesting is capped at 2 levels.** HA's add-on options schema micro-language supports nested
+   arrays/dicts to a maximum depth of two (developers.home-assistant.io/docs/add-ons/configuration/). A deeper structure
+   must be flattened — typically by hoisting the inner structure to its own top-level list of objects with an explicit
+   foreign-key field pointing back to its parent. This repo did exactly that for `cups`'s `printer_presets` feature
+   (since removed for unrelated reasons — it turned out ineffective for its purpose — but the flattening technique
+   remains the correct pattern for any future deeply-nested option).
+2. **`host_network: true` add-ons that broadcast on the network must be conscious of siblings.** Two `host_network`
+   add-ons on the same host share the exact same host IP addresses. If both run independent avahi-daemons that each
+   publish address/reverse-PTR records by default, they perpetually and mutually reject each other's records as RFC 6762
+   conflicts, causing an endless hostname-rename loop on both sides. An add-on that only needs to _browse_ mDNS (not
+   advertise itself) should ship an `avahi-daemon.conf` with `publish-addresses=no` to opt out entirely —
+   `network-tools` shipped exactly this fix in `0.5.0-3`.
+3. **Surface an internal daemon's own log files to the add-on's log output.** A service that logs to its own files (not
+   stdout) inside the container is invisible to `ha apps logs` / `docker logs` by default. Background a `tail -F` on the
+   relevant log file(s) from `run.sh` after starting the service, gated by a configurable `log_level`-style option, and
+   add that background process to the container's shutdown trap so it doesn't block clean termination.
+4. **Persistent state belongs under `/data`, not the container's writable layer.** Anything needing to survive a restart
+   or image update — a small state file, a history log, generated config that must stay stable across restarts — must be
+   written under `/data`, never under `/etc`, `/tmp`, or `/var` inside the image layer, which resets on every
+   recreation.
+5. **Never bump a version with a bare `X.Y.Z`** — always pass the explicit full `X.Y.Z-N` string via
+   `make update-version ADDON=<name> VERSION=<explicit-string>`. See `## Versioning Rules` above; this is the same hard
+   rule, repeated here only as a pointer, not duplicated.
+
 ## Pre-commit Validation
 
 A pre-commit hook automatically validates:
