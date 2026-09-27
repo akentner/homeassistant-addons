@@ -7,8 +7,8 @@ current_phase_name: cups print server addon airprint mdns fixes
 current_plan: 1
 status: Phase 20 execution complete
 stopped_at: Phase 21 context gathered
-last_updated: "2026-09-26T09:52:26.415Z"
-state_head: a77e7dc7897e6dc43db018d9853cfb9b3c81f650
+last_updated: "2026-09-27T15:30:40.361Z"
+state_head: 925074f71015b07853692e9476e1bb17c3679f51
 progress:
   total_phases: 8
   completed_phases: 12
@@ -394,6 +394,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260909-rlm | Make the CI documentation describe what the workflows really do | 2026-09-10 | 176de257f6cb5c8d5f5686c059102ee345563f43 | .planning/quick/stage-5-depends-on-stages-1-and-3-it-documents-what-they-cha |
 | 260909-rln | Replace the nine per-add-on build workflows with one build.yml | 2026-09-10 | c560b5e | .planning/quick/stage-6-depends-on-stage-1-it-rewrites-internal-dispatch-bui |
 | 260927-i1m | network-tools: mdns_scan.py hostname-stability (churn/rename-loop) detection — persisted per-monitor state, new hostname_change_count MQTT-discovery sensor | 2026-09-27 | 64db4bc | [quick/260927-i1m-add-hostname-stability-churn-rename-loop](./quick/260927-i1m-add-hostname-stability-churn-rename-loop/) |
+| 260927-ntq | cups: configurable AirPrint print presets (printers[].presets) via *APPrinterPreset PPD stanzas | 2026-09-27 | 925074f | [260927-ntq-add-configurable-airprint-print-presets-](./quick/260927-ntq-add-configurable-airprint-print-presets-/) |
 
 ## Session Continuity
 
