@@ -7,8 +7,8 @@ current_phase_name: cups print server addon airprint mdns fixes
 current_plan: 1
 status: Phase 20 execution complete
 stopped_at: Phase 21 context gathered
-last_updated: "2026-09-27T15:30:40.361Z"
-state_head: 925074f71015b07853692e9476e1bb17c3679f51
+last_updated: "2026-09-27T16:30:06.130Z"
+state_head: 44b57b8c18caebb7452d7ca7a05ba67ffd82761e
 progress:
   total_phases: 8
   completed_phases: 12
@@ -395,6 +395,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260909-rln | Replace the nine per-add-on build workflows with one build.yml | 2026-09-10 | c560b5e | .planning/quick/stage-6-depends-on-stage-1-it-rewrites-internal-dispatch-bui |
 | 260927-i1m | network-tools: mdns_scan.py hostname-stability (churn/rename-loop) detection — persisted per-monitor state, new hostname_change_count MQTT-discovery sensor | 2026-09-27 | 64db4bc | [quick/260927-i1m-add-hostname-stability-churn-rename-loop](./quick/260927-i1m-add-hostname-stability-churn-rename-loop/) |
 | 260927-ntq | cups: configurable AirPrint print presets (printers[].presets) via *APPrinterPreset PPD stanzas | 2026-09-27 | 925074f | [260927-ntq-add-configurable-airprint-print-presets-](./quick/260927-ntq-add-configurable-airprint-print-presets-/) |
+| 260927-p3c | cups: stable printer UUID across restarts (fixes iOS ghost-duplicate printer entries) | 2026-09-27 | 44b57b8 | [260927-p3c-cups-stable-printer-uuid-across-restarts](./quick/260927-p3c-cups-stable-printer-uuid-across-restarts/) |
 
 ## Session Continuity
 
