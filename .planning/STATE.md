@@ -7,8 +7,8 @@ current_phase_name: cups print server addon airprint mdns fixes
 current_plan: 1
 status: Phase 20 execution complete
 stopped_at: Phase 21 context gathered
-last_updated: "2026-09-27T21:34:41.440Z"
-state_head: 9cd7bd855a19ac794df5ea6d8fcc85926d2f55ed
+last_updated: "2026-09-27T22:14:38.843Z"
+state_head: ee0e85970c1a39ee5e11b959d1d3d17fff2ce7fb
 progress:
   total_phases: 8
   completed_phases: 12
@@ -343,6 +343,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | Phase 09 P01                                           | 40     | 3 tasks  | 15 files |
 | Phase 09 P02                                           | 458s   | 3 tasks  | 8 files  |
 | Phase 9 P3                                             | 9min   | 3 tasks  | 5 files  |
+| Phase quick-260927-wzn                                 | 20min  | 3 tasks  | 4 files  |
 | Phase 09 P04                                           | 25min  | 4 tasks  | 3 files  |
 | Phase 10 P01                                           | 35min  | 3 tasks  | 11 files |
 | Phase 10 P02                                           | 25min  | 3 tasks  | 11 files |
@@ -400,6 +401,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260927-r2j | cups: remove AirPrint print-presets feature (confirmed ineffective for iOS) | 2026-09-27 | d1931c7 | [260927-r2j-cups-remove-airprint-print-presets-featu](./quick/260927-r2j-cups-remove-airprint-print-presets-featu/) |
 | 260927-vwt | docs: add-on presentation & metadata best practices (icon/logo, translations, changelog, operational lessons) | 2026-09-27 | 9f72846 | [260927-vwt-docs-add-on-presentation-metadata-best-p](./quick/260927-vwt-docs-add-on-presentation-metadata-best-p/) |
 | 260927-vbk | cups: official CUPS branding (icon/logo), configurable log_level with error/access log passthrough, print-job history persisted to /data as JSONL | 2026-09-27 | 9cd7bd8 | [260927-vbk-cups-add-logo-png-banner-configurable-lo](./quick/260927-vbk-cups-add-logo-png-banner-configurable-lo/) |
+| 260927-wzn | internal/update-version.py: defer git tagging until version-bump files are committed (fixes 260927-r2j/260927-vbk mis-tag class); RED-before-GREEN regression test wired into make check-all | 2026-09-27 | ee0e859 | [260927-wzn-fix-internal-update-version-py-tag-timin](./quick/260927-wzn-fix-internal-update-version-py-tag-timin/) |
 
 ## Session Continuity
 
@@ -473,3 +475,5 @@ skipped; Phase 16 ready to plan_
 - [Phase 17]: verify-opencode-gate is files:-scoped to opencode.yml + the verifier, not always_run — a workflow deletion deliberately does not fire it
 - [Phase 17]: docker-build-check hadolint discovery widened via the */ tools/*/ glob, not a find port, to preserve the trailing-slash concatenation contract
 - [Phase 17]: The repo has two deliberate add-on definitions (is a shipped add-on vs must pass validation/linting); all four discovery sites now name theirs — do not unify
+- [Phase quick-260927-wzn]: update-version.py: files_have_uncommitted_changes() gates tagging on git status --porcelain scoped to exactly the version files per add-on, so an unrelated dirty file elsewhere never blocks or falsely permits tagging
+- [Phase quick-260927-wzn]: Regression test proven RED (against a saved pre-fix copy) before GREEN (against the fixed script), then wired into make check-all so the tag-timing bug class cannot silently regress
