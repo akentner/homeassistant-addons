@@ -178,6 +178,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 ### Roadmap Evolution
 
 - Phase 21 added: cups print server addon airprint mdns fixes
+- Phase 22 added: cups: paperless-ngx PDF document upload
 
 ### Key Decisions (v1.3)
 

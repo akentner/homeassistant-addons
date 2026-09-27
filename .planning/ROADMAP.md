@@ -95,6 +95,53 @@ Plans:
 - [ ] `21-03-PLAN.md` — Rollout on haos-op3050-1: migration-suggestion script, install + empirical mDNS
       verification, human confirmation checkpoint, remove f1c878cb_cups
 
+### Phase 22: cups: paperless-ngx PDF document upload
+
+**Goal:** Add a second, PDF-only virtual printer queue to the `cups` add-on (via `cups-pdf`), separate from and
+non-disruptive to the existing physical Brother-MFC-7460DN queue, whose output is picked up by a decoupled background
+worker and uploaded to a paperless-ngx instance's REST API. Locked design decisions from user discussion, do not
+re-litigate during planning:
+
+- **Target DMS is paperless-ngx specifically** (not a generic multi-DMS adapter system) — user has it "ganz oben auf
+  der Liste" but has not deployed/finalized it yet. The worker must be resilient to paperless-ngx being unreachable
+  during development/at boot — retry/backoff, never crash, never block cupsd or the physical printer.
+- **Architecture (agreed):** CUPS-PDF queue → local outbox directory under `/data` (this add-on's persistent volume,
+  per `docs/DEVELOPMENT.md`'s "Persistent state belongs under /data" convention) → separate background worker process
+  (co-located with this add-on's existing `generate_config.py`/`print-history-poller.py`, started from `run.sh` the
+  same way) → paperless-ngx. Core principle: "CUPS erzeugt das Dokument; ein separater Worker besitzt die
+  Verantwortung für die Zustellung" — the physical printer and cupsd itself must stay fully unaffected if paperless-ngx
+  is down.
+- **Confirmed paperless-ngx REST API facts** (verified live via WebFetch against the actual paperless-ngx docs, this
+  corrects a wrong detail from an initial AI-assisted design discussion): endpoint is `POST
+  /api/documents/post_document/`; multipart field name is `document` (NOT `file`); auth header is `Authorization:
+  Token <token>` (NOT `Bearer`); response is HTTP 200 with a consumption-task UUID — **async**, not an immediate
+  "stored successfully" confirmation. A "sent" status in this add-on's own outbox bookkeeping means "task accepted",
+  not "confirmed stored", unless task-status polling is added later (out of v1 scope unless planning finds it trivial).
+- **v1 scope is deliberately narrow:** only `document` (the PDF) + `title` fields — no `tags`/`correspondent`/
+  `document_type` mapping (those are numeric IDs in paperless-ngx's API, not names, requiring a separate lookup step).
+  Rely on paperless-ngx's own built-in automatic classification for those fields instead. Do NOT build a generic
+  multi-DMS adapter abstraction for v1 — build directly against paperless-ngx's real API; adapter abstraction is an
+  explicit non-goal until/unless a second DMS target is ever actually needed.
+- **Outbox/worker design:** an incoming/processing/sent/failed directory pattern (or equivalent state-tracking) with
+  retry/backoff for transient upload failures; a failed document is never deleted. Matches this add-on's own recent
+  `print-history-poller.py` precedent (state survives restarts, forward-only, resilient to the dependent service being
+  briefly unavailable at boot).
+- **Config surface (exact schema TBD by planning, must cover):** enable/disable toggle defaulting OFF (existing
+  installations without paperless-ngx must be completely unaffected), paperless-ngx base URL, API token (use HA's
+  `password`-type schema field if available — must not be plaintext-visible like a normal string option), upload
+  timeout, retry count/delay.
+- Read the CURRENT state of `cups/config.yaml`, `cups/run.sh`, `cups/generate_config.py`, `cups/Dockerfile`,
+  `cups/DOCS.md` before planning — this add-on was modified extensively on 2026-09-27 (presets added/removed,
+  stable-UUID fixup, log-level passthrough + tail, print-history poller, official branding, update-version.py
+  tag-timing fix) — do not assume prior shape from memory.
+
+**Requirements**: TBD
+**Depends on:** Phase 21
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 22 to break down)
+
 ### 📋 v1.4 iac-runner (Phases 16-19) — PLANNING
 
 **Milestone Goal:** Ship a Home Assistant Supervisor add-on (`iac-runner/`) that clones a Git repo (e.g.
