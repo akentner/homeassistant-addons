@@ -1,7 +1,7 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions update-version validate-dockerfiles docker-build-check build-addon release install-provider verify-install-provider verify-images verify-images-self-test
+.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions verify-update-version-tag-timing update-version validate-dockerfiles docker-build-check build-addon release install-provider verify-install-provider verify-images verify-images-self-test
 
 # Default target
 help: ## Show this help message
@@ -106,6 +106,15 @@ validate-addons: ## Validate add-on configurations
 validate-versions: ## Validate add-on versioning consistency
 	@echo "🔍 Validating add-on versions..."
 	./internal/validate-versions.sh
+
+# Unlike verify-images below, this is offline, deterministic, and fails only for
+# something in this repo's own internal/update-version.py -- it builds a
+# throwaway git repo in a temp dir and never touches network or Docker. That is
+# exactly the bar check-all's other members meet, so this one joins check-all
+# too (verify-images does not, for the reasons in the comment below).
+verify-update-version-tag-timing: ## Regression-test that update-version.py never tags before the bump commit exists
+	@echo "🔍 Verifying update-version.py's tag-timing fix (pure git, temp repo, no Docker/network)..."
+	./internal/verify-update-version-tag-timing.sh
 
 # verify-images and verify-images-self-test are deliberately NOT members of
 # check-all. Every current check-all member is offline, deterministic, and fails
@@ -297,7 +306,7 @@ install-provider: ## Build and install terraform-provider-homeassistant for Open
 verify-install-provider: ## Hermetic E2E check that make install-provider produces a runnable Provider
 	@bash internal/verify-install-provider.sh
 
-check-all: lint validate-addons validate-versions validate-dockerfiles ## Run all checks (lint + validate + versions + dockerfile args)
+check-all: lint validate-addons validate-versions validate-dockerfiles verify-update-version-tag-timing ## Run all checks (lint + validate + versions + dockerfile args + tag-timing)
 
 test: check-all ## Run all tests and checks
 
