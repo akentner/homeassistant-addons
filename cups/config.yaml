@@ -28,7 +28,7 @@ options:
   admin_username: ""
   admin_password: ""
   printers: []
-  log_level: "info"
+  log_level: "warning"
 
 schema:
   avahi_reflector: "bool?"

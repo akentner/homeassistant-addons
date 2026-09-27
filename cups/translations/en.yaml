@@ -26,4 +26,7 @@ configuration:
       name, device URI, whether it's enabled, and an optional location.
   log_level:
     name: Log Level
-    description: Add-on log verbosity (debug, info, warning, error).
+    description: >-
+      Add-on log verbosity (debug, info, warning, error). Default is warning for quiet
+      operation. cupsd's error log is always forwarded to this add-on's own log output;
+      the access log is additionally forwarded only at the debug level.

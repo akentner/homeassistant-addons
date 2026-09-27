@@ -14,7 +14,7 @@ License 2.0.
 | `admin_username`  | `""` (unset) | Username for CUPS's web admin UI (`/admin`) login. Leave empty (the default) to keep `/admin` exactly as unauthenticatable as before this option existed — a fail-safe default, not an open admin panel. Must be set together with `admin_password`. See [Design notes](#design-notes) for the security implication of setting this.                                                                                                                                                                |
 | `admin_password`  | `""` (unset) | Password for the `admin_username` account above. Masked in the HA UI. Must be set together with `admin_username`. **Pick a real password** — this account is a real system account in the `lpadmin` group, reachable from the LAN (and Tailscale, when detected), not sandboxed by anything else.                                                                                                                                                                                                   |
 | `printers`        | `[]`         | List of printers to register with CUPS at startup. See [Printers](#printers) below for the object shape.                                                                                                                                                                                                                                                                                                                                                                                            |
-| `log_level`       | `info`       | Log verbosity: `debug`, `info`, `warning`, `error`                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `log_level`       | `warning`    | Log verbosity: `debug`, `info`, `warning`, `error`. `error_log` is always tailed into the add-on's own log output; `access_log` is additionally tailed only at the `debug` tier.                                                                                                                                                                                                                                                                                                                    |
 
 ## Printers
 
@@ -166,6 +166,13 @@ never written to the add-on's logs.
 `No slot available for legacy unicast reflection` message anywhere in this add-on. With `avahi_reflector: false` as the
 shipped default, this failure class cannot occur at all, so a watchdog for it would be dead code. If you re-enable
 `avahi_reflector`, you re-inherit the original bug and are responsible for monitoring it yourself.
+
+**cupsd's own file-based logs are tailed into the add-on's log output (`log_level`).** Previously, cupsd's
+`error_log`/`access_log` under `/var/log/cups/` were invisible to `ha apps logs`/`docker logs` — nothing in this add-on
+ever surfaced them. `run.sh` now backgrounds `tail -F /var/log/cups/error_log` unconditionally, and additionally
+`tail -F /var/log/cups/access_log` only when `log_level: debug` is selected (the tier used for live diagnosis) — a
+quieter default (`log_level: warning`, mapped to CUPS's own `LogLevel warn`) keeps routine operation quiet while `debug`
+gives full request-level visibility on demand.
 
 **Generic driver, not driverless auto-detection.** Printer registration uses `lpadmin -m drv:///sample.drv/generic.ppd`
 (a static generic PostScript driver) rather than `-m everywhere` (CUPS driverless IPP-Everywhere). `-m everywhere`

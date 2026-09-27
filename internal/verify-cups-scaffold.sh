@@ -156,6 +156,78 @@ else
     FAIL=1
 fi
 
+yellow "Checking cupsd LogLevel reflects the configured log_level option..."
+if docker exec "${CONTAINER_NAME}" grep -qE '^LogLevel info$' /etc/cups/cupsd.conf; then
+    green "   PASS: cupsd.conf LogLevel reflects the fixture's configured log_level=info"
+else
+    red "   FAIL: cupsd.conf LogLevel does not reflect log_level=info"
+    docker exec "${CONTAINER_NAME}" grep -i '^LogLevel' /etc/cups/cupsd.conf || true
+    FAIL=1
+fi
+
+yellow "Checking cupsd error_log passthrough into the add-on's own log output..."
+if docker logs "${CONTAINER_NAME}" 2>&1 | grep -qE '^[EWID] \['; then
+    green "   PASS: cupsd error_log lines appear in the add-on's own log output"
+else
+    red "   FAIL: no cupsd error_log lines found in the add-on's own log output"
+    FAIL=1
+fi
+if docker logs "${CONTAINER_NAME}" 2>&1 | grep -qE '"(GET|POST|PUT|HEAD) '; then
+    red "   FAIL: access_log lines appear despite log_level=info (should only tail at the debug tier)"
+    FAIL=1
+else
+    green "   PASS: access_log not tailed at the non-debug log_level=info fixture"
+fi
+
+yellow "Checking debug-tier log_level additionally tails access_log (separate lightweight container)..."
+DEBUG_DATA_DIR="$(mktemp -d)"
+python3 -c "
+import json
+with open('${DATA_DIR}/options.json') as f:
+    d = json.load(f)
+d['log_level'] = 'debug'
+with open('${DEBUG_DATA_DIR}/options.json', 'w') as f:
+    json.dump(d, f)
+"
+DEBUG_CONTAINER_NAME="${CONTAINER_NAME}-debug"
+docker run --rm -d --name "${DEBUG_CONTAINER_NAME}" -v "${DEBUG_DATA_DIR}:/data" "${IMAGE_NAME}" >/dev/null
+DEBUG_READY=0
+for _ in $(seq 1 40); do
+    if docker exec "${DEBUG_CONTAINER_NAME}" lpstat -r >/dev/null 2>&1; then
+        DEBUG_READY=1
+        break
+    fi
+    sleep 1
+done
+if [[ "${DEBUG_READY}" != "1" ]]; then
+    red "   FAIL: debug-tier container did not become ready"
+    FAIL=1
+else
+    docker exec "${DEBUG_CONTAINER_NAME}" lpstat -v >/dev/null 2>&1 || true
+    sleep 2
+    DEBUG_LOGS=$(docker logs "${DEBUG_CONTAINER_NAME}" 2>&1)
+    if echo "${DEBUG_LOGS}" | grep -qE '^[EWID] \['; then
+        green "   PASS: error_log still tailed at the debug tier"
+    else
+        red "   FAIL: error_log not tailed at the debug tier"
+        FAIL=1
+    fi
+    if echo "${DEBUG_LOGS}" | grep -qE '"(GET|POST|PUT|HEAD) '; then
+        green "   PASS: access_log additionally tailed at the debug tier"
+    else
+        red "   FAIL: access_log not tailed at the debug tier"
+        FAIL=1
+    fi
+    if docker exec "${DEBUG_CONTAINER_NAME}" grep -qE '^LogLevel debug$' /etc/cups/cupsd.conf; then
+        green "   PASS: cupsd.conf LogLevel=debug applied for the debug tier"
+    else
+        red "   FAIL: cupsd.conf LogLevel not set to debug"
+        FAIL=1
+    fi
+fi
+docker rm -f "${DEBUG_CONTAINER_NAME}" >/dev/null 2>&1 || true
+rm -rf "${DEBUG_DATA_DIR}" >/dev/null 2>&1 || true
+
 yellow "Checking cupsd.conf ServerAlias (Host-header validation fix)..."
 if echo "${CUPSD_CONF}" | grep -qF "ServerAlias cups-verify.example.ts.net"; then
     green "   PASS: ServerAlias emitted for the configured server_aliases value"

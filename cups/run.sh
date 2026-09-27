@@ -136,10 +136,27 @@ case "$LOG_LEVEL" in
 esac
 cupsctl LogLevel="$CUPS_LOG_LEVEL" || log "cupsctl LogLevel failed"
 
-# 10. Forward termination signals to cupsd and wait on it -- the container
+# 10. Tail cupsd's own file-based logs into this add-on's own stdout so
+#     `ha apps logs`/`docker logs` actually surface cupsd's logging --
+#     today nothing does this: cupsd's error_log/access_log under
+#     /var/log/cups/ are invisible outside the container. error_log is
+#     always tailed; access_log is ADDITIONALLY tailed only at the most
+#     verbose 'debug' tier (the level used for live diagnosis sessions).
+#     `-F` retries across a missing/not-yet-created or rotated file
+#     rather than exiting.
+tail -n +1 -F /var/log/cups/error_log 2>/dev/null &
+ERROR_LOG_TAIL_PID=$!
+ACCESS_LOG_TAIL_PID=""
+if [ "$LOG_LEVEL" = "debug" ]; then
+    tail -n +1 -F /var/log/cups/access_log 2>/dev/null &
+    ACCESS_LOG_TAIL_PID=$!
+fi
+
+# 11. Forward termination signals to cupsd and wait on it -- the container
 #     stays alive exactly as long as cupsd does. Per D-08: no watchdog for
 #     the legacy-unicast reflector slot-exhaustion error is added here --
 #     with enable-reflector=no (the shipped default) that failure class
-#     cannot occur.
-trap 'kill -TERM "$CUPSD_PID" 2>/dev/null' TERM INT
+#     cannot occur. Also stops the log-tail background processes so
+#     container shutdown stays clean.
+trap 'kill -TERM "$CUPSD_PID" 2>/dev/null; kill -TERM "$ERROR_LOG_TAIL_PID" 2>/dev/null; [ -n "$ACCESS_LOG_TAIL_PID" ] && kill -TERM "$ACCESS_LOG_TAIL_PID" 2>/dev/null' TERM INT
 wait "$CUPSD_PID"
