@@ -28,7 +28,6 @@ options:
   admin_username: ""
   admin_password: ""
   printers: []
-  printer_presets: []
   log_level: "info"
 
 schema:
@@ -45,8 +44,4 @@ schema:
       location: str?
       driver: "list(generic|brlaser)?"
       driver_model: str?
-  printer_presets:
-    - printer: str
-      name: str
-      options: str
   log_level: "list(debug|info|warning|error)?"
