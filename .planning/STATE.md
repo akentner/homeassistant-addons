@@ -7,8 +7,8 @@ current_phase_name: cups print server addon airprint mdns fixes
 current_plan: 1
 status: Phase 20 execution complete
 stopped_at: Phase 21 context gathered
-last_updated: "2026-09-27T21:11:30.998Z"
-state_head: 9f728464982fdeec81c2373ca685ce730999b4a6
+last_updated: "2026-09-27T21:34:41.440Z"
+state_head: 9cd7bd855a19ac794df5ea6d8fcc85926d2f55ed
 progress:
   total_phases: 8
   completed_phases: 12
@@ -399,6 +399,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260927-q51 | cups: printer_presets as top-level object list (replaces flattened-string printers[].presets) | 2026-09-27 | 88906b9 | [260927-q51-cups-printer-presets-as-top-level-object](./quick/260927-q51-cups-printer-presets-as-top-level-object/) |
 | 260927-r2j | cups: remove AirPrint print-presets feature (confirmed ineffective for iOS) | 2026-09-27 | d1931c7 | [260927-r2j-cups-remove-airprint-print-presets-featu](./quick/260927-r2j-cups-remove-airprint-print-presets-featu/) |
 | 260927-vwt | docs: add-on presentation & metadata best practices (icon/logo, translations, changelog, operational lessons) | 2026-09-27 | 9f72846 | [260927-vwt-docs-add-on-presentation-metadata-best-p](./quick/260927-vwt-docs-add-on-presentation-metadata-best-p/) |
+| 260927-vbk | cups: official CUPS branding (icon/logo), configurable log_level with error/access log passthrough, print-job history persisted to /data as JSONL | 2026-09-27 | 9cd7bd8 | [260927-vbk-cups-add-logo-png-banner-configurable-lo](./quick/260927-vbk-cups-add-logo-png-banner-configurable-lo/) |
 
 ## Session Continuity
 
