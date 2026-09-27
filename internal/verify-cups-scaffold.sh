@@ -30,8 +30,16 @@ cat > "${DATA_DIR}/options.json" <<'JSON'
   "admin_username": "verifyadmin",
   "admin_password": "verify-secret-pw",
   "printers": [
-    {"name": "testprinter", "uri": "ipp://192.0.2.10:631/ipp/print", "enabled": true, "location": "Office", "presets": "Draft Mode|PageSize=A4 Duplex=None;Bad Preset|Duplex=None Resolution="},
-    {"name": "brlasertest", "uri": "socket://192.0.2.20:9100", "enabled": true, "driver": "brlaser", "driver_model": "MFC-7460DN", "presets": "Duplex Fein|Duplex=DuplexNoTumble Resolution=1200x600dpi;Test Preset|Duplex=None Resolution=600dpi;Test  Preset|Duplex=DuplexTumble Resolution=600dpi"}
+    {"name": "testprinter", "uri": "ipp://192.0.2.10:631/ipp/print", "enabled": true, "location": "Office"},
+    {"name": "brlasertest", "uri": "socket://192.0.2.20:9100", "enabled": true, "driver": "brlaser", "driver_model": "MFC-7460DN"}
+  ],
+  "printer_presets": [
+    {"printer": "testprinter", "name": "Draft Mode", "options": "PageSize=A4 Duplex=None"},
+    {"printer": "testprinter", "name": "Bad Preset", "options": "Duplex=None Resolution="},
+    {"printer": "brlasertest", "name": "Duplex Fein", "options": "Duplex=DuplexNoTumble Resolution=1200x600dpi"},
+    {"printer": "brlasertest", "name": "Test Preset", "options": "Duplex=None Resolution=600dpi"},
+    {"printer": "brlasertest", "name": "Test  Preset", "options": "Duplex=DuplexTumble Resolution=600dpi"},
+    {"printer": "nonexistent-printer", "name": "Ghost Preset", "options": "Duplex=None"}
   ],
   "log_level": "info"
 }
@@ -328,6 +336,23 @@ if echo "${PRESET_LOGS}" | grep -qF "invalid or empty options"; then
 else
     red "   FAIL: no WARNING logged for the skipped invalid preset"
     FAIL=1
+fi
+
+# A printer_presets entry whose `printer` FK does not match ANY
+# configured printer must be WARNING-logged once (main()'s new
+# unmatched-FK check) and must never surface in the generated
+# register-printers.sh -- proves a typo'd FK is not silently swallowed.
+if echo "${PRESET_LOGS}" | grep -qF "references printer 'nonexistent-printer', which is not a currently configured"; then
+    green "   PASS: WARNING logged for printer_presets entry referencing unmatched printer 'nonexistent-printer'"
+else
+    red "   FAIL: no WARNING logged for the unmatched printer_presets 'printer' foreign key"
+    FAIL=1
+fi
+if echo "${REGISTER_SCRIPT}" | grep -qF "Ghost Preset"; then
+    red "   FAIL: 'Ghost Preset' (unmatched printer_presets entry) unexpectedly appears in register-printers.sh"
+    FAIL=1
+else
+    green "   PASS: 'Ghost Preset' (unmatched printer_presets entry) does not appear in register-printers.sh"
 fi
 
 # End-to-end proof: the live PPD files on disk actually carry the injected

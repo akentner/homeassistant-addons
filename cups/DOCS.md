@@ -13,21 +13,21 @@ Add-on icon is the official CUPS project logo (github.com/apple/cups), used unde
 | `admin_username`  | `""` (unset) | Username for CUPS's web admin UI (`/admin`) login. Leave empty (the default) to keep `/admin` exactly as unauthenticatable as before this option existed — a fail-safe default, not an open admin panel. Must be set together with `admin_password`. See [Design notes](#design-notes) for the security implication of setting this.                                                                                                                                                                |
 | `admin_password`  | `""` (unset) | Password for the `admin_username` account above. Masked in the HA UI. Must be set together with `admin_username`. **Pick a real password** — this account is a real system account in the `lpadmin` group, reachable from the LAN (and Tailscale, when detected), not sandboxed by anything else.                                                                                                                                                                                                   |
 | `printers`        | `[]`         | List of printers to register with CUPS at startup. See [Printers](#printers) below for the object shape.                                                                                                                                                                                                                                                                                                                                                                                            |
+| `printer_presets` | `[]`         | List of named AirPrint print presets, each referencing a configured printer by name. See [Printer Presets](#printer-presets) below for the object shape.                                                                                                                                                                                                                                                                                                                                            |
 | `log_level`       | `info`       | Log verbosity: `debug`, `info`, `warning`, `error`                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ## Printers
 
-Each entry in the `printers` list is an object with seven fields:
+Each entry in the `printers` list is an object with six fields:
 
-| Field          | Type                      | Default   | Description                                                                                                                                                                                |
-| -------------- | ------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`         | `str`                     | —         | Printer queue name registered with CUPS (`lpadmin -p <name>`)                                                                                                                              |
-| `uri`          | `str`                     | —         | Device URI CUPS uses to reach the printer. See [Supported URI schemes](#supported-uri-schemes) below                                                                                       |
-| `enabled`      | `bool?`                   | `true`    | Whether this printer entry is registered at startup                                                                                                                                        |
-| `location`     | `str?`                    | —         | Optional CUPS Location string (`lpadmin -L <location>`, e.g. `"Office"`). Omitted entirely when unset.                                                                                     |
-| `driver`       | `list(generic\|brlaser)?` | `generic` | PPD driver used at registration. See [Printer driver](#printer-driver) below.                                                                                                              |
-| `driver_model` | `str?`                    | —         | Required when `driver: brlaser`. Search term matched against `lpinfo -m` to find the exact PPD (e.g. `"MFC-7460DN"`).                                                                      |
-| `presets`      | `str?`                    | —         | Optional AirPrint print presets bundling this printer's own PPD option/choice pairs into named entries iOS's print sheet shows as a picker. See [Printer presets](#printer-presets) below. |
+| Field          | Type                      | Default   | Description                                                                                                           |
+| -------------- | ------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `name`         | `str`                     | —         | Printer queue name registered with CUPS (`lpadmin -p <name>`)                                                         |
+| `uri`          | `str`                     | —         | Device URI CUPS uses to reach the printer. See [Supported URI schemes](#supported-uri-schemes) below                  |
+| `enabled`      | `bool?`                   | `true`    | Whether this printer entry is registered at startup                                                                   |
+| `location`     | `str?`                    | —         | Optional CUPS Location string (`lpadmin -L <location>`, e.g. `"Office"`). Omitted entirely when unset.                |
+| `driver`       | `list(generic\|brlaser)?` | `generic` | PPD driver used at registration. See [Printer driver](#printer-driver) below.                                         |
+| `driver_model` | `str?`                    | —         | Required when `driver: brlaser`. Search term matched against `lpinfo -m` to find the exact PPD (e.g. `"MFC-7460DN"`). |
 
 ### Supported URI schemes
 
@@ -72,39 +72,67 @@ printers:
   `lpinfo -m`'s output. If the term matches zero or more than one brlaser PPD, that printer is skipped (logged as a
   `WARNING`) rather than guessed — see brlaser's own project page for the full list of supported models.
 
-### Printer presets
+## Printer Presets
 
-`presets` (optional) declares named AirPrint print presets for a printer, using Apple's `*APPrinterPreset` PPD extension
-(see [cups.org's PPD extensions spec](https://www.cups.org/doc/spec-ppd.html)). Each preset bundles one or more of that
+`printer_presets` (optional, default `[]`) is a TOP-LEVEL list of objects — a sibling of `printers`, not nested inside
+it — declaring named AirPrint print presets, using Apple's `*APPrinterPreset` PPD extension (see
+[cups.org's PPD extensions spec](https://www.cups.org/doc/spec-ppd.html)). Each preset bundles one or more of a
 printer's OWN existing PPD option/choice pairs (e.g. Duplex + Resolution) into a single named entry iOS's print sheet
 shows as a "Preset"/"Vorlage" picker — instead of separate Duplex/Resolution controls nested under "Optionen".
 
-Format: a single string of semicolon-separated presets, each shaped `<display-name>|<Key1=Value1 Key2=Value2 ...>`:
+Each entry is an object with three fields:
+
+| Field     | Type  | Description                                                                                     |
+| --------- | ----- | ----------------------------------------------------------------------------------------------- |
+| `printer` | `str` | Foreign key — must match one of the configured `printers[].name` values                         |
+| `name`    | `str` | Display name shown in iOS's print sheet preset picker                                           |
+| `options` | `str` | Space-separated `Key=Value` tokens bundling that printer's own existing PPD option/choice pairs |
 
 ```yaml
+printer_presets:
+  - printer: "Brother-MFC-7460DN"
+    name: "Duplex Fein"
+    options: "Duplex=DuplexNoTumble Resolution=1200x600dpi"
+  - printer: "Brother-MFC-7460DN"
+    name: "Entwurf"
+    options: "Duplex=None Resolution=600dpi"
+
 printers:
   - name: "Brother-MFC-7460DN"
     uri: "socket://192.168.178.44:9100"
     driver: "brlaser"
     driver_model: "MFC-7460DN"
-    presets: "Duplex Fein|Duplex=DuplexNoTumble Resolution=1200x600dpi;Entwurf|Duplex=None Resolution=600dpi"
 ```
 
-**Discovering valid Key/Value pairs:** run `lpoptions -p <printer-name> -l` against the running add-on — each line is
+**Discovering valid Key/Value pairs:** run `lpoptions -p <printer-name> -l` against the running add-on (the same command
+the [duplex design note](#design-notes) already points operators at) — each line is
 `Keyword/Display Text: choice1 *default-choice choice2 ...`; use the `Keyword` and one of its `choice` values as one
 `Key=Value` token. Only reference option/choice pairs that already exist in THAT printer's own generated PPD — this
 add-on does not verify presets against the live PPD at generate time.
 
-**Why a flattened string, not a nested options list:** Home Assistant's add-on options schema micro-language caps nested
-list/dict depth at two (see the
-[add-on configuration docs](https://developers.home-assistant.io/docs/add-ons/configuration/)). `printers[]` is already
-a depth-two list-of-objects, so a `presets[]` list-of-objects nested inside one of its entries would be a third level
-and cannot be expressed in `schema:`.
+A `printer` value that does not match any configured `printers[].name` is logged as a `WARNING` at startup and never
+applied — it is not silently dropped, but it is also not a fatal error. Invalid `name`/`options` values (a malformed
+display name or an options token that doesn't look like `Key=Value`) are skipped individually, logged as a `WARNING`,
+and never affect sibling presets or that printer's own registration. Presets are injected into the printer's live PPD (a
+TEMP copy, never in place) and reloaded via `lpadmin -P` at every add-on start — idempotent across restarts, same as the
+rest of this add-on's generated configuration.
 
-Invalid presets (a malformed name or an options token that doesn't look like `Key=Value`) are skipped individually,
-logged as a `WARNING`, and never affect sibling presets or that printer's own registration. Presets are injected into
-the printer's live PPD (a TEMP copy, never in place) and reloaded via `lpadmin -P` at every add-on start — idempotent
-across restarts, same as the rest of this add-on's generated configuration.
+**Breaking change — replaces `printers[].presets` (0.1.0-9/0.1.0-10).** The earlier flattened
+`<name>|<Key=Value> ...;...` string field nested inside each `printers[]` entry is REMOVED entirely, not kept alongside
+this one. There is no automatic migration: an existing config using the old `printers[].presets` field must be rewritten
+into the new top-level `printer_presets` shape above. This is a deliberate replacement, not an oversight — the old
+flattened-string format already caused a real config mistake (a stray literal `"` pasted into the HA UI's YAML editor
+silently broke one preset's parsing), and the new object-based list gives a real, individually validated list UI
+instead.
+
+**Why a top-level list, not nested inside `printers[]`:** Home Assistant's add-on options schema micro-language caps
+nested list/dict depth at two (see the
+[add-on configuration docs](https://developers.home-assistant.io/docs/add-ons/configuration/)). `printers[]` is already
+a depth-two list-of-objects (list → object with scalar fields), so a `presets[]` list-of-objects nested inside one of
+its entries would be a third level and cannot be expressed in `schema:`. Hoisting presets to their own top-level list
+(`printer_presets[]`, a sibling of `printers[]`) keeps it at depth two itself (list → object with scalar
+`printer`/`name`/`options` fields), so it is fully schema-valid and gives a real, repeatable list UI in the HA options
+form — individually validated fields per row, not one big delimited string a user can mistype.
 
 ## Design notes
 
@@ -216,15 +244,18 @@ empty string would actively clear a location a user set manually via the web UI.
 `LOCATION_RE` (printable ASCII, no quotes/control characters) before use; an invalid value is skipped with a WARNING
 rather than aborting that printer's registration entirely.
 
-**AirPrint print presets via `*APPrinterPreset` (`printers[].presets`).** iOS's print sheet only shows individual
+**AirPrint print presets via `*APPrinterPreset` (top-level `printer_presets`).** iOS's print sheet only shows individual
 Duplex/Resolution/etc. controls nested under "Optionen" unless a printer's PPD declares named presets via Apple's
 `*APPrinterPreset` extension — neither brlaser's driver-generated PPDs nor the generic `sample.drv` PPD ship any.
-`generate_config.py`'s `build_preset_injection_snippet()` validates each configured preset (display name against
-`PRESET_NAME_RE`, every `Key=Value` options token against `PRESET_OPTION_TOKEN_RE`) and, for every printer with at least
-one valid preset, appends the resulting stanzas to a TEMP copy of that printer's live PPD and reloads it via
-`lpadmin -P` — never editing the live PPD in place, so this is idempotent across restarts exactly like the brlaser PPD
-resolution above. `presets` is a flattened string (`<name>|<Key=Value> ...;...`), not a nested options-schema list,
-because HA's schema micro-language caps list/dict nesting at depth two and `printers[]` already uses both levels.
+`generate_config.py`'s `group_presets_by_printer()` groups the top-level `printer_presets` option list by its `printer`
+foreign key before printer registration begins; `build_preset_injection_snippet()` then validates each grouped printer's
+presets (display name against `PRESET_NAME_RE`, every `Key=Value` options token against `PRESET_OPTION_TOKEN_RE`) and,
+for every printer with at least one valid preset, appends the resulting stanzas to a TEMP copy of that printer's live
+PPD and reloads it via `lpadmin -P` — never editing the live PPD in place, so this is idempotent across restarts exactly
+like the brlaser PPD resolution above. `printer_presets` is a TOP-LEVEL list of objects (a sibling of `printers[]`), not
+nested inside it, because HA's schema micro-language caps list/dict nesting at depth two and `printers[]` already uses
+both levels — see [Printer Presets](#printer-presets) above for the full rationale. This REPLACES the earlier flattened
+`printers[].presets` string field (0.1.0-9/0.1.0-10) entirely; there is no migration shim.
 
 **Generic PostScript over a raw socket connection can print a 1-page PDF as endless blank pages (`driver: brlaser`,
 D-14).** Discovered during the real physical AirPrint test on `haos-op3050-1`: a Brother MFC-7460DN, connected via

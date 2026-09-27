@@ -20,9 +20,9 @@ configure. The Avahi reflector's behavior is configurable via the `avahi_reflect
 - IPv6 mDNS resolution disabled by default (`avahi_use_ipv6: false`) — avoids resolving to an unreachable/unrouted IPv6
   ULA address for clients that can't use it
 - Multiple printers configurable from a single `printers` options list
-- Optional named AirPrint print presets per printer (`printers[].presets`) — bundles existing option/choice pairs (e.g.
-  Duplex + Resolution) into a single named entry iOS's print sheet shows as a picker, via Apple's `*APPrinterPreset` PPD
-  extension
+- Optional named AirPrint print presets via the top-level `printer_presets` list (each entry references a printer by
+  name) — bundles existing option/choice pairs (e.g. Duplex + Resolution) into a single named entry iOS's print sheet
+  shows as a picker, via Apple's `*APPrinterPreset` PPD extension
 
 ## Configuration
 
