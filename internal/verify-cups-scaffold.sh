@@ -30,8 +30,8 @@ cat > "${DATA_DIR}/options.json" <<'JSON'
   "admin_username": "verifyadmin",
   "admin_password": "verify-secret-pw",
   "printers": [
-    {"name": "testprinter", "uri": "ipp://192.0.2.10:631/ipp/print", "enabled": true, "location": "Office"},
-    {"name": "brlasertest", "uri": "socket://192.0.2.20:9100", "enabled": true, "driver": "brlaser", "driver_model": "MFC-7460DN"}
+    {"name": "testprinter", "uri": "ipp://192.0.2.10:631/ipp/print", "enabled": true, "location": "Office", "presets": "Draft Mode|PageSize=A4 Duplex=None;Bad Preset|Duplex=None Resolution="},
+    {"name": "brlasertest", "uri": "socket://192.0.2.20:9100", "enabled": true, "driver": "brlaser", "driver_model": "MFC-7460DN", "presets": "Duplex Fein|Duplex=DuplexNoTumble Resolution=1200x600dpi;Test Preset|Duplex=None Resolution=600dpi;Test  Preset|Duplex=DuplexTumble Resolution=600dpi"}
   ],
   "log_level": "info"
 }
@@ -265,6 +265,86 @@ else
 fi
 if echo "${BRLASER_PPD}" | grep -qi "sample.drv"; then
     red "   FAIL: brlasertest.ppd unexpectedly references the generic sample.drv PPD"
+    FAIL=1
+fi
+
+yellow "Checking AirPrint preset injection (printers[].presets)..."
+REGISTER_SCRIPT=$(docker exec "${CONTAINER_NAME}" cat /tmp/register-printers.sh)
+PRESET_LOGS=$(docker logs "${CONTAINER_NAME}" 2>&1)
+
+# Positive case: brlasertest's "Duplex Fein" preset survives validation and
+# is rendered into a *APPrinterPreset stanza with its Duplex/Resolution
+# *Key lines, plus a lpadmin -P reload call -- all inside the GENERATED
+# script (proves generate_config.py's own output).
+if echo "${REGISTER_SCRIPT}" | grep -qF '*APPrinterPreset duplex_fein/Duplex Fein: "'; then
+    green "   PASS: *APPrinterPreset stanza generated for 'Duplex Fein'"
+else
+    red "   FAIL: missing *APPrinterPreset stanza for 'Duplex Fein'"
+    FAIL=1
+fi
+if echo "${REGISTER_SCRIPT}" | grep -qF '*Duplex DuplexNoTumble' \
+    && echo "${REGISTER_SCRIPT}" | grep -qF '*Resolution 1200x600dpi'; then
+    green "   PASS: preset option lines present (*Duplex/*Resolution)"
+else
+    red "   FAIL: missing preset *Duplex/*Resolution option lines"
+    FAIL=1
+fi
+if echo "${REGISTER_SCRIPT}" | grep -qE 'lpadmin -p brlasertest -P '; then
+    green "   PASS: lpadmin -P reload call present for brlasertest"
+else
+    red "   FAIL: missing lpadmin -P reload call for brlasertest"
+    FAIL=1
+fi
+
+# Slug collision: "Test Preset" and "Test  Preset" (double space) sanitize
+# to the same base slug -- the second must get a de-duplicated _2 suffix,
+# never silently overwrite or drop the first.
+if echo "${REGISTER_SCRIPT}" | grep -qF '*APPrinterPreset test_preset/Test Preset: "' \
+    && echo "${REGISTER_SCRIPT}" | grep -qF '*APPrinterPreset test_preset_2/Test  Preset: "'; then
+    green "   PASS: slug collision de-duplicated (test_preset / test_preset_2)"
+else
+    red "   FAIL: slug collision not de-duplicated as expected"
+    FAIL=1
+fi
+
+# Negative case: testprinter's "Bad Preset" has an invalid options token
+# (Resolution= with no value) and must be skipped entirely -- its sibling
+# "Draft Mode" preset must still register, proving one bad preset does not
+# take down the others, and a WARNING is logged.
+if echo "${REGISTER_SCRIPT}" | grep -qF '*APPrinterPreset draft_mode/Draft Mode: "'; then
+    green "   PASS: valid sibling preset 'Draft Mode' still registered"
+else
+    red "   FAIL: 'Draft Mode' preset missing -- a sibling invalid preset should not affect it"
+    FAIL=1
+fi
+if echo "${REGISTER_SCRIPT}" | grep -qF 'Bad Preset'; then
+    red "   FAIL: invalid 'Bad Preset' (malformed options token) was NOT skipped from the generated script"
+    FAIL=1
+else
+    green "   PASS: invalid 'Bad Preset' skipped from the generated script"
+fi
+if echo "${PRESET_LOGS}" | grep -qF "invalid or empty options"; then
+    green "   PASS: WARNING logged for the skipped invalid preset"
+else
+    red "   FAIL: no WARNING logged for the skipped invalid preset"
+    FAIL=1
+fi
+
+# End-to-end proof: the live PPD files on disk actually carry the injected
+# stanzas after lpadmin -P reloaded them -- not just present in the
+# generated script, but proven to have actually run.
+LIVE_BRLASER_PPD="${BRLASER_PPD}"
+if echo "${LIVE_BRLASER_PPD}" | grep -qF '*APPrinterPreset duplex_fein/Duplex Fein: "'; then
+    green "   PASS: brlasertest.ppd carries the injected preset stanza on disk"
+else
+    red "   FAIL: brlasertest.ppd does not carry the injected preset stanza"
+    FAIL=1
+fi
+LIVE_GENERIC_PPD=$(docker exec "${CONTAINER_NAME}" cat /etc/cups/ppd/testprinter.ppd 2>/dev/null || true)
+if echo "${LIVE_GENERIC_PPD}" | grep -qF '*APPrinterPreset draft_mode/Draft Mode: "'; then
+    green "   PASS: testprinter.ppd carries the injected preset stanza on disk"
+else
+    red "   FAIL: testprinter.ppd does not carry the injected preset stanza"
     FAIL=1
 fi
 
