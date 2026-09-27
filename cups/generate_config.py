@@ -40,27 +40,40 @@ Reads /data/options.json and generates:
     behavior; `brlaser` defers to a runtime `lpinfo -m` lookup inside the
     generated script itself (see `build_brlaser_registration_snippet`) for
     Brother monochrome laser/LED printers with no real PostScript support.
-    Each entry's optional `presets` field injects Apple's AirPrint PPD
-    extension `*APPrinterPreset <slug>/<display-name>: "..." *End` stanzas
-    (see cups.org/doc/spec-ppd.html) into that printer's live PPD after its
-    own registration line above -- bundling one or more of that printer's
-    OWN already-existing PPD option/choice pairs (e.g. Duplex + Resolution)
-    into a single named entry iOS's print sheet shows as a "Preset"/
-    "Vorlage" list, instead of separate Duplex/Resolution controls nested
-    under "Optionen". `presets` is a flattened `<name>|<Key=Value> ...;...`
-    string, not a nested options-schema list -- HA's add-on options schema
-    micro-language caps list/dict nesting at depth two
+    A NEW top-level `printer_presets` list of objects (a sibling of
+    `printers[]`, not nested inside it) lets an operator declare named
+    AirPrint print presets per printer: each entry is `{printer, name,
+    options}`, where `printer` is a foreign-key string matching one of
+    the configured `printers[].name` values. `group_presets_by_printer()`
+    groups these top-level entries by their `printer` key before this
+    loop runs, and `build_preset_injection_snippet()` (see its docstring)
+    validates and renders each grouped printer's presets into Apple's
+    AirPrint PPD extension `*APPrinterPreset <slug>/<display-name>: "..."
+    *End` stanzas (see cups.org/doc/spec-ppd.html), injected into that
+    printer's live PPD after its own registration line above -- bundling
+    one or more of that printer's OWN already-existing PPD option/choice
+    pairs (e.g. Duplex + Resolution) into a single named entry iOS's
+    print sheet shows as a "Preset"/"Vorlage" list, instead of separate
+    Duplex/Resolution controls nested under "Optionen". `printer_presets`
+    is hoisted to a TOP-LEVEL list rather than nested inside `printers[]`
+    because HA's add-on options schema micro-language caps list/dict
+    nesting at depth two
     (developers.home-assistant.io/docs/add-ons/configuration), and
-    `printers[]` is already a depth-two list-of-objects, so a `presets[]`
-    list-of-objects nested inside it would be a third level and cannot be
-    expressed in `schema:` (see `build_preset_injection_snippet` for the
-    parser). Injection always operates on a TEMP copy of the printer's
-    CURRENT on-disk PPD (`cp` then `cat >>` then `lpadmin -P`, never
-    editing `/etc/cups/ppd/<name>.ppd` in place), so this is idempotent
-    across restarts exactly like the brlaser PPD resolution above: every
-    start first (re)generates a fresh, preset-free PPD for that printer,
-    and only then does this step append presets to that fresh copy --
-    never compounding duplicate stanzas across restarts.
+    `printers[]` is already a depth-two list-of-objects -- a nested
+    `presets[]` list-of-objects would be a third level and cannot be
+    expressed in `schema:`. A top-level list of objects is itself only
+    depth-two (list -> object with scalar fields), so `printer_presets`
+    is fully schema-valid and gives a real, repeatable list UI in the HA
+    options form. This REPLACES the earlier flattened `printers[].presets`
+    string field (shipped in 0.1.0-9/0.1.0-10) entirely -- a deliberate
+    breaking change, no migration shim. Injection always operates on a
+    TEMP copy of the printer's CURRENT on-disk PPD (`cp` then `cat >>`
+    then `lpadmin -P`, never editing `/etc/cups/ppd/<name>.ppd` in
+    place), so this is idempotent across restarts exactly like the
+    brlaser PPD resolution above: every start first (re)generates a
+    fresh, preset-free PPD for that printer, and only then does this
+    step append presets to that fresh copy -- never compounding
+    duplicate stanzas across restarts.
   - /tmp/fixup-printer-uuids.sh: present ONLY when at least one printer
     passed build_printer_registration()'s own validation gates -- patches
     each such printer's `UUID urn:uuid:...` line in the LIVE
@@ -473,41 +486,7 @@ def slugify_preset_id(name: str, used_slugs: set[str]) -> str:
     return slug
 
 
-def _parse_presets_field(raw: str) -> list[tuple[str, str]]:
-    """Split a printers[].presets flattened string into (name, options) pairs.
-
-    Format: semicolon-separated preset entries, each `<name>|<options>` --
-    see PRESET_NAME_RE/PRESET_OPTION_TOKEN_RE's docstrings above for why
-    `|` and `;` are safe delimiters (neither character is in either
-    regex's allowed charset, so a VALID name/options value can never
-    itself contain one). This flattened shape is a deliberate fallback:
-    HA's add-on options schema micro-language caps nested list/dict depth
-    at two (developers.home-assistant.io/docs/add-ons/configuration/) --
-    printers[] is already a depth-two list-of-objects, so a nested
-    presets[] list-of-objects would be a third level and cannot be
-    expressed in `schema:`. Returns raw, UNVALIDATED pairs -- callers
-    validate each half with PRESET_NAME_RE/PRESET_OPTION_TOKEN_RE. An
-    entry with no `|` (no options half at all) is skipped here directly
-    with a WARNING, since there is no options string left to validate.
-    """
-    pairs: list[tuple[str, str]] = []
-    for chunk in raw.split(";"):
-        chunk = chunk.strip()
-        if not chunk:
-            continue
-        if "|" not in chunk:
-            print(
-                f"WARNING: skipping malformed presets entry {chunk!r} -- expected "
-                "'<name>|<Key=Value ...>'",
-                flush=True,
-            )
-            continue
-        preset_name, _, preset_options = chunk.partition("|")
-        pairs.append((preset_name.strip(), preset_options.strip()))
-    return pairs
-
-
-def build_preset_injection_snippet(name: str, presets_raw: str) -> str | None:
+def build_preset_injection_snippet(name: str, presets: list[tuple[str, str]]) -> str | None:
     """Render sh that injects validated *APPrinterPreset stanzas into a
     printer's live PPD and reloads it into cupsd.
 
@@ -520,8 +499,10 @@ def build_preset_injection_snippet(name: str, presets_raw: str) -> str | None:
     brlaser's own driver-generated PPDs (and the generic sample.drv PPD)
     ship with no such stanzas.
 
-    Each preset in `presets_raw` (see _parse_presets_field for the
-    flattened format) is validated independently: an invalid `name`
+    `presets` is a list of already-extracted `(preset_name, preset_options)`
+    pairs for THIS ONE printer, pre-filtered/grouped by the caller
+    (`group_presets_by_printer`) -- no flattened-string parsing happens
+    here anymore. Each pair is validated independently: an invalid `name`
     (PRESET_NAME_RE) or any invalid options token (PRESET_OPTION_TOKEN_RE)
     skips THAT preset alone (WARNING, never a partial stanza) --
     validation failure on one preset never affects its siblings or the
@@ -549,11 +530,10 @@ def build_preset_injection_snippet(name: str, presets_raw: str) -> str | None:
     posture); removes the temp file; logs one INFO line naming the
     registered slugs, or WARNINGs for skipped presets.
 
-    Returns None -- writing nothing -- when `presets_raw` is empty/absent,
+    Returns None -- writing nothing -- when `presets` is empty/absent,
     or when every preset in it failed validation.
     """
-    presets_raw = str(presets_raw or "").strip()
-    if not presets_raw:
+    if not presets:
         return None
 
     quoted_name = shlex.quote(name)
@@ -561,7 +541,7 @@ def build_preset_injection_snippet(name: str, presets_raw: str) -> str | None:
     stanza_blocks: list[str] = []
     registered_slugs: list[str] = []
 
-    for preset_name, preset_options in _parse_presets_field(presets_raw):
+    for preset_name, preset_options in presets:
         if not PRESET_NAME_RE.match(preset_name):
             print(
                 f"WARNING: skipping preset for printer '{name}' -- invalid name "
@@ -610,6 +590,49 @@ def build_preset_injection_snippet(name: str, presets_raw: str) -> str | None:
         f'{name}" >&2\n'
         f"fi"
     )
+
+
+def group_presets_by_printer(options: dict) -> dict[str, list[tuple[str, str]]]:
+    """Group the top-level `printer_presets` option list by its `printer` FK.
+
+    Reads `options.get("printer_presets") or []` and, for each entry,
+    skips with a WARNING (mirroring this file's existing
+    `if not isinstance(entry, dict):` skip pattern used for `printers[]`
+    entries) when the entry itself is not a dict, or when
+    `printer`/`name`/`options` are missing or not strings. Surviving
+    entries are appended as `(str(entry["name"]), str(entry["options"]))`
+    pairs into a dict keyed by `str(entry["printer"])`.
+
+    Does NOT validate name/options against PRESET_NAME_RE/
+    PRESET_OPTION_TOKEN_RE itself -- build_preset_injection_snippet()
+    still does that per-pair validation exactly as before; this
+    function's only job is grouping raw pairs by their `printer`
+    foreign key. A `printer` value that does not match any CURRENTLY
+    CONFIGURED printer name is not an error at grouping time -- this
+    function has no visibility into which printer names are valid, it
+    just groups by whatever string is there. build_printer_registration()
+    naturally only ever looks up names it is actually iterating over, so
+    an unmatched entry simply never gets consumed here -- main() surfaces
+    a WARNING for that case separately (see main()'s own printer_presets
+    FK check).
+    """
+    grouped: dict[str, list[tuple[str, str]]] = {}
+    for entry in options.get("printer_presets") or []:
+        if not isinstance(entry, dict):
+            print(f"WARNING: skipping non-object printer_presets[] entry: {entry!r}", flush=True)
+            continue
+        printer = entry.get("printer")
+        name = entry.get("name")
+        preset_options = entry.get("options")
+        if not isinstance(printer, str) or not isinstance(name, str) or not isinstance(preset_options, str):
+            print(
+                f"WARNING: skipping printer_presets[] entry with missing/non-string "
+                f"printer/name/options: {entry!r}",
+                flush=True,
+            )
+            continue
+        grouped.setdefault(printer, []).append((str(name), str(preset_options)))
+    return grouped
 
 
 def build_cupsd_conf(iface: str | None, options: dict) -> str | None:
@@ -972,6 +995,7 @@ def build_printer_registration(options: dict) -> tuple[str, list[str]]:
     printers = options.get("printers") or []
     lines = ["#!/bin/sh", "set -e", ""]
     registered_names: list[str] = []
+    presets_by_printer = group_presets_by_printer(options)
 
     for entry in printers:
         if not isinstance(entry, dict):
@@ -1039,7 +1063,7 @@ def build_printer_registration(options: dict) -> tuple[str, list[str]]:
                 continue
             lines.append(build_brlaser_registration_snippet(name, uri, driver_model, location))
             registered_names.append(name)
-            preset_snippet = build_preset_injection_snippet(name, str(entry.get("presets", "") or ""))
+            preset_snippet = build_preset_injection_snippet(name, presets_by_printer.get(name, []))
             if preset_snippet is not None:
                 lines.append(preset_snippet)
             continue
@@ -1064,7 +1088,7 @@ def build_printer_registration(options: dict) -> tuple[str, list[str]]:
         lines.append(" ".join(shlex.quote(a) for a in argv))
         lines.append(f'echo "registered printer: {name}"')
         registered_names.append(name)
-        preset_snippet = build_preset_injection_snippet(name, str(entry.get("presets", "") or ""))
+        preset_snippet = build_preset_injection_snippet(name, presets_by_printer.get(name, []))
         if preset_snippet is not None:
             lines.append(preset_snippet)
 
@@ -1361,6 +1385,15 @@ def main() -> None:
     script_path.write_text(register_script)
     script_path.chmod(0o755)
     print(f"Config written to {REGISTER_SCRIPT_PATH}", flush=True)
+
+    presets_by_printer = group_presets_by_printer(options)
+    for printer_name in presets_by_printer:
+        if printer_name not in registered_printer_names:
+            print(
+                f"WARNING: printer_presets entry references printer {printer_name!r}, which is not "
+                "a currently configured/registered printer -- these presets will never be applied",
+                flush=True,
+            )
 
     uuid_fixup_script = build_printer_uuid_fixup_script(registered_printer_names)
     if uuid_fixup_script is not None:
