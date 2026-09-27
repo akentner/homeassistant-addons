@@ -247,6 +247,29 @@ a literal, case-insensitive substring match of the operator-supplied `driver_mod
 live output; zero or more than one match is a hard skip with a `WARNING`, never a silent guess. For the MFC-7460DN
 specifically, `driver_model: "MFC-7460DN"` resolves to `drv:///brlaser.drv/br7460d.ppd`.
 
+**Printer UUIDs are stable across add-on restarts via a two-phase boot.** This add-on's `/etc/cups/` is not persisted
+outside `/data`, so `cupsd` starts every single boot with a completely empty `printers.conf` — `lpadmin -m` therefore
+creates every configured printer "fresh" from `cupsd`'s point of view, including a brand-new random `printer-uuid`, on
+EVERY restart (confirmed live on `haos-op3050-1` across three consecutive restarts: `a12d7b3a-...` -> `01087e95-...` ->
+`740a4011-...`). iOS/AirPrint caches discovered printers keyed by UUID, so enough restarts leave the user with multiple
+"ghost" duplicate entries for the same printer name in iOS's print sheet.
+`lpadmin -p <name> -o printer-uuid=urn:uuid:<value>` was tried first and confirmed REJECTED — tested live against this
+add-on's own running CUPS v2.4.19, `lpadmin` exited `0` but the on-disk UUID in `printers.conf` was completely unchanged
+afterward (`printer-uuid` is also absent from `lpadmin`'s own documented `-o` attribute list). A live `printers.conf`
+edit followed by a `SIGHUP` reload was also deliberately NOT used: the file's own generated header says, verbatim, "DO
+NOT EDIT THIS FILE WHEN CUPSD IS RUNNING", and a real GitHub issue (`apple/cups#2590`) documents the corruption/crash
+risk of ignoring that warning. Instead, `generate_config.py`'s `compute_stable_printer_uuid()` derives a deterministic
+`uuid.uuid5()` value from each printer's own `name` (a fixed, hardcoded namespace constant — same name always derives
+the same UUID, on every host, forever; a renamed printer correctly gets a new identity), and
+`build_printer_uuid_fixup_script()` renders `/tmp/fixup-printer-uuids.sh`, which patches ONLY the target printer's own
+`UUID urn:uuid:...` line inside its own `<Printer NAME>...</Printer>` stanza — provably scoped, never touching a sibling
+printer's UUID or any other directive. `run.sh` runs this ONLY while `cupsd` is fully stopped: it gracefully stops the
+already-running `cupsd` (the same `kill -TERM`/`wait` mechanism its own shutdown trap uses), runs the fixup script,
+starts a fresh `cupsd`, and re-runs the same readiness-polling wait used on the first boot — printer registration and
+preset injection are NOT re-run a second time, since `printers.conf`/PPDs are otherwise untouched by this cycle. This
+adds roughly one `cupsd` start/stop/readiness-wait cycle to every single container boot — an accepted, one-time cost for
+a stable, non-flickering AirPrint identity across restarts.
+
 ## Migrating from f1c878cb_cups
 
 See the rollout runbook — filled in by a later plan.
