@@ -7,13 +7,26 @@ FROM $BUILD_FROM
 #   generated avahi-daemon.conf, not in package selection)
 # dbus: required by avahi-daemon (system bus)
 # python3: runs generate_config.py (stdlib json only, no extra packages needed)
+# brlaser: CUPS driver for Brother monochrome laser/LED printers
+#   (https://github.com/pdewacht/brlaser, packaged in Alpine's community repo,
+#   confirmed present as brlaser-6.2.8-r0 for this image's Alpine 3.24 base).
+#   Root cause this fixes: raw `socket://` (JetDirect) printers with no real
+#   PostScript support -- e.g. a Brother MFC-7460DN -- were registered with
+#   `drv:///sample.drv/generic.ppd` (generic PostScript). Sent over a raw
+#   socket with no format negotiation, the printer cannot parse the PS bytes
+#   and cycles form-feeds, printing a 1-page PDF as endless blank pages.
+#   brlaser ships a real PPD generator for these printers instead. Installed
+#   unconditionally (small package, no downside for installs that leave the
+#   per-printer `driver` option at its default `generic`) -- see
+#   `printers[].driver` in cups/config.yaml and cups/DOCS.md.
 RUN apk add --no-cache \
     cups \
     cups-filters \
     avahi \
     avahi-tools \
     dbus \
-    python3
+    python3 \
+    brlaser
 
 # Preserve the stock cupsd.conf exactly as shipped by the cups package, before
 # anything ever patches it. generate_config.py's build_cupsd_conf() always

@@ -28,7 +28,8 @@ cat > "${DATA_DIR}/options.json" <<'JSON'
   "avahi_use_ipv6": false,
   "server_aliases": "cups-verify.example.ts.net",
   "printers": [
-    {"name": "testprinter", "uri": "ipp://192.0.2.10:631/ipp/print", "enabled": true, "location": "Office"}
+    {"name": "testprinter", "uri": "ipp://192.0.2.10:631/ipp/print", "enabled": true, "location": "Office"},
+    {"name": "brlasertest", "uri": "socket://192.0.2.20:9100", "enabled": true, "driver": "brlaser", "driver_model": "MFC-7460DN"}
   ],
   "log_level": "info"
 }
@@ -87,7 +88,20 @@ fi
 green "cupsd is ready"
 
 # Give run.sh a moment to finish printer registration after cupsd came up.
-sleep 2
+# Polls rather than a fixed sleep: run.sh's own registration retry loop (up
+# to 5 attempts x 1s on a transient lpadmin connection error -- observed here
+# once the brlaser fixture below added a second, slower registration pass
+# doing its own live `lpinfo -m` query) can outlast a short fixed sleep.
+REG_SETTLED=0
+for _ in $(seq 1 15); do
+    if docker exec "${CONTAINER_NAME}" lpstat -v testprinter >/dev/null 2>&1 \
+        && docker exec "${CONTAINER_NAME}" lpstat -v brlasertest >/dev/null 2>&1; then
+        REG_SETTLED=1
+        break
+    fi
+    sleep 1
+done
+[[ "${REG_SETTLED}" == "1" ]] || yellow "   NOTE: printer registration did not settle within 15s -- checks below may still fail"
 
 FAIL=0
 
@@ -175,6 +189,29 @@ if docker exec "${CONTAINER_NAME}" lpstat -l -p testprinter 2>/dev/null | grep -
 else
     red "   FAIL: testprinter does not show 'Location: Office'"
     docker exec "${CONTAINER_NAME}" lpstat -l -p testprinter 2>&1 || true
+    FAIL=1
+fi
+
+yellow "Checking brlaser driver registration (D-14)..."
+if docker exec "${CONTAINER_NAME}" lpstat -v brlasertest 2>/dev/null | grep -q "socket://192.0.2.20:9100"; then
+    green "   PASS: brlasertest registered with the configured device uri"
+else
+    red "   FAIL: brlasertest not registered"
+    docker exec "${CONTAINER_NAME}" lpstat -v 2>&1 || true
+    FAIL=1
+fi
+# The strongest proof this printer is bound to the resolved brlaser PPD (not
+# the generic.ppd fallback) is the PPD file CUPS wrote for it -- it must
+# reference brlaser's own filter/NickName, never the generic driver.
+BRLASER_PPD=$(docker exec "${CONTAINER_NAME}" cat /etc/cups/ppd/brlasertest.ppd 2>/dev/null || true)
+if echo "${BRLASER_PPD}" | grep -qi "rastertobrlaser"; then
+    green "   PASS: brlasertest.ppd references the brlaser filter (rastertobrlaser)"
+else
+    red "   FAIL: brlasertest.ppd does not reference brlaser -- may have registered with generic.ppd instead"
+    FAIL=1
+fi
+if echo "${BRLASER_PPD}" | grep -qi "sample.drv"; then
+    red "   FAIL: brlasertest.ppd unexpectedly references the generic sample.drv PPD"
     FAIL=1
 fi
 

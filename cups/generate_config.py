@@ -33,7 +33,11 @@ Reads /data/options.json and generates:
     a malformed name or uri cannot inject extra shell commands (T-21-01). Each
     entry's optional `location` field is passed through as `-L <location>`
     when present, letting CUPS show a human-readable per-printer location
-    string (e.g. "Office").
+    string (e.g. "Office"). An entry's `driver` field (D-14) selects the PPD:
+    `generic` (default) keeps the static `drv:///sample.drv/generic.ppd`
+    behavior; `brlaser` defers to a runtime `lpinfo -m` lookup inside the
+    generated script itself (see `build_brlaser_registration_snippet`) for
+    Brother monochrome laser/LED printers with no real PostScript support.
 """
 
 import ipaddress
@@ -103,6 +107,24 @@ PROC_NET_ROUTE = "/proc/net/route"
 # shlex.quote, but this closes the door on control characters or values that
 # would otherwise render oddly in `lpstat -l`/the HA UI).
 LOCATION_RE = re.compile(r"^[A-Za-z0-9 ,.\-_/()]{1,127}$")
+
+# Per-printer driver selection (D-14 -- Brother MFC-7460DN blank-page bug).
+# "generic" (default, omitted field) preserves this add-on's original
+# behavior byte-for-byte; "brlaser" is for raw-socket-connected Brother
+# monochrome laser/LED printers with no real PostScript support (see
+# `build_brlaser_registration_snippet` for the root cause and why the PPD
+# lookup happens at runtime, not here).
+ALLOWED_DRIVERS = {"generic", "brlaser"}
+GENERIC_PPD = "drv:///sample.drv/generic.ppd"
+
+# Matches a `driver_model` search term (e.g. "MFC-7460DN"): the free-text
+# string an operator supplies to identify their printer's exact brlaser PPD
+# among `lpinfo -m`'s listing (see build_brlaser_registration_snippet).
+# Same conservative printable-ASCII-minus-quotes allowlist as LOCATION_RE --
+# this value is embedded into the generated register-printers.sh via
+# shlex.quote (T-21-01's no-interpolated-shell-string mitigation), this regex
+# is defense in depth against control characters/newlines.
+DRIVER_MODEL_RE = re.compile(r"^[A-Za-z0-9 ,.\-_/()]{1,127}$")
 
 # Tailscale's standard Linux interface name -- not configurable by the user
 # (Tailscale itself does not support renaming it), so this is a fixed check
@@ -532,6 +554,64 @@ def build_avahi_conf(options: dict) -> str:
     return "\n".join(lines)
 
 
+def build_brlaser_registration_snippet(name: str, uri: str, driver_model: str, location: str) -> str:
+    """Emit sh that resolves the exact brlaser PPD via `lpinfo -m` at
+    registration time, then registers the printer with it.
+
+    Root cause this fixes (a real physical AirPrint test on haos-op3050-1,
+    D-14): a Brother MFC-7460DN is connected via raw `socket://` (JetDirect,
+    port 9100) -- unlike IPP, a raw socket has no format-negotiation step, so
+    whatever bytes CUPS sends are what the printer gets. Registered with
+    `drv:///sample.drv/generic.ppd` (generic PostScript), a printer with no
+    real PostScript support cannot parse the PS byte stream and cycles
+    form-feeds -- a 1-page PDF prints as endless blank pages. brlaser
+    (github.com/pdewacht/brlaser, packaged for Alpine as `brlaser`) ships a
+    real PPD generator for Brother monochrome laser/LED printers, including
+    the MFC-7460DN.
+
+    Why this resolution happens HERE (in the generated shell script) and not
+    in generate_config.py's own Python code: `lpinfo -m` requires a LIVE
+    cupsd scheduler to answer -- confirmed empirically via a local `docker
+    run` against this add-on's own base image (brlaser installed, cupsd not
+    yet started: `lpinfo -m` fails with "Bad file descriptor"; cupsd started:
+    it lists every driver, e.g. `drv:///brlaser.drv/br7460d.ppd Brother
+    MFC-7460DN, using Owl-Maintain/brlaser v6.2.8`). generate_config.py itself
+    runs BEFORE cupsd starts (run.sh step 1), so this lookup cannot happen at
+    Python build time -- it is deferred into the generated
+    /tmp/register-printers.sh, which run.sh only executes after cupsd is
+    confirmed ready (step 6).
+
+    brlaser's own model-id strings (`br7460d`, `br7365d`, `br7360` with no
+    `d`, ...) are not a predictable function of the model name, so this never
+    hardcodes a guessed identifier: `driver_model` is a free-text search term
+    (e.g. "MFC-7460DN") the operator supplies in the add-on options, matched
+    with a literal (non-regex) case-insensitive substring search (`grep -iF`)
+    against the live `lpinfo -m` listing. Zero matches or more than one match
+    is a hard skip with a clear log message -- never a silent guess at which
+    PPD is "close enough".
+    """
+    quoted_model = shlex.quote(driver_model)
+    quoted_name = shlex.quote(name)
+    quoted_uri = shlex.quote(uri)
+    location_arg = f" -L {shlex.quote(location)}" if location else ""
+    return (
+        f'PPD_MATCH=$(lpinfo -m 2>/dev/null | grep -iF -- {quoted_model} || true)\n'
+        f'PPD_MATCH_COUNT=$(printf \'%s\\n\' "$PPD_MATCH" | grep -c . || true)\n'
+        f'if [ -z "$PPD_MATCH" ]; then\n'
+        f'  echo "WARNING: no brlaser PPD matched {quoted_model} for printer {quoted_name} -- '
+        f'skipping registration (is brlaser installed? try a shorter driver_model search term)" >&2\n'
+        f'elif [ "$PPD_MATCH_COUNT" -gt 1 ]; then\n'
+        f'  echo "WARNING: {quoted_model} matched more than one brlaser PPD for printer '
+        f'{quoted_name} -- refusing to guess, skipping registration. Matches:" >&2\n'
+        f'  printf \'%s\\n\' "$PPD_MATCH" >&2\n'
+        f'else\n'
+        f'  PPD_URI="${{PPD_MATCH%% *}}"\n'
+        f'  lpadmin -p {quoted_name} -v {quoted_uri} -E -m "$PPD_URI"{location_arg}\n'
+        f'  echo "registered printer: {name} (brlaser: $PPD_URI)"\n'
+        f'fi'
+    )
+
+
 def build_printer_registration(options: dict) -> str:
     """Render /tmp/register-printers.sh: one validated, quoted lpadmin call per entry.
 
@@ -543,6 +623,12 @@ def build_printer_registration(options: dict) -> str:
     `-L ""` would just clear any location a user might set later via the web
     UI. An invalid `location` value is skipped (with a WARNING) but does not
     abort registration of the rest of that printer's fields.
+
+    `driver` selects the PPD model used at registration (D-14): omitted or
+    `"generic"` (the default) preserves this add-on's original behavior
+    byte-for-byte -- `drv:///sample.drv/generic.ppd`. `"brlaser"` defers PPD
+    resolution into the generated script itself, see
+    `build_brlaser_registration_snippet`.
     """
     printers = options.get("printers") or []
     lines = ["#!/bin/sh", "set -e", ""]
@@ -576,29 +662,60 @@ def build_printer_registration(options: dict) -> str:
             )
             continue
 
-        # argv-array construction, never an interpolated shell string (T-21-01
-        # mitigation). `-m everywhere` was tried first (CUPS's driverless
-        # IPP-Everywhere model) but proved unavailable during the Task 2
-        # smoke test: it performs a live IPP capability query against the
-        # device AT REGISTRATION TIME, so any printer that happens to be
-        # powered off/unreachable when the add-on (re)starts fails to
-        # register at all -- defeating the point of a persistent print
-        # queue. `-m drv:///sample.drv/generic.ppd` (a static generic
-        # PostScript driver, CUPS's documented fallback model) registers the
-        # queue unconditionally; CUPS only contacts the device when a job is
-        # actually printed.
-        argv = ["lpadmin", "-p", name, "-v", uri, "-E", "-m", "drv:///sample.drv/generic.ppd"]
-
         location = str(entry.get("location", "") or "").strip()
-        if location:
-            if LOCATION_RE.match(location):
-                argv += ["-L", location]
-            else:
+        if location and not LOCATION_RE.match(location):
+            print(
+                f"WARNING: skipping location for printer '{name}' -- invalid value "
+                f"{location!r}, must match {LOCATION_RE.pattern}",
+                flush=True,
+            )
+            location = ""
+
+        driver = str(entry.get("driver", "generic") or "generic").strip().lower()
+        if driver not in ALLOWED_DRIVERS:
+            print(
+                f"WARNING: skipping printer '{name}' -- unknown driver {driver!r}, must be one "
+                f"of {sorted(ALLOWED_DRIVERS)}",
+                flush=True,
+            )
+            continue
+
+        if driver == "brlaser":
+            driver_model = str(entry.get("driver_model", "") or "").strip()
+            if not driver_model:
                 print(
-                    f"WARNING: skipping location for printer '{name}' -- invalid value "
-                    f"{location!r}, must match {LOCATION_RE.pattern}",
+                    f"WARNING: skipping printer '{name}' -- driver=brlaser requires "
+                    "driver_model (a search term matched against lpinfo -m output, e.g. "
+                    "'MFC-7460DN')",
                     flush=True,
                 )
+                continue
+            if not DRIVER_MODEL_RE.match(driver_model):
+                print(
+                    f"WARNING: skipping printer '{name}' -- invalid driver_model "
+                    f"{driver_model!r}, must match {DRIVER_MODEL_RE.pattern}",
+                    flush=True,
+                )
+                continue
+            lines.append(build_brlaser_registration_snippet(name, uri, driver_model, location))
+            continue
+
+        # driver == "generic": argv-array construction, never an interpolated
+        # shell string (T-21-01 mitigation). `-m everywhere` was tried first
+        # (CUPS's driverless IPP-Everywhere model) but proved unavailable
+        # during the Task 2 smoke test: it performs a live IPP capability
+        # query against the device AT REGISTRATION TIME, so any printer that
+        # happens to be powered off/unreachable when the add-on (re)starts
+        # fails to register at all -- defeating the point of a persistent
+        # print queue. `-m drv:///sample.drv/generic.ppd` (a static generic
+        # PostScript driver, CUPS's documented fallback model) registers the
+        # queue unconditionally; CUPS only contacts the device when a job is
+        # actually printed. (This is also the exact behavior D-14's
+        # `driver: brlaser` option exists to opt out of, for printers with no
+        # real PostScript support.)
+        argv = ["lpadmin", "-p", name, "-v", uri, "-E", "-m", GENERIC_PPD]
+        if location:
+            argv += ["-L", location]
 
         lines.append(" ".join(shlex.quote(a) for a in argv))
         lines.append(f'echo "registered printer: {name}"')

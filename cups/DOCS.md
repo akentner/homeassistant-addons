@@ -15,14 +15,16 @@ Add-on icon is the official CUPS project logo (github.com/apple/cups), used unde
 
 ## Printers
 
-Each entry in the `printers` list is an object with four fields:
+Each entry in the `printers` list is an object with six fields:
 
-| Field      | Type    | Default | Description                                                                                            |
-| ---------- | ------- | ------- | ------------------------------------------------------------------------------------------------------ |
-| `name`     | `str`   | —       | Printer queue name registered with CUPS (`lpadmin -p <name>`)                                          |
-| `uri`      | `str`   | —       | Device URI CUPS uses to reach the printer. See [Supported URI schemes](#supported-uri-schemes) below   |
-| `enabled`  | `bool?` | `true`  | Whether this printer entry is registered at startup                                                    |
-| `location` | `str?`  | —       | Optional CUPS Location string (`lpadmin -L <location>`, e.g. `"Office"`). Omitted entirely when unset. |
+| Field          | Type                      | Default   | Description                                                                                                           |
+| -------------- | ------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `name`         | `str`                     | —         | Printer queue name registered with CUPS (`lpadmin -p <name>`)                                                         |
+| `uri`          | `str`                     | —         | Device URI CUPS uses to reach the printer. See [Supported URI schemes](#supported-uri-schemes) below                  |
+| `enabled`      | `bool?`                   | `true`    | Whether this printer entry is registered at startup                                                                   |
+| `location`     | `str?`                    | —         | Optional CUPS Location string (`lpadmin -L <location>`, e.g. `"Office"`). Omitted entirely when unset.                |
+| `driver`       | `list(generic\|brlaser)?` | `generic` | PPD driver used at registration. See [Printer driver](#printer-driver) below.                                         |
+| `driver_model` | `str?`                    | —         | Required when `driver: brlaser`. Search term matched against `lpinfo -m` to find the exact PPD (e.g. `"MFC-7460DN"`). |
 
 ### Supported URI schemes
 
@@ -43,7 +45,29 @@ printers:
   - name: "usb-printer"
     uri: "usb://Acme/ModelX?serial=ABC123"
     enabled: false
+  - name: "Brother-MFC-7460DN"
+    uri: "socket://192.168.178.44:9100"
+    enabled: true
+    location: "Office"
+    driver: "brlaser"
+    driver_model: "MFC-7460DN"
 ```
+
+### Printer driver
+
+`driver` (default `generic`, omitted field) selects the PPD used to register a printer:
+
+- **`generic`** (default): `drv:///sample.drv/generic.ppd`, a static generic PostScript driver. Unchanged from this
+  add-on's original behavior — see [Generic driver, not driverless auto-detection](#design-notes) below for why this is
+  the default.
+- **`brlaser`**: uses the [brlaser](https://github.com/pdewacht/brlaser) CUPS driver, packaged for Alpine as
+  [`brlaser`](https://pkgs.alpinelinux.org/package/edge/community/x86_64/brlaser) (installed unconditionally in this
+  add-on's image). Required for Brother monochrome laser/LED printers with no real PostScript support, connected via a
+  raw socket (JetDirect) URI. See [Generic PostScript over a raw socket](#design-notes) below for the exact bug this
+  fixes. `driver_model` must be set to a search term (e.g. `"MFC-7460DN"`, a substring of the printer's model name) —
+  the exact PPD is resolved at add-on startup by matching this term (case-insensitive, literal substring) against
+  `lpinfo -m`'s output. If the term matches zero or more than one brlaser PPD, that printer is skipped (logged as a
+  `WARNING`) rather than guessed — see brlaser's own project page for the full list of supported models.
 
 ## Design notes
 
@@ -131,6 +155,27 @@ when `location` is present and non-empty -- an empty/omitted value is skipped en
 empty string would actively clear a location a user set manually via the web UI. The value is validated against
 `LOCATION_RE` (printable ASCII, no quotes/control characters) before use; an invalid value is skipped with a WARNING
 rather than aborting that printer's registration entirely.
+
+**Generic PostScript over a raw socket connection can print a 1-page PDF as endless blank pages (`driver: brlaser`,
+D-14).** Discovered during the real physical AirPrint test on `haos-op3050-1`: a Brother MFC-7460DN, connected via
+`socket://192.168.178.44:9100` (a JetDirect port, not IPP), was registered with the `generic` driver above
+(`drv:///sample.drv/generic.ppd`). Unlike IPP, a raw socket connection has no format- negotiation step — whatever bytes
+CUPS sends are exactly what the printer receives. The MFC-7460DN has no genuine PostScript interpreter, so the generic
+PostScript byte stream is misinterpreted as raw print data; the printer cycles form-feeds, and a 1-page PDF comes out as
+an endless stream of blank pages. [brlaser](https://github.com/pdewacht/brlaser) is an open-source CUPS driver
+purpose-built for Brother monochrome laser/LED printers (the MFC-7460DN is explicitly on its supported list) and is
+packaged for Alpine as [`brlaser`](https://pkgs.alpinelinux.org/package/edge/community/x86_64/brlaser) — confirmed
+available for this add-on's exact base image (`ghcr.io/home-assistant/amd64-base:3.24`, Alpine 3.24, `brlaser-6.2.8-r0`)
+and installed unconditionally in the Dockerfile (small package, no cost for installs that leave every printer at the
+`generic` default). brlaser's own model-id strings inside its generated PPD list (e.g. `br7460d`, `br7365d`, `br7360`
+with no `d` suffix at all) are not a predictable function of the model name — empirically confirmed by installing
+`brlaser` into this add-on's own base image locally and running `lpinfo -m` against a live `cupsd` (`lpinfo -m` requires
+a running scheduler to answer at all; it cannot be queried at `generate_config.py`'s own build time, before `cupsd`
+starts — see `build_printer_registration`/`build_brlaser_registration_snippet` in `cups/generate_config.py`). Rather
+than hardcode a guessed identifier, the exact PPD is resolved at add-on startup — after `cupsd` is confirmed ready — by
+a literal, case-insensitive substring match of the operator-supplied `driver_model` search term against `lpinfo -m`'s
+live output; zero or more than one match is a hard skip with a `WARNING`, never a silent guess. For the MFC-7460DN
+specifically, `driver_model: "MFC-7460DN"` resolves to `drv:///brlaser.drv/br7460d.ppd`.
 
 ## Migrating from f1c878cb_cups
 
