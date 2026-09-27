@@ -27,6 +27,8 @@ cat > "${DATA_DIR}/options.json" <<'JSON'
   "avahi_hostname": "cups-verify",
   "avahi_use_ipv6": false,
   "server_aliases": "cups-verify.example.ts.net",
+  "admin_username": "verifyadmin",
+  "admin_password": "verify-secret-pw",
   "printers": [
     {"name": "testprinter", "uri": "ipp://192.0.2.10:631/ipp/print", "enabled": true, "location": "Office"},
     {"name": "brlasertest", "uri": "socket://192.0.2.20:9100", "enabled": true, "driver": "brlaser", "driver_model": "MFC-7460DN"}
@@ -160,6 +162,57 @@ if echo "${CUPSD_CONF}" | grep -qF "ServerAlias cups-verify.example.ts.net"; the
 else
     red "   FAIL: missing 'ServerAlias cups-verify.example.ts.net' -- cupsd would reject that Host header with 400"
     FAIL=1
+fi
+
+yellow "Checking <Location /admin> gained the same Allow from lines as <Location /> (web admin fix)..."
+ROOT_ALLOW=$(echo "${CUPSD_CONF}" | grep -A5 '<Location />' | grep -E '^\s*Allow from ' || true)
+ADMIN_ALLOW=$(echo "${CUPSD_CONF}" | grep -A5 '<Location /admin>' | grep -E '^\s*Allow from ' || true)
+if [[ -n "${ROOT_ALLOW}" && "${ROOT_ALLOW}" == "${ADMIN_ALLOW}" ]]; then
+    green "   PASS: <Location /admin> carries the same Allow from line(s) as <Location />"
+else
+    red "   FAIL: <Location /admin> Allow from lines do not match <Location />'s"
+    echo "--- <Location /> Allow lines ---"; echo "${ROOT_ALLOW}"
+    echo "--- <Location /admin> Allow lines ---"; echo "${ADMIN_ALLOW}"
+    FAIL=1
+fi
+if echo "${CUPSD_CONF}" | grep -A5 '<Location /admin/conf>' | grep -q 'Allow from'; then
+    red "   FAIL: <Location /admin/conf> was unexpectedly widened -- must stay @SYSTEM-only"
+    FAIL=1
+else
+    green "   PASS: <Location /admin/conf> untouched (no Allow from line)"
+fi
+if echo "${CUPSD_CONF}" | grep -A5 '<Location /admin/log>' | grep -q 'Allow from'; then
+    red "   FAIL: <Location /admin/log> was unexpectedly widened -- must stay @SYSTEM-only"
+    FAIL=1
+else
+    green "   PASS: <Location /admin/log> untouched (no Allow from line)"
+fi
+
+yellow "Checking admin account provisioning (admin_username/admin_password)..."
+ADMIN_SHADOW=$(docker exec "${CONTAINER_NAME}" grep '^verifyadmin:' /etc/shadow 2>/dev/null || true)
+if [[ -z "${ADMIN_SHADOW}" ]]; then
+    red "   FAIL: 'verifyadmin' has no /etc/shadow entry -- account was not created"
+    FAIL=1
+else
+    ADMIN_HASH=$(echo "${ADMIN_SHADOW}" | cut -d: -f2)
+    if [[ "${ADMIN_HASH}" == "*" || "${ADMIN_HASH}" == "!" || -z "${ADMIN_HASH}" ]]; then
+        red "   FAIL: 'verifyadmin' shadow entry is disabled/empty (${ADMIN_HASH}) -- login would never work"
+        FAIL=1
+    else
+        green "   PASS: 'verifyadmin' has a valid, non-disabled shadow hash"
+    fi
+fi
+if docker exec "${CONTAINER_NAME}" id -Gn verifyadmin 2>/dev/null | grep -qw lpadmin; then
+    green "   PASS: 'verifyadmin' is a member of the lpadmin group (@SYSTEM auth)"
+else
+    red "   FAIL: 'verifyadmin' is not a member of lpadmin -- @SYSTEM auth would reject it"
+    FAIL=1
+fi
+if echo "${CONTAINER_LOGS:-$(docker logs "${CONTAINER_NAME}" 2>&1)}" | grep -qF "verify-secret-pw"; then
+    red "   FAIL: the plaintext admin_password appears in container logs"
+    FAIL=1
+else
+    green "   PASS: admin_password never appears in container logs"
 fi
 
 yellow "Checking printer registration..."

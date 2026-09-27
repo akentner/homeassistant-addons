@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Render /etc/avahi/avahi-daemon.conf, /etc/cups/cupsd.conf, and
-/tmp/register-printers.sh from HA add-on options.
+"""Render /etc/avahi/avahi-daemon.conf, /etc/cups/cupsd.conf,
+/tmp/register-printers.sh, and /tmp/provision-admin.sh from HA add-on options.
 
 Reads /data/options.json and generates:
   - /etc/avahi/avahi-daemon.conf: a minimal avahi-daemon.conf carrying the three
@@ -17,9 +17,11 @@ Reads /data/options.json and generates:
     Because this add-on runs `host_network: true`, "localhost" inside the
     container IS the host's own loopback -- unreachable from any other LAN
     device, which meant AirPrint clients could resolve the printer via mDNS
-    but never actually connect to port 631 to print. `/admin`, `/admin/conf`,
-    `/admin/log`, and every Policy block are left byte-for-byte untouched --
-    only network reachability changes, not the admin-auth boundary. Also
+    but never actually connect to port 631 to print. `<Location /admin>` gets
+    the same network widening (see `build_cupsd_conf`'s docstring for the
+    403-before-any-auth-challenge bug this fixes); `/admin/conf`, `/admin/log`,
+    and every Policy block are left byte-for-byte untouched -- only network
+    reachability changes, never the admin-auth boundary itself. Also
     emits a `ServerAlias` directive from the `server_aliases` option so
     cupsd's own separate Host-header validation accepts hostnames beyond its
     auto-detected one (e.g. a Tailscale MagicDNS name) -- see
@@ -38,6 +40,13 @@ Reads /data/options.json and generates:
     behavior; `brlaser` defers to a runtime `lpinfo -m` lookup inside the
     generated script itself (see `build_brlaser_registration_snippet`) for
     Brother monochrome laser/LED printers with no real PostScript support.
+  - /tmp/provision-admin.sh: one idempotent account-setup script, present ONLY
+    when both `admin_username` and `admin_password` validate (see
+    `build_admin_provisioning`) -- creates/updates a real system login for
+    CUPS's web admin UI (`/admin`), added to the `lpadmin` group so it
+    satisfies `Require user @SYSTEM`. Executed by run.sh before cupsd starts,
+    every single start, because this container's filesystem is not persisted
+    outside /data and /etc/passwd/shadow reset on every restart/update.
 """
 
 import ipaddress
@@ -100,6 +109,20 @@ SERVER_ALIAS_TOKEN_RE = re.compile(r"^(\*|[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Z
 
 PROC_NET_ROUTE = "/proc/net/route"
 
+# /tmp/provision-admin.sh -- see build_admin_provisioning. Written only when
+# both admin_username and admin_password validate; run.sh checks for this
+# file's presence (mirrors the REGISTER_SCRIPT_PATH pattern below) before
+# executing it, so the fail-safe default (either option unset) leaves no
+# file to run at all.
+ADMIN_PROVISION_SCRIPT_PATH = "/tmp/provision-admin.sh"
+
+# Linux/BusyBox username convention (adduser enforces a similar check itself,
+# but this is validated BEFORE being embedded into the generated shell script
+# below -- defense in depth, same posture as NAME_RE/IFACE_RE/LOCATION_RE):
+# lowercase letters/digits/underscore/hyphen, must start with a letter or
+# underscore, max 32 chars total.
+ADMIN_USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
+
 # Matches a CUPS printer Location string (lpadmin -L). Conservative
 # printable-ASCII-minus-quotes allowlist -- defense in depth alongside the
 # argv-array construction in build_printer_registration (T-21-01's
@@ -153,6 +176,12 @@ LISTEN_LOCALHOST_RE = re.compile(r"^Listen localhost:631\s*$", re.MULTILINE)
 # appears for the root Location). Non-greedy body capture stops at this
 # block's own `</Location>` since CUPS's Location blocks are never nested.
 LOCATION_ROOT_RE = re.compile(r"(<Location />\n)(.*?)(\n</Location>)", re.DOTALL)
+
+# Matches the stock `<Location /admin>` block (the CUPS web admin UI).
+# Anchored to the exact ">" immediately after "/admin" so this never matches
+# `<Location /admin/conf>` or `<Location /admin/log>` -- those two stay
+# byte-for-byte untouched (see build_cupsd_conf's docstring for why).
+LOCATION_ADMIN_RE = re.compile(r"(<Location /admin>\n)(.*?)(\n</Location>)", re.DOTALL)
 
 # ioctl request numbers (Linux-specific, from <linux/sockios.h>) used by
 # get_iface_ipv4 below to read an interface's IPv4 address/netmask without an
@@ -347,6 +376,10 @@ def build_cupsd_conf(iface: str | None, options: dict) -> str | None:
         gains `Allow from <lan-subnet-cidr>` underneath the stock's
         `Order allow,deny` -- printing/web-UI works from the detected LAN
         subnet, not from arbitrary addresses
+      - the `<Location /admin>` block (the CUPS web admin UI) gains the same
+        `Allow from <lan-subnet-cidr>` (+ Tailscale, when detected) lines --
+        see the `/admin` paragraph below for why this is also needed, not
+        just the root block
     Also inserts a `ServerAlias` directive (from the `server_aliases` add-on
     option, default `"*"`) directly after the patched `Listen` line -- see
     `parse_server_aliases` for why this is needed (cupsd's Host-header
@@ -356,17 +389,24 @@ def build_cupsd_conf(iface: str | None, options: dict) -> str | None:
     from`, not the Host header check).
 
     If a `tailscale0` interface is present on the host, a SECOND `Allow from
-    100.64.0.0/10` line is added to the same `<Location />` block (CUPS's
-    `Order allow,deny` evaluates multiple `Allow from` lines independently --
-    standard syntax, not an error) -- see `detect_tailscale_subnet` for why
-    Tailscale-routed clients need this in addition to the LAN subnet's
-    `Allow from` line. If no `tailscale0` interface is found, this is skipped
-    with a log note, not a hard failure -- not every deployment runs
-    Tailscale.
+    100.64.0.0/10` line is added to both the `<Location />` AND `<Location
+    /admin>` blocks (CUPS's `Order allow,deny` evaluates multiple `Allow
+    from` lines independently -- standard syntax, not an error) -- see
+    `detect_tailscale_subnet` for why Tailscale-routed clients need this in
+    addition to the LAN subnet's `Allow from` line. If no `tailscale0`
+    interface is found, this is skipped with a log note, not a hard failure
+    -- not every deployment runs Tailscale.
 
-    `/admin`, `/admin/conf`, `/admin/log`, and every `<Policy>` block are
-    never touched by this function -- only the lines above are patched,
-    everything else in the stock file survives byte-for-byte.
+    `/admin` (the CUPS web admin UI) gains the SAME `Allow from` line(s) as
+    the top-level `<Location />` above -- root cause: the stock `<Location
+    /admin>` block ships with NO `Allow from` directive at all (only
+    `AuthType Default` / `Require user @SYSTEM` / `Order allow,deny`), so it
+    was rejecting every client at the network layer before any auth
+    challenge was even offered, independent of whether a valid account
+    existed. `/admin/conf`, `/admin/log`, and every `<Policy>` block are
+    never touched by this function -- only `Listen`, `<Location />`, and
+    `<Location /admin>` are patched, everything else in the stock file
+    survives byte-for-byte.
 
     Returns None -- leaving CUPSD_CONF_PATH at its current (stock, loopback-
     only) content -- when no interface was detected, no IPv4 address could be
@@ -461,21 +501,11 @@ def build_cupsd_conf(iface: str | None, options: dict) -> str | None:
             flush=True,
         )
 
-    location_match = LOCATION_ROOT_RE.search(patched)
-    if location_match is None:
-        print(
-            "WARNING: stock cupsd.conf does not contain the expected top-level '<Location />' "
-            "block -- Listen was patched but access control was not; cupsd is reachable on the "
-            "LAN with NO subnet restriction until this is fixed",
-            flush=True,
-        )
-        return patched
-
     tailscale_subnet = detect_tailscale_subnet()
     if tailscale_subnet:
         print(
             f"INFO: tailscale0 interface detected -- also allowing {tailscale_subnet} in the "
-            "top-level <Location /> block",
+            "top-level <Location /> and <Location /admin> blocks",
             flush=True,
         )
     else:
@@ -485,13 +515,36 @@ def build_cupsd_conf(iface: str | None, options: dict) -> str | None:
             flush=True,
         )
 
-    body = location_match.group(2)
-    allow_lines = f"{body}\n  Allow from {subnet}"
-    if tailscale_subnet:
-        allow_lines += f"\n  Allow from {tailscale_subnet}"
-    patched = (
-        patched[: location_match.start(2)] + allow_lines + patched[location_match.end(2) :]
-    )
+    def _widen_location(text: str, location_re: re.Pattern, label: str) -> tuple[str, bool]:
+        """Append `Allow from <subnet>` (+ Tailscale, if detected) to one Location
+        block's body. Returns (patched-or-unchanged text, whether a match was found).
+        Shared by both `<Location />` and `<Location /admin>` below so they always
+        agree on which networks may reach them -- one detection, two call sites.
+        """
+        match = location_re.search(text)
+        if match is None:
+            print(
+                f"WARNING: stock cupsd.conf does not contain the expected '{label}' block -- "
+                "its access control was not widened",
+                flush=True,
+            )
+            return text, False
+        body = match.group(2)
+        allow_lines = f"{body}\n  Allow from {subnet}"
+        if tailscale_subnet:
+            allow_lines += f"\n  Allow from {tailscale_subnet}"
+        return text[: match.start(2)] + allow_lines + text[match.end(2) :], True
+
+    patched, root_patched = _widen_location(patched, LOCATION_ROOT_RE, "<Location />")
+    if not root_patched:
+        print(
+            "WARNING: Listen was patched but the top-level <Location /> access control was "
+            "not; cupsd is reachable on the LAN with NO subnet restriction until this is fixed",
+            flush=True,
+        )
+        return patched
+
+    patched, _ = _widen_location(patched, LOCATION_ADMIN_RE, "<Location /admin>")
     return patched
 
 
@@ -745,6 +798,128 @@ def build_printer_registration(options: dict) -> str:
     return "\n".join(lines)
 
 
+def build_admin_provisioning(options: dict) -> str | None:
+    """Render /tmp/provision-admin.sh: idempotent CUPS web-admin account setup.
+
+    Root cause this fixes (D-12 follow-up): `/admin` returned 403 for everyone,
+    with no way to authenticate at all even once network access is granted (see
+    `build_cupsd_conf`'s `<Location /admin>` widening above) -- this image's
+    only account (`root`) has a shadow entry of `*` (password disabled, can
+    never authenticate), and there is no PAM config, so cupsd authenticates
+    directly against `/etc/shadow` via `crypt()`.
+
+    When BOTH `admin_username` and `admin_password` are set (non-empty),
+    returns a script that -- at every container start, since this container's
+    filesystem is not persisted outside `/data` and `/etc/passwd`/`/etc/shadow`
+    reset to the stock image on every restart/update -- creates the account if
+    absent (or just resets its password if present), adds it to the `lpadmin`
+    group (the `SystemGroup` `@SYSTEM` checks), and sets its password via
+    `chpasswd`. Returns None -- writing nothing -- when either option is
+    empty/unset (the shipped default), preserving the exact pre-fix fail-safe
+    behavior: `/admin` stays unauthenticatable, not an open admin panel by
+    default.
+
+    Validates both values BEFORE embedding them into the generated script
+    (`shlex.quote`'d, never an interpolated shell string -- T-21-01's
+    mitigation, same as `build_printer_registration`): an invalid
+    `admin_username` (must match `ADMIN_USERNAME_RE`), a mismatched pair (one
+    set, the other empty -- a misconfiguration, not a silent partial no-op),
+    or an `admin_password` containing a newline or colon (would corrupt the
+    `user:password` line fed to `chpasswd`'s stdin -- a newline in particular
+    could inject an entirely separate line, silently overwriting a DIFFERENT
+    account's password) all return None with a WARNING logged here, at
+    generate time. The password itself is never printed to the logs.
+
+    A run-time-only failure -- `adduser`/`addgroup`/`chpasswd` itself failing,
+    or the requested username colliding with an existing system account below
+    uid 1000 (`root`, `lp`, `avahi`, ... -- a typo must never silently reset a
+    system account's password) -- cannot be known at generate time, so those
+    checks are written INTO the generated script and logged when `run.sh`
+    actually executes it, not here.
+    """
+    username = str(options.get("admin_username", "") or "")
+    password = str(options.get("admin_password", "") or "")
+
+    if not username and not password:
+        return None
+
+    if username and not password:
+        print(
+            "WARNING: admin_username is set but admin_password is empty -- both are required "
+            "together, admin account not provisioned",
+            flush=True,
+        )
+        return None
+    if password and not username:
+        print(
+            "WARNING: admin_password is set but admin_username is empty -- both are required "
+            "together, admin account not provisioned",
+            flush=True,
+        )
+        return None
+
+    if not ADMIN_USERNAME_RE.match(username):
+        print(
+            f"WARNING: admin_username {username!r} failed validation -- must match "
+            f"{ADMIN_USERNAME_RE.pattern}, admin account not provisioned",
+            flush=True,
+        )
+        return None
+
+    if "\n" in password or ":" in password:
+        print(
+            "WARNING: admin_password contains a newline or colon -- refusing to use it (would "
+            "corrupt the generated chpasswd input), admin account not provisioned",
+            flush=True,
+        )
+        return None
+
+    quoted_user = shlex.quote(username)
+    quoted_pass = shlex.quote(password)
+
+    # `username` itself is already ADMIN_USERNAME_RE-validated (letters,
+    # digits, underscore, hyphen only -- no shell metacharacters), so it is
+    # also safe to interpolate directly into the echo/log text below, exactly
+    # like `build_brlaser_registration_snippet` does for its own validated
+    # `name`. `quoted_user`/`quoted_pass` are used for every actual command
+    # argument/stdin value.
+    return (
+        "#!/bin/sh\n"
+        f"if getent passwd {quoted_user} >/dev/null 2>&1; then\n"
+        f"  EXISTING_UID=$(getent passwd {quoted_user} | cut -d: -f3)\n"
+        '  if [ "$EXISTING_UID" -lt 1000 ] 2>/dev/null; then\n'
+        f'    echo "WARNING: admin_username {username} collides with an existing system '
+        'account (uid=$EXISTING_UID) -- refusing to touch it, admin account not provisioned. '
+        'Choose a different admin_username." >&2\n'
+        "    exit 0\n"
+        "  fi\n"
+        f'  echo "admin account {username} already exists (uid=$EXISTING_UID) -- updating its '
+        'password"\n'
+        "else\n"
+        f"  if ! adduser -D -H -s /sbin/nologin {quoted_user}; then\n"
+        f'    echo "WARNING: adduser failed for {username} -- admin account not provisioned" '
+        ">&2\n"
+        "    exit 0\n"
+        "  fi\n"
+        f'  echo "created admin account {username}"\n'
+        "fi\n"
+        f"if id -Gn {quoted_user} 2>/dev/null | grep -qw lpadmin; then\n"
+        "  :\n"
+        f"elif addgroup {quoted_user} lpadmin; then\n"
+        f'  echo "added {username} to the lpadmin group (required for @SYSTEM auth)"\n'
+        "else\n"
+        f'  echo "WARNING: could not add {username} to lpadmin -- @SYSTEM auth would reject '
+        'this account" >&2\n'
+        "fi\n"
+        f"if printf '%s:%s\\n' {quoted_user} {quoted_pass} | chpasswd; then\n"
+        f'  echo "admin account {username} password set -- CUPS /admin login is now usable"\n'
+        "else\n"
+        f'  echo "WARNING: chpasswd failed for {username} -- password not set, login will not '
+        'work" >&2\n'
+        "fi\n"
+    )
+
+
 def main() -> None:
     options = load_options()
 
@@ -768,6 +943,13 @@ def main() -> None:
     script_path.write_text(register_script)
     script_path.chmod(0o755)
     print(f"Config written to {REGISTER_SCRIPT_PATH}", flush=True)
+
+    admin_script = build_admin_provisioning(options)
+    if admin_script is not None:
+        admin_script_path = Path(ADMIN_PROVISION_SCRIPT_PATH)
+        admin_script_path.write_text(admin_script)
+        admin_script_path.chmod(0o755)
+        print(f"Config written to {ADMIN_PROVISION_SCRIPT_PATH}", flush=True)
 
 
 if __name__ == "__main__":

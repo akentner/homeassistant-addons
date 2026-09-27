@@ -22,7 +22,26 @@ dbus-daemon --system --fork || log "dbus-daemon failed to start"
 #    (mirrors network-tools/run.sh's exact incantation).
 avahi-daemon --daemonize || log "avahi-daemon failed to start"
 
-# 5. Start cupsd in the foreground, backgrounded here so this script can
+# 5. Provision the optional CUPS web-admin login (`admin_username` /
+#    `admin_password`), from the script generate_config.py already rendered
+#    at step 1 (/tmp/provision-admin.sh -- validation lives there, alongside
+#    every other option's defensive validation, since it reads /data/options.json
+#    directly; this step just executes the result, mirroring how
+#    /tmp/register-printers.sh is generated in step 1 and executed later).
+#    Written as its own file (not present at all when admin_username/
+#    admin_password are unset, the fail-safe default) rather than a plain
+#    function here, so root cause: cupsd's `Require user @SYSTEM` checks
+#    directly against /etc/shadow via crypt() (no PAM config in this image)
+#    -- this container's filesystem is not persisted outside /data, so
+#    /etc/passwd/shadow reset to the stock image on every restart/update,
+#    meaning the account must be (re-)provisioned every single start, not
+#    just once. Runs BEFORE cupsd starts below so a fresh cupsd process
+#    reads a consistent /etc/shadow from its very first startup.
+if [ -f /tmp/provision-admin.sh ]; then
+    sh /tmp/provision-admin.sh || log "admin account provisioning reported an issue (see above)"
+fi
+
+# 6. Start cupsd in the foreground, backgrounded here so this script can
 #    finish printer registration and log-level setup before waiting on it.
 cupsd -f &
 CUPSD_PID=$!
@@ -42,7 +61,7 @@ else
     log "cupsd did not become ready within 30s -- attempting printer registration anyway"
 fi
 
-# 6. Register printers against the now-live cupsd. A short settle window is
+# 7. Register printers against the now-live cupsd. A short settle window is
 #    needed even after lpstat -r reports the scheduler up: cupsd's admin
 #    interface (used by lpadmin) can still transiently reject the very first
 #    connection right after readiness is first observed. Retry a few times
@@ -60,7 +79,7 @@ if [ -f /tmp/register-printers.sh ]; then
     [ "$REG_OK" = "1" ] || log "printer registration failed after retries (see above)"
 fi
 
-# 7. Map HA log_level option to a cupsctl LogLevel value.
+# 8. Map HA log_level option to a cupsctl LogLevel value.
 LOG_LEVEL=$(bashio::config 'log_level')
 case "$LOG_LEVEL" in
     debug) CUPS_LOG_LEVEL="debug" ;;
@@ -70,7 +89,7 @@ case "$LOG_LEVEL" in
 esac
 cupsctl LogLevel="$CUPS_LOG_LEVEL" || log "cupsctl LogLevel failed"
 
-# 8. Forward termination signals to cupsd and wait on it -- the container
+# 9. Forward termination signals to cupsd and wait on it -- the container
 #    stays alive exactly as long as cupsd does. Per D-08: no watchdog for the
 #    legacy-unicast reflector slot-exhaustion error is added here -- with
 #    enable-reflector=no (the shipped default) that failure class cannot occur.
