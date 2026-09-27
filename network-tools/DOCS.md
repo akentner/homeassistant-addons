@@ -203,12 +203,14 @@ mdns_monitors:
 
 ### MQTT-Topics (pro Monitor)
 
-| Topic                                    | Payload                                   | Retain | QoS |
-| ---------------------------------------- | ----------------------------------------- | ------ | --- |
-| `<prefix>/state`                         | `ON` / `OFF` (Binary-Sensor-Payload)      | ja     | 1   |
-| `<prefix>/details`                       | JSON (alle Detailinformationen)           | ja     | 0   |
-| `homeassistant/binary_sensor/.../config` | HA-Discovery (1 Entity pro Monitor)       | ja     | 0   |
-| `network-tools/arping/availability`      | `online` / `offline` (geteilt mit ARPing) | ja     | 0   |
+| Topic                                              | Payload                                      | Retain | QoS |
+| -------------------------------------------------- | -------------------------------------------- | ------ | --- |
+| `<prefix>/state`                                   | `ON` / `OFF` (Binary-Sensor-Payload)         | ja     | 1   |
+| `<prefix>/details`                                 | JSON (alle Detailinformationen)              | ja     | 0   |
+| `<prefix>/hostname_changes`                        | Integer als String (`hostname_change_count`) | ja     | 1   |
+| `homeassistant/binary_sensor/.../config`           | HA-Discovery (1 Entity pro Monitor)          | ja     | 0   |
+| `homeassistant/sensor/..._hostname_changes/config` | HA-Discovery (Hostname-Wechsel-Sensor)       | ja     | 0   |
+| `network-tools/arping/availability`                | `online` / `offline` (geteilt mit ARPing)    | ja     | 0   |
 
 `<prefix>` ist standardmäßig `homeassistant/monitor/networktools_mdns_<slug>`. `network-tools/arping/availability` ist
 ein geteiltes Last-Will-Topic — der gesamte Container hat **eine** LWT-Subscription, die ARPing- und mDNS-Loop abdeckt.
@@ -216,7 +218,9 @@ ein geteiltes Last-Will-Topic — der gesamte Container hat **eine** LWT-Subscri
 **Ab Version 0.4.0** wird pro Monitor **nur noch eine** HA-Entity emittiert (`binary_sensor.networktools_mdns_<slug>`).
 Vorher gab es `sensor.networktools_mdns_<slug>_state` und `sensor.networktools_mdns_<slug>_last_check`. Diese beiden
 Entitäten sind weg — ihre Inhalte leben jetzt im JSON-Attribute-Topic `<prefix>/details`. Das `state`-Feld dort enthält
-weiterhin den ausgeschriebenen Text (`online | offline | unknown`), `last_check` den ISO-Timestamp.
+weiterhin den ausgeschriebenen Text (`online | offline | unknown`), `last_check` den ISO-Timestamp. Seit 0.5.0-2 kommt
+optional ein zusätzlicher `hostname_change_count`-Sensor pro Monitor hinzu (siehe Abschnitt "Hostname-Stabilitaet"
+unten).
 
 ### MQTT-Auto-Discovery
 
@@ -247,9 +251,15 @@ Die Discovery-Topics für die mDNS-Monitore heißen konkret:
   "error": null,
   "duration_ms": 1234,
   "filter": ["Brother"],
-  "service_types_scanned": ["_ipp._tcp", "_ipps._tcp"]
+  "service_types_scanned": ["_ipp._tcp", "_ipps._tcp"],
+  "hostname_changed": false,
+  "previous_hostname": null,
+  "hostname_change_count": 0
 }
 ```
+
+`hostname_changed` (bool) gilt nur für diesen einen Check, `previous_hostname` (string oder `null`) ist der zuvor
+gespeicherte Hostname, `hostname_change_count` (int) ist der laufende Gesamtzähler seit dem ersten Check.
 
 Das vollständige JSON landet als Attribute der Binary-Sensor-Entity und kann in HA-Templates referenziert werden — z.B.
 `state_attr('binary_sensor.networktools_mdns_brother_airprint', 'address')`.
@@ -260,6 +270,25 @@ Das vollständige JSON landet als Attribute der Binary-Sensor-Entity und kann in
 - `announced_unresolved`: Dienst angekündigt, Hostname nicht auflösbar — `OFF`, `state` = `offline`
 - `not_found`: Kein passender Dienst in diesem Check — `OFF`, `state` = `offline`
 - `error`: avahi-browse fehlgeschlagen oder Timeout — `OFF`, `state` = `unknown`
+
+### Hostname-Stabilitaet (Avahi-Rename-Loop-Erkennung)
+
+**Ab Version 0.5.0-2** trackt jeder Monitor zusaetzlich, ob sich der von `avahi-browse` gemeldete Hostname
+(`HOST`-Spalte, z.B. `brother.local`) zwischen zwei Checks aendert. Hintergrund: Avahi kann bei einem Namenskonflikt im
+lokalen Netz einen Dienst umbenennen (`brother.local` -> `brother-2.local`) und ggf. spaeter wieder zurueck - ein
+einzelner Check meldet dabei weiterhin `online`, weil der (neue) Name normal aufloesbar ist. Nur der Vergleich ueber
+mehrere Checks hinweg deckt diesen "Rename-Loop" auf.
+
+- Persistiert in `/data/state/mdns_stability_state.json`, ein Eintrag pro Monitor-Slug: `last_hostname` +
+  `hostname_change_count`.
+- Verglichen wird **nur** bei `state: online` - ein `not_found` / `announced_unresolved` / `error`-Check liefert keinen
+  frischen Hostnamen und laesst die gespeicherte Baseline unangetastet (kein Reset, kein Zaehlerinkrement).
+- Der allererste Check eines Monitors legt die Baseline an, zaehlt aber nicht als Aenderung (nichts zum Vergleichen).
+- Zusaetzliche Felder im `<prefix>/details`-JSON: `hostname_changed` (bool, nur fuer diesen Check) und
+  `previous_hostname` (string oder `null`, der zuvor gespeicherte Hostname).
+- Neue HA-Discovery-Entity: `sensor.networktools_mdns_<slug>_hostname_changes` - numerischer Sensor,
+  `state_class: total_increasing`, Einheit `changes`, Icon `mdi:swap-horizontal`, gruppiert auf demselben
+  Geraete-Eintrag wie der bestehende Binary Sensor. Der State ist der laufende `hostname_change_count`-Zaehler.
 
 ### Firewall / Multicast-Anforderungen
 

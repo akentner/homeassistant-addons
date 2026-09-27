@@ -22,7 +22,7 @@ LOG_DIR="$WORK/logs"
 mkdir -p "$MOCK_BIN" "$LOG_DIR"
 
 PASSED=0
-TOTAL=8
+TOTAL=9
 
 assert_ok() {
     local desc="$1"
@@ -45,11 +45,13 @@ assert_ok() {
 ADDON_PID=""
 MOSQ_PID=""
 SUB_PID=""
+STABILITY_PID=""
 
 cleanup() {
     if [ -n "$SUB_PID" ]; then kill "$SUB_PID" 2>/dev/null || true; fi
     if [ -n "$ADDON_PID" ]; then docker rm -f "$ADDON_PID" 2>/dev/null || true; fi
     if [ -n "$MOSQ_PID" ]; then docker rm -f "$MOSQ_PID" 2>/dev/null || true; fi
+    if [ -n "$STABILITY_PID" ]; then docker rm -f "$STABILITY_PID" 2>/dev/null || true; fi
     rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -284,6 +286,79 @@ else
     sed 's/^/    /' "$LWT_LOG"
 fi
 assert_ok "A8: LWT fires offline on container kill" "$A8"
+
+# --- 9. Hostname stability (churn/rename-loop) across two polls ---
+echo "=== 9. Hostname stability: two polls with a mocked avahi-browse hostname flip ==="
+
+STABILITY_OPTIONS="$WORK/stability_options.json"
+cat > "$STABILITY_OPTIONS" <<EOF
+{
+    "arping_hosts": [],
+    "interface": "eth0",
+    "log_level": "info",
+    "mqtt_enabled": true,
+    "mqtt_host": "core-mosquitto",
+    "mqtt_port": 1883,
+    "mqtt_username": "",
+    "mqtt_password": "",
+    "mqtt_discovery_prefix": "homeassistant",
+    "mdns_monitors": [
+        {
+            "name": "stability_printer",
+            "enabled": true,
+            "service_types": ["_ipp._tcp"],
+            "filter": [],
+            "interval": 60,
+            "timeout": 10,
+            "topic_prefix": "homeassistant/monitor/stability_printer",
+            "device_name": "Stability Printer"
+        }
+    ]
+}
+EOF
+
+STABILITY_PID=$(docker run -d --rm \
+    --network container:"$MOSQ_PID" \
+    -v "$STABILITY_OPTIONS:/data/options.json:ro" \
+    -v "$MOCK_BIN:/mock_bin:ro" \
+    -e "PATH=/mock_bin:/usr/local/bin:/usr/bin:/bin" \
+    --entrypoint sleep \
+    "$IMAGE:$VERSION" 600 2>/dev/null | tail -1)
+
+# Poll 1: mock avahi-browse still reports "brother.local" (unchanged from step 3)
+docker exec "$STABILITY_PID" python3 /usr/local/bin/mdns_scan.py > "$LOG_DIR/stability_poll1.log" 2>&1 || true
+
+# Rewrite the mock avahi-browse HOST column for poll 2 - simulates the avahi
+# hostname rename this feature must catch on the NEXT poll.
+cat > "$MOCK_BIN/avahi-browse" <<'EOF'
+#!/bin/sh
+cat <<'OUT'
+=;eth0;IPv4;Brother HL-L3270CDW series;_ipp._tcp;local;brother-renamed.local;192.168.178.50;631;"txtvers=1"
+OUT
+exit 0
+EOF
+chmod +x "$MOCK_BIN/avahi-browse"
+
+# Poll 2: same monitor, now sees the renamed host
+docker exec "$STABILITY_PID" python3 /usr/local/bin/mdns_scan.py > "$LOG_DIR/stability_poll2.log" 2>&1 || true
+
+sleep 1
+HOSTNAME_CHANGES=$(timeout 3 mosquitto_sub -h localhost -p 11883 \
+    -t 'homeassistant/monitor/stability_printer/hostname_changes' -C 1 2>&1 || true)
+
+docker rm -f "$STABILITY_PID" 2>/dev/null || true
+STABILITY_PID=""
+
+A9=0
+if [ "$HOSTNAME_CHANGES" = "1" ]; then
+    A9=0
+else
+    A9=1
+    echo "  A9 expected hostname_change_count=1 after the mocked hostname flip, got: $HOSTNAME_CHANGES"
+    echo "  poll1 log:"; sed 's/^/    /' "$LOG_DIR/stability_poll1.log" 2>/dev/null || true
+    echo "  poll2 log:"; sed 's/^/    /' "$LOG_DIR/stability_poll2.log" 2>/dev/null || true
+fi
+assert_ok "A9: hostname_change_count sensor increments after a hostname flip across polls" "$A9"
 
 kill "$SUB_PID" 2>/dev/null || true
 
