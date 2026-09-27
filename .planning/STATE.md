@@ -7,8 +7,8 @@ current_phase_name: cups print server addon airprint mdns fixes
 current_plan: 1
 status: Phase 20 execution complete
 stopped_at: Phase 21 context gathered
-last_updated: "2026-09-27T19:46:08.453Z"
-state_head: d1931c711ef298299b92302b403f1c77898f1662
+last_updated: "2026-09-27T21:11:30.998Z"
+state_head: 9f728464982fdeec81c2373ca685ce730999b4a6
 progress:
   total_phases: 8
   completed_phases: 12
@@ -398,6 +398,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | 260927-p3c | cups: stable printer UUID across restarts (fixes iOS ghost-duplicate printer entries) | 2026-09-27 | 44b57b8 | [260927-p3c-cups-stable-printer-uuid-across-restarts](./quick/260927-p3c-cups-stable-printer-uuid-across-restarts/) |
 | 260927-q51 | cups: printer_presets as top-level object list (replaces flattened-string printers[].presets) | 2026-09-27 | 88906b9 | [260927-q51-cups-printer-presets-as-top-level-object](./quick/260927-q51-cups-printer-presets-as-top-level-object/) |
 | 260927-r2j | cups: remove AirPrint print-presets feature (confirmed ineffective for iOS) | 2026-09-27 | d1931c7 | [260927-r2j-cups-remove-airprint-print-presets-featu](./quick/260927-r2j-cups-remove-airprint-print-presets-featu/) |
+| 260927-vwt | docs: add-on presentation & metadata best practices (icon/logo, translations, changelog, operational lessons) | 2026-09-27 | 9f72846 | [260927-vwt-docs-add-on-presentation-metadata-best-p](./quick/260927-vwt-docs-add-on-presentation-metadata-best-p/) |
 
 ## Session Continuity
 
