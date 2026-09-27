@@ -126,20 +126,61 @@ if [ -f /tmp/fixup-printer-uuids.sh ]; then
     fi
 fi
 
-# 9. Map HA log_level option to a cupsctl LogLevel value.
-LOG_LEVEL=$(bashio::config 'log_level')
-case "$LOG_LEVEL" in
-    debug) CUPS_LOG_LEVEL="debug" ;;
-    warning) CUPS_LOG_LEVEL="warn" ;;
-    error) CUPS_LOG_LEVEL="error" ;;
-    *) CUPS_LOG_LEVEL="info" ;;
-esac
-cupsctl LogLevel="$CUPS_LOG_LEVEL" || log "cupsctl LogLevel failed"
+# 9. Map HA log_level option to a cupsctl LogLevel value. Sourced from the
+#    file generate_config.py already rendered at step 1 (LOG_LEVEL +
+#    CUPS_LOG_LEVEL) instead of calling `bashio::config 'log_level'`
+#    directly here -- that call requires a live round-trip to the
+#    Supervisor API with no local-file fallback, an unnecessary fragility
+#    for a value already resolved once at step 1 exactly like every other
+#    option in this add-on (see generate_config.py's build_log_level_env).
+# shellcheck source=/dev/null
+. /tmp/cups-log-level.env
+# Same transient "Unable to connect to server: Bad file descriptor" race as
+# step 7's lpadmin retry loop above -- cupsd's admin interface can still
+# briefly reject the very first connection right after the post-fixup
+# restart's own readiness poll (step 8) succeeds. cupsctl has no side effect
+# on failure (it just leaves LogLevel at its previous value), so retrying is
+# safe.
+CUPSCTL_OK=0
+for _ in $(seq 1 5); do
+    if cupsctl LogLevel="$CUPS_LOG_LEVEL"; then
+        CUPSCTL_OK=1
+        break
+    fi
+    sleep 1
+done
+[ "$CUPSCTL_OK" = "1" ] || log "cupsctl LogLevel failed after retries (see above)"
 
-# 10. Forward termination signals to cupsd and wait on it -- the container
+# 10. Tail cupsd's own file-based logs into this add-on's own stdout so
+#     `ha apps logs`/`docker logs` actually surface cupsd's logging --
+#     today nothing does this: cupsd's error_log/access_log under
+#     /var/log/cups/ are invisible outside the container. error_log is
+#     always tailed; access_log is ADDITIONALLY tailed only at the most
+#     verbose 'debug' tier (the level used for live diagnosis sessions).
+#     `-F` retries across a missing/not-yet-created or rotated file
+#     rather than exiting.
+tail -n +1 -F /var/log/cups/error_log 2>/dev/null &
+ERROR_LOG_TAIL_PID=$!
+ACCESS_LOG_TAIL_PID=""
+if [ "$LOG_LEVEL" = "debug" ]; then
+    tail -n +1 -F /var/log/cups/access_log 2>/dev/null &
+    ACCESS_LOG_TAIL_PID=$!
+fi
+
+# 11. Background: poll cupsd for newly-completed print jobs and persist a
+#     simple JSONL history to /data/print-history.jsonl (see
+#     print-history-poller.py's own module docstring for the documented
+#     lpstat-text-output limitations). Started here rather than gated on
+#     this script's own readiness poll -- the poller does its own
+#     retry/backoff if cupsd is not yet reachable.
+python3 /print-history-poller.py &
+PRINT_HISTORY_POLLER_PID=$!
+
+# 12. Forward termination signals to cupsd and wait on it -- the container
 #     stays alive exactly as long as cupsd does. Per D-08: no watchdog for
 #     the legacy-unicast reflector slot-exhaustion error is added here --
 #     with enable-reflector=no (the shipped default) that failure class
-#     cannot occur.
-trap 'kill -TERM "$CUPSD_PID" 2>/dev/null' TERM INT
+#     cannot occur. Also stops the log-tail and print-history-poller
+#     background processes so container shutdown stays clean.
+trap 'kill -TERM "$CUPSD_PID" 2>/dev/null; kill -TERM "$ERROR_LOG_TAIL_PID" 2>/dev/null; [ -n "$ACCESS_LOG_TAIL_PID" ] && kill -TERM "$ACCESS_LOG_TAIL_PID" 2>/dev/null; kill -TERM "$PRINT_HISTORY_POLLER_PID" 2>/dev/null' TERM INT
 wait "$CUPSD_PID"

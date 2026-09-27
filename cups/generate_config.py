@@ -62,6 +62,15 @@ Reads /data/options.json and generates:
     satisfies `Require user @SYSTEM`. Executed by run.sh before cupsd starts,
     every single start, because this container's filesystem is not persisted
     outside /data and /etc/passwd/shadow reset on every restart/update.
+  - /tmp/cups-log-level.env: resolves the `log_level` option to both its raw
+    value and its mapped `cupsctl LogLevel=` value (see `build_log_level_env`).
+    Sourced by run.sh instead of calling `bashio::config 'log_level')` directly
+    -- that call requires a live round-trip to the Supervisor API
+    (`bashio::addon.config` has no local-file fallback), which is an
+    unnecessary fragility for a value this script can already read straight
+    out of /data/options.json exactly like every other option here. Also
+    means this option is exercisable in a bare `docker run` test harness with
+    no real Supervisor present (see internal/verify-cups-scaffold.sh).
 """
 
 import ipaddress
@@ -131,6 +140,25 @@ PROC_NET_ROUTE = "/proc/net/route"
 # executing it, so the fail-safe default (either option unset) leaves no
 # file to run at all.
 ADMIN_PROVISION_SCRIPT_PATH = "/tmp/provision-admin.sh"
+
+# /tmp/cups-log-level.env -- see build_log_level_env. Sourced by run.sh in
+# place of a direct `bashio::config 'log_level'` call.
+LOG_LEVEL_ENV_PATH = "/tmp/cups-log-level.env"
+
+# Must stay in sync with cups/config.yaml's `schema.log_level` enum.
+ALLOWED_LOG_LEVELS = {"debug", "info", "warning", "error"}
+
+# cupsd's own `cupsctl LogLevel=` accepted values -- "warning" (this add-on's
+# option name, matching HA's own convention) maps to CUPS's own "warn" token.
+# An invalid/unrecognized log_level value falls back to "info", the same
+# fallback the add-on has always used (originally as the `case ... *)` branch
+# in run.sh, now here).
+_LOG_LEVEL_TO_CUPSCTL = {
+    "debug": "debug",
+    "info": "info",
+    "warning": "warn",
+    "error": "error",
+}
 
 # CUPS's live printer registry -- see build_printer_uuid_fixup_script's
 # docstring for why this is only ever patched while cupsd is fully
@@ -991,6 +1019,38 @@ def build_printer_uuid_fixup_script(names: list[str]) -> str | None:
     )
 
 
+def build_log_level_env(options: dict) -> str:
+    """Render /tmp/cups-log-level.env: LOG_LEVEL + CUPS_LOG_LEVEL shell vars.
+
+    Root cause this fixes: `bashio::config 'log_level'` (the mechanism used
+    before this fix) calls `bashio::addon.config`, which ALWAYS queries the
+    Supervisor API over HTTP -- there is no local-file fallback anywhere in
+    bashio's own implementation. In a bare `docker run` test harness with no
+    real Supervisor to answer that call (see internal/verify-cups-scaffold.sh),
+    the call fails silently and returns an empty string, which the old
+    run.sh case-statement's `*)` branch then defaulted to "info" -- meaning
+    ANY configured log_level value was silently ignored in that harness, and
+    only "worked" for the pre-existing test fixture because "info" also
+    happened to be that same fallback default. This add-on already reads
+    every other option directly from /data/options.json in this exact
+    script (see `load_options`); log_level is resolved the same way here.
+
+    An unrecognized/invalid value (should not happen given config.yaml's own
+    schema enum, but defensive) falls back to "info" -- the same fallback
+    behavior as before.
+    """
+    raw = str(options.get("log_level", "warning") or "warning").strip().lower()
+    if raw not in ALLOWED_LOG_LEVELS:
+        print(
+            f"WARNING: log_level {raw!r} is not one of {sorted(ALLOWED_LOG_LEVELS)} -- "
+            "falling back to 'info'",
+            flush=True,
+        )
+        raw = "info"
+    cups_level = _LOG_LEVEL_TO_CUPSCTL[raw]
+    return f'LOG_LEVEL="{raw}"\nCUPS_LOG_LEVEL="{cups_level}"\n'
+
+
 def build_admin_provisioning(options: dict) -> str | None:
     """Render /tmp/provision-admin.sh: idempotent CUPS web-admin account setup.
 
@@ -1150,6 +1210,10 @@ def main() -> None:
         admin_script_path.write_text(admin_script)
         admin_script_path.chmod(0o755)
         print(f"Config written to {ADMIN_PROVISION_SCRIPT_PATH}", flush=True)
+
+    log_level_env = build_log_level_env(options)
+    Path(LOG_LEVEL_ENV_PATH).write_text(log_level_env)
+    print(f"Config written to {LOG_LEVEL_ENV_PATH}", flush=True)
 
 
 if __name__ == "__main__":

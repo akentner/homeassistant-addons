@@ -28,4 +28,7 @@ configuration:
       fest.
   log_level:
     name: Log-Level
-    description: Ausführlichkeit der Add-on-Protokollierung (debug, info, warning, error).
+    description: >-
+      Ausführlichkeit der Add-on-Protokollierung (debug, info, warning, error). Standard ist
+      warning für einen ruhigen Betrieb. Das error_log von cupsd wird immer in die eigene
+      Log-Ausgabe dieses Add-ons weitergeleitet; das access_log zusätzlich nur bei debug.

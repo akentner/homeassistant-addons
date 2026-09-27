@@ -35,7 +35,7 @@ RUN apk add --no-cache \
 # double-patches or drifts from the original template.
 RUN cp /etc/cups/cupsd.conf /etc/cups/cupsd.conf.stock
 
-COPY run.sh generate_config.py /
+COPY run.sh generate_config.py print-history-poller.py /
 
 # CUPS restricts admin operations (lpadmin) to members of the SystemGroup
 # (lpadmin by default per /etc/cups/cups-files.conf) -- root is not a member

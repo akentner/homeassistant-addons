@@ -1,6 +1,7 @@
 # CUPS Add-on Configuration
 
-Add-on icon is the official CUPS project logo (github.com/apple/cups), used under its Apache License 2.0.
+Add-on icon and logo banner use the official CUPS project mark (github.com/OpenPrinting/cups), used under its Apache
+License 2.0.
 
 ## Add-on Options
 
@@ -13,7 +14,7 @@ Add-on icon is the official CUPS project logo (github.com/apple/cups), used unde
 | `admin_username`  | `""` (unset) | Username for CUPS's web admin UI (`/admin`) login. Leave empty (the default) to keep `/admin` exactly as unauthenticatable as before this option existed — a fail-safe default, not an open admin panel. Must be set together with `admin_password`. See [Design notes](#design-notes) for the security implication of setting this.                                                                                                                                                                |
 | `admin_password`  | `""` (unset) | Password for the `admin_username` account above. Masked in the HA UI. Must be set together with `admin_username`. **Pick a real password** — this account is a real system account in the `lpadmin` group, reachable from the LAN (and Tailscale, when detected), not sandboxed by anything else.                                                                                                                                                                                                   |
 | `printers`        | `[]`         | List of printers to register with CUPS at startup. See [Printers](#printers) below for the object shape.                                                                                                                                                                                                                                                                                                                                                                                            |
-| `log_level`       | `info`       | Log verbosity: `debug`, `info`, `warning`, `error`                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `log_level`       | `warning`    | Log verbosity: `debug`, `info`, `warning`, `error`. `error_log` is always tailed into the add-on's own log output; `access_log` is additionally tailed only at the `debug` tier.                                                                                                                                                                                                                                                                                                                    |
 
 ## Printers
 
@@ -70,6 +71,41 @@ printers:
   the exact PPD is resolved at add-on startup by matching this term (case-insensitive, literal substring) against
   `lpinfo -m`'s output. If the term matches zero or more than one brlaser PPD, that printer is skipped (logged as a
   `WARNING`) rather than guessed — see brlaser's own project page for the full list of supported models.
+
+## Print History
+
+Every completed print job is appended as one JSON line to `/data/print-history.jsonl` (survives add-on restarts/updates,
+since `/data` is this add-on's persistent volume). A lightweight background poller (`print-history-poller.py`, started
+by `run.sh`) queries `lpstat -W completed -o` every ~20 seconds and tracks the last-seen CUPS job id in
+`/data/print-history-state.json` so a restart never replays already-recorded jobs. On the very first-ever run (no state
+file yet), the poller baselines to whatever jobs already exist at that moment WITHOUT backfilling them — this is a
+forward-only history, not a retroactive import.
+
+Each JSONL line has these fields:
+
+| Field         | Type                   | Notes                                                                                                                 |
+| ------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `timestamp`   | ISO 8601 string (UTC)  | When the poller observed the job as completed, not CUPS's own (locale-dependent, unreliable to parse) completion time |
+| `printer`     | string                 | The CUPS destination name                                                                                             |
+| `job_id`      | integer                | CUPS's own job id                                                                                                     |
+| `user`        | string or `null`       | Submitting user, from `lpstat`'s output                                                                               |
+| `title`       | `null` (always)        | See Known limitations below                                                                                           |
+| `page_count`  | `null` (always)        | See Known limitations below                                                                                           |
+| `final_state` | `"completed"` (always) | See Known limitations below                                                                                           |
+
+### Known limitations (print history)
+
+- **`final_state` does not currently distinguish canceled/aborted jobs from a normal completion.** CUPS's own
+  `lpstat -W completed` classification already groups completed, canceled, and aborted jobs together, and this add-on
+  confirmed empirically (during this feature's design) that `lpstat -l`'s `Alerts:` field is not a reliable text signal
+  either — a job explicitly canceled while queued showed `Alerts: none`, indistinguishable from a normal successful
+  completion. Disambiguating these three states reliably would require an IPP client (e.g. `ipptool`, not present in
+  this image) querying the job's `job-state` attribute directly — out of proportionate scope for this add-on's
+  single-printer home use case.
+- **`title`/`page_count` are always `null`.** Neither is exposed by any CUPS CLI text tool available in this image
+  (`lpstat`, `lpq`) for a completed job, without the same additional IPP tooling noted above.
+- **No automatic rotation or pruning of `print-history.jsonl`.** It grows indefinitely; prune it manually if it becomes
+  large.
 
 ## Design notes
 
@@ -165,6 +201,13 @@ never written to the add-on's logs.
 `No slot available for legacy unicast reflection` message anywhere in this add-on. With `avahi_reflector: false` as the
 shipped default, this failure class cannot occur at all, so a watchdog for it would be dead code. If you re-enable
 `avahi_reflector`, you re-inherit the original bug and are responsible for monitoring it yourself.
+
+**cupsd's own file-based logs are tailed into the add-on's log output (`log_level`).** Previously, cupsd's
+`error_log`/`access_log` under `/var/log/cups/` were invisible to `ha apps logs`/`docker logs` — nothing in this add-on
+ever surfaced them. `run.sh` now backgrounds `tail -F /var/log/cups/error_log` unconditionally, and additionally
+`tail -F /var/log/cups/access_log` only when `log_level: debug` is selected (the tier used for live diagnosis) — a
+quieter default (`log_level: warning`, mapped to CUPS's own `LogLevel warn`) keeps routine operation quiet while `debug`
+gives full request-level visibility on demand.
 
 **Generic driver, not driverless auto-detection.** Printer registration uses `lpadmin -m drv:///sample.drv/generic.ppd`
 (a static generic PostScript driver) rather than `-m everywhere` (CUPS driverless IPP-Everywhere). `-m everywhere`
