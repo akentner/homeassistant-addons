@@ -490,6 +490,172 @@ class TestRunMonitor:
         assert "timeout" in result["error"]
 
 
+# ----------------------------- _apply_hostname_stability -----------------------------
+
+
+class TestHostnameStability:
+    """Pure-function tests for _apply_hostname_stability(slug, result, state)."""
+
+    def test_first_poll_seeds_baseline_without_counting_change(self):
+        result = {"state": "online", "hostname": "brother.local"}
+        state = {}
+        mdns_scan._apply_hostname_stability("brother", result, state)
+        assert result["hostname_changed"] is False
+        assert result["previous_hostname"] is None
+        assert result["hostname_change_count"] == 0
+        assert state["brother"] == {"last_hostname": "brother.local", "hostname_change_count": 0}
+
+    def test_same_hostname_does_not_count_as_change(self):
+        state = {"brother": {"last_hostname": "brother.local", "hostname_change_count": 2}}
+        result = {"state": "online", "hostname": "brother.local"}
+        mdns_scan._apply_hostname_stability("brother", result, state)
+        assert result["hostname_changed"] is False
+        assert result["previous_hostname"] == "brother.local"
+        assert result["hostname_change_count"] == 2
+
+    def test_hostname_change_detected_and_counted(self):
+        state = {"brother": {"last_hostname": "brother.local", "hostname_change_count": 0}}
+        result = {"state": "online", "hostname": "brother-renamed.local"}
+        mdns_scan._apply_hostname_stability("brother", result, state)
+        assert result["hostname_changed"] is True
+        assert result["previous_hostname"] == "brother.local"
+        assert result["hostname_change_count"] == 1
+        assert state["brother"]["last_hostname"] == "brother-renamed.local"
+
+    def test_non_online_poll_does_not_touch_baseline(self):
+        for state_value in ("not_found", "announced_unresolved", "error"):
+            state = {"brother": {"last_hostname": "brother.local", "hostname_change_count": 3}}
+            pre_call_entry = dict(state["brother"])
+            result = {"state": state_value, "hostname": None}
+            mdns_scan._apply_hostname_stability("brother", result, state)
+            assert result["hostname_changed"] is False
+            assert result["previous_hostname"] is None
+            assert result["hostname_change_count"] == 3
+            assert state["brother"] == pre_call_entry
+
+    def test_non_online_poll_on_unseen_monitor_does_not_seed_baseline(self):
+        state = {}
+        result = {"state": "not_found", "hostname": None}
+        mdns_scan._apply_hostname_stability("brother", result, state)
+        assert "brother" not in state
+
+
+# ----------------------------- _build_hostname_changes_discovery_payload -----------------------------
+
+
+class TestHostnameChangesDiscoveryPayload:
+    def _monitor(self):
+        return {
+            "name": "Brother AirPrint",
+            "service_types": ["_ipp._tcp"],
+            "filter": [],
+            "interval": 60,
+            "timeout": 10,
+            "topic_prefix": "homeassistant/monitor/brother",
+            "device_name": "Brother HL-L3270CDW",
+        }
+
+    def test_payload_shape(self):
+        payload = mdns_scan._build_hostname_changes_discovery_payload(
+            self._monitor(), "brother", "homeassistant/monitor/brother"
+        )
+        assert payload["unique_id"] == "networktools_mdns_brother_hostname_changes"
+        assert payload["default_entity_id"] == "sensor.networktools_mdns_brother_hostname_changes"
+        assert payload["state_class"] == "total_increasing"
+        assert payload["icon"] == "mdi:swap-horizontal"
+        assert payload["unit_of_measurement"] == "changes"
+        assert payload["state_topic"] == "homeassistant/monitor/brother/hostname_changes"
+
+    def test_shares_device_block_with_binary_sensor(self):
+        binary = mdns_scan._build_discovery_payload(self._monitor(), "homeassistant", "brother")
+        changes = mdns_scan._build_hostname_changes_discovery_payload(
+            self._monitor(), "brother", binary["_topic_prefix"]
+        )
+        assert changes["device"] == binary["payload"]["device"]
+
+
+# ----------------------------- state file round trip -----------------------------
+
+
+class TestStateFileRoundTrip:
+    def test_save_then_load_round_trip(self, tmp_path):
+        state_path = tmp_path / "mdns_stability_state.json"
+        with patch.object(mdns_scan, "STATE_FILE", state_path):
+            mdns_scan.save_state({"brother": {"last_hostname": "brother.local", "hostname_change_count": 1}})
+            result = mdns_scan.load_state()
+        assert result == {"brother": {"last_hostname": "brother.local", "hostname_change_count": 1}}
+
+    def test_load_missing_file_returns_empty_dict(self, tmp_path):
+        state_path = tmp_path / "does_not_exist.json"
+        with patch.object(mdns_scan, "STATE_FILE", state_path):
+            result = mdns_scan.load_state()
+        assert result == {}
+
+
+# ----------------------------- hostname_changes publish -----------------------------
+
+
+class TestHostnameChangesPublish:
+    def _monitor(self):
+        return {
+            "name": "test_monitor",
+            "enabled": True,
+            "service_types": ["_ipp._tcp"],
+            "filter": [],
+            "interval": 60,
+            "timeout": 10,
+            "topic_prefix": "homeassistant/monitor/test",
+            "device_name": "Test Monitor",
+        }
+
+    def _result(self):
+        return {
+            "name": "test_monitor",
+            "state": "online",
+            "timestamp": "2026-08-22T12:00:00+00:00",
+            "service_type": "_ipp._tcp",
+            "service_name": "Test Printer",
+            "hostname": "test.local",
+            "address": "192.168.178.50",
+            "port": 631,
+            "txt_records": [],
+            "error": None,
+            "duration_ms": 100,
+            "filter": [],
+            "service_types_scanned": ["_ipp._tcp"],
+            "hostname_changed": True,
+            "previous_hostname": "old.local",
+            "hostname_change_count": 4,
+        }
+
+    def _options(self):
+        return {
+            "mqtt_enabled": True,
+            "mqtt_host": "core-mosquitto",
+            "mqtt_port": 1883,
+            "mqtt_username": "",
+            "mqtt_password": "",
+            "mqtt_discovery_prefix": "homeassistant",
+        }
+
+    def test_publish_includes_hostname_changes_sensor(self):
+        mock_client_cls = MagicMock()
+        mock_client = install_mock_paho(mock_client_cls)
+        try:
+            mdns_scan.publish_mqtt(self._monitor(), self._result(), self._options(), "test_monitor")
+        finally:
+            uninstall_mock_paho()
+        calls = mock_client.publish.call_args_list
+        assert any(
+            c.args and c.args[0] == "homeassistant/sensor/networktools_mdns_test_monitor_hostname_changes/config"
+            for c in calls
+        )
+        assert any(
+            c.args and c.args[0] == "homeassistant/monitor/test/hostname_changes" and c.args[1] == "4"
+            for c in calls
+        )
+
+
 class TestMainIndependence:
     """mDNS-Fehler duerfen den ARPing-Loop NICHT stoppen.
 
@@ -516,10 +682,12 @@ class TestMainIndependence:
                 }
             )
         )
+        state_path = tmp_path / "state" / "mdns_stability_state.json"
         with patch.object(mdns_scan, "OPTIONS_FILE", options_path):
-            with patch("mdns_scan.run_monitor", side_effect=Exception("simulated crash")):
-                # main() should catch the exception and continue, not raise
-                mdns_scan.main()
+            with patch.object(mdns_scan, "STATE_FILE", state_path):
+                with patch("mdns_scan.run_monitor", side_effect=Exception("simulated crash")):
+                    # main() should catch the exception and continue, not raise
+                    mdns_scan.main()
 
     def test_main_writes_empty_output_when_no_monitors(self, tmp_path):
         options_path = tmp_path / "options.json"

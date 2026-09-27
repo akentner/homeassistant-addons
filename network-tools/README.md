@@ -10,6 +10,9 @@ Network diagnostics and ARP-based host detection for Home Assistant.
   min/avg/max/stddev, packet loss, hostname, error)
 - **mDNS/DNS-SD service monitor** — generic per-service health checks (AirPrint, AirPlay, SMB, etc.) with configurable
   filter, interval, and HA MQTT discovery. One binary_sensor per monitor; full diagnostic info in JSON attributes.
+- **Hostname-stability detection** — tracks the mDNS-advertised hostname across polls per monitor; a numeric
+  `sensor.networktools_mdns_<slug>_hostname_changes` (`state_class: total_increasing`) increments whenever avahi renames
+  a service between checks, surfacing a rename-loop bug a single poll cannot see.
 - **Periodic scanning** — configurable interval (default: 30s), results served via REST
 - **Network tools** — nmap, ping, dig, traceroute, avahi-browse, avahi-resolve available in container
 - **host_network mode** — full Layer-2 access for ARP packets and mDNS multicast
@@ -43,6 +46,10 @@ See [DOCS.md](DOCS.md) for full configuration reference and HA integration examp
       lives in `attributes`
 - [ ] When `avahi-browse -artp _ipp._tcp` returns no results, mDNS binary sensor flips to `OFF`
 - [ ] When ARPing host is unreachable for `disconnect_threshold` consecutive cycles, the binary sensor flips to `OFF`
+- [ ] mDNS hostname-stability sensor `sensor.networktools_mdns_<slug>_hostname_changes` appears in HA after
+      `mosquitto_sub -t 'homeassistant/sensor/networktools_mdns_+_hostname_changes/config' -v`
+- [ ] When the mDNS-advertised hostname for a monitor changes between two polls (avahi rename-loop), the
+      `hostname_change_count` sensor value increments by 1 on the next successful (`online`) poll
 
 <!-- Badge Links -->
 
