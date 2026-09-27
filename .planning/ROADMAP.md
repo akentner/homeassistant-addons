@@ -135,12 +135,16 @@ re-litigate during planning:
   stable-UUID fixup, log-level passthrough + tail, print-history poller, official branding, update-version.py
   tag-timing fix) — do not assume prior shape from memory.
 
-**Requirements**: TBD
+**Requirements**: D-01..D-15 (CONTEXT.md decisions — no REQUIREMENTS.md IDs mapped to this ad-hoc phase)
 **Depends on:** Phase 21
-**Plans:** 0 plans
+**Plans:** 2 plans in 2 waves
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 22 to break down)
+- [ ] `22-01-PLAN.md` — Tracer: paperless_upload config schema + cups-pdf queue registration + PostProcess sidecar
+      mechanism + upload-worker.py (happy path + retry/backoff/failed-state + D-07 disabled-by-default regression) +
+      internal/verify-cups-paperless-upload.sh
+- [ ] `22-02-PLAN.md` — cups/DOCS.md + cups/README.md documentation, cross-checked against shipped defaults via a
+      final full regression of the feature's verify script
 
 ### 📋 v1.4 iac-runner (Phases 16-19) — PLANNING
 
