@@ -72,6 +72,41 @@ printers:
   `lpinfo -m`'s output. If the term matches zero or more than one brlaser PPD, that printer is skipped (logged as a
   `WARNING`) rather than guessed — see brlaser's own project page for the full list of supported models.
 
+## Print History
+
+Every completed print job is appended as one JSON line to `/data/print-history.jsonl` (survives add-on restarts/updates,
+since `/data` is this add-on's persistent volume). A lightweight background poller (`print-history-poller.py`, started
+by `run.sh`) queries `lpstat -W completed -o` every ~20 seconds and tracks the last-seen CUPS job id in
+`/data/print-history-state.json` so a restart never replays already-recorded jobs. On the very first-ever run (no state
+file yet), the poller baselines to whatever jobs already exist at that moment WITHOUT backfilling them — this is a
+forward-only history, not a retroactive import.
+
+Each JSONL line has these fields:
+
+| Field         | Type                   | Notes                                                                                                                 |
+| ------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `timestamp`   | ISO 8601 string (UTC)  | When the poller observed the job as completed, not CUPS's own (locale-dependent, unreliable to parse) completion time |
+| `printer`     | string                 | The CUPS destination name                                                                                             |
+| `job_id`      | integer                | CUPS's own job id                                                                                                     |
+| `user`        | string or `null`       | Submitting user, from `lpstat`'s output                                                                               |
+| `title`       | `null` (always)        | See Known limitations below                                                                                           |
+| `page_count`  | `null` (always)        | See Known limitations below                                                                                           |
+| `final_state` | `"completed"` (always) | See Known limitations below                                                                                           |
+
+### Known limitations (print history)
+
+- **`final_state` does not currently distinguish canceled/aborted jobs from a normal completion.** CUPS's own
+  `lpstat -W completed` classification already groups completed, canceled, and aborted jobs together, and this add-on
+  confirmed empirically (during this feature's design) that `lpstat -l`'s `Alerts:` field is not a reliable text signal
+  either — a job explicitly canceled while queued showed `Alerts: none`, indistinguishable from a normal successful
+  completion. Disambiguating these three states reliably would require an IPP client (e.g. `ipptool`, not present in
+  this image) querying the job's `job-state` attribute directly — out of proportionate scope for this add-on's
+  single-printer home use case.
+- **`title`/`page_count` are always `null`.** Neither is exposed by any CUPS CLI text tool available in this image
+  (`lpstat`, `lpq`) for a completed job, without the same additional IPP tooling noted above.
+- **No automatic rotation or pruning of `print-history.jsonl`.** It grows indefinitely; prune it manually if it becomes
+  large.
+
 ## Design notes
 
 **Avahi is auto-scoped to the host's primary network interface.** Because this add-on runs `host_network: true`,

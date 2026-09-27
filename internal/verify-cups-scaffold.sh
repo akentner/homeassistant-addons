@@ -157,7 +157,19 @@ else
 fi
 
 yellow "Checking cupsd LogLevel reflects the configured log_level option..."
-if docker exec "${CONTAINER_NAME}" grep -qE '^LogLevel info$' /etc/cups/cupsd.conf; then
+# run.sh's own cupsctl call (step 9) has a 5x1s retry loop around the same
+# transient "Unable to connect to server: Bad file descriptor" race
+# lpadmin's step-7 retry already guards against -- poll rather than check
+# once, so this does not race that retry window.
+LOG_LEVEL_APPLIED=0
+for _ in $(seq 1 10); do
+    if docker exec "${CONTAINER_NAME}" grep -qE '^LogLevel info$' /etc/cups/cupsd.conf; then
+        LOG_LEVEL_APPLIED=1
+        break
+    fi
+    sleep 1
+done
+if [[ "${LOG_LEVEL_APPLIED}" == "1" ]]; then
     green "   PASS: cupsd.conf LogLevel reflects the fixture's configured log_level=info"
 else
     red "   FAIL: cupsd.conf LogLevel does not reflect log_level=info"
@@ -166,13 +178,33 @@ else
 fi
 
 yellow "Checking cupsd error_log passthrough into the add-on's own log output..."
-if docker logs "${CONTAINER_NAME}" 2>&1 | grep -qE '^[EWID] \['; then
+# Log-tail forwarding only starts after run.sh's UUID-fixup restart cycle
+# (steps 6-8) completes -- steps 9-12 (log-level mapping + tail setup) run
+# on the SECOND (post-fixup) cupsd instance. Poll rather than check once,
+# since the fixup cycle's own stop/patch/restart takes a few seconds past
+# this main container's initial (pre-fixup) readiness wait above.
+ERROR_LOG_SEEN=0
+for _ in $(seq 1 40); do
+    # Captured into a variable, then grepped, rather than piping `docker
+    # logs` directly into `grep -q` -- under this script's `set -o
+    # pipefail`, `grep -q` exiting early on a match sends SIGPIPE to a
+    # still-writing `docker logs`, which then reports a non-zero (141)
+    # pipeline exit despite the match being found, making the `if` always
+    # take the else branch. Capturing first avoids the live pipe entirely.
+    MAIN_LOGS_SNAPSHOT=$(docker logs "${CONTAINER_NAME}" 2>&1)
+    if echo "${MAIN_LOGS_SNAPSHOT}" | grep -qE '^[EWID] \['; then
+        ERROR_LOG_SEEN=1
+        break
+    fi
+    sleep 1
+done
+if [[ "${ERROR_LOG_SEEN}" == "1" ]]; then
     green "   PASS: cupsd error_log lines appear in the add-on's own log output"
 else
-    red "   FAIL: no cupsd error_log lines found in the add-on's own log output"
+    red "   FAIL: no cupsd error_log lines found in the add-on's own log output within 40s"
     FAIL=1
 fi
-if docker logs "${CONTAINER_NAME}" 2>&1 | grep -qE '"(GET|POST|PUT|HEAD) '; then
+if echo "${MAIN_LOGS_SNAPSHOT}" | grep -qE '"(GET|POST|PUT|HEAD) '; then
     red "   FAIL: access_log lines appear despite log_level=info (should only tail at the debug tier)"
     FAIL=1
 else
@@ -203,26 +235,66 @@ if [[ "${DEBUG_READY}" != "1" ]]; then
     red "   FAIL: debug-tier container did not become ready"
     FAIL=1
 else
-    docker exec "${DEBUG_CONTAINER_NAME}" lpstat -v >/dev/null 2>&1 || true
-    sleep 2
-    DEBUG_LOGS=$(docker logs "${DEBUG_CONTAINER_NAME}" 2>&1)
-    if echo "${DEBUG_LOGS}" | grep -qE '^[EWID] \['; then
-        green "   PASS: error_log still tailed at the debug tier"
-    else
-        red "   FAIL: error_log not tailed at the debug tier"
+    # As in the main container's UUID-fixup cycle above: lpstat -r reports
+    # the FIRST (pre-fixup) cupsd instance. Log-tail forwarding (run.sh
+    # steps 9-12) only starts on the SECOND (post-fixup) instance, so wait
+    # for run.sh's own post-fixup readiness log line before generating a
+    # request and checking for tail evidence -- otherwise this reads the
+    # pre-fixup instance's (tail-less) state.
+    DEBUG_POST_FIXUP_SEEN=0
+    for _ in $(seq 1 40); do
+        # See the main container's error_log check above for why this
+        # captures into a variable first rather than piping `docker logs`
+        # straight into `grep -q` (pipefail + early-exit SIGPIPE).
+        DEBUG_LOGS_SNAPSHOT=$(docker logs "${DEBUG_CONTAINER_NAME}" 2>&1)
+        if echo "${DEBUG_LOGS_SNAPSHOT}" | grep -qF "cupsd is ready (post-fixup restart)"; then
+            DEBUG_POST_FIXUP_SEEN=1
+            break
+        fi
+        sleep 1
+    done
+    if [[ "${DEBUG_POST_FIXUP_SEEN}" != "1" ]]; then
+        red "   FAIL: debug-tier container's post-fixup cupsd instance did not become ready within 40s"
+        docker logs "${DEBUG_CONTAINER_NAME}" 2>&1 || true
         FAIL=1
-    fi
-    if echo "${DEBUG_LOGS}" | grep -qE '"(GET|POST|PUT|HEAD) '; then
-        green "   PASS: access_log additionally tailed at the debug tier"
     else
-        red "   FAIL: access_log not tailed at the debug tier"
-        FAIL=1
-    fi
-    if docker exec "${DEBUG_CONTAINER_NAME}" grep -qE '^LogLevel debug$' /etc/cups/cupsd.conf; then
-        green "   PASS: cupsd.conf LogLevel=debug applied for the debug tier"
-    else
-        red "   FAIL: cupsd.conf LogLevel not set to debug"
-        FAIL=1
+        docker exec "${DEBUG_CONTAINER_NAME}" lpstat -v >/dev/null 2>&1 || true
+        DEBUG_ACCESS_LOG_SEEN=0
+        for _ in $(seq 1 20); do
+            DEBUG_LOGS_SNAPSHOT=$(docker logs "${DEBUG_CONTAINER_NAME}" 2>&1)
+            if echo "${DEBUG_LOGS_SNAPSHOT}" | grep -qE '"(GET|POST|PUT|HEAD) '; then
+                DEBUG_ACCESS_LOG_SEEN=1
+                break
+            fi
+            sleep 1
+        done
+        DEBUG_LOGS=$(docker logs "${DEBUG_CONTAINER_NAME}" 2>&1)
+        if echo "${DEBUG_LOGS}" | grep -qE '^[EWID] \['; then
+            green "   PASS: error_log still tailed at the debug tier"
+        else
+            red "   FAIL: error_log not tailed at the debug tier"
+            FAIL=1
+        fi
+        if [[ "${DEBUG_ACCESS_LOG_SEEN}" == "1" ]]; then
+            green "   PASS: access_log additionally tailed at the debug tier"
+        else
+            red "   FAIL: access_log not tailed at the debug tier"
+            FAIL=1
+        fi
+        DEBUG_LOG_LEVEL_APPLIED=0
+        for _ in $(seq 1 10); do
+            if docker exec "${DEBUG_CONTAINER_NAME}" grep -qE '^LogLevel debug$' /etc/cups/cupsd.conf; then
+                DEBUG_LOG_LEVEL_APPLIED=1
+                break
+            fi
+            sleep 1
+        done
+        if [[ "${DEBUG_LOG_LEVEL_APPLIED}" == "1" ]]; then
+            green "   PASS: cupsd.conf LogLevel=debug applied for the debug tier"
+        else
+            red "   FAIL: cupsd.conf LogLevel not set to debug"
+            FAIL=1
+        fi
     fi
 fi
 docker rm -f "${DEBUG_CONTAINER_NAME}" >/dev/null 2>&1 || true
@@ -459,6 +531,82 @@ else
         # post-restart container output too, not just the first boot's.
         CONTAINER_LOGS=$(docker logs "${CONTAINER_NAME}" 2>&1)
     fi
+fi
+
+yellow "Checking print-history poller (Task C: print-history.jsonl)..."
+if docker exec "${CONTAINER_NAME}" test -f /print-history-poller.py; then
+    green "   PASS: /print-history-poller.py present in the image"
+else
+    red "   FAIL: /print-history-poller.py missing"
+    FAIL=1
+fi
+# This check runs shortly after the UUID-stability section's real `docker
+# restart` above, which re-executes run.sh's entire boot sequence from
+# scratch, including this section's own step-9 cupsctl retry loop (which can
+# take a few seconds) BEFORE step 11 (starting this poller) even runs -- so
+# poll rather than check once, to not race that same restart's own boot.
+POLLER_RUNNING=0
+for _ in $(seq 1 15); do
+    if docker exec "${CONTAINER_NAME}" sh -c 'ps aux | grep -v grep | grep -qF print-history-poller.py'; then
+        POLLER_RUNNING=1
+        break
+    fi
+    sleep 1
+done
+if [[ "${POLLER_RUNNING}" == "1" ]]; then
+    green "   PASS: print-history-poller.py is running as a background process"
+else
+    red "   FAIL: print-history-poller.py is not running"
+    FAIL=1
+fi
+
+# A real, instantly-completing print job directly against cupsd (a
+# throwaway "verify-history-printer" using file:///dev/null -- distinct
+# from this add-on's own testprinter/brlasertest fixtures above, whose
+# device URIs are deliberately unreachable TEST-NET addresses and would
+# never actually complete), so the poller has a real completed job to
+# observe.
+docker exec "${CONTAINER_NAME}" lpadmin -p verify-history-printer -v file:///dev/null -E -m drv:///sample.drv/generic.ppd >/dev/null 2>&1 || true
+docker exec "${CONTAINER_NAME}" sh -c 'echo verify-history-payload > /tmp/verify-history.txt'
+docker exec "${CONTAINER_NAME}" lp -d verify-history-printer -t "verify-history-job" /tmp/verify-history.txt >/dev/null 2>&1 || true
+
+yellow "   waiting up to 40s for the poller to record the job in print-history.jsonl..."
+HISTORY_SEEN=0
+for _ in $(seq 1 40); do
+    if [[ -f "${DATA_DIR}/print-history.jsonl" ]] && grep -qF "verify-history-printer" "${DATA_DIR}/print-history.jsonl"; then
+        HISTORY_SEEN=1
+        break
+    fi
+    sleep 1
+done
+if [[ "${HISTORY_SEEN}" == "1" ]]; then
+    green "   PASS: print-history.jsonl recorded the verify-history-printer job"
+    grep -F "verify-history-printer" "${DATA_DIR}/print-history.jsonl" | tail -1 > "${DATA_DIR}/.verify-history-line.json"
+    if python3 -c "
+import json
+with open('${DATA_DIR}/.verify-history-line.json') as f:
+    d = json.loads(f.read())
+assert d.get('printer') == 'verify-history-printer', d
+assert isinstance(d.get('job_id'), int), d
+assert 'timestamp' in d, d
+assert d.get('final_state') == 'completed', d
+print('OK')
+" | grep -q OK; then
+        green "   PASS: print-history.jsonl line has the expected fields"
+    else
+        red "   FAIL: print-history.jsonl line missing expected fields"
+        FAIL=1
+    fi
+else
+    red "   FAIL: print-history.jsonl did not record the job within 40s"
+    FAIL=1
+fi
+
+if [[ -f "${DATA_DIR}/print-history-state.json" ]]; then
+    green "   PASS: print-history-state.json exists under /data"
+else
+    red "   FAIL: print-history-state.json missing under /data"
+    FAIL=1
 fi
 
 if [[ "${FAIL}" == "1" ]]; then
