@@ -27,6 +27,7 @@ from typing import Optional
 
 OPTIONS_FILE = Path("/data/options.json")
 OUTPUT_FILE = Path("/data/results/mdns_scan.json")
+STATE_FILE = Path("/data/state/mdns_stability_state.json")
 SHARED_AVAIL_TOPIC = "network-tools/arping/availability"
 
 LOG_LEVEL_MAP = {
@@ -55,6 +56,22 @@ def load_options() -> dict:
     except (OSError, json.JSONDecodeError) as e:
         log.error(f"Options nicht lesbar: {e}")
         return {}
+
+
+def load_state() -> dict:
+    """Read the hostname-stability state file. Returns {} on any read error."""
+    try:
+        return json.loads(STATE_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_state(state: dict) -> None:
+    """Persist the hostname-stability state file via atomic tmp+rename write."""
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = STATE_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(state, indent=2, sort_keys=True))
+    tmp.rename(STATE_FILE)
 
 
 def slugify(value: str) -> str:
@@ -217,12 +234,51 @@ def run_monitor(monitor: dict) -> dict:
     return result
 
 
+def _apply_hostname_stability(slug: str, result: dict, state: dict) -> None:
+    """Compare this poll's hostname against the persisted baseline for `slug`.
+
+    Mutates `result` in place with hostname_changed / previous_hostname /
+    hostname_change_count, and updates `state[slug]` when the poll is online.
+    A non-online poll leaves the persisted baseline untouched entirely - it has
+    no fresh hostname to compare, so it must not seed, reset, or increment.
+    """
+    entry = state.get(slug)
+    prior_hostname = entry.get("last_hostname") if entry else None
+    prior_count = entry.get("hostname_change_count", 0) if entry else 0
+
+    if result["state"] != "online":
+        result["hostname_changed"] = False
+        result["previous_hostname"] = None
+        result["hostname_change_count"] = prior_count
+        return
+
+    current_hostname = result.get("hostname")
+    if entry is None:
+        # First-ever poll for this monitor: seed the baseline, don't count a change.
+        state[slug] = {"last_hostname": current_hostname, "hostname_change_count": 0}
+        result["hostname_changed"] = False
+        result["previous_hostname"] = None
+        result["hostname_change_count"] = 0
+        return
+
+    changed = prior_hostname != current_hostname
+    new_count = prior_count + 1 if changed else prior_count
+    state[slug] = {"last_hostname": current_hostname, "hostname_change_count": new_count}
+    result["hostname_changed"] = changed
+    result["previous_hostname"] = prior_hostname
+    result["hostname_change_count"] = new_count
+
+
 def _state_topic_for(prefix: str) -> str:
     return f"{prefix.rstrip('/')}/state"
 
 
 def _details_topic_for(prefix: str) -> str:
     return f"{prefix.rstrip('/')}/details"
+
+
+def _hostname_changes_topic_for(prefix: str) -> str:
+    return f"{prefix.rstrip('/')}/hostname_changes"
 
 
 def _build_device_block(monitor: dict, slug: str) -> dict:
@@ -271,6 +327,31 @@ def _build_discovery_payload(monitor: dict, discovery_prefix: str, slug: str) ->
             "device": device,
         },
         "_topic_prefix": topic_prefix,
+    }
+
+
+def _build_hostname_changes_discovery_payload(monitor: dict, slug: str, topic_prefix: str) -> dict:
+    """Build the HA Discovery payload for the hostname-change counter sensor.
+
+    Shares the same device block as the binary_sensor from _build_discovery_payload
+    so both entities land on one HA device page. `topic_prefix` is taken as a
+    parameter (not re-derived) - the caller already has it from built["_topic_prefix"].
+    """
+    device = _build_device_block(monitor, slug)
+    friendly = monitor.get("device_name") or monitor.get("name") or slug
+
+    return {
+        "name": f"{friendly} Hostname-Wechsel",
+        "unique_id": f"networktools_mdns_{slug}_hostname_changes",
+        "default_entity_id": f"sensor.networktools_mdns_{slug}_hostname_changes",
+        "state_topic": _hostname_changes_topic_for(topic_prefix),
+        "state_class": "total_increasing",
+        "icon": "mdi:swap-horizontal",
+        "unit_of_measurement": "changes",
+        "availability_topic": SHARED_AVAIL_TOPIC,
+        "payload_available": "online",
+        "payload_not_available": "offline",
+        "device": device,
     }
 
 
@@ -335,11 +416,24 @@ def publish_mqtt(monitor: dict, result: dict, options: dict, slug: str) -> None:
         f"{discovery_prefix}/binary_sensor/networktools_mdns_{slug}/config"
     )
 
+    hostname_changes_payload = _build_hostname_changes_discovery_payload(monitor, slug, topic_prefix)
+    hostname_changes_state_topic = _hostname_changes_topic_for(topic_prefix)
+    hostname_changes_discovery_topic = (
+        f"{discovery_prefix}/sensor/networktools_mdns_{slug}_hostname_changes/config"
+    )
+
     try:
         client.publish(discovery_topic, json.dumps(payload), retain=True)
         state_payload = _state_to_binary(result["state"])
         client.publish(state_topic, state_payload, retain=True, qos=1)
         client.publish(details_topic, json.dumps(result, default=str), retain=True)
+        client.publish(hostname_changes_discovery_topic, json.dumps(hostname_changes_payload), retain=True)
+        client.publish(
+            hostname_changes_state_topic,
+            str(result.get("hostname_change_count", 0)),
+            retain=True,
+            qos=1,
+        )
         log.debug(
             f"MQTT published: {slug} -> state={state_payload} matched={bool(result.get('service_name'))}"
         )
@@ -382,6 +476,7 @@ def main() -> None:
         log.info("Keine mdns_monitors konfiguriert - exit")
         write_output([])
         return
+    state = load_state()
     results: list[dict] = []
     for monitor in monitors:
         if not monitor.get("enabled", True):
@@ -407,11 +502,13 @@ def main() -> None:
                 "filter": monitor.get("filter", []),
                 "service_types_scanned": monitor.get("service_types", []),
             }
+        _apply_hostname_stability(slug, result, state)
         results.append(result)
         try:
             publish_mqtt(monitor, result, options, slug)
         except Exception as e:  # noqa: BLE001 - publish failures must not crash the loop
             log.error(f"publish_mqtt failed for {monitor.get('name')}: {e}")
+    save_state(state)
     write_output(results)
 
 
