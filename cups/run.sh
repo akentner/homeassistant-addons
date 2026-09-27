@@ -79,7 +79,54 @@ if [ -f /tmp/register-printers.sh ]; then
     [ "$REG_OK" = "1" ] || log "printer registration failed after retries (see above)"
 fi
 
-# 8. Map HA log_level option to a cupsctl LogLevel value.
+# 8. Fix up each registered printer's UUID for stability across restarts.
+#    Root cause: /etc/cups/ is not persisted outside /data, so cupsd
+#    starts every single boot with a completely empty printers.conf --
+#    lpadmin -m (step 7 above) always creates each printer "fresh" from
+#    cupsd's own point of view, including a brand-new RANDOM printer-uuid
+#    every restart. iOS/AirPrint caches discovered printers keyed by
+#    UUID, so enough restarts leave multiple "ghost" duplicate entries in
+#    iOS's print sheet for the same printer name. printers.conf must
+#    never be edited while cupsd is running (the file's own generated
+#    header says so verbatim; see apple/cups#2590 for the
+#    corruption/crash risk), so this stops the already-running cupsd
+#    first (same kill -TERM/wait mechanism as this script's own shutdown
+#    trap below), runs the generated fixup script (present only when at
+#    least one printer was actually registered -- mirrors the
+#    /tmp/register-printers.sh / /tmp/provision-admin.sh presence-check
+#    pattern above), and starts a fresh cupsd. Printer registration and
+#    preset injection are NOT re-run here: printers.conf/PPDs are
+#    otherwise untouched by this cycle, only the UUID line changes. See
+#    cups/DOCS.md's Design notes for the accepted boot-time cost of this
+#    extra start/stop/readiness-wait cycle.
+if [ -f /tmp/fixup-printer-uuids.sh ]; then
+    log "stopping cupsd to patch printer UUIDs (printers.conf must never be edited while cupsd is running)..."
+    kill -TERM "$CUPSD_PID" 2>/dev/null
+    wait "$CUPSD_PID"
+
+    sh /tmp/fixup-printer-uuids.sh || log "printer UUID fixup reported an issue (see above)"
+
+    log "restarting cupsd..."
+    cupsd -f &
+    CUPSD_PID=$!
+
+    log "waiting for cupsd to accept connections (post-fixup restart)..."
+    CUPSD_READY=0
+    for _ in $(seq 1 30); do
+        if lpstat -r >/dev/null 2>&1; then
+            CUPSD_READY=1
+            break
+        fi
+        sleep 1
+    done
+    if [ "$CUPSD_READY" = "1" ]; then
+        log "cupsd is ready (post-fixup restart)"
+    else
+        log "cupsd did not become ready within 30s after the UUID-fixup restart"
+    fi
+fi
+
+# 9. Map HA log_level option to a cupsctl LogLevel value.
 LOG_LEVEL=$(bashio::config 'log_level')
 case "$LOG_LEVEL" in
     debug) CUPS_LOG_LEVEL="debug" ;;
@@ -89,9 +136,10 @@ case "$LOG_LEVEL" in
 esac
 cupsctl LogLevel="$CUPS_LOG_LEVEL" || log "cupsctl LogLevel failed"
 
-# 9. Forward termination signals to cupsd and wait on it -- the container
-#    stays alive exactly as long as cupsd does. Per D-08: no watchdog for the
-#    legacy-unicast reflector slot-exhaustion error is added here -- with
-#    enable-reflector=no (the shipped default) that failure class cannot occur.
+# 10. Forward termination signals to cupsd and wait on it -- the container
+#     stays alive exactly as long as cupsd does. Per D-08: no watchdog for
+#     the legacy-unicast reflector slot-exhaustion error is added here --
+#     with enable-reflector=no (the shipped default) that failure class
+#     cannot occur.
 trap 'kill -TERM "$CUPSD_PID" 2>/dev/null' TERM INT
 wait "$CUPSD_PID"
