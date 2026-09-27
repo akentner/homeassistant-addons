@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: opentofu-bridge
-current_phase: 21
-current_phase_name: cups print server addon airprint mdns fixes
+current_phase: 22
+current_phase_name: cups-paperless-ngx-pdf-document-upload
 current_plan: 1
 status: Phase 20 execution complete
 stopped_at: Phase 22 context gathered
-last_updated: "2026-09-27T22:59:27.897Z"
-state_head: 68950c549b42569dcbf9ffaac448505925dd9a3a
+last_updated: "2026-09-27T23:34:06.911Z"
+state_head: 95547518223aa94f6511973c3131d13f9df9679d
 progress:
   total_phases: 9
   completed_phases: 12
-  total_plans: 18
+  total_plans: 20
   completed_plans: 27
-  percent: 100
+  percent: 22
 ---
 
 # Project State
@@ -108,7 +108,7 @@ parallelize after Phase 16 stabilises the contracts).
 
 Current Plan: 1
 
-Phase: 21 (cups print server addon airprint mdns fixes) — EXECUTING
+Phase: 22 (cups-paperless-ngx-pdf-document-upload) — READY TO EXECUTE
 21 atomic commits on main (4 planning + 14 execution + 4 plan SUMMARYs). All 4 plans landed:
 
 - **Plan 01** (e0df1a1 / fcb14cd / 958ef21 / 493eb71 / f490894 / cebe063 / b6e6534): 4-file HA Supervisor scaffold
