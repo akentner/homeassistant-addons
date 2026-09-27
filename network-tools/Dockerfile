@@ -19,6 +19,7 @@ COPY arping_scan.py /usr/local/bin/arping_scan.py
 COPY mdns_scan.py /usr/local/bin/mdns_scan.py
 COPY run.sh /run.sh
 COPY nginx.conf /etc/nginx/network-tools.conf
+COPY avahi-daemon.conf /etc/avahi/avahi-daemon.conf
 
 RUN chmod +x /run.sh \
     && mkdir -p /data/results \
