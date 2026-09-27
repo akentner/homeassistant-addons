@@ -17,16 +17,17 @@ Add-on icon is the official CUPS project logo (github.com/apple/cups), used unde
 
 ## Printers
 
-Each entry in the `printers` list is an object with six fields:
+Each entry in the `printers` list is an object with seven fields:
 
-| Field          | Type                      | Default   | Description                                                                                                           |
-| -------------- | ------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
-| `name`         | `str`                     | —         | Printer queue name registered with CUPS (`lpadmin -p <name>`)                                                         |
-| `uri`          | `str`                     | —         | Device URI CUPS uses to reach the printer. See [Supported URI schemes](#supported-uri-schemes) below                  |
-| `enabled`      | `bool?`                   | `true`    | Whether this printer entry is registered at startup                                                                   |
-| `location`     | `str?`                    | —         | Optional CUPS Location string (`lpadmin -L <location>`, e.g. `"Office"`). Omitted entirely when unset.                |
-| `driver`       | `list(generic\|brlaser)?` | `generic` | PPD driver used at registration. See [Printer driver](#printer-driver) below.                                         |
-| `driver_model` | `str?`                    | —         | Required when `driver: brlaser`. Search term matched against `lpinfo -m` to find the exact PPD (e.g. `"MFC-7460DN"`). |
+| Field          | Type                      | Default   | Description                                                                                                                                                                                |
+| -------------- | ------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`         | `str`                     | —         | Printer queue name registered with CUPS (`lpadmin -p <name>`)                                                                                                                              |
+| `uri`          | `str`                     | —         | Device URI CUPS uses to reach the printer. See [Supported URI schemes](#supported-uri-schemes) below                                                                                       |
+| `enabled`      | `bool?`                   | `true`    | Whether this printer entry is registered at startup                                                                                                                                        |
+| `location`     | `str?`                    | —         | Optional CUPS Location string (`lpadmin -L <location>`, e.g. `"Office"`). Omitted entirely when unset.                                                                                     |
+| `driver`       | `list(generic\|brlaser)?` | `generic` | PPD driver used at registration. See [Printer driver](#printer-driver) below.                                                                                                              |
+| `driver_model` | `str?`                    | —         | Required when `driver: brlaser`. Search term matched against `lpinfo -m` to find the exact PPD (e.g. `"MFC-7460DN"`).                                                                      |
+| `presets`      | `str?`                    | —         | Optional AirPrint print presets bundling this printer's own PPD option/choice pairs into named entries iOS's print sheet shows as a picker. See [Printer presets](#printer-presets) below. |
 
 ### Supported URI schemes
 
@@ -70,6 +71,40 @@ printers:
   the exact PPD is resolved at add-on startup by matching this term (case-insensitive, literal substring) against
   `lpinfo -m`'s output. If the term matches zero or more than one brlaser PPD, that printer is skipped (logged as a
   `WARNING`) rather than guessed — see brlaser's own project page for the full list of supported models.
+
+### Printer presets
+
+`presets` (optional) declares named AirPrint print presets for a printer, using Apple's `*APPrinterPreset` PPD extension
+(see [cups.org's PPD extensions spec](https://www.cups.org/doc/spec-ppd.html)). Each preset bundles one or more of that
+printer's OWN existing PPD option/choice pairs (e.g. Duplex + Resolution) into a single named entry iOS's print sheet
+shows as a "Preset"/"Vorlage" picker — instead of separate Duplex/Resolution controls nested under "Optionen".
+
+Format: a single string of semicolon-separated presets, each shaped `<display-name>|<Key1=Value1 Key2=Value2 ...>`:
+
+```yaml
+printers:
+  - name: "Brother-MFC-7460DN"
+    uri: "socket://192.168.178.44:9100"
+    driver: "brlaser"
+    driver_model: "MFC-7460DN"
+    presets: "Duplex Fein|Duplex=DuplexNoTumble Resolution=1200x600dpi;Entwurf|Duplex=None Resolution=600dpi"
+```
+
+**Discovering valid Key/Value pairs:** run `lpoptions -p <printer-name> -l` against the running add-on — each line is
+`Keyword/Display Text: choice1 *default-choice choice2 ...`; use the `Keyword` and one of its `choice` values as one
+`Key=Value` token. Only reference option/choice pairs that already exist in THAT printer's own generated PPD — this
+add-on does not verify presets against the live PPD at generate time.
+
+**Why a flattened string, not a nested options list:** Home Assistant's add-on options schema micro-language caps nested
+list/dict depth at two (see the
+[add-on configuration docs](https://developers.home-assistant.io/docs/add-ons/configuration/)). `printers[]` is already
+a depth-two list-of-objects, so a `presets[]` list-of-objects nested inside one of its entries would be a third level
+and cannot be expressed in `schema:`.
+
+Invalid presets (a malformed name or an options token that doesn't look like `Key=Value`) are skipped individually,
+logged as a `WARNING`, and never affect sibling presets or that printer's own registration. Presets are injected into
+the printer's live PPD (a TEMP copy, never in place) and reloaded via `lpadmin -P` at every add-on start — idempotent
+across restarts, same as the rest of this add-on's generated configuration.
 
 ## Design notes
 
@@ -180,6 +215,16 @@ when `location` is present and non-empty -- an empty/omitted value is skipped en
 empty string would actively clear a location a user set manually via the web UI. The value is validated against
 `LOCATION_RE` (printable ASCII, no quotes/control characters) before use; an invalid value is skipped with a WARNING
 rather than aborting that printer's registration entirely.
+
+**AirPrint print presets via `*APPrinterPreset` (`printers[].presets`).** iOS's print sheet only shows individual
+Duplex/Resolution/etc. controls nested under "Optionen" unless a printer's PPD declares named presets via Apple's
+`*APPrinterPreset` extension — neither brlaser's driver-generated PPDs nor the generic `sample.drv` PPD ship any.
+`generate_config.py`'s `build_preset_injection_snippet()` validates each configured preset (display name against
+`PRESET_NAME_RE`, every `Key=Value` options token against `PRESET_OPTION_TOKEN_RE`) and, for every printer with at least
+one valid preset, appends the resulting stanzas to a TEMP copy of that printer's live PPD and reloads it via
+`lpadmin -P` — never editing the live PPD in place, so this is idempotent across restarts exactly like the brlaser PPD
+resolution above. `presets` is a flattened string (`<name>|<Key=Value> ...;...`), not a nested options-schema list,
+because HA's schema micro-language caps list/dict nesting at depth two and `printers[]` already uses both levels.
 
 **Generic PostScript over a raw socket connection can print a 1-page PDF as endless blank pages (`driver: brlaser`,
 D-14).** Discovered during the real physical AirPrint test on `haos-op3050-1`: a Brother MFC-7460DN, connected via
