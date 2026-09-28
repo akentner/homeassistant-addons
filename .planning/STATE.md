@@ -6,9 +6,9 @@ current_phase: 22
 current_phase_name: "cups: paperless-ngx PDF document upload"
 current_plan: 1
 status: Phase 20 execution complete
-stopped_at: Completed 22-01-PLAN.md
-last_updated: "2026-09-28T20:01:39.705Z"
-state_head: da79d6ae9239d1639f621af2251745c673d67c8e
+stopped_at: Completed 22-02-PLAN.md
+last_updated: "2026-09-28T20:13:23.539Z"
+state_head: 690e1df2c5b3b75799b84a1e8f165e0f11664ddd
 progress:
   total_phases: 9
   completed_phases: 12
@@ -368,6 +368,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | Phase quick-260910-u0m P01 | 18min | 3 tasks | 5 files |
 | Phase quick-260910-vh7 P01 | 35min | 2 tasks | 3 files |
 | Phase 22 P01 | 21min | 2 tasks | 8 files |
+| Phase 22 P02 | 5min | 2 tasks | 3 files |
 
 ## Quick Tasks Completed
 
@@ -410,9 +411,9 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 
 **Resume file:** None
 
-**Stopped at:** Completed 22-01-PLAN.md
+**Stopped at:** Completed 22-02-PLAN.md
 
-Last session: 2026-09-28T20:01:39.492Z
+Last session: 2026-09-28T20:13:23.325Z
 
 ---
 
@@ -482,3 +483,5 @@ skipped; Phase 16 ready to plan_
 - [Phase quick-260927-wzn]: Regression test proven RED (against a saved pre-fix copy) before GREEN (against the fixed script), then wired into make check-all so the tag-timing bug class cannot silently regress
 - [Phase 22]: cups-pdf's directive is `PostProcessing` (not `PostProcess` as the plan text said); Alpine's cups-pdf-3.0.2-r0 apk backend ships world-executable (0755) so CUPS runs it unprivileged, but cups-pdf itself refuses to run unless root -- fixed with `chmod 700` in the Dockerfile (Debian's package ships 0700 for the same reason). — Both discovered empirically via the docker-build verify harness during Task 1; without the chmod fix the entire paperless_upload feature would have silently produced zero PDFs on this Alpine base image.
 - [Phase 22]: D-08's UUID-stability fixup required zero new code for the cups-pdf queue -- build_cups_pdf_registration_snippet()'s queue_name is appended into the same registered_printer_names list build_printer_uuid_fixup_script() already consumes generically. — Verified empirically with a real docker restart of a paperless_upload-enabled container: the cups-pdf queue's printer UUID was byte-identical before and after.
+- [Phase 22]: Reused the single existing [docs]: DOCS.md reference link for the new README bullet rather than adding a second, anchor-specific link. — Matches this add-on's own convention where only the closing 'See DOCS.md' line carries a reference-style link; adding a second docs link would be redundant.
+- [Phase 22]: Consolidated all four required Design-notes sub-points (fixed outbox path, corrected PostProcessing argument model, 0o777 outbox rationale, minimal exhausted-retry visibility) into one bolded-lead paragraph. — Matches cups/DOCS.md's established one-entry-per-topic Design notes style rather than splitting into four separate entries.
