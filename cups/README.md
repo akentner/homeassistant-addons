@@ -20,6 +20,8 @@ configure. The Avahi reflector's behavior is configurable via the `avahi_reflect
 - IPv6 mDNS resolution disabled by default (`avahi_use_ipv6: false`) — avoids resolving to an unreachable/unrouted IPv6
   ULA address for clients that can't use it
 - Multiple printers configurable from a single `printers` options list
+- Optional forwarding of printed PDFs to a [paperless-ngx](https://docs.paperless-ngx.com/) instance via a second,
+  disabled-by-default `cups-pdf` virtual queue — see [Paperless-ngx PDF Upload][docs] in DOCS.md
 
 ## Configuration
 
