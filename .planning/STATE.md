@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: opentofu-bridge
 current_phase: 22
-current_phase_name: cups-paperless-ngx-pdf-document-upload
+current_phase_name: "cups: paperless-ngx PDF document upload"
 current_plan: 1
 status: Phase 20 execution complete
-stopped_at: Phase 22 context gathered
-last_updated: "2026-09-27T23:34:06.911Z"
-state_head: 95547518223aa94f6511973c3131d13f9df9679d
+stopped_at: Completed 22-01-PLAN.md
+last_updated: "2026-09-28T20:01:39.705Z"
+state_head: da79d6ae9239d1639f621af2251745c673d67c8e
 progress:
   total_phases: 9
   completed_phases: 12
   total_plans: 20
   completed_plans: 27
-  percent: 22
+  percent: 100
 ---
 
 # Project State
@@ -106,9 +106,10 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Current Plan: 1
+Current Plan: 2
+Total Plans in Phase: 2
 
-Phase: 22 (cups-paperless-ngx-pdf-document-upload) — READY TO EXECUTE
+Phase: 22 (cups: paperless-ngx PDF document upload) — EXECUTING
 21 atomic commits on main (4 planning + 14 execution + 4 plan SUMMARYs). All 4 plans landed:
 
 - **Plan 01** (e0df1a1 / fcb14cd / 958ef21 / 493eb71 / f490894 / cebe063 / b6e6534): 4-file HA Supervisor scaffold
@@ -366,6 +367,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | Phase 17 P07 | 25 min   | 4 tasks | 8 files |
 | Phase quick-260910-u0m P01 | 18min | 3 tasks | 5 files |
 | Phase quick-260910-vh7 P01 | 35min | 2 tasks | 3 files |
+| Phase 22 P01 | 21min | 2 tasks | 8 files |
 
 ## Quick Tasks Completed
 
@@ -406,11 +408,11 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 
 ## Session Continuity
 
-**Resume file:** .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-CONTEXT.md
+**Resume file:** None
 
-**Stopped at:** Phase 22 context gathered
+**Stopped at:** Completed 22-01-PLAN.md
 
-Last session: 2026-09-27T22:59:27.651Z
+Last session: 2026-09-28T20:01:39.492Z
 
 ---
 
@@ -478,3 +480,5 @@ skipped; Phase 16 ready to plan_
 - [Phase 17]: The repo has two deliberate add-on definitions (is a shipped add-on vs must pass validation/linting); all four discovery sites now name theirs — do not unify
 - [Phase quick-260927-wzn]: update-version.py: files_have_uncommitted_changes() gates tagging on git status --porcelain scoped to exactly the version files per add-on, so an unrelated dirty file elsewhere never blocks or falsely permits tagging
 - [Phase quick-260927-wzn]: Regression test proven RED (against a saved pre-fix copy) before GREEN (against the fixed script), then wired into make check-all so the tag-timing bug class cannot silently regress
+- [Phase 22]: cups-pdf's directive is `PostProcessing` (not `PostProcess` as the plan text said); Alpine's cups-pdf-3.0.2-r0 apk backend ships world-executable (0755) so CUPS runs it unprivileged, but cups-pdf itself refuses to run unless root -- fixed with `chmod 700` in the Dockerfile (Debian's package ships 0700 for the same reason). — Both discovered empirically via the docker-build verify harness during Task 1; without the chmod fix the entire paperless_upload feature would have silently produced zero PDFs on this Alpine base image.
+- [Phase 22]: D-08's UUID-stability fixup required zero new code for the cups-pdf queue -- build_cups_pdf_registration_snippet()'s queue_name is appended into the same registered_printer_names list build_printer_uuid_fixup_script() already consumes generically. — Verified empirically with a real docker restart of a paperless_upload-enabled container: the cups-pdf queue's printer UUID was byte-identical before and after.

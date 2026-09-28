@@ -137,9 +137,11 @@ re-litigate during planning:
 
 **Requirements**: D-01..D-15 (CONTEXT.md decisions — no REQUIREMENTS.md IDs mapped to this ad-hoc phase)
 **Depends on:** Phase 21
-**Plans:** 2 plans in 2 waves
+**Plans:** 1/2 plans executed in 2 waves
 
 Plans:
+- [x] 22-01-PLAN.md
+- [ ] 22-02-PLAN.md
 - [ ] `22-01-PLAN.md` — Tracer: paperless_upload config schema + cups-pdf queue registration + PostProcess sidecar
       mechanism + upload-worker.py (happy path + retry/backoff/failed-state + D-07 disabled-by-default regression) +
       internal/verify-cups-paperless-upload.sh
