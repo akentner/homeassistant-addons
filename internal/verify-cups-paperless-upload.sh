@@ -350,6 +350,122 @@ fi
 
 docker rm -f "${DISABLED_CONTAINER}" >/dev/null 2>&1 || true
 
+# =============================================================================
+# Scenario 3: retry/backoff exhaustion -> failed/ (D-09/D-15)
+# =============================================================================
+yellow "=== Scenario 3: retry/backoff exhaustion (D-09/D-15) ==="
+
+FAIL_PORT=8793
+FAIL_LOG="${SCRATCH_DIR}/fail-requests.jsonl"
+FAIL_MODE="${SCRATCH_DIR}/fail-mode.txt"
+FAIL_STUB_PID=$(start_stub_server "${FAIL_PORT}" "${FAIL_LOG}" "${FAIL_MODE}")
+STUB_PIDS+=("${FAIL_STUB_PID}")
+echo "fail" > "${FAIL_MODE}"
+sleep 1
+
+RETRY_CONTAINER="cups-paperless-verify-retry-${STAMP}"
+CONTAINERS_STARTED+=("${RETRY_CONTAINER}")
+RETRY_DATA_DIR="${SCRATCH_DIR}/retry-data"
+mkdir -p "${RETRY_DATA_DIR}"
+cat > "${RETRY_DATA_DIR}/options.json" <<JSON
+{
+  "avahi_reflector": false,
+  "printers": [],
+  "log_level": "info",
+  "paperless_upload": {
+    "enabled": true,
+    "queue_name": "verify-pdf-queue",
+    "location": "",
+    "url": "http://host.docker.internal:${FAIL_PORT}",
+    "token": "verify-fake-token-2",
+    "timeout": 10,
+    "retry_count": 2,
+    "retry_delay": 2
+  }
+}
+JSON
+
+docker run --rm -d --name "${RETRY_CONTAINER}" \
+    --add-host=host.docker.internal:host-gateway \
+    -v "${RETRY_DATA_DIR}:/data" \
+    "${IMAGE_NAME}" >/dev/null
+
+if ! wait_for_container_ready "${RETRY_CONTAINER}"; then
+    red "cupsd did not become ready in the retry-exhaustion container"
+    docker logs "${RETRY_CONTAINER}" 2>&1 || true
+    FAIL=1
+elif ! wait_for_queue "${RETRY_CONTAINER}" "verify-pdf-queue"; then
+    red "FAIL: verify-pdf-queue did not register within timeout (retry-exhaustion container)"
+    docker logs "${RETRY_CONTAINER}" 2>&1 || true
+    FAIL=1
+else
+    docker exec "${RETRY_CONTAINER}" sh -c 'echo "verify retry-exhaustion payload" > /tmp/retry.txt'
+    docker exec "${RETRY_CONTAINER}" lp -d verify-pdf-queue -t "Retry Exhaustion Title" /tmp/retry.txt >/dev/null
+
+    # retry_count=2, retry_delay=2s -- exhaustion should land in failed/ well
+    # within 60s (first attempt immediate, one retry ~2s later, plus poll
+    # cadence and cupsd/filter overhead).
+    RETRY_FAILED_SEEN=0
+    for _ in $(seq 1 60); do
+        if [[ -n "$(ls -A "${RETRY_DATA_DIR}/paperless_upload/failed" 2>/dev/null)" ]]; then
+            RETRY_FAILED_SEEN=1
+            break
+        fi
+        sleep 1
+    done
+
+    if [[ "${RETRY_FAILED_SEEN}" == "1" ]]; then
+        green "PASS: document landed in failed/ after retry exhaustion"
+    else
+        red "FAIL: no document appeared in failed/ within timeout"
+        docker logs "${RETRY_CONTAINER}" 2>&1 || true
+        FAIL=1
+    fi
+
+    RETRY_PROCESSING_LEFTOVER=$(ls -A "${RETRY_DATA_DIR}/paperless_upload/processing" 2>/dev/null || true)
+    if [[ -z "${RETRY_PROCESSING_LEFTOVER}" ]]; then
+        green "PASS: processing/ is empty after retry exhaustion (no leftover retry-state files)"
+    else
+        red "FAIL: processing/ still has leftover files after retry exhaustion: ${RETRY_PROCESSING_LEFTOVER}"
+        FAIL=1
+    fi
+
+    FAILED_PDF_COUNT=$(find "${RETRY_DATA_DIR}/paperless_upload/failed" -name '*.pdf' 2>/dev/null | wc -l)
+    if [[ "${FAILED_PDF_COUNT}" -ge 1 ]]; then
+        green "PASS: failed/ contains the PDF (never deleted)"
+    else
+        red "FAIL: failed/ does not contain a PDF"
+        FAIL=1
+    fi
+
+    FAILED_SIDECAR_COUNT=$(find "${RETRY_DATA_DIR}/paperless_upload/failed" -name '*.json' 2>/dev/null | wc -l)
+    if [[ "${FAILED_SIDECAR_COUNT}" -ge 1 ]]; then
+        green "PASS: failed/ contains the title sidecar alongside the PDF"
+    else
+        yellow "NOTE: failed/ has no sidecar -- acceptable only if cups-pdf's PostProcessing hook did not run"
+    fi
+
+    RETRY_LOGS=$(docker logs "${RETRY_CONTAINER}" 2>&1)
+    WARNING_COUNT=$(echo "${RETRY_LOGS}" | grep -c "WARNING: paperless-ngx upload exhausted" || true)
+    if [[ "${WARNING_COUNT}" == "1" ]]; then
+        green "PASS: exactly one 'WARNING: paperless-ngx upload exhausted' log line (D-15)"
+    else
+        red "FAIL: expected exactly 1 'WARNING: paperless-ngx upload exhausted' line, found ${WARNING_COUNT}"
+        echo "${RETRY_LOGS}" | grep "WARNING: paperless-ngx upload exhausted" || true
+        FAIL=1
+    fi
+
+    if echo "${RETRY_LOGS}" | grep -qF "verify-fake-token-2"; then
+        red "FAIL: the fixture token appears verbatim in container logs (retry-exhaustion container)"
+        FAIL=1
+    else
+        green "PASS: paperless_upload.token never appears in container logs (retry-exhaustion container)"
+    fi
+fi
+
+docker rm -f "${RETRY_CONTAINER}" >/dev/null 2>&1 || true
+kill "${FAIL_STUB_PID}" >/dev/null 2>&1 || true
+
 if [[ "${FAIL}" == "1" ]]; then
     echo
     red "internal/verify-cups-paperless-upload.sh: FAILED"

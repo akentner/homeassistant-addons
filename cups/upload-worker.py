@@ -26,11 +26,15 @@ the full rationale):
     (D-11) when it is missing or malformed -- the upload must never be
     skipped just because a title could not be recovered.
   - Each PDF (+ its sidecar, if present) is atomically moved into
-    processing/ before an upload attempt, then to sent/ on success. On
-    failure it currently moves straight to failed/ -- retry/backoff across
-    multiple poll cycles is added in a later revision of this worker
-    (tracked via a `<basename>.retry.json` state file living alongside the
-    PDF in processing/).
+    processing/ before an upload attempt, then to sent/ on success.
+  - On failure, a companion `<basename>.retry.json` state file (attempts +
+    next_attempt_at, a FIXED interval per D-09 -- not exponential, matching
+    this add-on's stated preference for simple/predictable behavior over
+    cleverness) is written atomically alongside the PDF in processing/, and
+    the document is retried on a later poll cycle once next_attempt_at has
+    passed. Once `attempts` reaches `retry_count`, the PDF + sidecar (if
+    present) move to failed/ (never deleted) and exactly one WARNING line
+    is emitted (D-15).
   - The worker does its own gating on paperless_upload.enabled: when
     disabled (the shipped default, D-07), this process logs one INFO line
     and exits immediately, writing nothing at all under /data.
@@ -39,7 +43,7 @@ the full rationale):
 import json
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -54,6 +58,9 @@ OPTIONS_PATH = Path("/data/options.json")
 POLL_INTERVAL_SECONDS = 20
 PAPERLESS_ENDPOINT = "/api/documents/post_document/"
 TITLE_MAX_LENGTH = 128
+# Suffix for the retry-state sidecar -- distinct from the title sidecar
+# (`.json`) written by the PostProcess hook, so the two never collide.
+RETRY_STATE_SUFFIX = ".retry.json"
 
 
 def load_options() -> dict:
@@ -105,6 +112,58 @@ def read_title(pdf_path: Path) -> str:
     return str(title).strip()[:TITLE_MAX_LENGTH]
 
 
+def retry_state_path(pdf_path: Path) -> Path:
+    """Return `<basename>.retry.json` for `pdf_path` -- lives alongside the
+    PDF in processing/ while retries are outstanding, distinct from the
+    `.json` title sidecar."""
+    return pdf_path.parent / (pdf_path.stem + RETRY_STATE_SUFFIX)
+
+
+def load_retry_state(pdf_path: Path) -> dict | None:
+    """Return the parsed retry-state dict, or None if absent/malformed.
+
+    A malformed/unreadable state file is treated as "no prior attempts" --
+    conservative (one extra retry at worst) rather than raising and killing
+    the poll cycle.
+    """
+    state_path = retry_state_path(pdf_path)
+    if not state_path.exists():
+        return None
+    try:
+        return json.loads(state_path.read_text())
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(
+            f"WARNING: could not read retry state {state_path}: {exc} -- treating as no "
+            "prior attempts",
+            flush=True,
+        )
+        return None
+
+
+def save_retry_state(pdf_path: Path, attempts: int, next_attempt_at: datetime) -> None:
+    """Atomically persist retry state -- same temp-file + `.replace()` idiom
+    as print-history-poller.py's save_last_seen_job_id()."""
+    state_path = retry_state_path(pdf_path)
+    tmp_path = state_path.with_suffix(state_path.suffix + ".tmp")
+    tmp_path.write_text(
+        json.dumps({"attempts": attempts, "next_attempt_at": next_attempt_at.isoformat()})
+    )
+    tmp_path.replace(state_path)
+
+
+def is_due(pdf_path: Path) -> bool:
+    """Return True if `pdf_path` has no retry state yet (never attempted) or
+    its `next_attempt_at` has already passed."""
+    state = load_retry_state(pdf_path)
+    if state is None:
+        return True
+    try:
+        next_attempt_at = datetime.fromisoformat(state["next_attempt_at"])
+    except (KeyError, ValueError):
+        return True
+    return datetime.now(timezone.utc) >= next_attempt_at
+
+
 def upload_document(pdf_path: Path, config: dict) -> bool:
     """Attempt one upload of `pdf_path` to paperless-ngx.
 
@@ -149,15 +208,60 @@ def upload_document(pdf_path: Path, config: dict) -> bool:
     return False
 
 
-def process_document(pdf_path: Path, config: dict) -> None:
-    """Move `pdf_path` (+ its sidecar, if present) into processing/, attempt
-    one upload, then move to sent/ or failed/.
+def attempt_and_route(pdf_path: Path, config: dict, prior_attempts: int) -> None:
+    """Attempt one upload of a document already sitting in processing/, then
+    route it to sent/, back into processing/ (with updated retry state), or
+    failed/ depending on the outcome and `retry_count`.
 
-    Wrapped in its own try/except by the caller (poll_once) so one
+    `prior_attempts` is the number of attempts already recorded in this
+    document's retry state (0 for a brand-new document with no state file
+    yet). Wrapped in its own try/except by the caller (poll_once) so one
     malformed document never kills the loop for every other queued
     document.
     """
-    sidecar_path = pdf_path.with_suffix(".json")
+    sidecar_path = pdf_path.parent / (pdf_path.stem + ".json")
+    retry_path = retry_state_path(pdf_path)
+
+    if upload_document(pdf_path, config):
+        if sidecar_path.exists():
+            sidecar_path.unlink()
+        if retry_path.exists():
+            retry_path.unlink()
+        pdf_path.replace(SENT / pdf_path.name)
+        return
+
+    attempts = prior_attempts + 1
+    retry_count = int(config.get("retry_count", 5) or 5)
+    retry_delay = int(config.get("retry_delay", 60) or 60)
+
+    if attempts >= retry_count:
+        pdf_path.replace(FAILED / pdf_path.name)
+        if sidecar_path.exists():
+            sidecar_path.replace(FAILED / sidecar_path.name)
+        if retry_path.exists():
+            retry_path.unlink()
+        # D-15: exactly one WARNING-level line per exhausted-retry document --
+        # this literal template exists at exactly one call site (this one)
+        # so it is never duplicated across the codebase.
+        print(
+            f"WARNING: paperless-ngx upload exhausted after {retry_count} attempts for "
+            f"{pdf_path.name} -- moved to failed/, see failed/{pdf_path.name}",
+            flush=True,
+        )
+    else:
+        next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=retry_delay)
+        save_retry_state(pdf_path, attempts, next_attempt_at)
+        print(
+            f"INFO: paperless-ngx upload attempt {attempts}/{retry_count} failed for "
+            f"{pdf_path.name} -- retrying at {next_attempt_at.isoformat()}",
+            flush=True,
+        )
+
+
+def process_new_document(pdf_path: Path, config: dict) -> None:
+    """Move a brand-new document from incoming/ into processing/, then
+    attempt its first upload."""
+    sidecar_path = pdf_path.parent / (pdf_path.stem + ".json")
     processing_pdf = PROCESSING / pdf_path.name
     processing_sidecar = PROCESSING / sidecar_path.name
 
@@ -165,32 +269,37 @@ def process_document(pdf_path: Path, config: dict) -> None:
     if sidecar_path.exists():
         sidecar_path.replace(processing_sidecar)
 
-    if upload_document(processing_pdf, config):
-        if processing_sidecar.exists():
-            processing_sidecar.unlink()
-        processing_pdf.replace(SENT / processing_pdf.name)
-    else:
-        # No retry/backoff yet at this revision -- move straight to
-        # failed/. failed/ documents are never deleted (sidecar preserved
-        # alongside, so a human triaging failed/ later still has the
-        # recovered title).
-        processing_pdf.replace(FAILED / processing_pdf.name)
-        if processing_sidecar.exists():
-            processing_sidecar.replace(FAILED / processing_sidecar.name)
-        print(
-            f"WARNING: paperless-ngx upload failed for {processing_pdf.name} -- moved to "
-            "failed/",
-            flush=True,
-        )
+    attempt_and_route(processing_pdf, config, prior_attempts=0)
+
+
+def process_due_retry(pdf_path: Path, config: dict) -> None:
+    """Re-attempt a document already sitting in processing/ whose
+    next_attempt_at has passed."""
+    state = load_retry_state(pdf_path) or {}
+    prior_attempts = int(state.get("attempts", 0) or 0)
+    attempt_and_route(pdf_path, config, prior_attempts=prior_attempts)
 
 
 def poll_once(config: dict) -> None:
-    """Scan incoming/ for new documents and process each one."""
+    """Scan incoming/ for brand-new documents, and processing/ for documents
+    whose retry backoff has elapsed."""
     for pdf_path in sorted(INCOMING.glob("*.pdf")):
         try:
-            process_document(pdf_path, config)
+            process_new_document(pdf_path, config)
         except Exception as exc:  # noqa: BLE001 -- must never crash this loop
             print(f"WARNING: failed to process {pdf_path.name}: {exc}", flush=True)
+
+    for pdf_path in sorted(PROCESSING.glob("*.pdf")):
+        # A document with no retry state at all here means a prior run
+        # crashed mid-attempt (before any state was written) -- is_due()
+        # already treats "no state file" as due immediately, so it is
+        # retried rather than left stuck forever.
+        if not is_due(pdf_path):
+            continue
+        try:
+            process_due_retry(pdf_path, config)
+        except Exception as exc:  # noqa: BLE001 -- must never crash this loop
+            print(f"WARNING: failed to retry {pdf_path.name}: {exc}", flush=True)
 
 
 def main() -> None:
