@@ -176,11 +176,24 @@ fi
 python3 /print-history-poller.py &
 PRINT_HISTORY_POLLER_PID=$!
 
+# 11b. Background: the optional paperless-ngx upload worker (paperless_upload
+#      option block, disabled by default -- D-07). Started unconditionally,
+#      same as step 11 above, rather than gated on a generated marker file
+#      here -- the worker does its own gating on paperless_upload.enabled by
+#      reading /data/options.json directly (mirrors this add-on's existing
+#      convention of every background process reading its own config), so it
+#      logs one INFO line and exits immediately when the feature is off.
+#      Decoupled from cupsd's own lifecycle exactly like step 11's poller: a
+#      hung/unreachable paperless-ngx can only stall this worker's own loop,
+#      never cupsd or the physical printer queue (D-13).
+python3 /upload-worker.py &
+UPLOAD_WORKER_PID=$!
+
 # 12. Forward termination signals to cupsd and wait on it -- the container
 #     stays alive exactly as long as cupsd does. Per D-08: no watchdog for
 #     the legacy-unicast reflector slot-exhaustion error is added here --
 #     with enable-reflector=no (the shipped default) that failure class
-#     cannot occur. Also stops the log-tail and print-history-poller
-#     background processes so container shutdown stays clean.
-trap 'kill -TERM "$CUPSD_PID" 2>/dev/null; kill -TERM "$ERROR_LOG_TAIL_PID" 2>/dev/null; [ -n "$ACCESS_LOG_TAIL_PID" ] && kill -TERM "$ACCESS_LOG_TAIL_PID" 2>/dev/null; kill -TERM "$PRINT_HISTORY_POLLER_PID" 2>/dev/null' TERM INT
+#     cannot occur. Also stops the log-tail, print-history-poller, and
+#     upload-worker background processes so container shutdown stays clean.
+trap 'kill -TERM "$CUPSD_PID" 2>/dev/null; kill -TERM "$ERROR_LOG_TAIL_PID" 2>/dev/null; [ -n "$ACCESS_LOG_TAIL_PID" ] && kill -TERM "$ACCESS_LOG_TAIL_PID" 2>/dev/null; kill -TERM "$PRINT_HISTORY_POLLER_PID" 2>/dev/null; kill -TERM "$UPLOAD_WORKER_PID" 2>/dev/null' TERM INT
 wait "$CUPSD_PID"

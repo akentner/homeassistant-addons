@@ -30,3 +30,44 @@ configuration:
       Add-on log verbosity (debug, info, warning, error). Default is warning for quiet
       operation. cupsd's error log is always forwarded to this add-on's own log output;
       the access log is additionally forwarded only at the debug level.
+  paperless_upload:
+    name: Paperless-ngx Upload
+    description: >-
+      Adds a second, PDF-only print queue whose output is uploaded to a paperless-ngx
+      instance. Disabled by default; when enabled, set url and token at minimum.
+    enabled:
+      name: Enable
+      description: >-
+        Register the cups-pdf queue and start the upload worker. Disabled by default --
+        existing installs see zero change until this is turned on.
+    queue_name:
+      name: Queue Name
+      description: >-
+        Name of the PDF-only print queue clients will see (e.g. in the iOS/macOS Print
+        sheet).
+    location:
+      name: Location
+      description: >-
+        Optional location/description metadata shown for the queue, mirroring printers[]'s
+        own location field.
+    url:
+      name: paperless-ngx URL
+      description: >-
+        Base URL of the paperless-ngx instance (e.g. "http://paperless.example.com:8000").
+    token:
+      name: API Token
+      description: >-
+        paperless-ngx API token, sent as "Authorization: Token <token>". Never logged.
+    timeout:
+      name: Upload Timeout (seconds)
+      description: >-
+        Maximum time to wait for a single upload request to paperless-ngx.
+    retry_count:
+      name: Retry Count
+      description: >-
+        Number of upload attempts before a document is moved to failed/ and a WARNING is
+        logged.
+    retry_delay:
+      name: Retry Delay (seconds)
+      description: >-
+        Fixed delay between retry attempts for a failed upload.

@@ -29,6 +29,15 @@ options:
   admin_password: ""
   printers: []
   log_level: "warning"
+  paperless_upload:
+    enabled: false
+    queue_name: "PDF-to-DMS"
+    location: ""
+    url: ""
+    token: ""
+    timeout: 30
+    retry_count: 5
+    retry_delay: 60
 
 schema:
   avahi_reflector: "bool?"
@@ -45,3 +54,12 @@ schema:
       driver: "list(generic|brlaser)?"
       driver_model: str?
   log_level: "list(debug|info|warning|error)?"
+  paperless_upload:
+    enabled: "bool?"
+    queue_name: "str?"
+    location: "str?"
+    url: "str?"
+    token: "password?"
+    timeout: "int?"
+    retry_count: "int?"
+    retry_delay: "int?"

@@ -191,6 +191,31 @@ PRINTER_UUID_NAMESPACE = uuid.UUID("1d944d3a-d74c-4e0b-b273-fdce19c621d9")
 # underscore, max 32 chars total.
 ADMIN_USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 
+# paperless_upload (Phase 22) -- see build_cups_pdf_conf / build_paperless_postprocess_hook
+# / build_cups_pdf_registration_snippet below. Kept as a dedicated block of constants,
+# mirroring the CUPSD_STOCK_CONF_PATH / REGISTER_SCRIPT_PATH naming convention above.
+PAPERLESS_UPLOAD_CUPS_PDF_CONF_PATH = "/etc/cups/cups-pdf.conf"
+# Pristine copy of the stock cups-pdf.conf, written by the Dockerfile (mirrors
+# CUPSD_STOCK_CONF_PATH's own rationale: every startup patches FROM this backup,
+# never from a possibly-already-patched live file).
+PAPERLESS_UPLOAD_CUPS_PDF_CONF_STOCK_PATH = "/etc/cups/cups-pdf.conf.stock"
+# Single shared outbox root (D-05) -- incoming/processing/sent/failed stage
+# directories live directly under this path. Under /data so it survives
+# container restarts (unlike /etc/cups/, which does not).
+PAPERLESS_UPLOAD_OUTBOX_ROOT = "/data/paperless_upload"
+# Rendered by build_paperless_postprocess_hook(), referenced as cups-pdf's own
+# `PostProcessing` directive. /tmp (not /data) since it is regenerated every
+# startup, exactly like REGISTER_SCRIPT_PATH/ADMIN_PROVISION_SCRIPT_PATH above.
+PAPERLESS_UPLOAD_POSTPROCESS_HOOK_PATH = "/tmp/paperless-postprocess.sh"
+# Literal (non-regex) case-insensitive search term matched against a live
+# `lpinfo -m` listing to resolve cups-pdf's own auto-generated PPD -- mirrors
+# build_brlaser_registration_snippet's driver_model search, but fixed (not an
+# add-on option) since cups-pdf only ever ships the one PPD.
+PAPERLESS_UPLOAD_PPD_SEARCH_TERM = "CUPS-PDF"
+# cups-pdf's device URI scheme -- fixed, not user-configurable (unlike
+# printers[].uri): this queue is always backed by the cups-pdf virtual backend.
+CUPS_PDF_DEVICE_URI = "cups-pdf:/"
+
 # Matches a CUPS printer Location string (lpadmin -L). Conservative
 # printable-ASCII-minus-quotes allowlist -- defense in depth alongside the
 # argv-array construction in build_printer_registration (T-21-01's
@@ -754,6 +779,215 @@ def build_brlaser_registration_snippet(name: str, uri: str, driver_model: str, l
     )
 
 
+def build_cups_pdf_conf(options: dict) -> str | None:
+    """Render /etc/cups/cups-pdf.conf for the optional paperless_upload feature.
+
+    Returns None -- writing nothing -- when `paperless_upload.enabled` is
+    false (the shipped default) or `queue_name` fails validation (D-07):
+    generate_config.py never registers the queue, no cups-pdf.conf is
+    generated, no outbox directories are created. Mirrors
+    `build_admin_provisioning`'s fail-safe-None-return pattern.
+
+    When valid, reads the stock template from
+    PAPERLESS_UPLOAD_CUPS_PDF_CONF_STOCK_PATH (falling back to an empty
+    string if the stock file is missing -- same defensive posture as
+    `build_cupsd_conf`'s stock-backup fallback) and APPENDS four active
+    directive lines at the end, never regex-patching the stock file's own
+    commented example lines:
+      - `Out <outbox>/incoming` / `AnonDirName <outbox>/incoming` -- both
+        point at the SAME fixed absolute path (D-05): every job lands flat
+        in one directory regardless of username, whether cups-pdf resolves
+        a real system user or falls back to its AnonUser="nobody" default
+        (left untouched here).
+      - `Label 2` -- fixed, not configurable: guarantees filename
+        uniqueness via a `-job_<id>` suffix even for identical titles
+        landing in the same shared directory (also required by the
+        upload-worker's/PostProcess hook's title-recovery mechanism, see
+        `build_paperless_postprocess_hook`).
+      - `PostProcessing <hook path>` -- the best-effort title-sidecar
+        writer (cups-pdf's own directive name is `PostProcessing`, verified
+        against the stock template's own documented `### Key:
+        PostProcessing (config, lptoptions)` stanza -- NOT `PostProcess`).
+    """
+    upload = options.get("paperless_upload") or {}
+    enabled = bool(upload.get("enabled", False))
+    if not enabled:
+        return None
+
+    queue_name = str(upload.get("queue_name", "PDF-to-DMS") or "PDF-to-DMS")
+    if not NAME_RE.match(queue_name):
+        print(
+            f"WARNING: paperless_upload.queue_name {queue_name!r} failed validation -- must "
+            f"match {NAME_RE.pattern}, cups-pdf queue not registered",
+            flush=True,
+        )
+        return None
+
+    stock_path = Path(PAPERLESS_UPLOAD_CUPS_PDF_CONF_STOCK_PATH)
+    try:
+        template = stock_path.read_text() if stock_path.exists() else ""
+    except OSError as exc:
+        print(
+            f"WARNING: could not read {PAPERLESS_UPLOAD_CUPS_PDF_CONF_STOCK_PATH}: {exc} -- "
+            "using an empty template",
+            flush=True,
+        )
+        template = ""
+
+    lines = [template.rstrip("\n")] if template.strip() else []
+    lines += [
+        f"Out {PAPERLESS_UPLOAD_OUTBOX_ROOT}/incoming",
+        f"AnonDirName {PAPERLESS_UPLOAD_OUTBOX_ROOT}/incoming",
+        "Label 2",
+        f"PostProcessing {PAPERLESS_UPLOAD_POSTPROCESS_HOOK_PATH}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def build_paperless_postprocess_hook() -> str:
+    """Render the PostProcess hook script cups-pdf invokes for every job.
+
+    cups-pdf's `PostProcessing` directive invokes the configured script via a
+    plain `system()` call with exactly three positional arguments: `$1` the
+    final absolute path of the generated PDF, `$2` the resolved username
+    cups-pdf wrote the file as, `$3` the original job-submitting username --
+    NOT a title-carrying environment variable (see this plan's
+    `<researched_correction>` -- verified against cups-pdf's own upstream C
+    source). cups-pdf's own `preparetitle()` logic already derives the
+    final PDF's filename directly from the print job's title (sanitized,
+    extension-stripped), with `Label 2` (set in build_cups_pdf_conf) adding
+    a `-job_<id>` disambiguating SUFFIX for collision-safety in this
+    add-on's single shared output directory (D-05). So the title is fully
+    recoverable from `$1`'s basename, after stripping that suffix -- zero
+    need for an env var that does not exist.
+
+    Static (no options needed): a short POSIX `sh` script that embeds a
+    `python3 - "$1" <<'PYEOF' ... PYEOF` block (mirrors the exact
+    heredoc-embedding idiom already used by
+    `build_printer_uuid_fixup_script`'s `_PRINTER_UUID_FIXUP_PYTHON_TEMPLATE`)
+    which strips the `-job_<N>` suffix, trims + caps the result at 128 chars
+    (D-14 -- paperless-ngx's Document.title field length; trim+cap only, no
+    filesystem sanitization, since this becomes an API string, never a
+    filename), and writes `{"title": "<derived-title>"}` to a same-basename
+    `.json` sidecar next to the PDF via a temp-file + `os.replace()` (atomic,
+    mirrors `save_last_seen_job_id`'s idiom in print-history-poller.py).
+
+    The whole hook ALWAYS exits 0 regardless of any internal failure (D-13:
+    PostProcess is best-effort only and must never affect the
+    already-completed print job -- cups-pdf's own `system()` call return
+    value is only used for logging on the C side, so this `|| true` +
+    trailing `exit 0` is defense-in-depth, not the only guarantee).
+    """
+    python_block = (
+        "import json\n"
+        "import os\n"
+        "import re\n"
+        "import sys\n"
+        "\n"
+        "pdf_path = sys.argv[1]\n"
+        "basename = os.path.basename(pdf_path)\n"
+        'if basename.lower().endswith(".pdf"):\n'
+        "    basename = basename[:-4]\n"
+        r'title = re.sub(r"-job_\d+$", "", basename).strip()[:128]' "\n"
+        "\n"
+        'sidecar_path = os.path.splitext(pdf_path)[0] + ".json"\n'
+        'tmp_path = sidecar_path + ".tmp"\n'
+        'with open(tmp_path, "w") as f:\n'
+        '    json.dump({"title": title}, f)\n'
+        "os.replace(tmp_path, sidecar_path)\n"
+    )
+    return (
+        "#!/bin/sh\n"
+        "# PostProcess hook -- see build_paperless_postprocess_hook() docstring.\n"
+        "# $1=final PDF path, $2=resolved job user, $3=original job-submitting user.\n"
+        "# Best-effort only (D-13): never blocks or fails the already-completed print job.\n"
+        "(\n"
+        '  python3 - "$1" <<\'PYEOF\'\n'
+        f"{python_block}"
+        "PYEOF\n"
+        ") || true\n"
+        "exit 0\n"
+    )
+
+
+def build_cups_pdf_registration_snippet(options: dict) -> tuple[str | None, str | None]:
+    """Render the cups-pdf queue's `lpadmin` registration snippet.
+
+    Mirrors `build_brlaser_registration_snippet`'s exact shape (retry loop
+    up to 5 attempts x 1s against `lpinfo -m`, matched via `grep -iF --`
+    against PAPERLESS_UPLOAD_PPD_SEARCH_TERM instead of a user-supplied
+    `driver_model`, same zero-match/multi-match WARNING-and-skip safety
+    net) -- this reuses the exact same printer-registration/Avahi code path
+    as the physical printer queue, so the cups-pdf queue is Avahi/AirPrint-
+    advertised identically and appears in iOS/macOS Print sheets without
+    extra client setup (D-02).
+
+    Validates `queue_name` against NAME_RE and optional `location` against
+    LOCATION_RE (reusing both constants directly, not new regexes).
+    Registers via `lpadmin -p <queue_name> -v cups-pdf:/ -E -m "$PPD_URI"
+    [-L <location>]`, argv-quoted exactly like the existing printer-
+    registration code (T-21-01 mitigation extended to this phase's new
+    values).
+
+    Returns (None, None) when `paperless_upload.enabled` is false or
+    `queue_name` fails validation. Returns (snippet_text, queue_name)
+    otherwise -- the caller appends `queue_name` into the same
+    `registered_names` list build_printer_uuid_fixup_script() consumes, so
+    D-08's UUID-stability fixup covers the new queue automatically.
+    """
+    upload = options.get("paperless_upload") or {}
+    enabled = bool(upload.get("enabled", False))
+    if not enabled:
+        return None, None
+
+    queue_name = str(upload.get("queue_name", "PDF-to-DMS") or "PDF-to-DMS")
+    if not NAME_RE.match(queue_name):
+        print(
+            f"WARNING: paperless_upload.queue_name {queue_name!r} failed validation -- must "
+            f"match {NAME_RE.pattern}, cups-pdf queue not registered",
+            flush=True,
+        )
+        return None, None
+
+    location = str(upload.get("location", "") or "").strip()
+    if location and not LOCATION_RE.match(location):
+        print(
+            f"WARNING: paperless_upload.location invalid value {location!r} -- must match "
+            f"{LOCATION_RE.pattern}, registering cups-pdf queue without a location",
+            flush=True,
+        )
+        location = ""
+
+    quoted_term = shlex.quote(PAPERLESS_UPLOAD_PPD_SEARCH_TERM)
+    quoted_name = shlex.quote(queue_name)
+    quoted_uri = shlex.quote(CUPS_PDF_DEVICE_URI)
+    location_arg = f" -L {shlex.quote(location)}" if location else ""
+    snippet = (
+        f'PPD_MATCH=""\n'
+        f"PPD_ATTEMPT=0\n"
+        f'while [ "$PPD_ATTEMPT" -lt 5 ]; do\n'
+        f"  PPD_MATCH=$(lpinfo -m 2>/dev/null | grep -iF -- {quoted_term} || true)\n"
+        f'  [ -n "$PPD_MATCH" ] && break\n'
+        f"  PPD_ATTEMPT=$((PPD_ATTEMPT + 1))\n"
+        f"  sleep 1\n"
+        f"done\n"
+        f"PPD_MATCH_COUNT=$(printf '%s\\n' \"$PPD_MATCH\" | grep -c . || true)\n"
+        f'if [ -z "$PPD_MATCH" ]; then\n'
+        f'  echo "WARNING: no cups-pdf PPD matched {quoted_term} for queue {quoted_name} after '
+        f'5 attempts -- skipping registration (is cups-pdf installed?)" >&2\n'
+        f'elif [ "$PPD_MATCH_COUNT" -gt 1 ]; then\n'
+        f'  echo "WARNING: {quoted_term} matched more than one cups-pdf PPD for queue '
+        f'{quoted_name} -- refusing to guess, skipping registration. Matches:" >&2\n'
+        f"  printf '%s\\n' \"$PPD_MATCH\" >&2\n"
+        f"else\n"
+        f'  PPD_URI="${{PPD_MATCH%% *}}"\n'
+        f'  lpadmin -p {quoted_name} -v {quoted_uri} -E -m "$PPD_URI"{location_arg}\n'
+        f'  echo "registered printer: {queue_name} (cups-pdf: $PPD_URI)"\n'
+        f"fi"
+    )
+    return snippet, queue_name
+
+
 def build_printer_registration(options: dict) -> tuple[str, list[str]]:
     """Render /tmp/register-printers.sh: one validated, quoted lpadmin call per entry.
 
@@ -1192,6 +1426,12 @@ def main() -> None:
         )
 
     register_script, registered_printer_names = build_printer_registration(options)
+
+    cups_pdf_snippet, cups_pdf_queue_name = build_cups_pdf_registration_snippet(options)
+    if cups_pdf_snippet is not None:
+        register_script += "\n" + cups_pdf_snippet + "\n"
+        registered_printer_names.append(cups_pdf_queue_name)
+
     script_path = Path(REGISTER_SCRIPT_PATH)
     script_path.write_text(register_script)
     script_path.chmod(0o755)
@@ -1214,6 +1454,27 @@ def main() -> None:
     log_level_env = build_log_level_env(options)
     Path(LOG_LEVEL_ENV_PATH).write_text(log_level_env)
     print(f"Config written to {LOG_LEVEL_ENV_PATH}", flush=True)
+
+    # paperless_upload (D-07): cups-pdf.conf + outbox stage dirs + PostProcess
+    # hook, independent of the registration snippet above -- writes nothing
+    # at all under /data or /etc/cups when paperless_upload.enabled is false,
+    # so existing installations see zero change.
+    cups_pdf_conf = build_cups_pdf_conf(options)
+    if cups_pdf_conf is not None:
+        Path(PAPERLESS_UPLOAD_CUPS_PDF_CONF_PATH).write_text(cups_pdf_conf)
+        print(f"Config written to {PAPERLESS_UPLOAD_CUPS_PDF_CONF_PATH}", flush=True)
+
+        outbox_root = Path(PAPERLESS_UPLOAD_OUTBOX_ROOT)
+        for stage in ("incoming", "processing", "sent", "failed"):
+            stage_dir = outbox_root / stage
+            stage_dir.mkdir(parents=True, exist_ok=True)
+            stage_dir.chmod(0o777)
+        print(f"Outbox directories created under {PAPERLESS_UPLOAD_OUTBOX_ROOT}", flush=True)
+
+        hook_path = Path(PAPERLESS_UPLOAD_POSTPROCESS_HOOK_PATH)
+        hook_path.write_text(build_paperless_postprocess_hook())
+        hook_path.chmod(0o755)
+        print(f"Config written to {PAPERLESS_UPLOAD_POSTPROCESS_HOOK_PATH}", flush=True)
 
 
 if __name__ == "__main__":

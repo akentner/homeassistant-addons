@@ -32,3 +32,46 @@ configuration:
       Ausführlichkeit der Add-on-Protokollierung (debug, info, warning, error). Standard ist
       warning für einen ruhigen Betrieb. Das error_log von cupsd wird immer in die eigene
       Log-Ausgabe dieses Add-ons weitergeleitet; das access_log zusätzlich nur bei debug.
+  paperless_upload:
+    name: Paperless-ngx Upload
+    description: >-
+      Fügt eine zweite, reine PDF-Druckerwarteschlange hinzu, deren Ausgabe zu einer
+      paperless-ngx-Instanz hochgeladen wird. Standardmäßig deaktiviert; bei Aktivierung
+      mindestens url und token setzen.
+    enabled:
+      name: Aktivieren
+      description: >-
+        Registriert die cups-pdf-Warteschlange und startet den Upload-Worker. Standardmäßig
+        deaktiviert -- bestehende Installationen bleiben unverändert, bis dies aktiviert wird.
+    queue_name:
+      name: Warteschlangenname
+      description: >-
+        Name der reinen PDF-Druckerwarteschlange, die Clients sehen (z.B. im iOS/macOS
+        Druckdialog).
+    location:
+      name: Standort
+      description: >-
+        Optionale Standort-/Beschreibungsmetadaten für die Warteschlange, analog zum
+        location-Feld von printers[].
+    url:
+      name: paperless-ngx-URL
+      description: >-
+        Basis-URL der paperless-ngx-Instanz (z.B. "http://paperless.example.com:8000").
+    token:
+      name: API-Token
+      description: >-
+        paperless-ngx-API-Token, gesendet als "Authorization: Token <token>". Wird niemals
+        geloggt.
+    timeout:
+      name: Upload-Timeout (Sekunden)
+      description: >-
+        Maximale Wartezeit für eine einzelne Upload-Anfrage an paperless-ngx.
+    retry_count:
+      name: Anzahl Wiederholungen
+      description: >-
+        Anzahl der Upload-Versuche, bevor ein Dokument nach failed/ verschoben und eine
+        WARNING protokolliert wird.
+    retry_delay:
+      name: Wiederholungsverzögerung (Sekunden)
+      description: >-
+        Feste Verzögerung zwischen Wiederholungsversuchen bei einem fehlgeschlagenen Upload.
