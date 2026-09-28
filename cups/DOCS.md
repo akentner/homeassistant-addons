@@ -5,16 +5,17 @@ License 2.0.
 
 ## Add-on Options
 
-| Option            | Default      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ----------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `avahi_reflector` | `false`      | Disabled by default. Avahi's legacy-unicast reflector keeps a fixed-size in-memory slot table that fills up under sustained legacy-unicast mDNS traffic (e.g. from a mesh Wi-Fi repeater) and silently drops all further mDNS queries once full, including resolves of this add-on's own advertised printers — the exact bug this add-on exists to fix. Only re-enable this if the add-on is run WITHOUT `host_network: true`, where reflection across network namespaces would actually be needed. |
-| `avahi_hostname`  | `cups`       | Fixed Avahi host-name, independent of the container's transient hostname. Prevents the auto-rename-on-conflict behavior (`<hostname>-2`) that made the printer's advertised mDNS name diverge from its actual resolvable address.                                                                                                                                                                                                                                                                   |
-| `avahi_use_ipv6`  | `false`      | Disabled by default. Avahi may resolve the add-on's mDNS hostname to an IPv6 ULA address that is unreachable/unrouted for some client devices, independent of the reflector bug.                                                                                                                                                                                                                                                                                                                    |
-| `server_aliases`  | `*`          | Space- and/or comma-separated list of hostnames cupsd's embedded web server accepts in the HTTP `Host:` header (e.g. `haos-op3050-1.tailxxxx.ts.net` for Tailscale MagicDNS access). `*` (the default) accepts any Host header. See [Design notes](#design-notes) for why this is safe as a default.                                                                                                                                                                                                |
-| `admin_username`  | `""` (unset) | Username for CUPS's web admin UI (`/admin`) login. Leave empty (the default) to keep `/admin` exactly as unauthenticatable as before this option existed — a fail-safe default, not an open admin panel. Must be set together with `admin_password`. See [Design notes](#design-notes) for the security implication of setting this.                                                                                                                                                                |
-| `admin_password`  | `""` (unset) | Password for the `admin_username` account above. Masked in the HA UI. Must be set together with `admin_username`. **Pick a real password** — this account is a real system account in the `lpadmin` group, reachable from the LAN (and Tailscale, when detected), not sandboxed by anything else.                                                                                                                                                                                                   |
-| `printers`        | `[]`         | List of printers to register with CUPS at startup. See [Printers](#printers) below for the object shape.                                                                                                                                                                                                                                                                                                                                                                                            |
-| `log_level`       | `warning`    | Log verbosity: `debug`, `info`, `warning`, `error`. `error_log` is always tailed into the add-on's own log output; `access_log` is additionally tailed only at the `debug` tier.                                                                                                                                                                                                                                                                                                                    |
+| Option             | Default      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `avahi_reflector`  | `false`      | Disabled by default. Avahi's legacy-unicast reflector keeps a fixed-size in-memory slot table that fills up under sustained legacy-unicast mDNS traffic (e.g. from a mesh Wi-Fi repeater) and silently drops all further mDNS queries once full, including resolves of this add-on's own advertised printers — the exact bug this add-on exists to fix. Only re-enable this if the add-on is run WITHOUT `host_network: true`, where reflection across network namespaces would actually be needed. |
+| `avahi_hostname`   | `cups`       | Fixed Avahi host-name, independent of the container's transient hostname. Prevents the auto-rename-on-conflict behavior (`<hostname>-2`) that made the printer's advertised mDNS name diverge from its actual resolvable address.                                                                                                                                                                                                                                                                   |
+| `avahi_use_ipv6`   | `false`      | Disabled by default. Avahi may resolve the add-on's mDNS hostname to an IPv6 ULA address that is unreachable/unrouted for some client devices, independent of the reflector bug.                                                                                                                                                                                                                                                                                                                    |
+| `server_aliases`   | `*`          | Space- and/or comma-separated list of hostnames cupsd's embedded web server accepts in the HTTP `Host:` header (e.g. `haos-op3050-1.tailxxxx.ts.net` for Tailscale MagicDNS access). `*` (the default) accepts any Host header. See [Design notes](#design-notes) for why this is safe as a default.                                                                                                                                                                                                |
+| `admin_username`   | `""` (unset) | Username for CUPS's web admin UI (`/admin`) login. Leave empty (the default) to keep `/admin` exactly as unauthenticatable as before this option existed — a fail-safe default, not an open admin panel. Must be set together with `admin_password`. See [Design notes](#design-notes) for the security implication of setting this.                                                                                                                                                                |
+| `admin_password`   | `""` (unset) | Password for the `admin_username` account above. Masked in the HA UI. Must be set together with `admin_username`. **Pick a real password** — this account is a real system account in the `lpadmin` group, reachable from the LAN (and Tailscale, when detected), not sandboxed by anything else.                                                                                                                                                                                                   |
+| `printers`         | `[]`         | List of printers to register with CUPS at startup. See [Printers](#printers) below for the object shape.                                                                                                                                                                                                                                                                                                                                                                                            |
+| `log_level`        | `warning`    | Log verbosity: `debug`, `info`, `warning`, `error`. `error_log` is always tailed into the add-on's own log output; `access_log` is additionally tailed only at the `debug` tier.                                                                                                                                                                                                                                                                                                                    |
+| `paperless_upload` | (disabled)   | Optional feature: forwards every PDF printed to a second, disabled-by-default `cups-pdf` virtual queue to a [paperless-ngx](https://docs.paperless-ngx.com/) instance. See [Paperless-ngx PDF Upload](#paperless-ngx-pdf-upload) below for the full field list.                                                                                                                                                                                                                                     |
 
 ## Printers
 
@@ -106,6 +107,54 @@ Each JSONL line has these fields:
   (`lpstat`, `lpq`) for a completed job, without the same additional IPP tooling noted above.
 - **No automatic rotation or pruning of `print-history.jsonl`.** It grows indefinitely; prune it manually if it becomes
   large.
+
+## Paperless-ngx PDF Upload
+
+Optionally forwards every PDF produced by a second, dedicated `cups-pdf` virtual print queue to a
+[paperless-ngx](https://docs.paperless-ngx.com/) instance's REST API. Disabled by default
+(`paperless_upload.enabled: false`) — when disabled, no cups-pdf queue is registered, no `cups-pdf.conf` is generated,
+no outbox directories are created under `/data/paperless_upload/`, and the background upload worker (`upload-worker.py`)
+exits immediately without touching the filesystem or the network.
+
+| Field         | Type        | Default        | Description                                                                                                                                     |
+| ------------- | ----------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`     | `bool?`     | `false`        | Registers the second `cups-pdf` virtual queue and starts the background upload worker when `true`.                                              |
+| `queue_name`  | `str?`      | `"PDF-to-DMS"` | CUPS queue name for the virtual printer (`lpadmin -p <queue_name>`). Validated with the same rules as `printers[].name`.                        |
+| `location`    | `str?`      | `""` (unset)   | Optional CUPS Location string for the virtual queue, passed through to `lpadmin -L` exactly like `printers[].location`. Omitted when unset.     |
+| `url`         | `str?`      | `""` (unset)   | Base URL of the paperless-ngx instance (e.g. `"http://paperless.local:8000"`); no trailing slash required.                                      |
+| `token`       | `password?` | `""` (unset)   | Paperless-ngx API token, sent as `Authorization: Token <token>`. Masked in the HA UI, never written to the add-on's logs.                       |
+| `timeout`     | `int?`      | `30`           | HTTP request timeout (seconds) for each upload attempt against paperless-ngx's `/api/documents/post_document/` endpoint.                        |
+| `retry_count` | `int?`      | `5`            | Number of upload attempts before a document is given up on and moved to `failed/`.                                                              |
+| `retry_delay` | `int?`      | `60`           | Fixed delay (seconds) between retry attempts — not exponential backoff. See [Known limitations](#known-limitations-paperless-ngx-upload) below. |
+
+### Outbox lifecycle
+
+Every PDF printed to the `paperless_upload` queue moves through four stage directories under `/data/paperless_upload/`
+(this add-on's persistent volume — survives add-on restarts/updates):
+
+1. **`incoming/`** — cups-pdf writes the PDF here directly (`Out`/`AnonDirName` both point at this single fixed
+   directory, see [Design notes](#design-notes) below), alongside a same-basename `.json` title sidecar written
+   best-effort by the `PostProcessing` hook.
+2. **`processing/`** — the background upload worker (`upload-worker.py`, polling every ~20 seconds) atomically moves a
+   new document here before its first upload attempt, and re-attempts it here on every later poll cycle once its retry
+   backoff has elapsed.
+3. **`sent/`** — on a successful upload (HTTP 2xx from paperless-ngx), the PDF and any leftover sidecar/retry-state
+   files move here.
+4. **`failed/`** — once `retry_count` attempts are exhausted, the PDF and its title sidecar (if still present) move
+   here. **Documents in `failed/` are never automatically deleted or retried again** — they must be triaged and
+   resubmitted manually (e.g. re-printed, or uploaded to paperless-ngx by hand). This mirrors
+   [Print History](#print-history)'s own honesty about `print-history.jsonl`'s unbounded growth: nothing under
+   `/data/paperless_upload/` is pruned automatically.
+
+### Known limitations (paperless-ngx upload)
+
+- **Retry is fixed-interval, not exponential.** Every retry waits exactly `retry_delay` seconds regardless of how many
+  attempts have already failed — a deliberate simplicity choice (see [Design notes](#design-notes) below), not an
+  oversight.
+- **A document moved to `failed/` is not automatically retried again.** There is no automatic re-queue from `failed/`
+  back into the pipeline; manual intervention is required.
+- **No automatic rotation or pruning of `sent/`/`failed/`.** Both directories grow indefinitely under normal operation;
+  prune them manually if they become large.
 
 ## Design notes
 
@@ -267,6 +316,31 @@ starts a fresh `cupsd`, and re-runs the same readiness-polling wait used on the 
 re-run a second time, since `printers.conf`/PPDs are otherwise untouched by this cycle. This adds roughly one `cupsd`
 start/stop/readiness-wait cycle to every single container boot — an accepted, one-time cost for a stable, non-flickering
 AirPrint identity across restarts.
+
+**Paperless-ngx upload reuses a single fixed outbox path, a corrected PostProcessing mechanism, a world-writable outbox,
+and deliberately minimal failure visibility (D-05).** The `cups-pdf` virtual queue's `Out`/`AnonDirName` directives both
+point at the same fixed `/data/paperless_upload/incoming` path rather than `${HOME}`/`${USER}`-style per-user
+substitution -- this container has no meaningful per-user home-directory concept (single-tenant, headless), so every job
+lands flat in one shared directory regardless of which user cups-pdf resolves the job to (or falls back to its
+`AnonUser="nobody"` default). The original design assumption that cups-pdf's PostProcess hook would receive the job's
+title via an environment variable was verified WRONG against cups-pdf's own upstream C source
+(`preparetitle()`/`system()` call): the directive is actually named `PostProcessing`, not `PostProcess` (confirmed
+against the stock `cups-pdf.conf`'s own `### Key: PostProcessing (config, lptoptions)` documentation), and it invokes
+the configured script with exactly three plain positional arguments -- `$1` the final PDF path, `$2` the resolved job
+user, `$3` the original submitting user -- never a title-carrying environment variable. The real job title is instead
+recovered from the PDF's own already-title-derived filename: cups-pdf's own `preparetitle()` logic derives the PDF's
+filename directly from the print job's title, and this add-on's `Label 2` directive appends a `-job_<id>` disambiguating
+suffix for collision-safety in the shared outbox directory; the `PostProcessing` hook strips that suffix from `$1`'s
+basename to recover the title, rather than looking for any separate title parameter. The outbox directories
+(`incoming/`, `processing/`, `sent/`, `failed/`) are created world-writable (`0o777`) as a deliberate choice, not an
+oversight: cups-pdf's own `PostProcessing` hook and the PDF-writing step itself run under cups-pdf's resolved job user
+(typically `nobody`), not root, so the shared outbox must be writable by an unknown non-root uid -- an acceptable,
+low-risk trade-off for a single-tenant home add-on with no other local users. Finally, exhausted-retry visibility is
+deliberately minimal: exactly one `WARNING`-level log line is emitted per document once `retry_count` attempts are
+exhausted (a single call site in `upload-worker.py`), with no dashboard or notification integration -- consistent with
+this add-on's existing plain `print(...)`-based logging convention used everywhere else in this file. Confirmed
+empirically end-to-end (real cups-pdf print job -> title sidecar written -> upload-worker.py upload -> `sent/`) by
+`internal/verify-cups-paperless-upload.sh` against a real built image.
 
 ## Migrating from f1c878cb_cups
 
