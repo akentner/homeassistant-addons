@@ -3,18 +3,30 @@ phase: 22
 review: 22-REVIEW.md
 titles: json
 findings:
+  - id: WR-01
+    severity: warning
+    disposition: open
+    title: "D-15 exhaustion log line reports the pre-disambiguation filename on a `failed/` collision"
+  - id: WR-02
+    severity: warning
+    disposition: open
+    title: "retry-state hardening validates the JSON is a dict but not its field types"
+  - id: IN-01
+    severity: info
+    disposition: open
+    title: "internal finding ID \"(WR-05)\" leaks into a production log line"
+  - id: IN-02
+    severity: info
+    disposition: open
+    title: "`collision_tag` sharing between PDF and sidecar is only reliable when the PDF itself collides"
+  - id: IN-03
+    severity: info
+    disposition: open
+    title: "pre-existing falsy-zero coercion bug in numeric option parsing (out of this diff's scope)"
   - id: CR-01
     severity: critical
     disposition: open
     title: "`is_due()` runs outside per-document error isolation — one corrupted retry-state file can silently stall the entire upload queue"
-  - id: WR-01
-    severity: warning
-    disposition: open
-    title: "`config.get(key, default) or default` silently discards a legitimately-configured `0`"
-  - id: WR-02
-    severity: warning
-    disposition: open
-    title: "`read_title()` can raise despite its own \"never raises\" contract"
   - id: WR-03
     severity: warning
     disposition: open
@@ -31,32 +43,25 @@ findings:
     severity: warning
     disposition: open
     title: "Upload response body is logged verbatim; the \"token never leaks\" verification does not generalize"
-  - id: IN-01
-    severity: info
-    disposition: open
-    title: "Duplicated PPD-resolution shell-script generation between `build_brlaser_registration_snippet` and `build_cups_pdf_registration_snippet`"
-  - id: IN-02
-    severity: info
-    disposition: open
-    title: "`DOCS.md`'s \"Migrating from f1c878cb_cups\" section is a placeholder with no content"
-open: 9
-total: 9
-recorded: 2026-09-28T20:24:39.958Z
+open: 10
+total: 10
+recorded: 2026-09-29T16:42:36.565Z
 ---
 
 # Phase 22: Code Review Disposition
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | open | - |
 | WR-01 | warning | open | - |
 | WR-02 | warning | open | - |
-| WR-03 | warning | open | - |
-| WR-04 | warning | open | - |
-| WR-05 | warning | open | - |
-| WR-06 | warning | open | - |
 | IN-01 | info | open | - |
 | IN-02 | info | open | - |
+| IN-03 | info | open | - |
+| CR-01 | critical | open | - (not in the current review) |
+| WR-03 | warning | open | - (not in the current review) |
+| WR-04 | warning | open | - (not in the current review) |
+| WR-05 | warning | open | - (not in the current review) |
+| WR-06 | warning | open | - (not in the current review) |
 
 Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.
 Set `deferred` by hand and put the reason in the Source cell; both are preserved. A `|` in the reason is kept as prose and escaped on the next run.
