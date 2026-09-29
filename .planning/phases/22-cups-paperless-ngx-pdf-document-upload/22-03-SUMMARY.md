@@ -153,6 +153,15 @@ None - no external service configuration required.
 - 22-VERIFICATION.md's `gaps_found` status (10/12 truths, CR-01/WR-02/WR-05 open) should now score 12/12 on re-verification
 - No blockers for Phase 22 closure
 
+## Self-Check: PASSED
+
+- `cups/upload-worker.py` exists on disk
+- `internal/verify-cups-paperless-upload.sh` exists on disk
+- `22-03-SUMMARY.md` exists on disk
+- Commits `82a93a5`, `79423a4`, `aa1d527` all found in `git log --oneline --all`
+- All acceptance criteria from Task 1 and Task 2 re-verified passing
+- Full `bash internal/verify-cups-paperless-upload.sh` re-run: exit 0, 4 scenarios, all PASS
+
 ---
 *Phase: 22-cups-paperless-ngx-pdf-document-upload*
 *Completed: 2026-09-29*
