@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: opentofu-bridge
 current_phase: 22
-current_phase_name: "cups: paperless-ngx PDF document upload"
+current_phase_name: cups-paperless-ngx-pdf-document-upload
 current_plan: 1
 status: Phase 20 execution complete
 stopped_at: Completed 22-02-PLAN.md
-last_updated: "2026-09-28T20:13:23.539Z"
-state_head: 690e1df2c5b3b75799b84a1e8f165e0f11664ddd
+last_updated: "2026-09-29T16:09:28.042Z"
+state_head: 7b15a10921de02446738f67a778cc29353a8e32b
 progress:
   total_phases: 9
   completed_phases: 12
-  total_plans: 20
+  total_plans: 21
   completed_plans: 27
-  percent: 100
+  percent: 22
 ---
 
 # Project State
@@ -107,9 +107,9 @@ parallelize after Phase 16 stabilises the contracts).
 ## Current Position
 
 Current Plan: 2
-Total Plans in Phase: 2
+Total Plans in Phase: 3
 
-Phase: 22 (cups: paperless-ngx PDF document upload) — EXECUTING
+Phase: 22 (cups-paperless-ngx-pdf-document-upload) — READY TO EXECUTE
 21 atomic commits on main (4 planning + 14 execution + 4 plan SUMMARYs). All 4 plans landed:
 
 - **Plan 01** (e0df1a1 / fcb14cd / 958ef21 / 493eb71 / f490894 / cebe063 / b6e6534): 4-file HA Supervisor scaffold
