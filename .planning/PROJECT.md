@@ -120,6 +120,13 @@ Ingress, with extensible diagram rendering and optional Git sync.
   chmod-600 validator with os.Exit(1) on failure (SEC-01); per-request slog record with Authorization strip (OBS-01). 44
   unit tests across 5 packages. Live-HA empirical exercise deferred to Phase 19 — Validated in Phase 16:
   iac-runner-scaffold-auth-state-backends-healthcheck
+- ✓ `cups` add-on: second PDF-only virtual `cups-pdf` queue, disabled by default, non-disruptive to the existing
+  physical Brother-MFC-7460DN queue — decoupled background `upload-worker.py` uploads to a paperless-ngx REST API
+  (D-01..D-15). Gap-closure hardening (`upload-worker.py` defensively validates untrusted outbox state: malformed
+  `.retry.json`/title-sidecar JSON degrades to existing fallbacks instead of raising; `sent/`/`failed/` filename
+  collisions disambiguated via `unique_destination()` instead of silently overwritten) closed CR-01/WR-02/WR-05 from
+  the phase's own code review — Validated in Phase 22: cups-paperless-ngx-pdf-document-upload (17/17 must-haves,
+  `internal/verify-cups-paperless-upload.sh` 4/4 scenarios pass against a real built image)
 
 ### Active
 
@@ -224,9 +231,11 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-09-06 — Phase 16 (iac-runner Scaffold + Auth + State Backends + Healthcheck) COMPLETE 12/12
-requirements validated. v1.4 Phases 17–19 remain. v1.3 essentially complete (6 of 7 phases shipped: 9–14; Phase 15 CI
-hardening mechanically ready, blocked on v1.2 Phase 8 gap-closure Cloudflare-setup prerequisite —
-`/gsd-execute-phase 8 --gaps-only` when ready). v1.4 runs in parallel to v1.3 Phase 15 by user decision 2026-09-06. v1.4
-roadmap: 4 phases (16–19), ~32 requirements across AUTHR/STBK/SEC/GIT/RUN/MQTT/OBS categories. RESEARCH skipped by
-explicit decision (scope clear from conversation). Phase 16 ready to plan via `/gsd-plan-phase 16`._
+_Last updated: 2026-09-29 — Phase 22 (cups: paperless-ngx PDF document upload) COMPLETE, 17/17 must-haves verified
+(re-verification after gap-closure plan 22-03 closed CR-01/WR-02/WR-05). **Note:** this document was not evolved
+through Phases 17–21 (iac-runner Git integration/MQTT/E2E and the interim Phase 21 cups/AirPrint fixes) before this
+update — those phases' Validated/Decisions entries are still missing here and should be backfilled separately; only
+Phase 22 was added in this pass, scoped to the `/gsd-execute-phase 22 --gaps-only` run that produced it. Phase 22's
+own code review flagged two new, non-blocking Warning-severity findings in the gap-closure fix itself (imprecise
+operator-facing log line on a rare double-collision path; retry-state field-type validation gap) — recorded in
+`22-VERIFICATION.md`'s `advisory:` block, not reopening CR-01/WR-02/WR-05._

@@ -21,10 +21,11 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-31)
+See: .planning/PROJECT.md (updated 2026-09-29)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Phase 20 — litellm-addon
+tracking. **Current focus:** Phase 22 complete (cups paperless-ngx upload, gap-closure) — next roadmap-sequential phase
+is 11 (Bridge Read API), already shipped code+tests per the table below; live-HA verification was deferred to Phase 14
 
 ## Milestone v1.0 — COMPLETE
 
