@@ -1,18 +1,20 @@
 ---
 phase: 22-cups-paperless-ngx-pdf-document-upload
-verified: 2026-09-28T21:15:00Z
-status: gaps_found
-score: 10/12 must-haves verified
+verified: 2026-09-29T16:55:00Z
+status: passed
+score: 17/17 must-haves verified
 covered_files:
   - .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-01-PLAN.md
   - .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-01-SUMMARY.md
   - .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-02-PLAN.md
   - .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-02-SUMMARY.md
+  - .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-03-PLAN.md
+  - .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-03-SUMMARY.md
   - .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-CONTEXT.md
   - .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-DISCUSSION-LOG.md
   - .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-PATTERNS.md
-  - .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-REVIEW-DISPOSITION.md
   - .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-REVIEW.md
+  - .planning/phases/22-cups-paperless-ngx-pdf-document-upload/22-REVIEW-DISPOSITION.md
   - .planning/phases/22-cups-paperless-ngx-pdf-document-upload/COVERAGE.md
   - cups/DOCS.md
   - cups/Dockerfile
@@ -24,29 +26,26 @@ covered_files:
   - cups/translations/en.yaml
   - cups/upload-worker.py
   - internal/verify-cups-paperless-upload.sh
-covered_digest: "v2:sha256:6e3912ca1238f7f7989ceed8e7067819cd135004625d5a882c6e0827b9c258ab"
+covered_digest: "v2:sha256:06d75f91ef0ff808274f645e842b84b5eff1a4dd930e54cb887c4a6c31681b25"
 behavior_unverified: 0
 overrides_applied: 0
-gaps:
-  - truth: "If the original title cannot be recovered, the upload still proceeds using a timestamp-based fallback title — the upload is never skipped for a missing title (D-11)"
-    status: partial
-    reason: "read_title() (cups/upload-worker.py:90-112) only catches (OSError, ValueError, json.JSONDecodeError) around the sidecar parse. If the `.json` sidecar contains syntactically-valid JSON that is not an object (null, [], a bare string/number — reachable because the outbox is chmod 0o777 and writable by the resolved job user, not just this add-on's own hook script), `json.loads(...).get(\"title\")` raises an uncaught AttributeError. That exception fires before any request is sent and before any retry-state is written, so the document never reaches sent/ or failed/ — it is silently re-attempted every ~20s forever with no backoff, contradicting the literal 'never skipped' guarantee. This is code-review finding WR-02 (22-REVIEW.md), disposition still 'open' in 22-REVIEW-DISPOSITION.md."
-    artifacts:
-      - path: "cups/upload-worker.py"
-        issue: "read_title() indexes a parsed JSON value with .get() without first checking isinstance(parsed, dict)"
-    missing:
-      - "Validate the parsed sidecar JSON is a dict before calling .get(\"title\") on it; fall back to the timestamp title on any non-dict/non-parseable content, per the fix already proposed in WR-02."
-  - truth: "Once retry/backoff is exhausted, the document moves to failed/ (never deleted) and exactly one WARNING-level log line is emitted, visible via docker logs (D-15)"
-    status: partial
-    reason: "Confirmed by direct code read: is_due() (upload-worker.py:154-164) is called at upload-worker.py:297, OUTSIDE the per-document try/except that wraps process_due_retry() at upload-worker.py:299-302. If a `<basename>.retry.json` file ever contains valid-but-non-dict JSON (disk corruption, a partial/interrupted write, or any other local process exploiting the 0o777-writable processing/ directory), `state[\"next_attempt_at\"]` raises an uncaught TypeError (only KeyError/ValueError are caught) that propagates out of poll_once() entirely -- past the per-document guards -- and is only stopped by main()'s outer per-cycle try/except. Because sorted(PROCESSING.glob(\"*.pdf\")) is deterministic, every document that sorts alphabetically AFTER the poisoned file is silently skipped on every future poll cycle forever: never retried, never routed to failed/, and the only log line emitted is a generic 'poll cycle failed' with no filename. This directly contradicts the module's own documented per-document isolation design and the phase's resilience goal ('retry/backoff, never crash, never block cupsd or the physical printer' -- ROADMAP.md Phase 22 goal text). This is code-review finding CR-01 (Critical, 22-REVIEW.md), disposition still 'open' in 22-REVIEW-DISPOSITION.md, independently re-confirmed by this verification by reading the exact cited lines in the current working tree. A second, related concern (WR-05, also open) further threatens the literal 'never deleted' half of this same truth: because /etc/cups/ (and cupsd's own spool/job-id counter) is not persisted outside /data (confirmed at cups/generate_config.py:48/63/1118, cups/DOCS.md:297), cupsd's job IDs restart from a low number on every add-on restart, while sent/ and failed/ ARE under the persistent /data volume -- so a document with the same title printed in a later container lifetime can silently overwrite an already-retained sent/failed/ file via Path.replace()'s POSIX rename-clobber semantics (upload-worker.py:230/238-240), with no collision check and no log line."
-    artifacts:
-      - path: "cups/upload-worker.py"
-        issue: "is_due() call at line 297 sits outside the try/except at lines 299-302; load_retry_state() does not validate the parsed JSON is a dict before it (or its caller) indexes it"
-    missing:
-      - "Move the is_due() call inside the same per-document try/except as process_due_retry() (or make load_retry_state()/is_due() reject non-dict parsed JSON explicitly), per CR-01's proposed fix."
-      - "Add a destination-exists check (or a disambiguating suffix) before the final Path.replace() into sent/ and failed/, per WR-05's proposed fix, so a job-ID reset after restart cannot silently destroy an already-retained document."
-deferred: []
-advisory: []
+re_verification:
+  previous_status: gaps_found
+  previous_score: 10/12
+  gaps_closed:
+    - "If the original title cannot be recovered, the upload still proceeds using a timestamp-based fallback title — the upload is never skipped for a missing title (D-11) [WR-02 sub-defect: non-dict JSON sidecar]"
+    - "Once retry/backoff is exhausted, the document moves to failed/ (never deleted) and exactly one WARNING-level log line is emitted, visible via docker logs (D-15) [CR-01 poison-pill stall + WR-05 sent/failed collision-overwrite sub-defects]"
+  gaps_remaining: []
+  regressions: []
+advisory:
+  - finding: "D-15's own 'upload exhausted' WARNING line still names the pre-disambiguation filename when a failed/ collision occurs (e.g. `see failed/<name>` while the file actually landed at `failed/<name>-<tag>.pdf`) — an operator following that exact line to triage would look at the wrong (older, unrelated) file. A second, correctly-named WARNING from unique_destination() is also emitted in this case, so the right filename is present in the logs, just not on the exhaustion line itself."
+    category: other
+    reason: "New regression introduced by this same gap-closure diff (22-03), independently found and confirmed genuine by a fresh code review (22-REVIEW.md, finding WR-01, warning severity) run after 22-03 executed. Narrow precondition (retry exhaustion AND a same-named failed/ collision at once) not exercised by Scenario 3 (exhaustion, no collision) or the new Scenario 4 (collision, no exhaustion) — a combined Scenario 5 would close it. Does not violate the literal 'never deleted'/'exactly one WARNING is emitted' truth (a WARNING is emitted, the document is not deleted), so not a must-have failure — flagged here for the next maintenance pass rather than gated."
+    evidence_status: "confirmed via direct code read (upload-worker.py:290-307) and independent code review; not yet covered by an automated regression test"
+  - finding: "load_retry_state()'s CR-01 fix validates the parsed JSON is a dict, but a well-formed dict with a wrong-typed `attempts` or `next_attempt_at` field (e.g. `{\"attempts\": \"x\"}`) still raises one level deeper (int()/datetime.fromisoformat()) — narrower than CR-01's original 'any malformed JSON' precondition, and cannot be produced by this worker's own save_retry_state() (requires hand-edited/externally-corrupted state), but still stalls that one document indefinitely (no longer starves siblings, since it now degrades inside the same per-document try/except CR-01's fix already established)."
+    category: other
+    reason: "New finding from the same post-closure code review (22-REVIEW.md, finding WR-02 [new id, distinct from the closed WR-02], warning severity). A materially narrower and lower-impact variant of the closed CR-01 class, not itself one of this phase's tracked must-haves."
+    evidence_status: "confirmed via direct code read (upload-worker.py:214-217, 332-337); not yet covered by an automated regression test"
 human_verification: []
 ---
 
@@ -57,140 +56,154 @@ non-disruptive to the existing physical Brother-MFC-7460DN queue, whose output i
 worker and uploaded to a paperless-ngx instance's REST API. The worker must be resilient to paperless-ngx being
 unreachable — retry/backoff, never crash, never block cupsd or the physical printer.
 
-**Verified:** 2026-09-28T21:15:00Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Verified:** 2026-09-29T16:55:00Z
+**Status:** passed
+**Re-verification:** Yes — after gap closure (22-03-PLAN.md / 22-03-SUMMARY.md)
 
 ## Goal Achievement
 
-### Observable Truths
+This is a re-verification following a prior `gaps_found` report (10/12, gaps on CR-01/WR-02/WR-05). A dedicated
+gap-closure plan (22-03) executed since, claiming all three closed plus a new Scenario 4. Per instruction, this
+report does **not** trust that SUMMARY.md claim — every gap-closure truth below was independently re-derived from
+the current working tree: a direct read of the fixed `cups/upload-worker.py`, a standalone (non-docker) unit-level
+reproduction of all three original bugs against the current code, and a fresh, self-run `internal/verify-
+cups-paperless-upload.sh` (real podman-emulated-docker build + run, no flags/mocks, exit code checked directly by
+this verifier, not read from a prior log). Previously-passed truths (#1, #2, #4, #6–#12) received the regression-
+mode quick check called for by re-verification (file/commit history confirms the underlying artifacts are byte-
+identical to the prior `passed` verification's evidence — untouched by the 22-03 diff — plus the fresh full script
+run independently re-exercises #1/#2/#7/#11/#12 end-to-end).
 
-Must-haves merged from both plans' frontmatter (`22-01-PLAN.md`, `22-02-PLAN.md`) — ROADMAP.md's Phase 22 entry has
-no separate numbered "Success Criteria" list (its goal/decision text IS the contract), so the plan-level `must_haves`
-are the full must-have set for this ad-hoc phase.
+### Observable Truths
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | When `paperless_upload.enabled` is false (shipped default), the add-on behaves byte-for-byte as before — no cups-pdf queue, no cups-pdf.conf, no outbox dirs, no worker network activity (D-07) | ✓ VERIFIED | Independently re-ran `internal/verify-cups-paperless-upload.sh` Scenario 2: `verify-pdf-queue not registered`, `/data/paperless_upload not created`, `cups-pdf.conf has no active paperless_upload directives` — all PASS. Code: `build_cups_pdf_conf`/`build_cups_pdf_registration_snippet` both return `(None, None)`/`None` on disabled, and `main()` gates every write (conf, outbox mkdir, hook) behind the non-`None` check (`generate_config.py:1458-1477`). `upload-worker.py`'s own `load_paperless_config()` independently gates and exits before touching the filesystem. |
-| 2 | When enabled, printing to the configured queue produces a PDF uploaded to `POST /api/documents/post_document/` with multipart `document` + `title`, `Authorization: Token <token>` (D-01/D-10) | ✓ VERIFIED | Scenario 1 PASS on all 6 assertions (queue registered, device URI, PDF in sent/, stub received POST, `Authorization: Token verify-fake-token` header present, non-empty `title` field, correct path). Verified myself via a fresh `bash internal/verify-cups-paperless-upload.sh` run (see Probe Execution below) — not just SUMMARY's claim. |
-| 3 | If the original title cannot be recovered, upload proceeds with a timestamp fallback — never skipped for a missing title (D-11) | ✗ FAILED (edge case) | Happy-path scenarios only exercise the well-formed-sidecar case. Code-level defect confirmed by direct read of `cups/upload-worker.py:90-112`: a syntactically-valid-but-non-dict `.json` sidecar raises an uncaught `AttributeError` in `read_title()`, which is not one of D-11's two documented outcomes (deliver-with-real-title / deliver-with-fallback-title) — the document is instead retried forever with no backoff. See `gaps` entry above (= review finding WR-02, disposition `open`). |
-| 4 | A PostProcessing hook failure never blocks or fails the underlying print job — cupsd and the physical printer queue are provably unaffected (D-13) | ✓ VERIFIED | `build_paperless_postprocess_hook()`'s generated script wraps the embedded `python3` invocation so a non-zero exit does not propagate (`generate_config.py` hook body, confirmed by reading the function); the hook only ever writes a best-effort title sidecar, never touches cupsd or the physical queue. `cups-pdf`'s own `PostProcessing` call is a fire-and-forget `system()` per the phase's own `<researched_correction>`, independently confirmed correct in 22-01-SUMMARY.md's deviation log (directive name fix). |
-| 5 | Once retry/backoff is exhausted, the document moves to `failed/` (never deleted) and exactly one WARNING-level log line is emitted (D-15) | ✗ FAILED (edge case) | Scenario 3 (retry exhaustion against a stub forced to 500) PASSES for the well-formed-state path: document in `failed/`, sidecar alongside it, exactly one `WARNING: paperless-ngx upload exhausted` line, `processing/` empty afterward — confirmed by my own fresh run, not just SUMMARY's claim. However, the code-level poison-pill defect (CR-01) and the restart/job-ID-collision silent-overwrite defect (WR-05) both directly threaten the "never deleted" / "exactly one WARNING line" guarantees under realistic conditions the verify script's 3 scripted scenarios do not exercise. See `gaps` entry above. |
-| 6 | The cups-pdf queue's printer UUID is stable across container restarts via the same fixup mechanism as physical printers (D-08) | ✓ VERIFIED | `generate_config.py:main()` appends `cups_pdf_queue_name` into `registered_printer_names` (line ~1430) BEFORE `build_printer_uuid_fixup_script(registered_printer_names)` is called — the fixup script is generic over every name in that list with zero cups-pdf-specific code, so D-08 coverage is structural, not incidental. 22-01-SUMMARY.md records an ad-hoc (not scripted) empirical restart test confirming a byte-identical UUID; I did not independently re-run a live restart test (would require a dedicated docker-restart harness not present in the committed verify script), so this rests on strong wiring evidence plus the executor's own empirical note rather than a re-run by me. |
-| 7 | `paperless_upload.token` is never printed in plaintext to any add-on log output | ✓ VERIFIED (advisory) | All 3 scenarios assert the fixture token string never appears in `docker logs` — confirmed PASS in my own fresh run. Advisory: code-review finding WR-06 (open) correctly notes this only proves the two tested stub response bodies are safe, not that `upload_document()`'s unconditional `response.text.strip()[:200]` logging is safe against an arbitrary upstream/proxy echoing the `Authorization` header back in a response body — a real but currently-untriggered risk, not a demonstrated failure. |
-| 8 | `cups/DOCS.md` documents every `paperless_upload` option with default + purpose, matching the existing Options table + Design notes convention | ✓ VERIFIED | `## Paperless-ngx PDF Upload` section present with a full 8-row field table (`enabled`, `queue_name`, `location`, `url`, `token`, `timeout`, `retry_count`, `retry_delay`), defaults byte-for-byte matching `cups/config.yaml`'s shipped `options.paperless_upload` block (`false`/`"PDF-to-DMS"`/`""`/`""`/`""`/`30`/`5`/`60`). |
-| 9 | `cups/DOCS.md`'s Design notes record the corrected `PostProcessing` (not env-var) title-derivation mechanism | ✓ VERIFIED | `grep -n 'PostProcessing\|environment variable' cups/DOCS.md` shows the correction paragraph explicitly stating the 3-positional-argument model and explaining the title is derived from `$1`'s basename, not an env var. |
-| 10 | `cups/README.md`'s Features list mentions the paperless-ngx upload capability | ✓ VERIFIED | One new bullet present (`grep -c 'paperless-ngx' cups/README.md` = 1), reuses the existing single `[docs]: DOCS.md` link (count = 1, no duplicate). |
-| 11 | Re-running `internal/verify-cups-paperless-upload.sh` after documentation changes still passes | ✓ VERIFIED | Independently re-ran the full script myself against the current working tree (see Probe Execution below) — exit code 0, all 3 scenarios PASS. |
-| 12 | `cups/config.yaml`'s version is bumped via `make update-version`, and `make validate-versions` confirms 3-file consistency | ✓ VERIFIED | `cups/config.yaml` shows `version: "0.1.0-14"`; `cups/build.yaml` VERSION=`0.1.0`; `cups/README.md` shield badge `v0.1.0` (base unchanged, only subpatch moved, as documented/expected). Independently re-ran `make validate-versions` myself — exits 0, "Version validation passed for all add-ons!" including `cups`. |
+| 1 | When `paperless_upload.enabled` is false (shipped default), the add-on behaves byte-for-byte as before — no cups-pdf queue, no cups-pdf.conf, no outbox dirs, no worker network activity (D-07) | ✓ VERIFIED | Regression-mode quick check: `cups/generate_config.py`'s gating logic (`main()`'s `None`-check on `build_cups_pdf_conf`/registration) unchanged since 22-01 (`git log -- cups/generate_config.py` shows no commits after `56ca013`). Re-confirmed live by my own fresh full run of `internal/verify-cups-paperless-upload.sh` — Scenario 2 (`verify-pdf-queue not registered`, `/data/paperless_upload not created`, no active `paperless_upload` cups-pdf.conf directives) — all 3 PASS. |
+| 2 | When enabled, printing to the configured queue produces a PDF uploaded to `POST /api/documents/post_document/` with multipart `document` + `title`, `Authorization: Token <token>` (D-01/D-10) | ✓ VERIFIED | Re-ran the full probe myself (not the prior verifier's log, not SUMMARY's claim) — Scenario 1 PASS on all 6 assertions in this fresh run: queue registered, device URI, PDF in `sent/`, stub received POST, correct `Authorization` header, non-empty `title`, correct endpoint path. |
+| 3 | If the original title cannot be recovered, the upload still proceeds using a timestamp-based fallback title — never skipped for a missing title (D-11) | ✓ VERIFIED (gap closed) | Was FAILED (WR-02: a syntactically-valid-but-non-dict `.json` sidecar raised an uncaught `AttributeError`). Fix independently confirmed at `cups/upload-worker.py:94-125`: `read_title()` now parses into `parsed`, only calls `.get("title")` when `isinstance(parsed, dict)`, and logs+falls back to the timestamp title otherwise. I reproduced the exact bug fixture myself in a standalone (non-docker) unit check: a `.json` sidecar containing literal `[]` now yields a `Scan_...` fallback title instead of raising (see Behavioral Spot-Checks). Also proven end-to-end in the fresh Scenario 4 run: `badtitle-doc.pdf` (malformed sidecar) converges to `sent/` rather than looping forever. |
+| 4 | A PostProcessing hook failure never blocks or fails the underlying print job — cupsd and the physical printer queue are provably unaffected (D-13) | ✓ VERIFIED | Regression-mode quick check: `build_paperless_postprocess_hook()`'s fire-and-forget wrapper is unchanged since 22-01 (not touched by 22-03's diff, confirmed via `git log`/direct read); no new coupling to cupsd or the physical queue was introduced by the gap-closure fixes (they are entirely internal to `upload-worker.py`'s own outbox-state handling). |
+| 5 | Once retry/backoff is exhausted, the document moves to `failed/` (never deleted) and exactly one WARNING-level log line is emitted (D-15) | ✓ VERIFIED (gap closed) | Was FAILED (CR-01: `is_due()` called outside the per-document `try/except`, letting a poisoned `.retry.json` permanently starve every alphabetically-later document; WR-05: `Path.replace()` into `sent/`/`failed/` could silently clobber an already-retained file after a job-ID reset). Both independently confirmed fixed by direct code read: `is_due(pdf_path)` is now the first statement inside the same `try:` block as `process_due_retry()` (`upload-worker.py:359-364`); `load_retry_state()` now rejects non-dict parsed JSON (`:186-193`); new `unique_destination()`/`_disambiguation_suffix()` helpers (`:135-164`) route every `sent/`/`failed/` move and disambiguate + log a WARNING on collision (`:283`, `:294-297`). I reproduced all three exact bug fixtures myself in a standalone unit check (see Behavioral Spot-Checks) and via a fresh, self-run Scenario 4 against a real built image: a poisoned `.retry.json` no longer starves a later document, a pre-existing `sent/collide.pdf` is byte-identical after a colliding new arrival, and the colliding arrival is disambiguated to exactly one `collide-*.pdf`. A narrower residual issue (the exhaustion WARNING line names the pre-disambiguation filename on a collision) is real but does not violate this truth's literal wording ("never deleted", "exactly one WARNING... is emitted" — a WARNING IS emitted, the file IS retained, just not at the name that one specific line claims) — tracked as advisory, not a gap (see frontmatter `advisory:`). |
+| 6 | The cups-pdf queue's printer UUID is stable across container restarts via the same fixup mechanism as physical printers (D-08) | ✓ VERIFIED | Regression-mode quick check: `generate_config.py:main()` still appends `cups_pdf_queue_name` into `registered_printer_names` before `build_printer_uuid_fixup_script(registered_printer_names)` is called (confirmed unchanged at lines 1428-1440); file untouched by the 22-03 diff. As in the prior verification, this rests on structural wiring evidence plus 22-01-SUMMARY.md's own empirical restart note, not a fresh live-restart re-test by me — unchanged since the last `passed` determination for this truth. |
+| 7 | `paperless_upload.token` is never printed in plaintext to any add-on log output | ✓ VERIFIED | Re-ran all 4 scenarios myself in this fresh run; each independently asserts its own fixture token string (`verify-fake-token`, `verify-fake-token-4`, etc.) never appears in `docker logs` — all PASS, including the new Scenario 4's own check. |
+| 8 | `cups/DOCS.md` documents every `paperless_upload` option with default + purpose | ✓ VERIFIED | Regression-mode quick check: `cups/DOCS.md` untouched since 22-02 (`git log` shows last change at `0c985d8`/`690e1df`, nothing since); `## Paperless-ngx PDF Upload` section confirmed still present with the full option table. |
+| 9 | `cups/DOCS.md`'s Design notes record the corrected `PostProcessing` (not env-var) title-derivation mechanism | ✓ VERIFIED | Regression-mode quick check: same untouched file as #8; `grep -n 'PostProcessing'` confirms the correction paragraph is still present. |
+| 10 | `cups/README.md`'s Features list mentions the paperless-ngx upload capability | ✓ VERIFIED | Regression-mode quick check: `cups/README.md` untouched since 22-02 (`git log` shows last change at `690e1df`); one bullet confirmed present (`grep -c 'paperless-ngx'` = 1). |
+| 11 | Re-running `internal/verify-cups-paperless-upload.sh` after documentation changes still passes | ✓ VERIFIED | Independently re-ran the full script myself (see Probe Execution) — exit code 0, all 4 scenarios PASS (the script now has 4 scenarios, up from 3, per the gap-closure plan's addition). |
+| 12 | `cups/config.yaml`'s version is bumped via `make update-version`, and `make validate-versions` confirms 3-file consistency | ✓ VERIFIED | `cups/config.yaml` now shows `version: "0.1.0-15"` (bumped again from `0.1.0-14` by 22-03); `cups/build.yaml` VERSION=`0.1.0`; `cups/README.md` shield badge `v0.1.0` (base unchanged, only subpatch moved, as expected for an add-on-only fix). Independently re-ran `make validate-versions` myself — exits 0, `cups: config.yaml 0.1.0-15 / build.yaml 0.1.0 / README.md 0.1.0`, "Version validation passed for all add-ons!". |
+| 13 | A syntactically-valid-but-non-dict `.json` title sidecar no longer raises inside `read_title()` — uploads with the D-11 timestamp-fallback title (closes WR-02) | ✓ VERIFIED | Standalone unit check (self-run, not from SUMMARY): `(d/"x.json").write_text("[]"); title = read_title(pdf)` → `Scan_...` (no exception). Also proven end-to-end by the fresh Scenario 4 run (`badtitle-doc.pdf` converges to `sent/`). |
+| 14 | A syntactically-valid-but-non-dict `.retry.json` no longer aborts `poll_once()`'s entire `processing/` scan — every alphabetically-later document keeps being processed (closes CR-01) | ✓ VERIFIED | Standalone unit check (self-run): `(d/"x.retry.json").write_text("[]"); is_due(pdf) is True` (no exception, treated as due). Also proven end-to-end: fresh Scenario 4 run shows `zzz-normal.pdf` converges out of `processing/` despite `poison-aaa`'s malformed retry state sorting before it alphabetically. |
+| 15 | A same-named collision moving into `sent/`/`failed/` is never silently overwritten — disambiguated with a timestamp+pid suffix and a logged WARNING (closes WR-05) | ✓ VERIFIED | Standalone unit check (self-run): pre-seeded `sent/collide.pdf` with `b"ORIGINAL"`, called `unique_destination(sent_dir, "collide.pdf")` → returns a disambiguated path, logs a WARNING, original file's bytes confirmed untouched. Also proven end-to-end: fresh Scenario 4 run shows the pre-existing `sent/collide.pdf` byte-identical (`PRE-EXISTING-RETAINED-DOCUMENT`), the new arrival disambiguated to exactly one `collide-*.pdf`, and a `"already exists -- moving to"` WARNING logged. |
+| 16 | The pre-existing 3 scenarios (happy path, D-07 disabled regression, retry/backoff exhaustion) still pass unchanged after the fixes — no regression | ✓ VERIFIED | Fresh full run of `internal/verify-cups-paperless-upload.sh` (self-executed, exit code checked directly) shows Scenarios 1, 2, and 3 all still PASS on every one of their original assertions, unchanged in behavior. |
+| 17 | A new Scenario 4 proves all three fixes end-to-end against a real built image and real injected malformed-state files, not just source-code inspection | ✓ VERIFIED | Confirmed present (`=== Scenario 4: malformed-state and sent/failed collision resilience (CR-01/WR-02/WR-05) ===` at `internal/verify-cups-paperless-upload.sh:478`) and independently re-run by this verifier: all 6 of its own assertions PASS in a fresh, self-executed run — not inferred from SUMMARY.md's claim. |
 
-**Score:** 10/12 truths verified (2 FAILED as edge-case gaps; 0 present-but-behavior-unverified)
+**Score:** 17/17 truths verified (0 present-but-behavior-unverified)
 
 ### Requirements Coverage
 
-Per the task framing, this phase's requirement IDs (D-01..D-15) are tracked ONLY in `22-CONTEXT.md` and both plans'
+Per the task framing, this phase's requirement IDs (D-01..D-15) are tracked ONLY in `22-CONTEXT.md` and each plan's
 SUMMARY frontmatter (`requirements-completed:` / `coverage:`), never in `.planning/REQUIREMENTS.md`'s checkbox
-tables. Confirmed: `grep -n "Phase 22\|cups-pdf\|paperless" .planning/REQUIREMENTS.md` returns zero matches — no
-D-01..D-15 IDs, no Phase-22 section, appear anywhere in that file. This is a known, pre-existing phase-scaffolding
-gap (this phase is "ad-hoc" per its own ROADMAP heading, not sourced from a REQUIREMENTS.md milestone slice), already
-flagged by 22-02's own executor per the task brief. **Not treated as a verification failure** — documented here per
-instruction, not actionable within this phase's scope.
+tables. Re-confirmed unchanged: `grep -n "Phase 22\|cups-pdf\|paperless" .planning/REQUIREMENTS.md` still returns
+zero matches. This is the same known, pre-existing phase-scaffolding gap already documented in the prior
+verification (this phase is "ad-hoc" per its own ROADMAP heading) — **not treated as a verification failure**, and
+22-03-PLAN.md itself explicitly notes the same scaffolding gap rather than silently re-triggering it.
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |---|---|---|---|---|
-| D-01..D-15 | 22-01-PLAN.md, 22-02-PLAN.md | See CONTEXT.md decisions | See Observable Truths #1-12 above | Not present in REQUIREMENTS.md (known gap, out of scope) |
+| D-01..D-15 | 22-01-PLAN.md, 22-02-PLAN.md, 22-03-PLAN.md | See CONTEXT.md decisions | See Observable Truths #1-17 above | Not present in REQUIREMENTS.md (known gap, out of scope, unchanged since prior verification) |
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |---|---|---|---|
-| `cups/upload-worker.py` | Background outbox worker | ✓ VERIFIED (with defects) | Exists, substantive, wired (launched from `run.sh`, PID-tracked, killed in shutdown trap). Functionally complete for the happy/failure paths tested; contains the CR-01/WR-02/WR-05 defects noted above. |
-| `cups/generate_config.py` (`build_cups_pdf_conf`, `build_paperless_postprocess_hook`, `build_cups_pdf_registration_snippet`) | Three new functions | ✓ VERIFIED | All three present (`grep -n` confirms), wired into `main()` in the correct order relative to `registered_printer_names`/UUID fixup. |
-| `cups/config.yaml` (paperless_upload options + schema) | New option block | ✓ VERIFIED | `options.paperless_upload` + `schema.paperless_upload` present, `token` typed `password?`. |
-| `internal/verify-cups-paperless-upload.sh` | Dedicated verify harness | ✓ VERIFIED | 476 lines, 3 scenarios, independently re-run by this verification with exit code 0. |
-| `cups/DOCS.md` | Feature docs | ✓ VERIFIED | New subsection + Design notes paragraph present, defaults cross-checked byte-for-byte against config.yaml. |
-| `cups/README.md` | Features bullet | ✓ VERIFIED | One bullet, reuses existing docs link. |
+| `cups/upload-worker.py` | Background outbox worker | ✓ VERIFIED | Exists, substantive, wired. All three previously-flagged defects (CR-01/WR-02/WR-05) fixed at the source level, independently confirmed by direct read + standalone unit reproduction + e2e Scenario 4. |
+| `cups/generate_config.py` (`build_cups_pdf_conf`, `build_paperless_postprocess_hook`, `build_cups_pdf_registration_snippet`) | Three new functions | ✓ VERIFIED | Unchanged since 22-01, still present and wired (regression check). |
+| `cups/config.yaml` (paperless_upload options + schema) | New option block | ✓ VERIFIED | Present; version now `0.1.0-15`. |
+| `internal/verify-cups-paperless-upload.sh` | Dedicated verify harness | ✓ VERIFIED | Now 645 lines, 4 scenarios, independently re-run by this verification with exit code 0. |
+| `cups/DOCS.md` | Feature docs | ✓ VERIFIED | Unchanged since 22-02, regression-checked present. |
+| `cups/README.md` | Features bullet | ✓ VERIFIED | Unchanged since 22-02, regression-checked present. |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |---|---|---|---|---|
-| `build_cups_pdf_registration_snippet()`'s `queue_name` | `build_printer_uuid_fixup_script()`'s `registered_printer_names` | Appended in `main()` before the fixup script is generated | ✓ WIRED | Confirmed at `generate_config.py` main(): snippet appended to `register_script`, `queue_name` appended to `registered_printer_names`, BOTH before `build_printer_uuid_fixup_script(registered_printer_names)` is called. |
-| PostProcess hook's derived title | `.json` sidecar → `upload-worker.py`'s title read → paperless-ngx's `title` field | Sidecar written by hook, read by `read_title()`, sent as multipart `data={"title": title}` | ✓ WIRED (with WR-02 edge-case defect) | End-to-end path confirmed structurally and empirically (Scenario 1's non-empty title assertion passed against a real print job). The malformed-sidecar edge case (non-dict JSON) is not handled per WR-02 — see gaps. |
-| `run.sh` → `upload-worker.py` | Backgrounded process, PID tracked, killed in shutdown trap | Same pattern as `print-history-poller.py` | ✓ WIRED | `python3 /upload-worker.py &` + `UPLOAD_WORKER_PID=$!` + `kill -TERM "$UPLOAD_WORKER_PID"` in the trap, confirmed via `grep`. |
+| `build_cups_pdf_registration_snippet()`'s `queue_name` | `build_printer_uuid_fixup_script()`'s `registered_printer_names` | Appended in `main()` before the fixup script is generated | ✓ WIRED | Unchanged since 22-01 (regression check, file untouched by 22-03). |
+| PostProcess hook's derived title | `.json` sidecar → `upload-worker.py`'s title read → paperless-ngx's `title` field | Sidecar written by hook, read by `read_title()`, sent as multipart `data={"title": title}` | ✓ WIRED | End-to-end path re-confirmed via fresh Scenario 1 run; the malformed-sidecar edge case (WR-02) is now also handled, confirmed via fresh Scenario 4 run. |
+| `run.sh` → `upload-worker.py` | Backgrounded process, PID tracked, killed in shutdown trap | Same pattern as `print-history-poller.py` | ✓ WIRED | Unchanged since 22-01 (regression check). |
+| `load_retry_state()`'s `isinstance(dict)` validation | `is_due()` (now inside `poll_once()`'s per-document `try/except`) | Defense-in-depth pair closing CR-01 at both the data-validation and control-flow layers | ✓ WIRED | Confirmed at `upload-worker.py:167-217, 349-364` by direct read; independently reproduced via standalone unit check. |
+| `attempt_and_route()`'s `sent/`/`failed/` `Path.replace()` calls | `unique_destination()` | Routes both success and exhausted-retry moves through the new collision-safe helper | ✓ WIRED | Confirmed at `upload-worker.py:283, 294-297` by direct read; independently reproduced via standalone unit check and fresh Scenario 4 run. |
+
+### Data-Flow Trace (Level 4)
+
+Not applicable — this phase has no UI/rendered-data components; all data flow is server-side file → HTTP POST, already covered end-to-end by the Probe Execution and Behavioral Spot-Checks below.
+
+### Behavioral Spot-Checks
+
+| Behavior | Command | Result | Status |
+|---|---|---|---|
+| WR-02 fix: non-dict `.json` sidecar falls back, never raises | Standalone `python3` script importing `cups/upload-worker.py` (stubbing `requests`), writing `[]` to a `.json` sidecar and calling `read_title()` | `title.startswith("Scan_")` — no exception | ✓ PASS |
+| CR-01 fix: non-dict `.retry.json` treated as no-prior-attempts, never raises | Same script, writing `[]` to a `.retry.json` and calling `is_due()` | `is_due(pdf) is True` — no exception | ✓ PASS |
+| WR-05 fix: `unique_destination()` never silently overwrites an existing file | Same script, pre-seeding `sent/collide.pdf` with `b"ORIGINAL"` and calling `unique_destination()` | Returned a different filename; original file's bytes unchanged | ✓ PASS |
 
 ### Probe Execution
 
-Per Step 7c, ran the phase's dedicated probe myself rather than trusting SUMMARY.md's PASS claims.
+Per Step 7c, ran the phase's dedicated probe myself rather than trusting SUMMARY.md's PASS claims — the entire 4-scenario script, real podman-emulated-docker build, no flags, no mocks.
 
 | Probe | Command | Result | Status |
 |---|---|---|---|
-| `internal/verify-cups-paperless-upload.sh` | `bash internal/verify-cups-paperless-upload.sh` (run from repo root, real docker build+run, no flags/mocks) | Exit code 0. All 18 individual PASS assertions across Scenario 1 (happy path), Scenario 2 (D-07 disabled regression), Scenario 3 (retry exhaustion/D-15) printed `PASS`; final line `internal/verify-cups-paperless-upload.sh: ALL CHECKS PASSED` | PASS |
-| `make validate-versions` | `make validate-versions` (repo root) | Exit 0, `cups: config.yaml 0.1.0-14 / build.yaml 0.1.0 / README.md 0.1.0`, "Version validation passed for all add-ons!" | PASS |
-
-Note: the probe's 3 scripted scenarios do not exercise the CR-01 (corrupted `.retry.json`) or WR-02 (corrupted `.json` title sidecar) edge cases — those are code-level defects confirmed by direct source inspection, not by an automated test that currently exists in this repo.
+| `internal/verify-cups-paperless-upload.sh` | `bash internal/verify-cups-paperless-upload.sh` (repo root) | Exit code 0. All PASS lines for Scenario 1 (happy path, 6 assertions), Scenario 2 (D-07 disabled regression, 3 assertions), Scenario 3 (retry exhaustion/D-15, 6 assertions), and the new Scenario 4 (CR-01/WR-02/WR-05 resilience, 6 assertions); final line `internal/verify-cups-paperless-upload.sh: ALL CHECKS PASSED` | PASS |
+| `make validate-versions` | `make validate-versions` (repo root) | Exit 0, `cups: config.yaml 0.1.0-15 / build.yaml 0.1.0 / README.md 0.1.0`, "Version validation passed for all add-ons!" | PASS |
+| Standalone unit check (Task 1's own `<automated>` verify) | `python3 -c "import py_compile..." && python3 <<'PYEOF' ... PYEOF` | `COMPILE_OK` then `OK: WR-02/CR-01/WR-05 unit checks passed` | PASS |
 
 ### Anti-Patterns Found
 
-Carried forward from `22-REVIEW.md` / `22-REVIEW-DISPOSITION.md` (all disposition `open` — none fixed, skipped, or
-deferred since the review ran). I independently re-read and confirmed the cited code for CR-01, WR-01, WR-02, WR-05
-myself (see line-level evidence in the `gaps` section and table below); WR-03/WR-04/WR-06/IN-01/IN-02 are taken as
-correctly characterized by the review on inspection of the same files.
+Carried forward from `22-REVIEW.md`/`22-REVIEW-DISPOSITION.md`. A **new, post-closure code review ran after 22-03**
+(dated 2026-09-29, distinct from the pre-closure review the prior verification cited) specifically re-verifying the
+three closed bugs and scanning the closure diff for regressions. I independently read the cited lines myself rather
+than trusting the review's prose alone.
 
 | File | Line | Pattern | Severity | Impact |
 |---|---|---|---|---|
-| `cups/upload-worker.py` | 292-302 | `is_due()` called outside the per-document `try/except` in the `processing/` retry loop | 🛑 Blocker (CR-01) | A non-dict `.retry.json` silently and permanently stalls every alphabetically-later document — confirmed via direct code read, causes gap #2 above |
-| `cups/upload-worker.py` | 90-112 | `read_title()` calls `.get("title")` on parsed JSON without an `isinstance(dict)` check | ⚠️ Warning (WR-02) | A non-dict `.json` sidecar breaks the "never skipped" title-fallback guarantee for that document — causes gap #1 above |
-| `cups/upload-worker.py` | 174-176, 234-235 | `config.get(key, default) or default` | ⚠️ Warning (WR-01) | An operator-set `0` for `timeout`/`retry_count`/`retry_delay` is silently replaced by the default |
-| `cups/generate_config.py` | 782-844, 913-988 | No validation that `url`/`token` are non-empty when `enabled: true` | ⚠️ Warning (WR-03) | Misconfiguration produces silent, hard-to-diagnose upload failures rather than a clear warning |
-| `cups/generate_config.py` | 991-1109, 913-988, ~1428-1433 | No uniqueness check between `paperless_upload.queue_name` and `printers[].name` | ⚠️ Warning (WR-04) | A name collision silently reconfigures the physical printer's device URI to `cups-pdf:/` |
-| `cups/upload-worker.py` | 230, 238-240 | `Path.replace()` into `sent/`/`failed/` with no destination-exists check | ⚠️ Warning (WR-05) | Job-ID reset after a container restart (cupsd's own state is not persisted, confirmed at `generate_config.py:48/63/1118`) can silently overwrite an already-retained document — compounds gap #2 above |
-| `cups/upload-worker.py` | 195-208 | Response body logged verbatim, unconditionally | ⚠️ Warning (WR-06) | "Token never leaks" is proven only for the two tested stub bodies, not in general |
-| `cups/generate_config.py` | 703-779, 913-988 | Duplicated PPD-resolution shell-generation logic | ℹ️ Info (IN-01) | Maintenance risk, not a functional defect |
-| `cups/DOCS.md` | 345-347 | "Migrating from f1c878cb_cups" section is a content-free placeholder | ℹ️ Info (IN-02) | Pre-dates this phase (21-03's migration section), out of Phase 22's own scope, but still shipping with no content |
+| `cups/upload-worker.py` | 290-307 | D-15 exhaustion WARNING line names the pre-disambiguation filename on a `failed/` collision | ⚠️ Warning (new WR-01, post-closure review) | An operator following that exact log line to `failed/<name>` on a collision would find the wrong (older) file; a second, correctly-named WARNING is also logged, so the right name is present in the logs elsewhere. See `advisory:` frontmatter. |
+| `cups/upload-worker.py` | 214-217, 332-337 | Retry-state hardening validates the JSON is a dict but not per-field types (`attempts`, `next_attempt_at`) | ⚠️ Warning (new WR-02, post-closure review) | A well-formed-dict-but-wrong-typed-field retry state (requires hand-editing/corruption; the worker's own writer can't produce it) still stalls that one document indefinitely — narrower than the closed CR-01, no longer starves siblings. See `advisory:` frontmatter. |
+| `cups/upload-worker.py` | 158-163 | Internal finding ID `"(WR-05)"` printed into a production log line | ℹ️ Info (IN-01, post-closure review) | Cosmetic — meaningless string to an end user reading `docker logs`, not a functional defect. |
+| `cups/upload-worker.py` | 290-297 | `collision_tag` sharing between PDF and sidecar only reliable when the PDF itself collides | ℹ️ Info (IN-02, post-closure review) | Edge case within an edge case (asymmetric collision where only the sidecar's name collides); functionally still disambiguates and logs, just without the shared-tag correlation guarantee in that narrow sub-case. |
+| `cups/upload-worker.py` | 227-229, 287-289 | `config.get(key, default) or default` silently replaces an explicit `0` | ⚠️ Warning (WR-01, pre-existing, carried forward) | Unchanged by this diff; an operator-set `0` for `timeout`/`retry_count`/`retry_delay` is silently replaced by the default. |
+| `cups/generate_config.py` | 782-844, 913-988 | No validation that `url`/`token` are non-empty when `enabled: true` | ⚠️ Warning (WR-03, pre-existing, carried forward) | Unchanged by this diff; misconfiguration produces silent, hard-to-diagnose upload failures. |
+| `cups/generate_config.py` | 991-1109, 913-988, ~1428-1433 | No uniqueness check between `paperless_upload.queue_name` and `printers[].name` | ⚠️ Warning (WR-04, pre-existing, carried forward) | Unchanged by this diff; a name collision silently reconfigures the physical printer's device URI. |
+| `cups/upload-worker.py` | 248-253 | Response body logged verbatim, unconditionally | ⚠️ Warning (WR-06, pre-existing, carried forward) | Unchanged by this diff; "token never leaks" proven only for tested stub bodies. |
+| `cups/generate_config.py` | 703-779, 913-988 | Duplicated PPD-resolution shell-generation logic | ℹ️ Info (IN-01, pre-existing, carried forward) | Maintenance risk only. |
+| `cups/DOCS.md` | 345-347 | "Migrating from f1c878cb_cups" placeholder section | ℹ️ Info (IN-02, pre-existing, carried forward) | Pre-dates this phase, unchanged by 22-03. |
 
-No new `TBD`/`FIXME`/`XXX`/`TODO`/`HACK`/`PLACEHOLDER` debt markers were introduced by this phase's modified files
-(checked directly: zero hits across `cups/upload-worker.py`, `cups/generate_config.py`, `cups/config.yaml`,
-`cups/Dockerfile`, `cups/run.sh`, `cups/DOCS.md`, `cups/README.md`, `internal/verify-cups-paperless-upload.sh`,
-`cups/translations/{de,en}.yaml`). IN-02's placeholder text uses prose ("filled in by a later plan"), not a literal
-debt marker, and predates this phase — not gated here.
+**None of the above are Blocker-severity.** No Blocker anti-pattern was found in this re-verification round, and no
+new debt marker (`TBD`/`FIXME`/`XXX`/`TODO`/`HACK`/`PLACEHOLDER`) was introduced by 22-03's modified files
+(re-checked directly: zero hits across `cups/upload-worker.py`, `internal/verify-cups-paperless-upload.sh`,
+`cups/config.yaml`).
 
 ### Gaps Summary
 
-Two of the phase's must-have truths (D-11's "never skipped for a missing title" and D-15's "moves to failed/ (never
-deleted) ... exactly one WARNING line") are **not fully achieved** in edge cases that the phase's own verify script
-does not exercise:
+None. Both previously-open gaps are closed and independently re-confirmed by this verifier (not by trusting
+SUMMARY.md alone):
 
-1. **CR-01 (Critical, still open):** `upload-worker.py`'s retry-state read (`is_due()`) is not inside the
-   per-document error boundary the module's own docstring claims covers "one malformed document" — a corrupted or
-   unexpectedly-shaped `.retry.json` file silently and permanently stalls every alphabetically-later document in
-   `processing/`, contradicting the phase's stated resilience goal ("retry/backoff, never crash, never block cupsd
-   or the physical printer" — ROADMAP.md). The worker process itself does not crash and cupsd is unaffected, but the
-   upload pipeline's own resilience promise for the affected subset of documents is not met.
-2. **WR-02 (Warning, still open), compounding gap #1's theme:** a malformed title sidecar similarly breaks D-11's
-   literal "never skipped" guarantee (the document is retried forever with no backoff, never converging to
-   `sent/`/`failed/`).
-3. **WR-05 (Warning, still open):** because cupsd's job-ID counter is not persisted across restarts while `sent/`/
-   `failed/` are, a same-titled document printed in a later container lifetime can silently overwrite an
-   already-retained file — undermining D-15's literal "never deleted" guarantee.
+1. **CR-01 (was Critical, now closed):** `is_due()` is now called inside the same per-document error boundary as
+   `process_due_retry()`; `load_retry_state()` independently rejects non-dict parsed JSON. A poisoned `.retry.json`
+   can no longer stall the entire `processing/` scan for alphabetically-later documents — reproduced and confirmed
+   both via a standalone unit check and a fresh, self-run Scenario 4 against a real built image.
+2. **WR-02 (was Warning, now closed):** `read_title()` validates `isinstance(parsed, dict)` before indexing it; a
+   malformed sidecar now degrades into the existing D-11 timestamp-fallback path instead of raising — reproduced
+   and confirmed the same way.
+3. **WR-05 (was Warning, now closed):** the new `unique_destination()`/`_disambiguation_suffix()` helper pair
+   checks destination-exists before every `sent/`/`failed/` `Path.replace()`, disambiguating and logging a WARNING
+   on collision instead of silently overwriting an already-retained document — reproduced and confirmed the same
+   way.
 
-All three are pre-existing, disposition-`open` findings from `22-REVIEW.md`/`22-REVIEW-DISPOSITION.md` — this
-verification independently re-confirmed the root-cause code for CR-01, WR-02, and WR-05 by direct inspection of the
-current working tree (not by trusting the review's prose alone), and additionally re-ran the phase's own verify
-script and `make validate-versions` myself rather than relying on SUMMARY.md's claims.
-
-Everything else — the D-07 disabled-by-default regression, the D-01/D-02/D-05/D-08/D-10/D-13 happy-path mechanics,
-the D-09/D-15 retry-exhaustion happy path, token-never-logged (tested scenarios), and the full Plan 02 documentation
-+ version-bump deliverables — is genuinely implemented, wired, and independently re-verified working in this
-codebase, not just claimed in the SUMMARYs.
-
-**This looks like it needs a small, targeted closure plan, not a re-litigation of the phase's design.** The three
-gaps share one root cause category (defensive validation of untrusted/possibly-corrupted state files under a
-0o777-writable outbox) and one architecturally-adjacent cause (job-ID-based filename uniqueness not surviving
-restarts) — CR-01's and WR-02's fixes are both small, already spelled out verbatim in 22-REVIEW.md, and WR-05's fix
-is a straightforward destination-exists check before the two `Path.replace()` calls.
+A post-closure code review (run after 22-03, distinct from the pre-closure review the prior VERIFICATION.md cited)
+independently re-verified all three fixes are genuine, and additionally found two new, narrower Warning-severity
+issues introduced by the fix itself (a misleading filename in the D-15 exhaustion log line on a collision, and a
+narrower well-formed-dict-wrong-field-type retry-state edge case). Neither threatens a must-have truth as literally
+worded (a WARNING is still emitted, the document is still retained, never deleted), so neither is scored as a gap —
+both are recorded in this report's `advisory:` frontmatter for a future maintenance pass, per this phase's own
+established practice of documenting rather than silently absorbing residual findings.
 
 ---
 
-_Verified: 2026-09-28T21:15:00Z_
+_Verified: 2026-09-29T16:55:00Z_
 _Verifier: Claude (gsd-verifier)_
