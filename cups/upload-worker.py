@@ -34,13 +34,17 @@ the full rationale):
     the document is retried on a later poll cycle once next_attempt_at has
     passed. Once `attempts` reaches `retry_count`, the PDF + sidecar (if
     present) move to failed/ (never deleted) and exactly one WARNING line
-    is emitted (D-15).
+    is emitted (D-15). A same-named collision on the final move into
+    sent/ or failed/ (e.g. after cupsd's own job-ID counter resets across a
+    container restart) is disambiguated with a timestamp+pid suffix and
+    logged, rather than silently overwriting an already-retained document.
   - The worker does its own gating on paperless_upload.enabled: when
     disabled (the shipped default, D-07), this process logs one INFO line
     and exits immediately, writing nothing at all under /data.
 """
 
 import json
+import os
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -97,12 +101,21 @@ def read_title(pdf_path: Path) -> str:
     sidecar_path = pdf_path.with_suffix(".json")
     title = None
     if sidecar_path.exists():
+        parsed = None
         try:
-            title = json.loads(sidecar_path.read_text()).get("title")
+            parsed = json.loads(sidecar_path.read_text())
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             print(
                 f"WARNING: could not read sidecar {sidecar_path}: {exc} -- falling back to "
                 "timestamp title",
+                flush=True,
+            )
+        if isinstance(parsed, dict):
+            title = parsed.get("title")
+        elif parsed is not None:
+            print(
+                f"WARNING: sidecar {sidecar_path} is not a JSON object "
+                f"({type(parsed).__name__}) -- falling back to timestamp title",
                 flush=True,
             )
     if not title:
@@ -119,6 +132,38 @@ def retry_state_path(pdf_path: Path) -> Path:
     return pdf_path.parent / (pdf_path.stem + RETRY_STATE_SUFFIX)
 
 
+def _disambiguation_suffix() -> str:
+    """Return a UTC-timestamp+pid suffix used to disambiguate a colliding
+    sent/failed destination filename (WR-05)."""
+    return f"-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}-{os.getpid()}"
+
+
+def unique_destination(dest_dir: Path, name: str, tag: str | None = None) -> Path:
+    """Return `dest_dir / name`, disambiguated with a suffix if that path
+    already exists on disk.
+
+    Never silently overwrites an already-retained document via
+    `Path.replace()`'s rename-clobber semantics (WR-05) -- a same-named
+    collision (most plausibly caused by cupsd's own job-ID counter resetting
+    across a container restart) is instead renamed and logged.
+    """
+    candidate = dest_dir / name
+    if not candidate.exists():
+        return candidate
+    if tag is None:
+        tag = _disambiguation_suffix()
+    stem = Path(name).stem
+    suffix = Path(name).suffix
+    disambiguated = dest_dir / f"{stem}{tag}{suffix}"
+    print(
+        f"WARNING: destination {candidate} already exists -- moving to "
+        f"{stem}{tag}{suffix} instead to avoid silently overwriting an already-retained "
+        "document (WR-05)",
+        flush=True,
+    )
+    return disambiguated
+
+
 def load_retry_state(pdf_path: Path) -> dict | None:
     """Return the parsed retry-state dict, or None if absent/malformed.
 
@@ -130,7 +175,7 @@ def load_retry_state(pdf_path: Path) -> dict | None:
     if not state_path.exists():
         return None
     try:
-        return json.loads(state_path.read_text())
+        parsed = json.loads(state_path.read_text())
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(
             f"WARNING: could not read retry state {state_path}: {exc} -- treating as no "
@@ -138,6 +183,14 @@ def load_retry_state(pdf_path: Path) -> dict | None:
             flush=True,
         )
         return None
+    if not isinstance(parsed, dict):
+        print(
+            f"WARNING: retry state {state_path} is not a JSON object "
+            f"({type(parsed).__name__}) -- treating as no prior attempts",
+            flush=True,
+        )
+        return None
+    return parsed
 
 
 def save_retry_state(pdf_path: Path, attempts: int, next_attempt_at: datetime) -> None:
@@ -227,7 +280,7 @@ def attempt_and_route(pdf_path: Path, config: dict, prior_attempts: int) -> None
             sidecar_path.unlink()
         if retry_path.exists():
             retry_path.unlink()
-        pdf_path.replace(SENT / pdf_path.name)
+        pdf_path.replace(unique_destination(SENT, pdf_path.name))
         return
 
     attempts = prior_attempts + 1
@@ -235,9 +288,13 @@ def attempt_and_route(pdf_path: Path, config: dict, prior_attempts: int) -> None
     retry_delay = int(config.get("retry_delay", 60) or 60)
 
     if attempts >= retry_count:
-        pdf_path.replace(FAILED / pdf_path.name)
+        # Share one collision_tag across the PDF and its sidecar (when both
+        # collide) so a human triaging failed/ later can still correlate a
+        # colliding pair by their identical disambiguation suffix (WR-05).
+        collision_tag = _disambiguation_suffix() if (FAILED / pdf_path.name).exists() else None
+        pdf_path.replace(unique_destination(FAILED, pdf_path.name, tag=collision_tag))
         if sidecar_path.exists():
-            sidecar_path.replace(FAILED / sidecar_path.name)
+            sidecar_path.replace(unique_destination(FAILED, sidecar_path.name, tag=collision_tag))
         if retry_path.exists():
             retry_path.unlink()
         # D-15: exactly one WARNING-level line per exhausted-retry document --
@@ -294,9 +351,14 @@ def poll_once(config: dict) -> None:
         # crashed mid-attempt (before any state was written) -- is_due()
         # already treats "no state file" as due immediately, so it is
         # retried rather than left stuck forever.
-        if not is_due(pdf_path):
-            continue
+        #
+        # is_due() is called INSIDE this same per-document try/except as
+        # process_due_retry() (not before it) so a malformed *.retry.json
+        # can never abort the scan for every alphabetically-later document
+        # (CR-01).
         try:
+            if not is_due(pdf_path):
+                continue
             process_due_retry(pdf_path, config)
         except Exception as exc:  # noqa: BLE001 -- must never crash this loop
             print(f"WARNING: failed to retry {pdf_path.name}: {exc}", flush=True)
