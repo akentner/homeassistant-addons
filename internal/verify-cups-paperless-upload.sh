@@ -8,6 +8,11 @@
 #      worker network activity when paperless_upload.enabled is false
 #   3. the failure path: retry/backoff exhaustion -> failed/ + exactly one
 #      WARNING log line, document + sidecar never deleted (D-09/D-15)
+#   4. malformed-state and sent/failed collision resilience (CR-01/WR-02/
+#      WR-05): a poisoned .retry.json never starves alphabetically-later
+#      documents, a malformed .json title sidecar never stalls a document,
+#      and a sent/failed filename collision is disambiguated, never
+#      silently overwritten
 #
 # Mirrors internal/verify-cups-scaffold.sh (DATA_DIR + options.json fixture,
 # docker build, docker run -v mount, trap cleanup, red/green/yellow helpers,
@@ -465,6 +470,170 @@ fi
 
 docker rm -f "${RETRY_CONTAINER}" >/dev/null 2>&1 || true
 kill "${FAIL_STUB_PID}" >/dev/null 2>&1 || true
+
+# =============================================================================
+# Scenario 4: malformed-state and sent/failed collision resilience
+# (CR-01/WR-02/WR-05)
+# =============================================================================
+yellow "=== Scenario 4: malformed-state and sent/failed collision resilience (CR-01/WR-02/WR-05) ==="
+
+RESIL_PORT=8794
+RESIL_LOG="${SCRATCH_DIR}/resilience-requests.jsonl"
+RESIL_MODE="${SCRATCH_DIR}/resilience-mode.txt"
+RESIL_STUB_PID=$(start_stub_server "${RESIL_PORT}" "${RESIL_LOG}" "${RESIL_MODE}")
+STUB_PIDS+=("${RESIL_STUB_PID}")
+sleep 1
+
+RESIL_CONTAINER="cups-paperless-verify-resilience-${STAMP}"
+CONTAINERS_STARTED+=("${RESIL_CONTAINER}")
+RESIL_DATA_DIR="${SCRATCH_DIR}/resilience-data"
+mkdir -p "${RESIL_DATA_DIR}"
+cat > "${RESIL_DATA_DIR}/options.json" <<JSON
+{
+  "avahi_reflector": false,
+  "printers": [],
+  "log_level": "info",
+  "paperless_upload": {
+    "enabled": true,
+    "queue_name": "verify-pdf-queue",
+    "location": "",
+    "url": "http://host.docker.internal:${RESIL_PORT}",
+    "token": "verify-fake-token-4",
+    "timeout": 10,
+    "retry_count": 2,
+    "retry_delay": 2
+  }
+}
+JSON
+
+docker run --rm -d --name "${RESIL_CONTAINER}" \
+    --add-host=host.docker.internal:host-gateway \
+    -v "${RESIL_DATA_DIR}:/data" \
+    "${IMAGE_NAME}" >/dev/null
+
+if ! wait_for_container_ready "${RESIL_CONTAINER}"; then
+    red "cupsd did not become ready in the resilience container"
+    docker logs "${RESIL_CONTAINER}" 2>&1 || true
+    FAIL=1
+else
+    # This scenario injects files directly into the outbox and never calls
+    # lp -- the cups-pdf queue itself does not need to exist -- so just wait
+    # for generate_config.py's outbox-directory creation to have run.
+    OUTBOX_READY=0
+    for _ in $(seq 1 15); do
+        if [[ -d "${RESIL_DATA_DIR}/paperless_upload/processing" && -d "${RESIL_DATA_DIR}/paperless_upload/sent" ]]; then
+            OUTBOX_READY=1
+            break
+        fi
+        sleep 1
+    done
+
+    if [[ "${OUTBOX_READY}" != "1" ]]; then
+        red "FAIL: outbox directories were not created within timeout"
+        docker logs "${RESIL_CONTAINER}" 2>&1 || true
+        FAIL=1
+    else
+        PROCESSING_DIR="${RESIL_DATA_DIR}/paperless_upload/processing"
+        SENT_DIR="${RESIL_DATA_DIR}/paperless_upload/sent"
+
+        # CR-01 fixture: a poisoned (syntactically-valid, non-dict)
+        # .retry.json alongside a PDF that sorts alphabetically FIRST.
+        printf 'poison' > "${PROCESSING_DIR}/poison-aaa.pdf"
+        printf '[]' > "${PROCESSING_DIR}/poison-aaa.retry.json"
+
+        # A fresh document with no sidecar/retry-state that sorts
+        # alphabetically AFTER poison-aaa -- exactly the document CR-01 said
+        # would be permanently starved.
+        printf 'normal' > "${PROCESSING_DIR}/zzz-normal.pdf"
+
+        # WR-02 fixture: a malformed (syntactically-valid, non-dict) .json
+        # title sidecar.
+        printf 'badtitle' > "${PROCESSING_DIR}/badtitle-doc.pdf"
+        printf '[]' > "${PROCESSING_DIR}/badtitle-doc.json"
+
+        # WR-05 fixture: a pre-existing retained document in sent/ from a
+        # prior container lifetime ...
+        printf 'PRE-EXISTING-RETAINED-DOCUMENT' > "${SENT_DIR}/collide.pdf"
+        # ... and a fresh document in processing/ whose filename collides
+        # with it (simulating cupsd's job-ID counter resetting after a
+        # restart, without needing an actual container restart).
+        printf 'NEW-DOCUMENT-CONTENT' > "${PROCESSING_DIR}/collide.pdf"
+
+        # CR-01 regression assertion: with the bug, zzz-normal.pdf would stay
+        # stuck in processing/ forever because poison-aaa.pdf (sorting
+        # before it) aborts every poll cycle. With the fix it converges
+        # independently within two full POLL_INTERVAL_SECONDS=20 cycles plus
+        # container/filter jitter.
+        ZZZ_GONE=0
+        for _ in $(seq 1 70); do
+            if [[ ! -e "${PROCESSING_DIR}/zzz-normal.pdf" ]]; then
+                ZZZ_GONE=1
+                break
+            fi
+            sleep 1
+        done
+
+        if [[ "${ZZZ_GONE}" == "1" ]]; then
+            green "PASS: zzz-normal.pdf converged out of processing/ despite poison-aaa's malformed retry state (CR-01)"
+        else
+            red "FAIL: zzz-normal.pdf is still stuck in processing/ -- CR-01 regression"
+            docker logs "${RESIL_CONTAINER}" 2>&1 || true
+            FAIL=1
+        fi
+
+        # WR-02 regression assertion: badtitle-doc.pdf must converge out of
+        # processing/ into sent/ despite its malformed title sidecar.
+        if [[ ! -e "${PROCESSING_DIR}/badtitle-doc.pdf" ]] \
+            && [[ -n "$(find "${SENT_DIR}" -name 'badtitle-doc.pdf' 2>/dev/null)" ]]; then
+            green "PASS: badtitle-doc.pdf converged to sent/ despite its malformed title sidecar (WR-02)"
+        else
+            red "FAIL: badtitle-doc.pdf did not converge to sent/ -- WR-02 regression"
+            docker logs "${RESIL_CONTAINER}" 2>&1 || true
+            FAIL=1
+        fi
+
+        # WR-05 core regression assertion: the pre-existing sent/collide.pdf
+        # must be untouched byte-for-byte.
+        if [[ "$(cat "${SENT_DIR}/collide.pdf" 2>/dev/null)" == "PRE-EXISTING-RETAINED-DOCUMENT" ]]; then
+            green "PASS: pre-existing sent/collide.pdf was not silently overwritten (WR-05)"
+        else
+            red "FAIL: pre-existing sent/collide.pdf was overwritten -- WR-05 regression"
+            docker logs "${RESIL_CONTAINER}" 2>&1 || true
+            FAIL=1
+        fi
+
+        # The new arrival must have been disambiguated, not silently
+        # dropped: exactly one other collide-*.pdf file now exists.
+        COLLIDE_DISAMBIGUATED_COUNT=$(find "${SENT_DIR}" -name 'collide-*.pdf' 2>/dev/null | wc -l)
+        if [[ "${COLLIDE_DISAMBIGUATED_COUNT}" == "1" ]]; then
+            green "PASS: the colliding new document was disambiguated into exactly one collide-*.pdf file"
+        else
+            red "FAIL: expected exactly 1 disambiguated collide-*.pdf file, found ${COLLIDE_DISAMBIGUATED_COUNT}"
+            docker logs "${RESIL_CONTAINER}" 2>&1 || true
+            FAIL=1
+        fi
+
+        RESIL_LOGS=$(docker logs "${RESIL_CONTAINER}" 2>&1)
+        COLLISION_WARNING_COUNT=$(echo "${RESIL_LOGS}" | grep -c "already exists -- moving to" || true)
+        if [[ "${COLLISION_WARNING_COUNT}" -ge 1 ]]; then
+            green "PASS: at least one 'already exists -- moving to' collision WARNING logged (WR-05)"
+        else
+            red "FAIL: no 'already exists -- moving to' collision WARNING found in container logs"
+            echo "${RESIL_LOGS}"
+            FAIL=1
+        fi
+
+        if echo "${RESIL_LOGS}" | grep -qF "verify-fake-token-4"; then
+            red "FAIL: the fixture token appears verbatim in container logs (resilience container)"
+            FAIL=1
+        else
+            green "PASS: paperless_upload.token never appears in container logs (resilience container)"
+        fi
+    fi
+fi
+
+docker rm -f "${RESIL_CONTAINER}" >/dev/null 2>&1 || true
+kill "${RESIL_STUB_PID}" >/dev/null 2>&1 || true
 
 if [[ "${FAIL}" == "1" ]]; then
     echo
