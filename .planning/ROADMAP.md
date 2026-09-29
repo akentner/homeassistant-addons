@@ -137,7 +137,7 @@ re-litigate during planning:
 
 **Requirements**: D-01..D-15 (CONTEXT.md decisions — no REQUIREMENTS.md IDs mapped to this ad-hoc phase)
 **Depends on:** Phase 21
-**Plans:** 3 plans in 3 waves (22-03 is a gap-closure plan from 22-VERIFICATION.md)
+**Plans:** 3/3 plans executed in 3 waves (22-03 is a gap-closure plan from 22-VERIFICATION.md)
 
 Plans:
 **Wave 1**
@@ -148,7 +148,7 @@ Plans:
 - [x] 22-02-PLAN.md
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 22-03-PLAN.md
+- [x] 22-03-PLAN.md
       mechanism + upload-worker.py (happy path + retry/backoff/failed-state + D-07 disabled-by-default regression) +
       internal/verify-cups-paperless-upload.sh
 - [ ] `22-02-PLAN.md` — cups/DOCS.md + cups/README.md documentation, cross-checked against shipped defaults via a

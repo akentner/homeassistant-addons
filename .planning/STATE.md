@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: opentofu-bridge
 current_phase: 22
-current_phase_name: cups-paperless-ngx-pdf-document-upload
-current_plan: 1
+current_phase_name: "cups: paperless-ngx PDF document upload"
+current_plan: 3
 status: Phase 20 execution complete
-stopped_at: Completed 22-02-PLAN.md
-last_updated: "2026-09-29T16:09:28.042Z"
-state_head: 7b15a10921de02446738f67a778cc29353a8e32b
+stopped_at: Completed 22-03-PLAN.md
+last_updated: "2026-09-29T16:31:40.426Z"
+state_head: 359ef354e4521666429de9101a4fb8abb97e6c51
 progress:
   total_phases: 9
   completed_phases: 12
   total_plans: 21
   completed_plans: 27
-  percent: 22
+  percent: 100
 ---
 
 # Project State
@@ -106,10 +106,10 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 3
 
-Phase: 22 (cups-paperless-ngx-pdf-document-upload) — READY TO EXECUTE
+Phase: 22 (cups: paperless-ngx PDF document upload) — EXECUTING
 21 atomic commits on main (4 planning + 14 execution + 4 plan SUMMARYs). All 4 plans landed:
 
 - **Plan 01** (e0df1a1 / fcb14cd / 958ef21 / 493eb71 / f490894 / cebe063 / b6e6534): 4-file HA Supervisor scaffold
@@ -369,6 +369,7 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 | Phase quick-260910-vh7 P01 | 35min | 2 tasks | 3 files |
 | Phase 22 P01 | 21min | 2 tasks | 8 files |
 | Phase 22 P02 | 5min | 2 tasks | 3 files |
+| Phase 22 P03 | 15min | 2 tasks | 3 files |
 
 ## Quick Tasks Completed
 
@@ -411,9 +412,9 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 
 **Resume file:** None
 
-**Stopped at:** Completed 22-02-PLAN.md
+**Stopped at:** Completed 22-03-PLAN.md
 
-Last session: 2026-09-28T20:13:23.325Z
+Last session: 2026-09-29T16:31:40.194Z
 
 ---
 
@@ -485,3 +486,4 @@ skipped; Phase 16 ready to plan_
 - [Phase 22]: D-08's UUID-stability fixup required zero new code for the cups-pdf queue -- build_cups_pdf_registration_snippet()'s queue_name is appended into the same registered_printer_names list build_printer_uuid_fixup_script() already consumes generically. — Verified empirically with a real docker restart of a paperless_upload-enabled container: the cups-pdf queue's printer UUID was byte-identical before and after.
 - [Phase 22]: Reused the single existing [docs]: DOCS.md reference link for the new README bullet rather than adding a second, anchor-specific link. — Matches this add-on's own convention where only the closing 'See DOCS.md' line carries a reference-style link; adding a second docs link would be redundant.
 - [Phase 22]: Consolidated all four required Design-notes sub-points (fixed outbox path, corrected PostProcessing argument model, 0o777 outbox rationale, minimal exhausted-retry visibility) into one bolded-lead paragraph. — Matches cups/DOCS.md's established one-entry-per-topic Design notes style rather than splitting into four separate entries.
+- [Phase 22]: CR-01 fixed at both data-validation and control-flow layers (defense in depth); WR-05 shares one collision_tag across a colliding PDF+sidecar pair for correlated triage — 22-VERIFICATION.md flagged CR-01/WR-02/WR-05 as still-open gaps; this gap-closure plan closes them with defensive isinstance(dict) validation and a new unique_destination() helper, proven end-to-end via a new Scenario 4
