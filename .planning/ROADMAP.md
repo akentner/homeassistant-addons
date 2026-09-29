@@ -137,16 +137,20 @@ re-litigate during planning:
 
 **Requirements**: D-01..D-15 (CONTEXT.md decisions — no REQUIREMENTS.md IDs mapped to this ad-hoc phase)
 **Depends on:** Phase 21
-**Plans:** 2/2 plans executed in 2 waves
+**Plans:** 3 plans in 3 waves (22-03 is a gap-closure plan from 22-VERIFICATION.md)
 
 Plans:
 - [x] 22-01-PLAN.md
 - [x] 22-02-PLAN.md
+- [ ] 22-03-PLAN.md
 - [ ] `22-01-PLAN.md` — Tracer: paperless_upload config schema + cups-pdf queue registration + PostProcess sidecar
       mechanism + upload-worker.py (happy path + retry/backoff/failed-state + D-07 disabled-by-default regression) +
       internal/verify-cups-paperless-upload.sh
 - [ ] `22-02-PLAN.md` — cups/DOCS.md + cups/README.md documentation, cross-checked against shipped defaults via a
       final full regression of the feature's verify script
+- [ ] `22-03-PLAN.md` — Gap closure: CR-01/WR-02/WR-05 defensive-validation fixes in upload-worker.py (malformed
+      retry-state poison-pill, malformed title sidecar, sent/failed collision overwrite), Scenario 4 in
+      internal/verify-cups-paperless-upload.sh, version bump to 0.1.0-15
 
 ### 📋 v1.4 iac-runner (Phases 16-19) — PLANNING
 
