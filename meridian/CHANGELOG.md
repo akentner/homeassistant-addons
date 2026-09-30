@@ -1,3 +1,10 @@
+## [1.79.0](https://github.com/rynfar/meridian/compare/meridian-v1.78.0...meridian-v1.79.0) (2026-09-29)
+
+### Features
+
+- polish menu-bar controls and account sign-in ([#1194](https://github.com/rynfar/meridian/issues/1194))
+  ([e926bc7](https://github.com/rynfar/meridian/commit/e926bc70ea7ee294f6b9cd9eb962342219d9adbf))
+
 ## [1.78.0](https://github.com/rynfar/meridian/compare/meridian-v1.77.1...meridian-v1.78.0) (2026-09-28)
 
 ### Features
