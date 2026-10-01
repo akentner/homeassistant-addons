@@ -12,6 +12,55 @@ key:
 ```bash
 cosign verify \
   --key https://raw.githubusercontent.com/BerriAI/litellm/0112e53046018d726492c814b3644b7d376029d0/cosign.pub \
+  ghcr.io/berriai/litellm:v1.103.2
+```
+
+**Verify using the release tag (convenience):**
+
+Tags are protected in this repository and resolve to the same key. This option is easier to read but relies on tag
+protection rules:
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/v1.103.2/cosign.pub \
+  ghcr.io/berriai/litellm:v1.103.2
+```
+
+Expected output:
+
+```
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - The signatures were verified against the specified public key
+```
+
+---
+
+## What's Changed
+
+- chore(release): sync stable/1.103.x to v1.103.1 by @yuneng-berri in https://github.com/BerriAI/litellm/pull/43824
+- fix(proxy): backport #40541, #43642, and #43656 to stable/1.103.x for v1.103.2 by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/43897
+- fix(anthropic): backport #42152 and #42288 to stable/1.103.x by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/43662
+- fix(proxy): backport #43962 to stable/1.103.x by @yuneng-berri in https://github.com/BerriAI/litellm/pull/43984
+
+**Full Changelog**: https://github.com/BerriAI/litellm/compare/v1.103.1...v1.103.2
+
+## Verify Docker Image Signature
+
+All LiteLLM Docker images are signed with [cosign](https://docs.sigstore.dev/cosign/overview/). Every release is signed
+with the same key introduced in
+[commit `0112e53`](https://github.com/BerriAI/litellm/commit/0112e53046018d726492c814b3644b7d376029d0).
+
+**Verify using the pinned commit hash (recommended):**
+
+A commit hash is cryptographically immutable, so this is the strongest way to ensure you are using the original signing
+key:
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/0112e53046018d726492c814b3644b7d376029d0/cosign.pub \
   ghcr.io/berriai/litellm:v1.103.1
 ```
 
