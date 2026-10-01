@@ -8,7 +8,7 @@ ARG VERSION
 # discarded builder stage takes the ~340M of libllvm/libicu/libnode/libz3
 # with it. Stage 2 ships just the 18M statically-linked engine binary + the
 # installed Python packages — verified via `ldd` against the engine binary.
-FROM python:3.13-slim-bookworm AS litellm-builder
+FROM python:3.14-slim-bookworm AS litellm-builder
 
 # Default falls the build workflow does not pass LITELLM_VERSION via --build-arg.
 # The repo-wide build.yml workflow only forwards the standard set
