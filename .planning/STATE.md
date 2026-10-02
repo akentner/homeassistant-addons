@@ -174,12 +174,15 @@ blocks them until 17-06, 17-07 and 17-08 also finish. `go build / vet / test ./.
 
 ### Pending Todos
 
-- [2026-09-26] [general] CUPS add-on brand icon nachliefern — [todo file](.planning/todos/pending/2026-09-26-cups-add-on-brand-icon-nachliefern.md)
-- [2026-09-26] [general] cups config options friendly names and DE/EN translations — [todo file](.planning/todos/pending/2026-09-26-cups-config-options-friendly-names-and-de-en-translations.md)
+None — the two CUPS todos previously listed here (brand icon, config options translations) were resolved during the
+Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8378`/`b164fb9` and `aac766b`).
 
 ### Roadmap Evolution
 
-- Phase 21 added: cups print server addon airprint mdns fixes
+- Phase 21 added: cups print server addon airprint mdns fixes — **complete, 3/3 plans** (21-03's rollout on
+  `haos-op3050-1` was executed live 2026-09-26/27 but never formally closed out; retroactively documented in
+  `21-03-SUMMARY.md` on 2026-10-02 after confirming via live SSH that the new `cups` add-on is running with a real
+  printer configured and `f1c878cb_cups` is already removed)
 - Phase 22 added: cups: paperless-ngx PDF document upload
 
 ### Key Decisions (v1.3)

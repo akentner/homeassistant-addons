@@ -80,20 +80,17 @@ options instead of upstream's hardcoded `options: {} / schema: []`, then roll th
 replacing `f1c878cb_cups`.
 **Requirements**: D-01..D-13 (CONTEXT.md decisions — no REQUIREMENTS.md IDs mapped to this ad-hoc phase)
 **Depends on:** Phase 20
-**Plans:** 2/3 plans executed in 3 waves
+**Plans:** 3/3 plans executed in 3 waves
 
 Plans:
 
-- [x] 21-01-PLAN.md
-- [x] 21-02-PLAN.md
-- [ ] 21-03-PLAN.md
-
-- [ ] `21-01-PLAN.md` — Tracer: cups/ 4-file scaffold + generated avahi-daemon.conf (reflector-off, fixed hostname,
+- [x] `21-01-PLAN.md` — Tracer: cups/ 4-file scaffold + generated avahi-daemon.conf (reflector-off, fixed hostname,
       IPv6-off) + one printer registered end-to-end (checkpoint: printers[].uri schema type)
-- [ ] `21-02-PLAN.md` — internal/base-image-config.yaml tracking + cups/README.md + cups/DOCS.md + root README.md
+- [x] `21-02-PLAN.md` — internal/base-image-config.yaml tracking + cups/README.md + cups/DOCS.md + root README.md
       entry
-- [ ] `21-03-PLAN.md` — Rollout on haos-op3050-1: migration-suggestion script, install + empirical mDNS
-      verification, human confirmation checkpoint, remove f1c878cb_cups
+- [x] `21-03-PLAN.md` — Rollout on haos-op3050-1: migration-suggestion script, install + empirical mDNS
+      verification, human confirmation checkpoint, remove f1c878cb_cups (closed out retroactively — see
+      21-03-SUMMARY.md)
 
 ### Phase 22: cups: paperless-ngx PDF document upload
 

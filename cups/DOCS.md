@@ -344,4 +344,34 @@ empirically end-to-end (real cups-pdf print job -> title sidecar written -> uplo
 
 ## Migrating from f1c878cb_cups
 
-See the rollout runbook — filled in by a later plan.
+This is the procedure actually executed on `haos-op3050-1` to replace the third-party `f1c878cb_cups` add-on with this
+one (D-12, D-13):
+
+1. **Get a ready-to-paste `printers:` suggestion from the old add-on's live config.**
+   `internal/cups-migration-suggestion.sh` SSHes to the host, runs `ha apps info f1c878cb_cups` and (if no per-printer
+   detail is exposed there) `lpstat -v` against the old add-on's container, and prints one YAML entry per discovered
+   printer in exactly this add-on's `printers[]` schema shape (`name`/`uri`/`enabled`). It is read-only — no
+   install/uninstall/restart verb anywhere in the script — so it is safe to re-run at any time, including before you've
+   decided to migrate at all.
+
+2. **Install this add-on and start it with an empty `printers` list.** Do not paste the Task 1 suggestion in yet —
+   verify the mDNS fixes hold on the real host first, independent of any printer configuration. Confirm:
+   - `avahi-resolve -a <host-ip>` returns the configured `avahi_hostname` with no auto-renamed `-2` suffix (D-11)
+   - the add-on's own logs contain zero occurrences of `No slot available for legacy unicast reflection` (D-07)
+
+3. **Paste the suggested `printers:` snippet into this add-on's Options, save, and restart it.** Review/edit names and
+   URIs first — the script's output is a starting point, not something to paste blindly.
+
+4. **Physically test AirPrint from a real iOS/macOS device.** This is the one step in the migration that genuinely
+   cannot be automated — no CLI/API exists for "does AirPrint actually work from a real device". On this host, the first
+   physical test surfaced a real bug: a Brother MFC-7460DN connected via raw socket (`socket://`, JetDirect) printed a
+   1-page PDF as endless blank pages under the `generic` driver, fixed by setting `driver: brlaser` + `driver_model` for
+   that printer (see [Printer driver](#printer-driver) above, D-14). Re-test after any such fix until printing genuinely
+   works.
+
+5. **Only after physical confirmation, remove the old add-on:** `ha apps uninstall f1c878cb_cups`, then confirm via
+   `ha apps list` that it no longer appears and this add-on still shows `state: started`.
+
+This order — install alongside, verify empirically, migrate config, physically confirm, _then_ remove — means the old
+add-on stays available as a fallback for the entire migration and is only ever removed after the replacement is proven
+to work, never before.
