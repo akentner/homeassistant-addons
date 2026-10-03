@@ -15,13 +15,17 @@
 # dbus-send Get* methods, avahi-resolve*), and the avahi client tools on the machine running the script.
 # It never issues a mutating Supervisor or docker verb and never signals a process.
 #
-# Usage: ./internal/verify-cups-mdns-live.sh [--assert] [--host H] [--slug S] [--host-ip IP]
-#                                            [--settle-wait SECONDS] [--mask] [-h|--help]
+# Usage: ./internal/verify-cups-mdns-live.sh [--assert | --diagnose [--out FILE]] [--host H] [--slug S]
+#                                            [--host-ip IP] [--settle-wait SECONDS] [--mask] [-h|--help]
 #
-# Output: one line per check -- `PASS|FAIL|INFO|SKIP <id>: <detail>` -- then `RESULT: PASS` or
-# `RESULT: FAIL (<n> failed)`.
+# --assert (default) output: one line per check -- `PASS|FAIL|INFO|SKIP <id>: <detail>` -- then `RESULT: PASS`
+# or `RESULT: FAIL (<n> failed)`. Exit status: 0 = no FAIL line, 1 = at least one FAIL line, 2 = usage or
+# prerequisite error.
 #
-# Exit status: 0 = no FAIL line, 1 = at least one FAIL line, 2 = usage or prerequisite error.
+# --diagnose output: nine evidence sections, each a header line `EVIDENCE E<n> <name>` followed by its body and
+# optional `HINT E<n>: <sentence>` lines. The RAW transcript goes to --out (default
+# ${TMPDIR:-/tmp}/cups-mdns-diagnose-<epoch>.log, keep it out of the repository); stdout is the same text passed
+# through the IP masker so it can be pasted into a committed document. Exit status 0 unless a prerequisite fails (2).
 
 set -euo pipefail
 export LC_ALL=C
@@ -32,6 +36,7 @@ HOST_IP=""
 SETTLE_WAIT=0
 MASK=0
 MODE="assert"
+OUT=""
 ARGS=("$@")
 
 usage() {
@@ -46,6 +51,12 @@ die() {
 while [[ $# -gt 0 ]]; do
     case "$1" in
     --assert) MODE="assert" ;;
+    --diagnose) MODE="diagnose" ;;
+    --out)
+        [[ $# -ge 2 ]] || die "--out needs a value"
+        OUT="$2"
+        shift
+        ;;
     --host)
         [[ $# -ge 2 ]] || die "--host needs a value"
         HOST="$2"
@@ -130,11 +141,16 @@ FACTS="$(printf '%s' "${APP_INFO}" | jq -r '[
     .data.state, .data.version,
     (.data.options.avahi_hostname // "cups"),
     (.data.options.avahi_use_ipv6 // false),
-    (.data.options.avahi_reflector // false)] | @tsv')" || die "could not parse ha apps info output"
+    (.data.options.avahi_reflector // false),
+    (.data.version_latest | tostring), (.data.watchdog | tostring), (.data.boot | tostring),
+    (.data.hostname | tostring)] | @tsv')" || die "could not parse ha apps info output"
 APP_INFO=""
-IFS=$'\t' read -r APP_STATE APP_VERSION AVAHI_HOSTNAME USE_IPV6 REFLECTOR <<<"${FACTS}"
-info addon "state=${APP_STATE} version=${APP_VERSION} avahi_hostname=${AVAHI_HOSTNAME} use_ipv6=${USE_IPV6}" \
-    "reflector=${REFLECTOR}"
+IFS=$'\t' read -r APP_STATE APP_VERSION AVAHI_HOSTNAME USE_IPV6 REFLECTOR APP_VLATEST APP_WATCHDOG APP_BOOT \
+    APP_HOSTNAME <<<"${FACTS}"
+if [[ "${MODE}" == "assert" ]]; then
+    info addon "state=${APP_STATE} version=${APP_VERSION} avahi_hostname=${AVAHI_HOSTNAME} use_ipv6=${USE_IPV6}" \
+        "reflector=${REFLECTOR}"
+fi
 [[ "${APP_STATE}" == "started" ]] || die "add-on ${SLUG} is not started (state=${APP_STATE})"
 
 # Step 3: container discovery tolerant of the app_ and addon_ naming prefixes.
@@ -148,6 +164,142 @@ if [[ -z "${HOST_IP}" ]]; then
 r = g.get_iface_ipv4(i) if i else None; print(r[0] if r else '')" 2>/dev/null || true)"
 fi
 [[ -n "${HOST_IP}" ]] || die "could not determine the host LAN IPv4 (use --host-ip)"
+
+# ---------------------------------------------------------------------------------------------------------------
+# --diagnose: nine read-only evidence sections (E1..E9).
+# ---------------------------------------------------------------------------------------------------------------
+section() { printf 'EVIDENCE E%s %s\n' "$1" "$2"; }
+hint() { printf 'HINT E%s: %s\n' "$1" "${*:2}"; }
+
+# Remote reader: one line per running container process that is an avahi-daemon or mdns-repeater. Containers
+# without a shell or without ps are skipped silently.
+scan_avahi_processes() {
+    rssh sh -s <<'REMOTE' 2>/dev/null || true
+for c in $(docker ps --format '{{.Names}}'); do
+    docker exec "$c" ps -o args </dev/null 2>/dev/null | grep -E 'avahi-daemon|mdns-repeater' | grep -v grep |
+        sed "s/^/$c: /"
+done
+REMOTE
+}
+
+diagnose() {
+    local hostinfo host_name boot_us boot_utc
+    hostinfo="$(rssh "ha host info --raw-json" 2>/dev/null || true)"
+    host_name="$(printf '%s' "${hostinfo}" | jq -r '.data.hostname // empty' 2>/dev/null || true)"
+    boot_us="$(printf '%s' "${hostinfo}" | jq -r '.data.boot_timestamp // empty' 2>/dev/null || true)"
+
+    section 1 addon-state
+    printf 'version=%s version_latest=%s state=%s watchdog=%s boot=%s hostname=%s\n' "${APP_VERSION}" \
+        "${APP_VLATEST}" "${APP_STATE}" "${APP_WATCHDOG}" "${APP_BOOT}" "${APP_HOSTNAME}"
+    printf 'avahi_hostname=%s avahi_use_ipv6=%s avahi_reflector=%s\n' "${AVAHI_HOSTNAME}" "${USE_IPV6}" "${REFLECTOR}"
+
+    section 2 avahi-processes
+    local procs
+    procs="$(scan_avahi_processes)"
+    printf '%s\n' "${procs:-(none found)}"
+    local siblings=() name
+    while IFS= read -r name; do
+        [[ -n "${name}" && "${name}" != "${CONTAINER}" ]] && siblings+=("${name}")
+    done < <(printf '%s\n' "${procs}" | grep 'avahi-daemon' | sed 's/: .*//' | sort -u || true)
+
+    section 3 live-avahi-conf
+    cexec grep -Ev '^[[:space:]]*(#|$)' /etc/avahi/avahi-daemon.conf 2>/dev/null || printf '(unreadable)\n'
+
+    section 4 syslog-sink
+    cexec ls -l /dev/log 2>&1 || true
+    if cexec sh -c 'test -S /dev/log' >/dev/null 2>&1; then
+        printf 'dev-log-live-socket: yes\n'
+    else
+        printf 'dev-log-live-socket: no\n'
+        hint 4 "/dev/log does not resolve to a live socket in the cups container; avahi's syslog output (including" \
+            "host-name conflict and rename messages) is discarded"
+    fi
+
+    section 5 daemon-dbus
+    local d_state d_short d_fqdn
+    d_state="$(dbus_get GetState 2>/dev/null | sed -n 's/^ *int32 \([0-9]*\).*/\1/p' || true)"
+    d_short="$(dbus_get GetHostName 2>/dev/null | sed -n 's/^ *string "\(.*\)".*/\1/p' || true)"
+    d_fqdn="$(dbus_get GetHostNameFqdn 2>/dev/null | sed -n 's/^ *string "\(.*\)".*/\1/p' || true)"
+    printf 'GetState=%s GetHostName=%s GetHostNameFqdn=%s\n' "${d_state:-unreadable}" "${d_short:-unreadable}" \
+        "${d_fqdn:-unreadable}"
+    printf 'process-title: %s\n' "$(cexec ps -o args 2>/dev/null | grep '^avahi-daemon:' | head -1 || true)"
+    if [[ -n "${d_short}" && "${d_short}" != "${AVAHI_HOSTNAME}" ]]; then
+        hint 5 "the daemon runs as '${d_short}' but avahi_hostname is '${AVAHI_HOSTNAME}': the host-name claim was lost"
+    fi
+
+    section 6 service-instance-suffix
+    local browse suffixes suffix
+    browse="$(timeout 30 avahi-browse -t -p -k _ipp._tcp 2>/dev/null || true)"
+    suffixes="$(printf '%s\n' "${browse}" | awk -F';' '$1 == "+" { print $4 }' | sed -e 's/\\032/ /g' -e 's/\\064/@/g' |
+        sed -n 's/.*@ *//p' | sort -u || true)"
+    printf 'instance suffix(es) after @: %s\n' "$(printf '%s' "${suffixes}" | tr '\n' ',' | sed 's/,$//')"
+    printf 'daemon short host name: %s\n' "${d_short:-unreadable}"
+    while IFS= read -r suffix; do
+        if [[ -n "${suffix}" && -n "${d_short}" && "${suffix}" != "${d_short}" ]]; then
+            hint 6 "service instance suffix '${suffix}' differs from the daemon host name '${d_short}': the" \
+                "service was registered under a stale host name and never re-registered after avahi's rename"
+        fi
+    done <<<"${suffixes}"
+
+    section 7 start-times
+    local c started cups_epoch other_epoch
+    started="$(rssh "docker inspect --format '{{.State.StartedAt}}' ${CONTAINER}" 2>/dev/null || true)"
+    printf '%s: %s\n' "${CONTAINER}" "${started}"
+    cups_epoch="$(date -u -d "${started}" +%s 2>/dev/null || true)"
+    for c in "${siblings[@]}"; do
+        local s
+        s="$(rssh "docker inspect --format '{{.State.StartedAt}}' ${c}" 2>/dev/null || true)"
+        printf '%s: %s\n' "${c}" "${s}"
+        other_epoch="$(date -u -d "${s}" +%s 2>/dev/null || true)"
+        if [[ -n "${cups_epoch}" && -n "${other_epoch}" ]]; then
+            local delta=$((cups_epoch - other_epoch))
+            [[ "${delta}" -lt 0 ]] && delta=$((-delta))
+            if [[ "${delta}" -le 60 ]]; then
+                hint 7 "${CONTAINER} and ${c} started ${delta}s apart: a cold-start probe race between sibling avahi" \
+                    "daemons is plausible"
+            fi
+        fi
+    done
+    if [[ -n "${boot_us}" ]]; then
+        boot_utc="$(date -u -d "@$((boot_us / 1000000))" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
+        printf 'host boot (UTC): %s\n' "${boot_utc:-unreadable}"
+    else
+        printf 'host boot (UTC): unreadable\n'
+    fi
+
+    section 8 lan-names
+    local n out
+    for n in "${host_name:+${host_name}.local}" "${AVAHI_HOSTNAME}.local" "${d_fqdn}"; do
+        [[ -n "${n}" ]] || continue
+        for fam in 4 6; do
+            out="$(timeout 8 avahi-resolve-host-name "-${fam}" "${n}" 2>/dev/null | awk '{ print $2; exit }' || true)"
+            printf 'forward -%s %s -> %s\n' "${fam}" "${n}" "${out:-no answer}"
+        done
+    done
+    printf 'reverse %s (INFO only) -> %s\n' "${HOST_IP}" \
+        "$(timeout 8 avahi-resolve -a "${HOST_IP}" 2>/dev/null | awk '{ print $2; exit }' || true)"
+
+    section 9 sibling-publish-config
+    if [[ "${#siblings[@]}" -eq 0 ]]; then
+        printf '(no sibling avahi containers found)\n'
+    fi
+    for c in "${siblings[@]}"; do
+        local conf
+        conf="$(rssh "docker exec ${c} grep -E '^(publish-addresses|publish-aaaa-on-ipv4|disable-publishing)' \
+/etc/avahi/avahi-daemon.conf" 2>/dev/null || true)"
+        printf '%s:\n%s\n' "${c}" "${conf:-  (none of the three keys set)}"
+        if ! printf '%s\n' "${conf}" | grep -q '^publish-addresses=no'; then
+            hint 9 "${c} does not set publish-addresses=no: a second publisher of the shared host IP's reverse" \
+                "records is the documented conflict class"
+        fi
+    done
+}
+
+if [[ "${MODE}" == "diagnose" ]]; then
+    [[ -n "${OUT}" ]] || OUT="${TMPDIR:-/tmp}/cups-mdns-diagnose-$(date +%s).log"
+    diagnose | tee "${OUT}" | mask_stream
+    exit 0
+fi
 
 # Step 5: optional settle wait (after a restart) -- poll D-Bus GetState until the daemon reports running (int32 2).
 if [[ "${SETTLE_WAIT}" -gt 0 ]]; then
@@ -228,7 +380,8 @@ else
     skip lan-no-aaaa "avahi_use_ipv6=true"
 fi
 
-BROWSE_OUT="$(timeout 60 avahi-browse -t -r -p _ipp._tcp 2>/dev/null || true)"
+# -k keeps the raw service type (`_ipp._tcp`) in field 5; without it avahi prints the friendly name from its type db.
+BROWSE_OUT="$(timeout 60 avahi-browse -t -r -p -k _ipp._tcp 2>/dev/null || true)"
 ADDED="$(printf '%s\n' "${BROWSE_OUT}" | awk -F';' '$1 == "+" { n++ } END { print n + 0 }')"
 RESOLVED="$(printf '%s\n' "${BROWSE_OUT}" | awk -F';' -v h="${WANT_FQDN}" -v ip="${HOST_IP}" \
     '$1 == "=" && $5 == "_ipp._tcp" && $7 == h && $8 == ip { n++ } END { print n + 0 }')"
