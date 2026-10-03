@@ -97,6 +97,32 @@ report(
 )
 report("WARNING" in output, "build_printer_registration prints a WARNING for 'testprinter\\n'")
 
+print("Section: avahi_use_ipv6 / publish-aaaa-on-ipv4 (D-10)")
+
+# Test 1: default (IPv6 off) carries use-ipv6=no, a [publish] section and publish-aaaa-on-ipv4=no,
+# ordered [server] ... [publish] ... [reflector].
+conf, exit_code, _ = call_quietly(gc.build_avahi_conf, {})
+conf = conf or ""
+ordered = (
+    "use-ipv6=no" in conf
+    and "[publish]" in conf
+    and "publish-aaaa-on-ipv4=no" in conf
+    and conf.index("use-ipv6=no") < conf.index("[publish]") < conf.index("publish-aaaa-on-ipv4=no")
+    and conf.index("publish-aaaa-on-ipv4=no") < conf.index("[reflector]")
+)
+report(
+    exit_code is None and ordered,
+    "avahi_use_ipv6 false: use-ipv6=no, then [publish] publish-aaaa-on-ipv4=no, then [reflector]",
+)
+
+# Test 2: IPv6 on keeps use-ipv6=yes and emits no publish-aaaa-on-ipv4 line at all.
+conf, exit_code, _ = call_quietly(gc.build_avahi_conf, {"avahi_use_ipv6": True})
+conf = conf or ""
+report(
+    exit_code is None and "use-ipv6=yes" in conf and "publish-aaaa-on-ipv4" not in conf,
+    "avahi_use_ipv6 true: use-ipv6=yes and no publish-aaaa-on-ipv4 line",
+)
+
 # <<hardening sections appended by later plans go above this line>>
 
 sys.exit(1 if failures else 0)

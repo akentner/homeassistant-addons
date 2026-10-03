@@ -163,6 +163,7 @@ run_harness() {
         -e "GUARD_QUERY_OUT=${query_out}" \
         "$@" \
         "${IMAGE_NAME}" -c '
+set -e
 mkdir -p /var/run/dbus /var/run/avahi-daemon
 dbus-daemon --system --fork
 python3 /generate_config.py >/dev/null
@@ -213,6 +214,24 @@ scenario_claim() {
     fqdn=$(docker exec "${CONTAINER_NAME}" dbus-send --system --print-reply --dest=org.freedesktop.Avahi \
         / org.freedesktop.Avahi.Server.GetHostNameFqdn 2>/dev/null || true)
     check "D-Bus GetHostNameFqdn prints cups-guard.local" grep -qF 'cups-guard.local' <<<"${fqdn}"
+
+    local conf
+    conf=$(docker exec "${CONTAINER_NAME}" cat /etc/avahi/avahi-daemon.conf 2>/dev/null || true)
+    check "generated avahi-daemon.conf contains publish-aaaa-on-ipv4=no" \
+        grep -qF 'publish-aaaa-on-ipv4=no' <<<"${conf}"
+
+    # D-10: with avahi_use_ipv6 false no IPv6 address record may be registered. Only meaningful when the
+    # container has a routable (neither link-local nor loopback) IPv6 address; otherwise report SKIP.
+    local routable_v6
+    routable_v6=$(docker exec "${CONTAINER_NAME}" cat /proc/net/if_inet6 2>/dev/null \
+        | awk '$1 !~ /^fe80/ && $1 != "00000000000000000000000000000001" { print $1 }' | head -n 1)
+    if [[ -z "${routable_v6}" ]]; then
+        yellow "   SKIP: no routable IPv6 address in the container; IPv6 registration check not applicable"
+    elif grep -qE 'Registering new address record for [0-9a-fA-F]*:[0-9a-fA-F:]* on' <<<"${logs}"; then
+        fail "avahi registered an IPv6 address record although avahi_use_ipv6 is false"
+    else
+        pass "no IPv6 address record registered (routable IPv6 present: ${routable_v6})"
+    fi
 
     docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 }

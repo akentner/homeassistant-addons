@@ -691,6 +691,14 @@ def build_avahi_conf(options: dict) -> str:
 
     Exits the process non-zero on an invalid avahi_hostname (see
     `resolve_avahi_hostname`).
+
+    With `avahi_use_ipv6` false (D-10) a `[publish]` section sets
+    `publish-aaaa-on-ipv4=no`: `use-ipv6=no` only disables IPv6 sockets, while
+    avahi's default `publish-aaaa-on-ipv4=yes` keeps publishing the host's IPv6
+    addresses (and their ip6.arpa reverse records) as AAAA over IPv4 -- the live
+    host still answered `avahi-resolve-host-name -6` with the IPv6 ULA that D-10
+    was meant to remove. `publish-addresses` is left untouched: the IPv4 A record
+    must stay published because the printer service's SRV target needs it.
     """
     hostname = resolve_avahi_hostname(options)
 
@@ -719,6 +727,13 @@ def build_avahi_conf(options: dict) -> str:
         )
     else:
         lines.append(f"allow-interfaces={allow_iface}")
+
+    if not use_ipv6:
+        lines += [
+            "",
+            "[publish]",
+            "publish-aaaa-on-ipv4=no",
+        ]
 
     lines += [
         "",
