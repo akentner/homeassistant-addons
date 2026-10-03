@@ -1,3 +1,36 @@
+## [1.79.0](https://github.com/rynfar/meridian/compare/meridian-v1.78.0...meridian-v1.79.0) (2026-09-29)
+
+### Features
+
+- polish menu-bar controls and account sign-in ([#1194](https://github.com/rynfar/meridian/issues/1194))
+  ([e926bc7](https://github.com/rynfar/meridian/commit/e926bc70ea7ee294f6b9cd9eb962342219d9adbf))
+
+## [1.78.0](https://github.com/rynfar/meridian/compare/meridian-v1.77.1...meridian-v1.78.0) (2026-09-28)
+
+### Features
+
+- support Claude Sonnet 5.5 ([#1188](https://github.com/rynfar/meridian/issues/1188))
+  ([bb6da1a](https://github.com/rynfar/meridian/commit/bb6da1a173b6b65577a6d5cbb36b2ef09e228971))
+
+### Bug Fixes
+
+- **replay:** bound fresh replays to the model's context window
+  ([#1183](https://github.com/rynfar/meridian/issues/1183))
+  ([4e845f2](https://github.com/rynfar/meridian/commit/4e845f29f800283dc21b2c0c24f156961b6fb680))
+- **replay:** render client tool-change blocks in structured replay
+  ([#1180](https://github.com/rynfar/meridian/issues/1180))
+  ([e8e7443](https://github.com/rynfar/meridian/commit/e8e74434a395e32314a5664cc867e39892f10127))
+- resume interrupted OpenCode checkpoint safely ([#1166](https://github.com/rynfar/meridian/issues/1166))
+  ([7e157aa](https://github.com/rynfar/meridian/commit/7e157aa24421c91dbc47fa520058f6d268ae121e))
+- **sanitize:** keep OpenCode skill_content in user text ([#1182](https://github.com/rynfar/meridian/issues/1182))
+  ([26c41f9](https://github.com/rynfar/meridian/commit/26c41f9f09806db9c95fa2805b642983b3c059f1))
+- **session:** defer transcript cleanup instead of refusing a turn
+  ([#1179](https://github.com/rynfar/meridian/issues/1179))
+  ([074c44b](https://github.com/rynfar/meridian/commit/074c44b8f116fa546e6c18df28292492c5a85b2d))
+- **windows:** hide the console for the claude auth status probe
+  ([#1181](https://github.com/rynfar/meridian/issues/1181))
+  ([2a502b7](https://github.com/rynfar/meridian/commit/2a502b7a7ba9c49384343f5a1391192f17603404))
+
 ## [1.77.1](https://github.com/rynfar/meridian/compare/meridian-v1.77.0...meridian-v1.77.1) (2026-09-26)
 
 ### Bug Fixes
