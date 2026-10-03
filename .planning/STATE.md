@@ -5,14 +5,14 @@ milestone_name: opentofu-bridge
 current_phase: 22
 current_phase_name: "cups: paperless-ngx PDF document upload"
 current_plan: 3
-status: Phase 22 execution complete — verification stale
-stopped_at: Phase 22 complete; re-verify Phase 22, then verification debt for 09/10/14/20/21
-last_updated: "2026-09-29T16:54:04.270Z"
-state_head: c83a6037270a7d9ae0c0110bbce61e2560a92556
+status: Phase 22 complete — verification passed (17/17), re-verified 2026-10-03
+stopped_at: Phase 22 complete; verification debt remains for 09/10/14/20/21
+last_updated: "2026-10-03T11:07:57.998Z"
+state_head: 3b306003e977192ff8131aee669bd7d89190e710
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 12
-  total_plans: 21
+  total_plans: 26
   completed_plans: 27
   percent: 100
 ---
@@ -24,8 +24,8 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-29)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Phase 22 complete (cups paperless-ngx upload, gap-closure) — VERIFICATION.md is stale vs. the
-latest SUMMARYs; phases 09/10/14/20/21 are executed but have no VERIFICATION.md
+tracking. **Current focus:** Phase 22 complete (cups paperless-ngx upload, gap-closure) — re-verified 2026-10-03 (17/17 passed);
+phases 09/10/14/20/21 are executed but have no VERIFICATION.md
 
 ## Milestone v1.0 — COMPLETE
 
@@ -110,7 +110,7 @@ parallelize after Phase 16 stabilises the contracts).
 Current Plan: 3 of 3 (complete)
 Total Plans in Phase: 3
 
-Phase: 22 — cups: paperless-ngx PDF document upload (executed, verification stale)
+Phase: 22 — cups: paperless-ngx PDF document upload (complete, verified)
 
 Phase 20 (litellm-addon) — 21 atomic commits on main (4 planning + 14 execution + 4 plan SUMMARYs). All 4 plans landed:
 

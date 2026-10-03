@@ -3,9 +3,9 @@
   "flavor": "core",
   "milestone": "v1.3 \u2014 opentofu-bridge",
   "next": {
-    "command": "/gsd:progress",
-    "label": "Show progress",
-    "reason": "Unsure of state \u2014 showing progress"
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step (verify)",
+    "reason": "Phase 11 of 10 \u00b7 100% \u00b7 ready to verify"
   },
   "phases": [
     {
@@ -101,8 +101,8 @@
     {
       "name": "CUPS print server AirPrint/mDNS",
       "number": "21",
-      "status": "complete"
+      "status": "in_progress"
     }
   ],
-  "updated_at": "2026-09-29T16:54:04.312Z"
+  "updated_at": "2026-10-03T11:07:58.038Z"
 }
