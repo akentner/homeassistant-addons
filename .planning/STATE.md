@@ -4,17 +4,17 @@ milestone: v1.3
 milestone_name: opentofu-bridge
 current_phase: 21
 current_phase_name: cups-print-server-addon-airprint-mdns-fixes
-current_plan: 3
+current_plan: 4 of 3 (complete)
 status: Phase 22 complete — verification passed (17/17), re-verified 2026-10-03
-stopped_at: Phase 22 complete; verification debt remains for 09/10/14/20/21
-last_updated: "2026-10-03T12:42:27.862Z"
-state_head: 6a9b5189260bda8726cf337b522517831f29a506
+stopped_at: Completed 21-04-PLAN.md
+last_updated: "2026-10-03T16:11:19.004Z"
+state_head: 94dc3aab349e18dc40b123573efb4877f20d17a3
 progress:
   total_phases: 10
   completed_phases: 12
   total_plans: 30
   completed_plans: 27
-  percent: 30
+  percent: 90
 ---
 
 # Project State
@@ -107,7 +107,7 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Current Plan: 3 of 3 (complete)
+Current Plan: 4 of 3 (complete)
 Total Plans in Phase: 7
 
 Phase: 21 (cups-print-server-addon-airprint-mdns-fixes) — READY TO EXECUTE
@@ -375,6 +375,7 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 | Phase 22 P01 | 21min | 2 tasks | 8 files |
 | Phase 22 P02 | 5min | 2 tasks | 3 files |
 | Phase 22 P03 | 15min | 2 tasks | 3 files |
+| Phase 21 P04 | interactive | 3 tasks | 1 files |
 
 ## Quick Tasks Completed
 
@@ -417,9 +418,9 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 
 **Resume file:** None
 
-**Stopped at:** Phase 22 complete, ready to plan Phase 11
+**Stopped at:** Completed 21-04-PLAN.md
 
-Last session: 2026-09-29T16:31:40.194Z
+Last session: 2026-10-03T16:11:18.774Z
 
 ---
 
@@ -492,3 +493,4 @@ skipped; Phase 16 ready to plan_
 - [Phase 22]: Reused the single existing [docs]: DOCS.md reference link for the new README bullet rather than adding a second, anchor-specific link. — Matches this add-on's own convention where only the closing 'See DOCS.md' line carries a reference-style link; adding a second docs link would be redundant.
 - [Phase 22]: Consolidated all four required Design-notes sub-points (fixed outbox path, corrected PostProcessing argument model, 0o777 outbox rationale, minimal exhausted-retry visibility) into one bolded-lead paragraph. — Matches cups/DOCS.md's established one-entry-per-topic Design notes style rather than splitting into four separate entries.
 - [Phase 22]: CR-01 fixed at both data-validation and control-flow layers (defense in depth); WR-05 shares one collision_tag across a colliding PDF+sidecar pair for correlated triage — 22-VERIFICATION.md flagged CR-01/WR-02/WR-05 as still-open gaps; this gap-closure plan closes them with defensive isinstance(dict) validation and a new unique_destination() helper, proven end-to-end via a new Scenario 4
+- [Phase 21]: 21-04: diagnosis classified inconclusive (experiment not run); decision proceed with guard plans 21-05..21-07
