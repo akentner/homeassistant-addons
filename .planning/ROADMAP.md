@@ -102,7 +102,6 @@ replacing `f1c878cb_cups`.
 **Plans:** 3/7 plans executed (21-04..21-07 are gap-closure plans from 21-VERIFICATION.md, 4 more waves)
 
 Plans:
-
 - [x] `21-01-PLAN.md` — Tracer: cups/ 4-file scaffold + generated avahi-daemon.conf (reflector-off, fixed hostname,
       IPv6-off) + one printer registered end-to-end (checkpoint: printers[].uri schema type)
 - [x] `21-02-PLAN.md` — internal/base-image-config.yaml tracking + cups/README.md + cups/DOCS.md + root README.md
