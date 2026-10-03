@@ -47,9 +47,14 @@ ok "  * ${OLD_SLUG} found on ${HOST}"
 # names it app_<slug>, older/other hosts may use addon_<slug>) — discover it
 # by filtering `docker ps` on the slug rather than assuming a fixed prefix, so
 # this script keeps working across Supervisor naming changes. Read-only.
+# The container list is captured first and filtered afterwards: piping ssh into
+# a head/grep that exits early can SIGPIPE ssh, and under pipefail that discards
+# a perfectly good result as soon as more than one container matches (IN-06).
 CONTAINER=""
+PS_OUT=""
 # shellcheck disable=SC2029 # intentional: local vars expand client-side into the remote command, by design
-CONTAINER="$(ssh "${HOST}" docker ps --format '{{.Names}}' 2>/dev/null | grep -F "${OLD_SLUG}" | head -1)" || CONTAINER=""
+PS_OUT="$(ssh "${HOST}" docker ps --format '{{.Names}}' 2>/dev/null)" || PS_OUT=""
+CONTAINER="$(grep -m1 -F -- "${OLD_SLUG}" <<<"${PS_OUT}")" || CONTAINER=""
 if [[ -z "${CONTAINER}" ]]; then
     warn "  No running container found for ${OLD_SLUG} on ${HOST} — nothing to migrate."
     echo "# No printers found: no running container for ${OLD_SLUG} on ${HOST}."
@@ -67,8 +72,15 @@ if [[ -z "${LPSTAT_OUT}" ]]; then
     exit 0
 fi
 
+# Escape a value for emission inside a double-quoted YAML scalar: backslash first, then double quote.
+yaml_escape() {
+    local value="${1//\\/\\\\}"
+    printf '%s' "${value//\"/\\\"}"
+}
+
 # lpstat -v prints one line per queue: "device for <name>: <uri>"
 FOUND=0
+SOCKET_SEEN=0
 SUGGESTION=""
 while IFS= read -r line; do
     name="$(printf '%s' "${line}" | sed -nE 's/^device for ([^:]+): .*/\1/p')"
@@ -76,8 +88,19 @@ while IFS= read -r line; do
     if [[ -z "${name}" || -z "${uri}" ]]; then
         continue
     fi
-    SUGGESTION+="  - name: \"${name}\"
-    uri: \"${uri}\"
+    # The new add-on only registers queue names matching [A-Za-z0-9_-]{1,127} (PRINTER_NAME_RE in
+    # generate_config.py); flag anything else instead of silently suggesting an entry it would drop.
+    if ! [[ "${name}" =~ ^[A-Za-z0-9_-]{1,127}$ ]]; then
+        SUGGESTION+="  # WARNING: the add-on skips queue names outside [A-Za-z0-9_-]{1,127};
+  # rename \"$(yaml_escape "${name}")\" before using this entry.
+"
+        warn "  queue name '${name}' would be skipped by the add-on — rename it."
+    fi
+    if [[ "${uri}" == socket://* ]]; then
+        SOCKET_SEEN=1
+    fi
+    SUGGESTION+="  - name: \"$(yaml_escape "${name}")\"
+    uri: \"$(yaml_escape "${uri}")\"
     enabled: true
 "
     FOUND=$((FOUND + 1))
@@ -85,10 +108,17 @@ done <<<"${LPSTAT_OUT}"
 
 if [[ "${FOUND}" -eq 0 ]]; then
     warn "  lpstat -v output from ${OLD_SLUG} did not parse into any printer entries — nothing to migrate."
-    echo "# No printers found: lpstat -v output from ${OLD_SLUG} did not match the expected 'device for NAME: URI' shape."
+    echo "# No printers found: lpstat -v output from ${OLD_SLUG} did not match the expected" \
+        "'device for NAME: URI' shape."
     exit 0
 fi
 
 printf 'printers:\n%s' "${SUGGESTION}"
+if [[ "${SOCKET_SEEN}" -eq 1 ]]; then
+    printf '%s\n' \
+        "# NOTE: raw-socket (socket://) printers usually need 'driver: brlaser' plus a 'driver_model'" \
+        "# search term (e.g. \"MFC-7460DN\"); 'location' is not migrated either." \
+        "# See the 'Printer driver' section of cups/DOCS.md."
+fi
 
 info "== ${FOUND} printer(s) found. Paste the printers: block above into the new cups add-on's Options UI. =="

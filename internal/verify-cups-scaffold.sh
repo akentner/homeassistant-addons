@@ -12,7 +12,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ADDON_DIR="${REPO_ROOT}/cups"
+# CUPS_ADDON_DIR points the test at a modified copy of cups/ (used to prove the checks can fail).
+ADDON_DIR="${CUPS_ADDON_DIR:-${REPO_ROOT}/cups}"
 
 STAMP="$(date +%s)"
 IMAGE_NAME="cups-verify:${STAMP}"
@@ -69,9 +70,14 @@ docker build -t "${IMAGE_NAME}" \
     "${ADDON_DIR}" >/dev/null
 green "image built"
 
-docker run --rm -d --name "${CONTAINER_NAME}" \
-    -v "${DATA_DIR}:/data" \
-    "${IMAGE_NAME}" >/dev/null
+# Identical flags for the first start and for the recreation in the UUID-stability section.
+start_container() {
+    docker run --rm -d --name "${CONTAINER_NAME}" \
+        -v "${DATA_DIR}:/data" \
+        "${IMAGE_NAME}" >/dev/null
+}
+
+start_container
 
 yellow "Waiting for cupsd inside the container to become ready..."
 READY=0
@@ -421,116 +427,124 @@ else
     green "   PASS: no reflector slot-exhaustion messages"
 fi
 
-yellow "Checking printer UUID stability across a real container restart..."
+yellow "Checking printer UUID stability across a container RECREATION..."
+
+# Supervisor does not restart an add-on container in place: it removes it and
+# starts a new one from the same image with the same /data mount. That is what
+# resets /etc/cups (the container's writable layer) and makes cupsd assign
+# fresh random printer UUIDs at registration -- the original bug path. A
+# `docker restart` keeps the writable layer, so it cannot reproduce that and
+# a UUID check built on it can pass with the fixup removed (WR-07). This
+# section therefore recreates the container and compares the recreated
+# container's UUIDs with the deterministic uuid5 value computed on the host
+# from the printer name by generate_config.py itself.
+
+# Expected UUID (urn:uuid:<uuid5>) for a printer name, computed on the host.
+expected_printer_uuid() {
+    python3 -c "
+import sys
+sys.path.insert(0, sys.argv[1])
+import generate_config
+print('urn:uuid:' + generate_config.compute_stable_printer_uuid(sys.argv[2]))
+" "${ADDON_DIR}" "$1"
+}
 
 get_printer_uuid() {
     docker exec "${CONTAINER_NAME}" awk "/<Printer $1>/,/<\/Printer>/" /etc/cups/printers.conf \
-        | grep '^UUID ' | awk '{print $2}'
+        | grep '^UUID ' | awk '{print $2}' || true
 }
 
-UUID_TESTPRINTER_BEFORE=$(get_printer_uuid testprinter)
-UUID_BRLASERTEST_BEFORE=$(get_printer_uuid brlasertest)
-
-if [[ -z "${UUID_TESTPRINTER_BEFORE}" || -z "${UUID_BRLASERTEST_BEFORE}" ]]; then
-    red "   FAIL: could not read a pre-restart UUID for testprinter/brlasertest -- cannot prove stability"
-    FAIL=1
-else
-    green "   pre-restart UUIDs: testprinter=${UUID_TESTPRINTER_BEFORE} brlasertest=${UUID_BRLASERTEST_BEFORE}"
-
-    # Baseline for the post-fixup-restart log-line poll below: only lines
-    # AFTER this point can possibly be the post-`docker restart` boot's own
-    # "cupsd is ready (post-fixup restart)" line -- a pre-restart occurrence
-    # of the same string (there isn't one yet, but this is defensive) must
-    # never be mistaken for fresh evidence.
-    PRE_RESTART_LOG_LINE_COUNT=$(docker logs "${CONTAINER_NAME}" 2>&1 | wc -l)
-
-    yellow "   performing a real 'docker restart' (reproduces the original bug path)..."
-    docker restart "${CONTAINER_NAME}" >/dev/null
-
-    RESTART_READY=0
+# Poll for run.sh's literal post-fixup readiness line (step 8). Only after it
+# is the SECOND cupsd instance (the one after the UUID patch) running; reading
+# printers.conf earlier could observe a stale pre-fixup value. Returns 1 when
+# the line does not appear (e.g. the fixup mechanism is absent).
+wait_for_post_fixup() {
+    local _ logs
     for _ in $(seq 1 40); do
-        if docker exec "${CONTAINER_NAME}" lpstat -r >/dev/null 2>&1; then
-            RESTART_READY=1
-            break
+        # Captured first: `docker logs | grep -q` would SIGPIPE docker under pipefail and report a false miss.
+        logs=$(docker logs "${CONTAINER_NAME}" 2>&1 || true)
+        if grep -qF "cupsd is ready (post-fixup restart)" <<<"${logs}"; then
+            return 0
         fi
         sleep 1
     done
-    if [[ "${RESTART_READY}" != "1" ]]; then
-        red "   FAIL: cupsd did not become ready after 'docker restart'"
-        docker logs "${CONTAINER_NAME}" 2>&1 || true
-        FAIL=1
+    return 1
+}
+
+check_uuid() {
+    # $1 = label, $2 = printer name, $3 = actual, $4 = expected
+    if [[ "$3" == "$4" ]]; then
+        green "   PASS: $1 $2 UUID equals the deterministic uuid5 value ($3)"
     else
-        green "   PASS: cupsd ready again after 'docker restart' (first, pre-fixup cupsd instance)"
-
-        # lpstat -r / lpstat -v report the FIRST (pre-fixup) cupsd instance's
-        # state -- printer registration (step 7 of run.sh) happens entirely
-        # BEFORE the new UUID-fixup boot phase (step 8) even begins. So
-        # "printers are registered again" is NOT evidence the fixup's
-        # internal stop/patch/restart cycle has completed; reading
-        # printers.conf's UUID at this point could observe a stale,
-        # still-pre-fixup value. The unambiguous signal that the SECOND
-        # (post-fixup) cupsd instance is now the one running is run.sh's own
-        # literal log line, emitted only after that second instance's
-        # readiness poll succeeds -- poll container logs for it, restricting
-        # the match to lines written AFTER this boot's docker restart
-        # (skipping any lines that existed before, which cannot be evidence
-        # of THIS boot's fixup cycle).
-        yellow "   waiting for run.sh's post-fixup-restart readiness log line..."
-        POST_FIXUP_LOG_SEEN=0
-        for _ in $(seq 1 40); do
-            CURRENT_LOG_LINE_COUNT=$(docker logs "${CONTAINER_NAME}" 2>&1 | wc -l)
-            if [[ "${CURRENT_LOG_LINE_COUNT}" -gt "${PRE_RESTART_LOG_LINE_COUNT}" ]]; then
-                NEW_LOG_LINES=$(docker logs "${CONTAINER_NAME}" 2>&1 | tail -n "+$((PRE_RESTART_LOG_LINE_COUNT + 1))")
-                if echo "${NEW_LOG_LINES}" | grep -qF "cupsd is ready (post-fixup restart)"; then
-                    POST_FIXUP_LOG_SEEN=1
-                    break
-                fi
-            fi
-            sleep 1
-        done
-
-        if [[ "${POST_FIXUP_LOG_SEEN}" != "1" ]]; then
-            red "   FAIL: run.sh's 'cupsd is ready (post-fixup restart)' log line did not appear within 40s -- the internal UUID-fixup stop/patch/restart cycle may not have completed; refusing to read printers.conf's UUID as it could be stale"
-            docker logs "${CONTAINER_NAME}" 2>&1 || true
-            FAIL=1
-        else
-            green "   PASS: post-fixup cupsd instance confirmed ready via run.sh's own log line -- safe to read printers.conf now"
-
-            UUID_TESTPRINTER_AFTER=$(get_printer_uuid testprinter)
-            UUID_BRLASERTEST_AFTER=$(get_printer_uuid brlasertest)
-
-            if [[ "${UUID_TESTPRINTER_AFTER}" == "${UUID_TESTPRINTER_BEFORE}" ]]; then
-                green "   PASS: testprinter UUID stable across restart (${UUID_TESTPRINTER_AFTER})"
-            else
-                red "   FAIL: testprinter UUID changed across restart (${UUID_TESTPRINTER_BEFORE} -> ${UUID_TESTPRINTER_AFTER})"
-                FAIL=1
-            fi
-            if [[ "${UUID_BRLASERTEST_AFTER}" == "${UUID_BRLASERTEST_BEFORE}" ]]; then
-                green "   PASS: brlasertest UUID stable across restart (${UUID_BRLASERTEST_AFTER})"
-            else
-                red "   FAIL: brlasertest UUID changed across restart (${UUID_BRLASERTEST_BEFORE} -> ${UUID_BRLASERTEST_AFTER})"
-                FAIL=1
-            fi
-
-            yellow "   Checking no regression: printer registration survives the restart..."
-            if docker exec "${CONTAINER_NAME}" lpstat -p testprinter 2>/dev/null | grep -q "testprinter"; then
-                green "   PASS: testprinter still registered after restart"
-            else
-                red "   FAIL: testprinter not registered after restart"
-                FAIL=1
-            fi
-            if docker exec "${CONTAINER_NAME}" lpstat -v brlasertest 2>/dev/null | grep -q "socket://192.0.2.20:9100"; then
-                green "   PASS: brlasertest still registered with its device uri after restart"
-            else
-                red "   FAIL: brlasertest not registered after restart"
-                FAIL=1
-            fi
-        fi
-
-        # Refresh for the final failure-path debug dump below, so it reflects
-        # post-restart container output too, not just the first boot's.
-        CONTAINER_LOGS=$(docker logs "${CONTAINER_NAME}" 2>&1)
+        red "   FAIL: $1 $2 UUID '$3' != expected '$4'"
+        FAIL=1
     fi
+}
+
+UUID_TESTPRINTER_EXPECTED=$(expected_printer_uuid testprinter)
+UUID_BRLASERTEST_EXPECTED=$(expected_printer_uuid brlasertest)
+
+# The first boot also runs the fixup cycle; wait for it before the baseline read.
+wait_for_post_fixup || yellow "   NOTE: no post-fixup readiness line in the first container within 40s"
+check_uuid "pre-recreation" testprinter "$(get_printer_uuid testprinter)" "${UUID_TESTPRINTER_EXPECTED}"
+check_uuid "pre-recreation" brlasertest "$(get_printer_uuid brlasertest)" "${UUID_BRLASERTEST_EXPECTED}"
+
+yellow "   recreating the container (stop, then start a new one with the same name and /data mount)..."
+docker stop -t 15 "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+# --rm removes the stopped container; wait until the name is free (removal can be asynchronous).
+for _ in $(seq 1 30); do
+    if ! docker inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
+docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+start_container
+
+RECREATE_READY=0
+for _ in $(seq 1 40); do
+    if docker exec "${CONTAINER_NAME}" lpstat -r >/dev/null 2>&1; then
+        RECREATE_READY=1
+        break
+    fi
+    sleep 1
+done
+if [[ "${RECREATE_READY}" != "1" ]]; then
+    red "   FAIL: cupsd did not become ready in the recreated container"
+    docker logs "${CONTAINER_NAME}" 2>&1 || true
+    FAIL=1
+else
+    green "   PASS: cupsd ready in the recreated container (fresh writable layer, same /data mount)"
+
+    yellow "   waiting for run.sh's post-fixup-restart readiness log line in the new container..."
+    if wait_for_post_fixup; then
+        green "   PASS: post-fixup cupsd instance confirmed ready via run.sh's own log line"
+    else
+        red "   FAIL: 'cupsd is ready (post-fixup restart)' did not appear within 40s -- the UUID fixup did not run"
+        FAIL=1
+    fi
+
+    # Read regardless, so a missing/ineffective fixup also surfaces as a UUID mismatch.
+    check_uuid "post-recreation" testprinter "$(get_printer_uuid testprinter)" "${UUID_TESTPRINTER_EXPECTED}"
+    check_uuid "post-recreation" brlasertest "$(get_printer_uuid brlasertest)" "${UUID_BRLASERTEST_EXPECTED}"
+
+    yellow "   Checking no regression: printer registration survives the recreation..."
+    if docker exec "${CONTAINER_NAME}" lpstat -p testprinter 2>/dev/null | grep -q "testprinter"; then
+        green "   PASS: testprinter registered after recreation"
+    else
+        red "   FAIL: testprinter not registered after recreation"
+        FAIL=1
+    fi
+    if docker exec "${CONTAINER_NAME}" lpstat -v brlasertest 2>/dev/null | grep -q "socket://192.0.2.20:9100"; then
+        green "   PASS: brlasertest registered with its device uri after recreation"
+    else
+        red "   FAIL: brlasertest not registered after recreation"
+        FAIL=1
+    fi
+
+    # Refresh for the final failure-path debug dump below, so it reflects the
+    # recreated container's output too, not just the first boot's.
+    CONTAINER_LOGS=$(docker logs "${CONTAINER_NAME}" 2>&1)
 fi
 
 yellow "Checking print-history poller (Task C: print-history.jsonl)..."
@@ -540,11 +554,11 @@ else
     red "   FAIL: /print-history-poller.py missing"
     FAIL=1
 fi
-# This check runs shortly after the UUID-stability section's real `docker
-# restart` above, which re-executes run.sh's entire boot sequence from
-# scratch, including this section's own step-9 cupsctl retry loop (which can
-# take a few seconds) BEFORE step 11 (starting this poller) even runs -- so
-# poll rather than check once, to not race that same restart's own boot.
+# This check runs shortly after the UUID-stability section's container
+# recreation above, which re-executes run.sh's entire boot sequence from
+# scratch, including its step-9 cupsctl retry loop (which can take a few
+# seconds) BEFORE step 11 (starting this poller) even runs -- so poll rather
+# than check once, to not race that same boot.
 POLLER_RUNNING=0
 for _ in $(seq 1 15); do
     if docker exec "${CONTAINER_NAME}" sh -c 'ps aux | grep -v grep | grep -qF print-history-poller.py'; then

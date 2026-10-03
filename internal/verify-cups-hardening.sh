@@ -222,6 +222,71 @@ if cups_snippet is not None:
         "cups-pdf snippet is placed before the final exit of the registration script",
     )
 
+print("Section: migration helper output safety (IN-06, WR-05)")
+
+HELPER = os.path.join(os.environ["REPO_ROOT"], "internal", "cups-migration-suggestion.sh")
+
+# Canned `lpstat -v` data: a socket uri, an ipp uri containing a double quote, and a dotted (invalid) name.
+LPSTAT_LINES = (
+    "device for Brother_MFC_7460DN: socket://192.0.2.20:9100\n"
+    'device for HP_LaserJet: ipp://192.0.2.21/ipp/print?x="y"\n'
+    "device for bad.name: ipp://192.0.2.22/ipp/print\n"
+)
+SSH_STUB = """#!/bin/sh
+# Stub ssh: ignores the host argument and answers by the remote command words (read-only canned data).
+case "$*" in
+  *"ha apps info"*) exit 0 ;;
+  *"docker ps"*) printf 'app_f1c878cb_cups\\napp_f1c878cb_cups_extra\\n'; exit 0 ;;
+  *"app_f1c878cb_cups lpstat -v"*) printf '%s' "$CANNED_LPSTAT"; exit 0 ;;
+esac
+exit 1
+"""
+
+
+def run_helper():
+    with tempfile.TemporaryDirectory() as tmp:
+        stub = os.path.join(tmp, "ssh")
+        with open(stub, "w") as handle:
+            handle.write(SSH_STUB)
+        os.chmod(stub, 0o755)
+        env = dict(os.environ, PATH=tmp + os.pathsep + os.environ["PATH"], CANNED_LPSTAT=LPSTAT_LINES)
+        return subprocess.run(["bash", HELPER], capture_output=True, text=True, env=env, timeout=60)
+
+
+proc = run_helper()
+out = proc.stdout
+
+# Test 2: two matching containers -- the first one is used, the exit status is 0.
+report(proc.returncode == 0, "two matching containers: helper exits 0")
+report(
+    "Brother_MFC_7460DN" in out and "HP_LaserJet" in out,
+    "two matching containers: printers of the FIRST container are emitted",
+)
+
+# Test 1: output content and YAML validity.
+report(
+    "bad.name" in out and out.index("WARNING") < out.index("bad.name") and out.count("WARNING") == 1,
+    "helper keeps 'bad.name' and puts exactly one WARNING comment before it",
+)
+report('ipp://192.0.2.21/ipp/print?x=\\"y\\"' in out, "helper escapes the double quote inside the uri")
+last_comment = [line for line in out.splitlines() if line.startswith("#")]
+report(
+    any("driver" in line and "driver_model" in line for line in last_comment),
+    "helper ends with a comment mentioning driver and driver_model for socket:// printers",
+)
+try:
+    import yaml
+except ImportError:
+    print("   SKIP: PyYAML not importable, YAML parse check skipped")
+else:
+    parsed = yaml.safe_load(out)
+    entries = (parsed or {}).get("printers") or []
+    report(
+        [entry["name"] for entry in entries] == ["Brother_MFC_7460DN", "HP_LaserJet", "bad.name"]
+        and entries[1]["uri"] == 'ipp://192.0.2.21/ipp/print?x="y"',
+        "helper output parses as YAML with three entries and the quote preserved",
+    )
+
 # <<hardening sections appended by later plans go above this line>>
 
 sys.exit(1 if failures else 0)
