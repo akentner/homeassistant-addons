@@ -19,6 +19,11 @@ fi
 
 # 2. D-Bus + Avahi need their runtime dirs (mirrors network-tools/run.sh).
 mkdir -p /var/run/dbus /var/run/avahi-daemon
+# A container restart reuses this filesystem, so pid files of the previous run
+# survive: dbus-daemon then refuses to start and avahi-daemon reports "Daemon
+# already running on PID <n>" (a stale number that may even match an unrelated
+# process in the new PID namespace). Nothing is running yet at this point.
+rm -f /var/run/dbus/pid /var/run/dbus/dbus.pid /var/run/avahi-daemon/pid
 
 # 3. System D-Bus -- required by avahi-daemon.
 dbus-daemon --system --fork || log "dbus-daemon failed to start"
@@ -214,11 +219,15 @@ UPLOAD_WORKER_PID=$!
 cleanup() {
     kill -TERM "$CUPSD_PID" 2>/dev/null
     kill -TERM "$ERROR_LOG_TAIL_PID" 2>/dev/null
-    [ -n "$ACCESS_LOG_TAIL_PID" ] && kill -TERM "$ACCESS_LOG_TAIL_PID" 2>/dev/null
+    if [ -n "$ACCESS_LOG_TAIL_PID" ]; then
+        kill -TERM "$ACCESS_LOG_TAIL_PID" 2>/dev/null
+    fi
     kill -TERM "$PRINT_HISTORY_POLLER_PID" 2>/dev/null
     kill -TERM "$UPLOAD_WORKER_PID" 2>/dev/null
     # Stop avahi last so its goodbye packets still go out on shutdown.
-    [ -n "${AVAHI_PID:-}" ] && avahi_guard_stop
+    if [ -n "${AVAHI_PID:-}" ]; then
+        avahi_guard_stop
+    fi
 }
 trap cleanup TERM INT
 wait "$CUPSD_PID"

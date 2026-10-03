@@ -28,6 +28,11 @@
 # restart-loop the add-on. The guard therefore never blocks forever and
 # always returns 0.
 #
+# errexit safety: run.sh runs under bashio, which may enable `set -e`, so every
+# command here that can legitimately return non-zero (a gone process, an
+# expected "not settled" status) is guarded with if/|| and the library never
+# lets such a status escape.
+#
 # Scope: startup only. No watchdog or log monitor is added (D-08) and no
 # add-on option exists for any of this (D-05); the AVAHI_GUARD_* environment
 # variables below are tunables for tests, not configuration.
@@ -93,15 +98,15 @@ avahi_guard_stop() {
     if [ -z "${AVAHI_PID:-}" ]; then
         return 0
     fi
-    kill -TERM "$AVAHI_PID" 2>/dev/null
+    kill -TERM "$AVAHI_PID" 2>/dev/null || true
     while kill -0 "$AVAHI_PID" 2>/dev/null && [ "$waited" -lt 10 ]; do
         sleep 1
         waited=$((waited + 1))
     done
     if kill -0 "$AVAHI_PID" 2>/dev/null; then
-        kill -KILL "$AVAHI_PID" 2>/dev/null
+        kill -KILL "$AVAHI_PID" 2>/dev/null || true
     fi
-    wait "$AVAHI_PID" 2>/dev/null
+    wait "$AVAHI_PID" 2>/dev/null || true
     AVAHI_PID=""
     sleep 1
 }
@@ -116,7 +121,9 @@ avahi_guard_wait_settled() {
     local max_polls=$((timeout / poll))
     local i=0 streak=0 last="" result state fqdn
 
-    [ "$max_polls" -lt 1 ] && max_polls=1
+    if [ "$max_polls" -lt 1 ]; then
+        max_polls=1
+    fi
     while [ "$i" -lt "$max_polls" ]; do
         if [ -n "${AVAHI_PID:-}" ] && ! kill -0 "$AVAHI_PID" 2>/dev/null; then
             return 2
@@ -168,8 +175,11 @@ avahi_guard_start() {
         _ag_log INFO "attempt ${attempt}/${attempts}: starting avahi-daemon (expecting ${expected_fqdn})"
         avahi_guard_launch
 
-        actual=$(avahi_guard_wait_settled)
-        rc=$?
+        if actual=$(avahi_guard_wait_settled); then
+            rc=0
+        else
+            rc=$?
+        fi
         if [ "$rc" -eq 0 ]; then
             if [ "$actual" = "$expected_fqdn" ]; then
                 _ag_log INFO "hostname claimed: ${expected_fqdn} (attempt ${attempt}/${attempts})"
