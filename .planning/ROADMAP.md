@@ -99,7 +99,7 @@ options instead of upstream's hardcoded `options: {} / schema: []`, then roll th
 replacing `f1c878cb_cups`.
 **Requirements**: D-01..D-13 (CONTEXT.md decisions — no REQUIREMENTS.md IDs mapped to this ad-hoc phase)
 **Depends on:** Phase 20
-**Plans:** 3/3 plans executed in 3 waves
+**Plans:** 3/7 plans executed (21-04..21-07 are gap-closure plans from 21-VERIFICATION.md, 4 more waves)
 
 Plans:
 
@@ -110,6 +110,18 @@ Plans:
 - [x] `21-03-PLAN.md` — Rollout on haos-op3050-1: migration-suggestion script, install + empirical mDNS
       verification, human confirmation checkpoint, remove f1c878cb_cups (closed out retroactively — see
       21-03-SUMMARY.md)
+
+Gap closure (from 21-VERIFICATION.md: truth #13 fixed hostname lost, truth #14 `_ipp._tcp` unresolvable):
+
+- [ ] `21-04-PLAN.md` — Wave 1: read-only live verifier `internal/verify-cups-mdns-live.sh` (RED baseline against the
+      renamed live daemon) + read-only evidence collection + human-approved conflict-capture experiment and go/no-go
+      decision
+- [ ] `21-05-PLAN.md` — Wave 2: avahi startup guard (visible avahi logs, cupsd only after a settled host-name claim,
+      bounded retry), CR-02 refuse-to-start, WR-04 fullmatch validation, D-10 completion (`publish-aaaa-on-ipv4=no`)
+- [ ] `21-06-PLAN.md` — Wave 3: WR-09/WR-05 registration robustness, IN-06 migration helper, WR-07 UUID test, docs, bump
+      to 0.1.0-16
+- [ ] `21-07-PLAN.md` — Wave 4: publish, live update + two restarts on haos-op3050-1, LAN-client verification
+      (`avahi-browse -r _ipp._tcp` resolved `=` line, fixed host name)
 
 ### Phase 22: cups: paperless-ngx PDF document upload
 
