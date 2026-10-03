@@ -99,7 +99,7 @@ options instead of upstream's hardcoded `options: {} / schema: []`, then roll th
 replacing `f1c878cb_cups`.
 **Requirements**: D-01..D-13 (CONTEXT.md decisions — no REQUIREMENTS.md IDs mapped to this ad-hoc phase)
 **Depends on:** Phase 20
-**Plans:** 5/7 plans executed (21-04..21-07 are gap-closure plans from 21-VERIFICATION.md, 4 more waves)
+**Plans:** 6/7 plans executed (21-04..21-07 are gap-closure plans from 21-VERIFICATION.md, 4 more waves)
 
 Plans:
 - [x] 21-01-PLAN.md
@@ -107,7 +107,7 @@ Plans:
 - [x] 21-03-PLAN.md
 - [x] 21-04-PLAN.md
 - [x] 21-05-PLAN.md
-- [ ] 21-06-PLAN.md
+- [x] 21-06-PLAN.md
 - [ ] 21-07-PLAN.md
 - [x] `21-01-PLAN.md` — Tracer: cups/ 4-file scaffold + generated avahi-daemon.conf (reflector-off, fixed hostname,
       IPv6-off) + one printer registered end-to-end (checkpoint: printers[].uri schema type)
@@ -701,7 +701,7 @@ exercised. Operator documentation (`README.md` + `DOCS.md`) is written from obse
 | 17. Git + Apply Jobs                | v1.4      | 8/8                                                           | In Progress         |            |
 | 18. MQTT + HA Entities              | v1.4      | 0/TBD                                                         | Planned             | —          |
 | 19. E2E + DOCS                      | v1.4      | 0/TBD                                                         | Planned             | —          |
-| 21. CUPS print server AirPrint/mDNS | —         | 5/7 | In Progress|  |
+| 21. CUPS print server AirPrint/mDNS | —         | 6/7 | In Progress|  |
 
 ---
 
