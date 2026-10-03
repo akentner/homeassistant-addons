@@ -9,7 +9,7 @@ License 2.0.
 | ------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `avahi_reflector`  | `false`      | Disabled by default. Avahi's legacy-unicast reflector keeps a fixed-size in-memory slot table that fills up under sustained legacy-unicast mDNS traffic (e.g. from a mesh Wi-Fi repeater) and silently drops all further mDNS queries once full, including resolves of this add-on's own advertised printers — the exact bug this add-on exists to fix. Only re-enable this if the add-on is run WITHOUT `host_network: true`, where reflection across network namespaces would actually be needed. |
 | `avahi_hostname`   | `cups`       | Fixed Avahi host-name, independent of the container's transient hostname. Prevents the auto-rename-on-conflict behavior (`<hostname>-2`) that made the printer's advertised mDNS name diverge from its actual resolvable address.                                                                                                                                                                                                                                                                   |
-| `avahi_use_ipv6`   | `false`      | Disabled by default. Avahi may resolve the add-on's mDNS hostname to an IPv6 ULA address that is unreachable/unrouted for some client devices, independent of the reflector bug.                                                                                                                                                                                                                                                                                                                    |
+| `avahi_use_ipv6`   | `false`      | Disabled by default. Avahi may resolve the add-on's mDNS hostname to an IPv6 ULA address that is unreachable/unrouted for some client devices, independent of the reflector bug. `false` also stops the add-on from publishing the host's IPv6 addresses (AAAA and ip6.arpa records) over IPv4 (`publish-aaaa-on-ipv4=no`), because `use-ipv6=no` alone only disables IPv6 sockets.                                                                                                                 |
 | `server_aliases`   | `*`          | Space- and/or comma-separated list of hostnames cupsd's embedded web server accepts in the HTTP `Host:` header (e.g. `haos-op3050-1.tailxxxx.ts.net` for Tailscale MagicDNS access). `*` (the default) accepts any Host header. See [Design notes](#design-notes) for why this is safe as a default.                                                                                                                                                                                                |
 | `admin_username`   | `""` (unset) | Username for CUPS's web admin UI (`/admin`) login. Leave empty (the default) to keep `/admin` exactly as unauthenticatable as before this option existed — a fail-safe default, not an open admin panel. Must be set together with `admin_password`. See [Design notes](#design-notes) for the security implication of setting this.                                                                                                                                                                |
 | `admin_password`   | `""` (unset) | Password for the `admin_username` account above. Masked in the HA UI. Must be set together with `admin_username`. **Pick a real password** — this account is a real system account in the `lpadmin` group, reachable from the LAN (and Tailscale, when detected), not sandboxed by anything else.                                                                                                                                                                                                   |
@@ -23,7 +23,7 @@ Each entry in the `printers` list is an object with six fields:
 
 | Field          | Type                      | Default   | Description                                                                                                           |
 | -------------- | ------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
-| `name`         | `str`                     | —         | Printer queue name registered with CUPS (`lpadmin -p <name>`)                                                         |
+| `name`         | `str`                     | —         | Printer queue name registered with CUPS (`lpadmin -p <name>`): letters, digits, hyphens and underscores, 1-127 chars. |
 | `uri`          | `str`                     | —         | Device URI CUPS uses to reach the printer. See [Supported URI schemes](#supported-uri-schemes) below                  |
 | `enabled`      | `bool?`                   | `true`    | Whether this printer entry is registered at startup                                                                   |
 | `location`     | `str?`                    | —         | Optional CUPS Location string (`lpadmin -L <location>`, e.g. `"Office"`). Omitted entirely when unset.                |
@@ -342,6 +342,21 @@ this add-on's existing plain `print(...)`-based logging convention used everywhe
 empirically end-to-end (real cups-pdf print job -> title sidecar written -> upload-worker.py upload -> `sent/`) by
 `internal/verify-cups-paperless-upload.sh` against a real built image.
 
+**Avahi startup guard (D-11).** Earlier versions started `avahi-daemon` in the background and then started cupsd without
+checking whether avahi had actually kept the configured host name, so a lost claim silently left the printers published
+under a stale name (`cups-2`). The add-on now runs avahi in a way that its own log reaches the add-on log (the
+container's `/dev/log` was a dead symlink, so earlier versions discarded avahi's messages) and starts cupsd only after
+avahi reports the running state over D-Bus with an unchanged host name for a short hold window. Look for these lines in
+the add-on log: `[avahi-guard] INFO: hostname claimed: <name>.local` (normal), `ERROR: hostname lost` (avahi is running
+under a different name; the guard stops it and retries), `ERROR: giving up` (all attempts used) and the closing
+`[avahi-guard] RESULT:` line (`claimed`, `degraded` or `unsettled`). The retry schedule is immediately, after 30 s, and
+after another 90 s: a foreign responder on the LAN that claimed the name often goes away within that time, and a longer
+total wait would only delay printing. After the last attempt the add-on keeps running under the renamed host and logs
+one loud ERROR rather than exiting, so the published services stay consistent with the name avahi really uses and remain
+resolvable. The guard is startup-only: a conflict that appears later is neither healed nor monitored (there is
+deliberately no watchdog, D-08), so restart the add-on to retry. When printers are not found, check the add-on log
+filtered for `avahi-guard` first.
+
 ## Migrating from f1c878cb_cups
 
 This is the procedure actually executed on `haos-op3050-1` to replace the third-party `f1c878cb_cups` add-on with this
@@ -356,8 +371,15 @@ one (D-12, D-13):
 
 2. **Install this add-on and start it with an empty `printers` list.** Do not paste the Task 1 suggestion in yet —
    verify the mDNS fixes hold on the real host first, independent of any printer configuration. Confirm:
-   - `avahi-resolve -a <host-ip>` returns the configured `avahi_hostname` with no auto-renamed `-2` suffix (D-11)
+   - from a LAN client, `avahi-resolve-host-name -4 <avahi_hostname>.local` returns the host address (D-11)
+   - from a LAN client, `avahi-browse -t -r _ipp._tcp` shows a resolved `=` line whose host is `<avahi_hostname>.local`,
+     with no auto-renamed `-2` suffix and no IPv6 address (D-10, D-11)
    - the add-on's own logs contain zero occurrences of `No slot available for legacy unicast reflection` (D-07)
+
+   Do not use a reverse lookup of the host IP (`avahi-resolve -a <host-ip>`) as proof: all add-ons and the HAOS host
+   share that IP, and the answer comes from whichever of the host's avahi daemons replies first (the HAOS host, other
+   host-network add-ons, this add-on), so it is not evidence either way. After every restart or update,
+   `internal/verify-cups-mdns-live.sh --assert` runs the reliable checks in one command.
 
 3. **Paste the suggested `printers:` snippet into this add-on's Options, save, and restart it.** Review/edit names and
    URIs first — the script's output is a starting point, not something to paste blindly.

@@ -19,6 +19,8 @@ configure. The Avahi reflector's behavior is configurable via the `avahi_reflect
 - Fixed, stable mDNS hostname (`avahi_hostname`) independent of the container's transient hostname across restarts
 - IPv6 mDNS resolution disabled by default (`avahi_use_ipv6: false`) — avoids resolving to an unreachable/unrouted IPv6
   ULA address for clients that can't use it
+- Avahi startup guard — cupsd starts only once avahi has kept the configured host name, a lost claim is retried with
+  bounded backoff, and avahi's own log lines appear in the add-on log (see the `avahi-guard` lines)
 - Multiple printers configurable from a single `printers` options list
 - Optional forwarding of printed PDFs to a [paperless-ngx](https://docs.paperless-ngx.com/) instance via a second,
   disabled-by-default `cups-pdf` virtual queue — see [Paperless-ngx PDF Upload][docs] in DOCS.md
