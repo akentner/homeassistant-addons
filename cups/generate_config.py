@@ -109,7 +109,8 @@ CUPSD_STOCK_CONF_PATH = "/etc/cups/cupsd.conf.stock"
 # Matches both a valid avahi host-name= value and a valid CUPS printer queue
 # name. No dots, slashes, whitespace, or shell metacharacters -- closes the
 # newline-injection surface into avahi-daemon.conf (T-21-01) and matches
-# lpadmin's own accepted queue-name charset.
+# lpadmin's own accepted queue-name charset. Always applied with fullmatch():
+# the `$` anchor alone also accepts a trailing newline (WR-04), fullmatch does not.
 NAME_RE = re.compile(r"^[A-Za-z0-9-]{1,63}$")
 
 # CUPS device URI schemes this add-on is expected to support (D-03/D-04).
@@ -438,7 +439,7 @@ def parse_server_aliases(raw: object) -> list[str]:
     for token in tokens:
         if not token:
             continue
-        if SERVER_ALIAS_TOKEN_RE.match(token):
+        if SERVER_ALIAS_TOKEN_RE.fullmatch(token):
             if token not in valid:
                 valid.append(token)
         else:
@@ -545,7 +546,7 @@ def build_cupsd_conf(iface: str | None, options: dict) -> str | None:
         )
         return None
 
-    if not IFACE_RE.match(iface):
+    if not IFACE_RE.fullmatch(iface):
         print(
             f"WARNING: detected primary interface {iface!r} failed validation against "
             f"{IFACE_RE.pattern} -- cupsd will keep listening on localhost only",
@@ -663,7 +664,7 @@ def resolve_avahi_hostname(options: dict) -> str:
     start is safer than writing an unsafe string.
     """
     hostname = str(options.get("avahi_hostname", "cups"))
-    if not NAME_RE.match(hostname):
+    if not NAME_RE.fullmatch(hostname):
         print(
             f"ERROR: avahi_hostname '{hostname}' is invalid -- must match "
             f"{NAME_RE.pattern} (letters, digits, hyphens, 1-63 chars). Refusing to start.",
@@ -710,7 +711,7 @@ def build_avahi_conf(options: dict) -> str:
             "hostname-rename-loop risk this fix addresses",
             flush=True,
         )
-    elif not IFACE_RE.match(allow_iface):
+    elif not IFACE_RE.fullmatch(allow_iface):
         print(
             f"WARNING: detected primary interface {allow_iface!r} failed validation against "
             f"{IFACE_RE.pattern} -- avahi will listen on all interfaces (pre-fix behavior)",
@@ -843,7 +844,7 @@ def build_cups_pdf_conf(options: dict) -> str | None:
         return None
 
     queue_name = str(upload.get("queue_name", "PDF-to-DMS") or "PDF-to-DMS")
-    if not NAME_RE.match(queue_name):
+    if not NAME_RE.fullmatch(queue_name):
         print(
             f"WARNING: paperless_upload.queue_name {queue_name!r} failed validation -- must "
             f"match {NAME_RE.pattern}, cups-pdf queue not registered",
@@ -969,7 +970,7 @@ def build_cups_pdf_registration_snippet(options: dict) -> tuple[str | None, str 
         return None, None
 
     queue_name = str(upload.get("queue_name", "PDF-to-DMS") or "PDF-to-DMS")
-    if not NAME_RE.match(queue_name):
+    if not NAME_RE.fullmatch(queue_name):
         print(
             f"WARNING: paperless_upload.queue_name {queue_name!r} failed validation -- must "
             f"match {NAME_RE.pattern}, cups-pdf queue not registered",
@@ -978,7 +979,7 @@ def build_cups_pdf_registration_snippet(options: dict) -> tuple[str | None, str 
         return None, None
 
     location = str(upload.get("location", "") or "").strip()
-    if location and not LOCATION_RE.match(location):
+    if location and not LOCATION_RE.fullmatch(location):
         print(
             f"WARNING: paperless_upload.location invalid value {location!r} -- must match "
             f"{LOCATION_RE.pattern}, registering cups-pdf queue without a location",
@@ -1057,7 +1058,7 @@ def build_printer_registration(options: dict) -> tuple[str, list[str]]:
             print(f"INFO: printer '{name}' has enabled=false, skipping registration", flush=True)
             continue
 
-        if not NAME_RE.match(name):
+        if not NAME_RE.fullmatch(name):
             print(
                 f"WARNING: skipping printer with invalid name {name!r} -- must match {NAME_RE.pattern}",
                 flush=True,
@@ -1074,7 +1075,7 @@ def build_printer_registration(options: dict) -> tuple[str, list[str]]:
             continue
 
         location = str(entry.get("location", "") or "").strip()
-        if location and not LOCATION_RE.match(location):
+        if location and not LOCATION_RE.fullmatch(location):
             print(
                 f"WARNING: skipping location for printer '{name}' -- invalid value "
                 f"{location!r}, must match {LOCATION_RE.pattern}",
@@ -1101,7 +1102,7 @@ def build_printer_registration(options: dict) -> tuple[str, list[str]]:
                     flush=True,
                 )
                 continue
-            if not DRIVER_MODEL_RE.match(driver_model):
+            if not DRIVER_MODEL_RE.fullmatch(driver_model):
                 print(
                     f"WARNING: skipping printer '{name}' -- invalid driver_model "
                     f"{driver_model!r}, must match {DRIVER_MODEL_RE.pattern}",
@@ -1373,7 +1374,7 @@ def build_admin_provisioning(options: dict) -> str | None:
         )
         return None
 
-    if not ADMIN_USERNAME_RE.match(username):
+    if not ADMIN_USERNAME_RE.fullmatch(username):
         print(
             f"WARNING: admin_username {username!r} failed validation -- must match "
             f"{ADMIN_USERNAME_RE.pattern}, admin account not provisioned",

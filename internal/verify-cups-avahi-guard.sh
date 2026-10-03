@@ -9,6 +9,8 @@
 #              attempts, then degrade-and-continue (RESULT=degraded, exit 0, avahi still running)
 #   unsettled  guard harness with the query stuck in the "registering" state: one timeout line,
 #              RESULT=unsettled, exit 0
+#   refuse     full add-on start with avahi_hostname "cups-guard\n" (trailing newline): run.sh refuses
+#              to start before any avahi/cupsd process, exits non-zero (CR-02, WR-04)
 #
 # Usage: bash internal/verify-cups-avahi-guard.sh [--keep] [--scenario NAME]...
 # Exit: 0 all assertions passed, 1 an assertion failed, 2 usage/environment error.
@@ -24,7 +26,7 @@ IMAGE_NAME="cups-guard-verify:${STAMP}"
 CONTAINER_NAME="cups-guard-verify-${STAMP}"
 KEEP=0
 SCENARIOS=()
-ALL_SCENARIOS=(claim lost unsettled)
+ALL_SCENARIOS=(claim lost unsettled refuse)
 
 red() { printf '\033[0;31m%s\033[0m\n' "$*"; }
 green() { printf '\033[0;32m%s\033[0m\n' "$*"; }
@@ -108,6 +110,22 @@ if ! command -v docker >/dev/null 2>&1; then
     red "docker not found in PATH"
     exit 2
 fi
+scenario_refuse() {
+    yellow "Scenario refuse: avahi_hostname with a trailing newline"
+    write_options '"cups-guard\n"'
+    local out status
+    out=$(timeout 90 docker run --rm -v "${DATA_DIR}:/data" "${IMAGE_NAME}" 2>&1)
+    status=$?
+
+    check "container exits non-zero (status ${status})" test "${status}" -ne 0
+    check "output contains 'generate_config.py failed'" grep -qF 'generate_config.py failed' <<<"${out}"
+    if grep -qF '[avahi-guard]' <<<"${out}"; then
+        fail "output contains an [avahi-guard] line (avahi must not start)"
+    else
+        pass "output contains no [avahi-guard] line"
+    fi
+}
+
 for scenario in "${SCENARIOS[@]}"; do
     case " ${ALL_SCENARIOS[*]} " in
         *" ${scenario} "*) ;;
@@ -233,6 +251,7 @@ for scenario in "${SCENARIOS[@]}"; do
         claim) scenario_claim ;;
         lost) scenario_lost ;;
         unsettled) scenario_unsettled ;;
+        refuse) scenario_refuse ;;
     esac
 done
 

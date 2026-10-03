@@ -9,7 +9,13 @@ log() { echo "[run.sh] $*" >&2; }
 #    never a sed-patched static file). This must run before cupsd starts
 #    below so cupsd reads the patched Listen/Location directives on its very
 #    first startup, not the stock localhost-only defaults.
-python3 /generate_config.py
+#    Any non-zero exit (invalid avahi_hostname, invalid JSON, unwritable path,
+#    uncaught exception) is fatal: running avahi/cupsd with stock config would
+#    publish an unconfigured service (CR-02). Nothing starts before this point.
+if ! python3 /generate_config.py; then
+    log "generate_config.py failed -- refusing to start"
+    exit 1
+fi
 
 # 2. D-Bus + Avahi need their runtime dirs (mirrors network-tools/run.sh).
 mkdir -p /var/run/dbus /var/run/avahi-daemon
