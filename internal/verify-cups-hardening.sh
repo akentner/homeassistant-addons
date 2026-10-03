@@ -13,7 +13,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CUPS_ADDON_DIR="${CUPS_ADDON_DIR:-${REPO_ROOT}/cups}"
-export CUPS_ADDON_DIR
+export CUPS_ADDON_DIR REPO_ROOT
 
 if [[ ! -f "${CUPS_ADDON_DIR}/generate_config.py" ]]; then
     printf 'generate_config.py not found in %s\n' "${CUPS_ADDON_DIR}" >&2
@@ -28,7 +28,10 @@ python3 - <<'PYTHON'
 import contextlib
 import io
 import os
+import re
+import subprocess
 import sys
+import tempfile
 
 sys.path.insert(0, os.environ["CUPS_ADDON_DIR"])
 import generate_config as gc  # noqa: E402
@@ -90,7 +93,7 @@ uri = "ipp://192.0.2.10:631/ipp/print"
 options = {"printers": [{"name": "testprinter\n", "uri": uri}, {"name": "testprinter", "uri": uri}]}
 result, exit_code, output = call_quietly(gc.build_printer_registration, options)
 script, names = result if result else ("", [])
-lpadmin_lines = [line for line in script.splitlines() if line.startswith("lpadmin ")]
+lpadmin_lines = [line for line in script.splitlines() if line.startswith("if lpadmin ")]
 report(
     exit_code is None and names == ["testprinter"] and len(lpadmin_lines) == 1,
     "build_printer_registration registers only 'testprinter' (one lpadmin line)",
@@ -122,6 +125,102 @@ report(
     exit_code is None and "use-ipv6=yes" in conf and "publish-aaaa-on-ipv4" not in conf,
     "avahi_use_ipv6 true: use-ipv6=yes and no publish-aaaa-on-ipv4 line",
 )
+
+print("Section: failure-tolerant registration and queue-name charset (WR-09, WR-05)")
+
+long127 = "A" * 127
+long128 = "A" * 128
+
+# Test 1: queue-name charset accepts underscores and 127 chars; rejects space, slash, 128 chars.
+options = {
+    "printers": [
+        {"name": "Brother_MFC_7460DN", "uri": uri},
+        {"name": "has space", "uri": uri},
+        {"name": "has/slash", "uri": uri},
+        {"name": long127, "uri": uri},
+        {"name": long128, "uri": uri},
+    ]
+}
+result, exit_code, output = call_quietly(gc.build_printer_registration, options)
+script, names = result if result else ("", [])
+report(
+    exit_code is None and names == ["Brother_MFC_7460DN", long127],
+    "queue names: Brother_MFC_7460DN and a 127-char name register; space, slash and 128-char names are skipped",
+)
+report(output.count("WARNING") == 3, "queue names: exactly three WARNING lines for the three invalid names")
+
+
+def run_registration(script_text: str, failing_name):
+    """Run the generated script with sh and a stub lpadmin; return (rc, stdout, stderr, argv_log_lines)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        stub = os.path.join(tmp, "lpadmin")
+        log = os.path.join(tmp, "calls.log")
+        with open(stub, "w") as handle:
+            handle.write("#!/bin/sh\n")
+            handle.write('echo "$*" >> "%s"\n' % log)
+            if failing_name:
+                handle.write('case "$*" in *"-p %s "*) exit 1;; esac\n' % failing_name)
+            handle.write("exit 0\n")
+        os.chmod(stub, 0o755)
+        script_path = os.path.join(tmp, "register.sh")
+        with open(script_path, "w") as handle:
+            handle.write(script_text)
+        env = dict(os.environ, PATH=tmp + os.pathsep + os.environ["PATH"])
+        proc = subprocess.run(["sh", script_path], capture_output=True, text=True, env=env, timeout=30)
+        calls = open(log).read().splitlines() if os.path.exists(log) else []
+    return proc.returncode, proc.stdout, proc.stderr, calls
+
+
+three = {"printers": [{"name": n, "uri": uri} for n in ("first_printer", "second_printer", "third_printer")]}
+result, _, _ = call_quietly(gc.build_printer_registration, three)
+script3, names3 = result
+
+# Test 2: no set -e; a failing middle entry does not stop the third; exit status is non-zero.
+report(not re.search(r"^set -e", script3, re.MULTILINE), "registration script does not start with set -e")
+rc, out, err, calls = run_registration(script3, "second_printer")
+report(
+    len(calls) == 3 and "-p third_printer " in calls[-1],
+    "failing entry: lpadmin is still called for the entry AFTER it",
+)
+report(
+    out.count("registered printer:") == 2
+    and "registered printer: first_printer" in out
+    and "registered printer: third_printer" in out
+    and "registered printer: second_printer" not in out,
+    "failing entry: 'registered printer:' printed only for the two successful entries",
+)
+report("WARNING: registration of second_printer failed" in err, "failing entry: WARNING names the failing printer")
+report(rc != 0, "failing entry: script exits non-zero")
+
+# Test 3: a stub that never fails gives exit 0.
+rc, out, err, calls = run_registration(script3, None)
+report(
+    rc == 0 and len(calls) == 3 and out.count("registered printer:") == 3,
+    "no failures: script exits 0 after three registrations",
+)
+
+# Test 4: paperless_upload.queue_name charset (underscores accepted, trailing newline rejected).
+pdf_ok = {"paperless_upload": {"enabled": True, "queue_name": "PDF_to_DMS"}}
+pdf_nl = {"paperless_upload": {"enabled": True, "queue_name": "PDF_to_DMS\n"}}
+result, _, _ = call_quietly(gc.build_cups_pdf_registration_snippet, pdf_ok)
+cups_snippet, queue = result
+report(cups_snippet is not None and queue == "PDF_to_DMS", "cups-pdf snippet is generated for queue_name 'PDF_to_DMS'")
+result, _, _ = call_quietly(gc.build_cups_pdf_registration_snippet, pdf_nl)
+report(result == (None, None), "cups-pdf snippet is NOT generated for queue_name with a trailing newline")
+conf, _, _ = call_quietly(gc.build_cups_pdf_conf, pdf_ok)
+report(conf is not None, "cups-pdf.conf is generated for queue_name 'PDF_to_DMS'")
+conf, _, _ = call_quietly(gc.build_cups_pdf_conf, pdf_nl)
+report(conf is None, "cups-pdf.conf is NOT generated for queue_name with a trailing newline")
+
+# The cups-pdf queue sits before the final exit, so it is attempted even when a printer entry failed.
+if cups_snippet is not None:
+    result, _, _ = call_quietly(gc.build_printer_registration, three, [cups_snippet])
+    script_with_pdf = result[0]
+    report(
+        script_with_pdf.rstrip().endswith(gc.REGISTER_SCRIPT_TRAILER)
+        and script_with_pdf.index("PDF_to_DMS") < script_with_pdf.rindex("exit "),
+        "cups-pdf snippet is placed before the final exit of the registration script",
+    )
 
 # <<hardening sections appended by later plans go above this line>>
 

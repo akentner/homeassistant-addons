@@ -106,12 +106,26 @@ CUPSD_CONF_PATH = "/etc/cups/cupsd.conf"
 # leaving cupsd unpatched on the second and every later boot).
 CUPSD_STOCK_CONF_PATH = "/etc/cups/cupsd.conf.stock"
 
-# Matches both a valid avahi host-name= value and a valid CUPS printer queue
-# name. No dots, slashes, whitespace, or shell metacharacters -- closes the
-# newline-injection surface into avahi-daemon.conf (T-21-01) and matches
-# lpadmin's own accepted queue-name charset. Always applied with fullmatch():
-# the `$` anchor alone also accepts a trailing newline (WR-04), fullmatch does not.
+# Matches a valid avahi host-name= value (an mDNS/DNS host label: letters,
+# digits and hyphens only -- NO underscore). No dots, slashes, whitespace, or
+# shell metacharacters -- closes the newline-injection surface into
+# avahi-daemon.conf (T-21-01). Not used for CUPS queue names, which may contain
+# underscores: see PRINTER_NAME_RE. Always applied with fullmatch(): the `$`
+# anchor alone also accepts a trailing newline (WR-04), fullmatch does not.
 NAME_RE = re.compile(r"^[A-Za-z0-9-]{1,63}$")
+
+# Matches a valid CUPS printer queue name (printers[].name and
+# paperless_upload.queue_name): letters, digits, hyphen and underscore, up to
+# 127 characters (CUPS's own limit; lpadmin rejects anything else such as
+# spaces, slashes and '#'). Underscore names like Brother_MFC_7460DN are the
+# common case on real installations (WR-05). Always applied with fullmatch()
+# (WR-04). Names still reach lpadmin only through shlex.quote (T-21-01).
+PRINTER_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,127}$")
+
+# Tail of the generated /tmp/register-printers.sh: every entry is attempted,
+# then the script exits non-zero if any lpadmin call failed (WR-09), so run.sh's
+# retry-the-whole-script loop keeps working.
+REGISTER_SCRIPT_TRAILER = 'exit "$REGISTER_FAILED"'
 
 # CUPS device URI schemes this add-on is expected to support (D-03/D-04).
 ALLOWED_URI_SCHEMES = {"ipp", "ipps", "socket", "usb", "dnssd", "lpd", "http"}
@@ -817,8 +831,12 @@ def build_brlaser_registration_snippet(name: str, uri: str, driver_model: str, l
         f'  printf \'%s\\n\' "$PPD_MATCH" >&2\n'
         f'else\n'
         f'  PPD_URI="${{PPD_MATCH%% *}}"\n'
-        f'  lpadmin -p {quoted_name} -v {quoted_uri} -E -m "$PPD_URI"{location_arg}\n'
-        f'  echo "registered printer: {name} (brlaser: $PPD_URI)"\n'
+        f'  if lpadmin -p {quoted_name} -v {quoted_uri} -E -m "$PPD_URI"{location_arg}; then\n'
+        f'    echo "registered printer: {name} (brlaser: $PPD_URI)"\n'
+        f'  else\n'
+        f'    echo "WARNING: registration of {name} failed" >&2\n'
+        f'    REGISTER_FAILED=1\n'
+        f'  fi\n'
         f'fi'
     )
 
@@ -859,10 +877,10 @@ def build_cups_pdf_conf(options: dict) -> str | None:
         return None
 
     queue_name = str(upload.get("queue_name", "PDF-to-DMS") or "PDF-to-DMS")
-    if not NAME_RE.fullmatch(queue_name):
+    if not PRINTER_NAME_RE.fullmatch(queue_name):
         print(
             f"WARNING: paperless_upload.queue_name {queue_name!r} failed validation -- must "
-            f"match {NAME_RE.pattern}, cups-pdf queue not registered",
+            f"match {PRINTER_NAME_RE.pattern}, cups-pdf queue not registered",
             flush=True,
         )
         return None
@@ -966,8 +984,8 @@ def build_cups_pdf_registration_snippet(options: dict) -> tuple[str | None, str 
     advertised identically and appears in iOS/macOS Print sheets without
     extra client setup (D-02).
 
-    Validates `queue_name` against NAME_RE and optional `location` against
-    LOCATION_RE (reusing both constants directly, not new regexes).
+    Validates `queue_name` against PRINTER_NAME_RE and optional `location`
+    against LOCATION_RE (reusing both constants directly, not new regexes).
     Registers via `lpadmin -p <queue_name> -v cups-pdf:/ -E -m "$PPD_URI"
     [-L <location>]`, argv-quoted exactly like the existing printer-
     registration code (T-21-01 mitigation extended to this phase's new
@@ -985,10 +1003,10 @@ def build_cups_pdf_registration_snippet(options: dict) -> tuple[str | None, str 
         return None, None
 
     queue_name = str(upload.get("queue_name", "PDF-to-DMS") or "PDF-to-DMS")
-    if not NAME_RE.fullmatch(queue_name):
+    if not PRINTER_NAME_RE.fullmatch(queue_name):
         print(
             f"WARNING: paperless_upload.queue_name {queue_name!r} failed validation -- must "
-            f"match {NAME_RE.pattern}, cups-pdf queue not registered",
+            f"match {PRINTER_NAME_RE.pattern}, cups-pdf queue not registered",
             flush=True,
         )
         return None, None
@@ -1025,15 +1043,31 @@ def build_cups_pdf_registration_snippet(options: dict) -> tuple[str | None, str 
         f"  printf '%s\\n' \"$PPD_MATCH\" >&2\n"
         f"else\n"
         f'  PPD_URI="${{PPD_MATCH%% *}}"\n'
-        f'  lpadmin -p {quoted_name} -v {quoted_uri} -E -m "$PPD_URI"{location_arg}\n'
-        f'  echo "registered printer: {queue_name} (cups-pdf: $PPD_URI)"\n'
+        f'  if lpadmin -p {quoted_name} -v {quoted_uri} -E -m "$PPD_URI"{location_arg}; then\n'
+        f'    echo "registered printer: {queue_name} (cups-pdf: $PPD_URI)"\n'
+        f"  else\n"
+        f'    echo "WARNING: registration of {queue_name} failed" >&2\n'
+        f"    REGISTER_FAILED=1\n"
+        f"  fi\n"
         f"fi"
     )
     return snippet, queue_name
 
 
-def build_printer_registration(options: dict) -> tuple[str, list[str]]:
+def build_printer_registration(
+    options: dict, extra_snippets: list[str] | None = None
+) -> tuple[str, list[str]]:
     """Render /tmp/register-printers.sh: one validated, quoted lpadmin call per entry.
+
+    Failure tolerance (WR-09, D-03): the script deliberately has no `set -e`.
+    Each lpadmin call sits in an if/else that prints `registered printer: <name>`
+    on success and a `WARNING: registration of <name> failed` line to stderr on
+    failure, so one bad entry can never prevent the later entries (or the
+    cups-pdf queue) from being attempted. The script ends with
+    `exit "$REGISTER_FAILED"`, i.e. non-zero if any entry failed, which keeps
+    run.sh's retry-the-whole-script loop working (lpadmin is idempotent).
+    `extra_snippets` (e.g. the cups-pdf queue's snippet) are placed before that
+    final exit so they are attempted too.
 
     Invalid entries (bad name, unsupported uri scheme) are skipped and logged
     rather than crashing lpadmin or the whole add-on. `enabled` defaults to
@@ -1051,13 +1085,13 @@ def build_printer_registration(options: dict) -> tuple[str, list[str]]:
     `build_brlaser_registration_snippet`.
 
     The second return value, `registered_names`, is the exact list of `name`
-    values that passed every validation gate above (`enabled`, `NAME_RE`,
+    values that passed every validation gate above (`enabled`, `PRINTER_NAME_RE`,
     uri-scheme, `driver`) -- the same list `build_printer_uuid_fixup_script()`
     consumes, so there is no drift between what gets registered and what gets
     UUID-fixed-up.
     """
     printers = options.get("printers") or []
-    lines = ["#!/bin/sh", "set -e", ""]
+    lines = ["#!/bin/sh", "REGISTER_FAILED=0", ""]
     registered_names: list[str] = []
 
     for entry in printers:
@@ -1073,9 +1107,10 @@ def build_printer_registration(options: dict) -> tuple[str, list[str]]:
             print(f"INFO: printer '{name}' has enabled=false, skipping registration", flush=True)
             continue
 
-        if not NAME_RE.fullmatch(name):
+        if not PRINTER_NAME_RE.fullmatch(name):
             print(
-                f"WARNING: skipping printer with invalid name {name!r} -- must match {NAME_RE.pattern}",
+                f"WARNING: skipping printer with invalid name {name!r} -- must match "
+                f"{PRINTER_NAME_RE.pattern}",
                 flush=True,
             )
             continue
@@ -1145,10 +1180,20 @@ def build_printer_registration(options: dict) -> tuple[str, list[str]]:
         if location:
             argv += ["-L", location]
 
-        lines.append(" ".join(shlex.quote(a) for a in argv))
-        lines.append(f'echo "registered printer: {name}"')
+        lines.append(f"if {' '.join(shlex.quote(a) for a in argv)}; then")
+        lines.append(f'  echo "registered printer: {name}"')
+        lines.append("else")
+        lines.append(f'  echo "WARNING: registration of {name} failed" >&2')
+        lines.append("  REGISTER_FAILED=1")
+        lines.append("fi")
         registered_names.append(name)
 
+    for snippet in extra_snippets or []:
+        lines.append("")
+        lines.append(snippet)
+
+    lines.append("")
+    lines.append(REGISTER_SCRIPT_TRAILER)
     lines.append("")
     return "\n".join(lines), registered_names
 
@@ -1235,7 +1280,7 @@ def build_printer_uuid_fixup_script(names: list[str]) -> str | None:
     """Render /tmp/fixup-printer-uuids.sh: patches printers.conf UUID lines.
 
     Only accepts `names` already validated by build_printer_registration()'s
-    own enabled/NAME_RE/uri-scheme/driver gates -- reusing that exact list
+    own enabled/PRINTER_NAME_RE/uri-scheme/driver gates -- reusing that exact list
     (rather than re-validating printers[] independently here) avoids any
     drift between which printers get registered and which get their UUID
     fixed up.
@@ -1472,11 +1517,11 @@ def main() -> None:
             flush=True,
         )
 
-    register_script, registered_printer_names = build_printer_registration(options)
-
     cups_pdf_snippet, cups_pdf_queue_name = build_cups_pdf_registration_snippet(options)
+    register_script, registered_printer_names = build_printer_registration(
+        options, [cups_pdf_snippet] if cups_pdf_snippet is not None else None
+    )
     if cups_pdf_snippet is not None:
-        register_script += "\n" + cups_pdf_snippet + "\n"
         registered_printer_names.append(cups_pdf_queue_name)
 
     script_path = Path(REGISTER_SCRIPT_PATH)
