@@ -22,6 +22,7 @@
   "search_gitignored": false,
   "workflow": {
     "_auto_chain_active": false,
+    "ai_integration_phase": true,
     "auto_advance": false,
     "discuss_mode": "discuss",
     "node_repair": true,

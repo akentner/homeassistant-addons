@@ -5,7 +5,7 @@
 - ✅ **v1.0 MVP** — Phases 1-3 (shipped 2026-04-04)
 - ✅ **v1.1 markdown-renderer** — Phases 4-6 (complete 2026-06-28)
 - 📋 **v1.2 CI/CD Hardening** — Phase 8 (planned 2026-08-30; gap-closure `08-05-GAP-PLAN.md` awaiting Cloudflare setup)
-- 🚧 **v1.3 opentofu-bridge** — Phases 9-15 (essentially complete 2026-09-05; Phase 15 release pending v1.2
+- 🚧 **v1.3 opentofu-bridge** — Phases 9-15 + 20 (essentially complete 2026-09-05; Phase 15 release pending v1.2
   Cloudflare-setup prerequisite)
 - 📋 **v1.4 iac-runner** — Phases 16-19 (planning 2026-09-06)
 
@@ -41,7 +41,7 @@ Full details: [.planning/milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 > this roadmap or STATE.md. Its status is unresolved (Q-03 in `08-CONTEXT.md`). Phase 8 deliberately takes the next
 > number rather than renumbering or absorbing it.
 
-### 🚧 v1.3 opentofu-bridge (Phases 9-15) — PLANNING
+### 🚧 v1.3 opentofu-bridge (Phases 9-15, 20) — PLANNING
 
 **Milestone Goal:** Ship a Home Assistant Supervisor add-on (`terraform-bridge/`) that exposes the Supervisor HTTP API
 as a bearer-authenticated, versioned JSON-over-HTTPS service, plus a co-located Go OpenTofu/Terraform provider
@@ -70,6 +70,25 @@ SUPERVISOR_TOKEN-rotation-across-restart — empirical spike required in Phase 9
       apply/destroy cycle foundation; 12 per-error_code verify scenarios; operator docs based on captured diagnostics
 - [x] **Phase 15: CI Hardening + Provider Install Workflow** — GitHub Actions build Bridge + test Provider workflows;
       (completed 2026-08-31) `make install-provider` verified in CI; release-cycle end-to-end
+- [x] **Phase 20: litellm-addon** — LiteLLM (OpenAI-compatible API gateway) + bundled PostgreSQL as a new `litellm/`
+      add-on (overflow phase added 2026-09-19); live-HA install and ghcr.io image push deferred to operator runtime
+
+### Phase 20: litellm-addon
+
+**Goal:** New Home Assistant add-on `litellm/` bundling LiteLLM (OpenAI-compatible API gateway) and PostgreSQL (state
+store for virtual keys, spend logs, model definitions) in one container; LAN/Tailscale on port 4000 plus Ingress for the
+Swagger UI. Master/salt key via `!secret` with auto-generated fallback in `/data/.<keyfile>`; provider keys via
+`!secret` only.
+**Requirements**: LITELLM-01..LITELLM-10
+**Depends on:** Phase 19 (added as an overflow phase on 2026-09-19; runs in parallel with v1.3/v1.4 work)
+**Plans:** 4/4 plans executed (completed 2026-09-19)
+
+Plans:
+
+- [x] `20-01-PLAN.md` — litellm/ 4-file scaffold + `.upstream.yaml` + `generate_config.py` envelope
+- [x] `20-02-PLAN.md` — Master/salt key lifecycle + signal trap + `generate_config.py` expansion (6 providers)
+- [x] `20-03-PLAN.md` — Postgres tuning reload + auto-update `LITELLM_VERSION` sync
+- [x] `20-04-PLAN.md` — `DOCS.md` + verifier scripts + README polish
 
 ### Phase 21: cups print server addon airprint mdns fixes
 

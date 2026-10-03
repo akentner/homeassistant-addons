@@ -2,11 +2,11 @@
 gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: opentofu-bridge
-current_phase: 11
-current_phase_name: Bridge Read API
-current_plan: Not started
-status: Phase 20 execution complete
-stopped_at: Phase 22 complete, ready to plan Phase 11
+current_phase: 22
+current_phase_name: "cups: paperless-ngx PDF document upload"
+current_plan: 3
+status: Phase 22 execution complete — verification stale
+stopped_at: Phase 22 complete; re-verify Phase 22, then verification debt for 09/10/14/20/21
 last_updated: "2026-09-29T16:54:04.270Z"
 state_head: c83a6037270a7d9ae0c0110bbce61e2560a92556
 progress:
@@ -24,8 +24,8 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-29)
 
 **Core value:** Any upstream release is automatically reflected in the add-on within 24 hours — zero manual version
-tracking. **Current focus:** Phase 22 complete (cups paperless-ngx upload, gap-closure) — next roadmap-sequential phase
-is 11 (Bridge Read API), already shipped code+tests per the table below; live-HA verification was deferred to Phase 14
+tracking. **Current focus:** Phase 22 complete (cups paperless-ngx upload, gap-closure) — VERIFICATION.md is stale vs. the
+latest SUMMARYs; phases 09/10/14/20/21 are executed but have no VERIFICATION.md
 
 ## Milestone v1.0 — COMPLETE
 
@@ -67,7 +67,7 @@ write per wave. 08-04 documents the end state and therefore runs last.
 
 ## Milestone v1.3 opentofu-bridge — PLANNING
 
-Roadmap: 7 phases (9-15) + Phase 20 (litellm-addon overflow, added 2026-09-19). 46 v1.3 requirements + 10 LITELLM-* mapped.
+Roadmap: 7 phases (9-15) + Phase 20 (litellm-addon overflow, added 2026-09-19; now listed in ROADMAP.md). 46 v1.3 requirements + 10 LITELLM-* mapped.
 Source: `research/SUMMARY.md` + `REQUIREMENTS.md` + 2026-09-19 litellm design session. Status: roadmap approved;
 Phase 9-12 shipped; Phase 20 just completed (4/4 plans). v1.3 runs in parallel with v1.2 Phase 8 gap-closure by explicit user decision.
 
@@ -77,9 +77,9 @@ Phase 9-12 shipped; Phase 20 just completed (4/4 plans). v1.3 runs in parallel w
 | 10    | Auth Layer + Structured Logging + Healthcheck          | Complete                               | 2026-08-31 (plans 01-03; live-HA verify deferred to Phase 14)                                                                                             |
 | 11    | Bridge Read API                                        | Complete (code + unit tests)           | 2026-09-02 (plans 01-02; 16 new tests; live-HA verification deferred to Phase 14)                                                                         |
 | 12    | Bridge Write API + Critical-Addon Safety + Concurrency | SHIPPED (12-01 + 12-02 + 12-03 landed) | 2026-09-04 (5 atomic commits: feat(12-01), feat(12-02)×2, feat(12-03), test(12-03); all 10 reqs operational end-to-end; race-clean; build/vet/gofmt pass) |
-| 13    | Provider + Resource + Data Sources + Schema Handshake  | Not started                            | —                                                                                                                                                         |
-| 14    | Real-HA End-to-End Verification + Operator Docs        | Not started                            | —                                                                                                                                                         |
-| 15    | CI Hardening + Provider Install Workflow               | Not started                            | —                                                                                                                                                         |
+| 13    | Provider + Resource + Data Sources + Schema Handshake  | Complete                               | 2026-09-05                                                                                                                                                         |
+| 14    | Real-HA End-to-End Verification + Operator Docs        | Complete (live-HA run deferred)        | 2026-09-05                                                                                                                                                         |
+| 15    | CI Hardening + Provider Install Workflow               | Complete (release cut pending)         | 2026-08-31                                                                                                                                                         |
 | 20    | litellm-addon (OpenAI-compatible API gateway)          | **Complete**                           | 2026-09-19 (plans 01-04; 21 commits ahead of origin/main; all 4 validators pass; DOCS.md + 4 verifier scripts + spike shipped; live-HA install deferred to operator runtime) |
 
 Phase dependency graph enforces: 9 → 10 → 11 → 12 → 13 → 14 → 15 (strictly serial). The empirical SUPERVISOR_TOKEN
@@ -107,11 +107,12 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Current Plan: Not started
+Current Plan: 3 of 3 (complete)
 Total Plans in Phase: 3
 
-Phase: 11 — Bridge Read API
-21 atomic commits on main (4 planning + 14 execution + 4 plan SUMMARYs). All 4 plans landed:
+Phase: 22 — cups: paperless-ngx PDF document upload (executed, verification stale)
+
+Phase 20 (litellm-addon) — 21 atomic commits on main (4 planning + 14 execution + 4 plan SUMMARYs). All 4 plans landed:
 
 - **Plan 01** (e0df1a1 / fcb14cd / 958ef21 / 493eb71 / f490894 / cebe063 / b6e6534): 4-file HA Supervisor scaffold
   (config.yaml + build.yaml + Dockerfile + run.sh) + .upstream.yaml + .gitignore + README +
