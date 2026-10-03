@@ -17,10 +17,20 @@ mkdir -p /var/run/dbus /var/run/avahi-daemon
 # 3. System D-Bus -- required by avahi-daemon.
 dbus-daemon --system --fork || log "dbus-daemon failed to start"
 
-# 4. Avahi daemon reads the config generate_config.py just wrote. Non-fatal:
-#    a failure here must not crash the whole add-on before cupsd even starts
-#    (mirrors network-tools/run.sh's exact incantation).
-avahi-daemon --daemonize || log "avahi-daemon failed to start"
+# 4. Avahi daemon reads the config generate_config.py just wrote. Started by
+#    the startup guard (avahi-guard.sh): avahi runs in the foreground of a
+#    background job so its own log lines reach this add-on's log, and this
+#    step returns only after avahi reported a settled host name, so cupsd (step
+#    6) cannot publish its DNS-SD records under a name avahi later abandons
+#    (D-11). Never fatal: after bounded retries the guard continues under the
+#    actual name with a loud ERROR (startup-only, no watchdog -- D-08).
+if [ -f /tmp/avahi-guard.env ]; then
+    # shellcheck source=/dev/null
+    . /tmp/avahi-guard.env
+fi
+# shellcheck source=/dev/null
+. /avahi-guard.sh
+avahi_guard_start
 
 # 5. Provision the optional CUPS web-admin login (`admin_username` /
 #    `admin_password`), from the script generate_config.py already rendered
@@ -41,7 +51,7 @@ if [ -f /tmp/provision-admin.sh ]; then
     sh /tmp/provision-admin.sh || log "admin account provisioning reported an issue (see above)"
 fi
 
-# 6. Start cupsd in the foreground, backgrounded here so this script can
+# 6. Start cupsd (only reached once the avahi guard above has returned) in the foreground, backgrounded here so this script can
 #    finish printer registration and log-level setup before waiting on it.
 cupsd -f &
 CUPSD_PID=$!
@@ -195,5 +205,14 @@ UPLOAD_WORKER_PID=$!
 #     with enable-reflector=no (the shipped default) that failure class
 #     cannot occur. Also stops the log-tail, print-history-poller, and
 #     upload-worker background processes so container shutdown stays clean.
-trap 'kill -TERM "$CUPSD_PID" 2>/dev/null; kill -TERM "$ERROR_LOG_TAIL_PID" 2>/dev/null; [ -n "$ACCESS_LOG_TAIL_PID" ] && kill -TERM "$ACCESS_LOG_TAIL_PID" 2>/dev/null; kill -TERM "$PRINT_HISTORY_POLLER_PID" 2>/dev/null; kill -TERM "$UPLOAD_WORKER_PID" 2>/dev/null' TERM INT
+cleanup() {
+    kill -TERM "$CUPSD_PID" 2>/dev/null
+    kill -TERM "$ERROR_LOG_TAIL_PID" 2>/dev/null
+    [ -n "$ACCESS_LOG_TAIL_PID" ] && kill -TERM "$ACCESS_LOG_TAIL_PID" 2>/dev/null
+    kill -TERM "$PRINT_HISTORY_POLLER_PID" 2>/dev/null
+    kill -TERM "$UPLOAD_WORKER_PID" 2>/dev/null
+    # Stop avahi last so its goodbye packets still go out on shutdown.
+    [ -n "${AVAHI_PID:-}" ] && avahi_guard_stop
+}
+trap cleanup TERM INT
 wait "$CUPSD_PID"

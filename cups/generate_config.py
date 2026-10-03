@@ -91,6 +91,10 @@ except ImportError:  # pragma: no cover -- only unavailable off Linux/Unix
 
 OPTIONS_PATH = "/data/options.json"
 AVAHI_CONF_PATH = "/etc/avahi/avahi-daemon.conf"
+# /tmp/avahi-guard.env -- see build_avahi_guard_env. Sourced by run.sh before
+# cups/avahi-guard.sh runs, so the guard compares avahi's live host name against
+# the exact value this script validated and wrote into avahi-daemon.conf.
+AVAHI_GUARD_ENV_PATH = "/tmp/avahi-guard.env"
 REGISTER_SCRIPT_PATH = "/tmp/register-printers.sh"
 CUPSD_CONF_PATH = "/etc/cups/cupsd.conf"
 # Pristine copy of the stock cupsd.conf, written once (Dockerfile, or lazily
@@ -649,12 +653,14 @@ def load_options() -> dict:
         return json.load(f)
 
 
-def build_avahi_conf(options: dict) -> str:
-    """Render avahi-daemon.conf carrying the D-07/D-10/D-11 fixes.
+def resolve_avahi_hostname(options: dict) -> str:
+    """Return the validated `avahi_hostname` option (default "cups").
 
-    Exits the process non-zero on an invalid avahi_hostname -- a raw newline in
-    that value could otherwise inject arbitrary directives into the generated
-    file (T-21-01), so refusing to start is safer than writing an unsafe string.
+    Single validation point shared by the avahi-daemon.conf `host-name=` line and
+    the guard env file, so both always carry the same value. Exits the process
+    non-zero on an invalid value -- a raw newline in that value could otherwise
+    inject arbitrary directives into the generated file (T-21-01), so refusing to
+    start is safer than writing an unsafe string.
     """
     hostname = str(options.get("avahi_hostname", "cups"))
     if not NAME_RE.match(hostname):
@@ -664,6 +670,28 @@ def build_avahi_conf(options: dict) -> str:
             flush=True,
         )
         sys.exit(1)
+    return hostname
+
+
+def build_avahi_guard_env(options: dict) -> str:
+    """Render /tmp/avahi-guard.env: the host name avahi is expected to claim.
+
+    Two shell assignment lines built from the already-validated hostname
+    (alphanumerics and hyphens only, so the file is safe to source). Read by
+    cups/avahi-guard.sh, which holds cupsd back until avahi reports this FQDN as
+    its settled host name (D-11).
+    """
+    hostname = resolve_avahi_hostname(options)
+    return f"AVAHI_EXPECTED_HOSTNAME={hostname}\nAVAHI_EXPECTED_FQDN={hostname}.local\n"
+
+
+def build_avahi_conf(options: dict) -> str:
+    """Render avahi-daemon.conf carrying the D-07/D-10/D-11 fixes.
+
+    Exits the process non-zero on an invalid avahi_hostname (see
+    `resolve_avahi_hostname`).
+    """
+    hostname = resolve_avahi_hostname(options)
 
     reflector = bool(options.get("avahi_reflector", False))
     use_ipv6 = bool(options.get("avahi_use_ipv6", False))
@@ -1413,6 +1441,9 @@ def main() -> None:
     avahi_conf = build_avahi_conf(options)
     Path(AVAHI_CONF_PATH).write_text(avahi_conf)
     print(f"Config written to {AVAHI_CONF_PATH}", flush=True)
+
+    Path(AVAHI_GUARD_ENV_PATH).write_text(build_avahi_guard_env(options))
+    print(f"Config written to {AVAHI_GUARD_ENV_PATH}", flush=True)
 
     cupsd_conf = build_cupsd_conf(detect_primary_interface(), options)
     if cupsd_conf is not None:

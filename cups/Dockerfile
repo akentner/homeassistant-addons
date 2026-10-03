@@ -70,7 +70,7 @@ RUN cp /etc/cups/cups-pdf.conf /etc/cups/cups-pdf.conf.stock || true
 # recognize it as root-required and run it accordingly.
 RUN chmod 700 /usr/lib/cups/backend/cups-pdf
 
-COPY run.sh generate_config.py print-history-poller.py upload-worker.py /
+COPY run.sh avahi-guard.sh generate_config.py print-history-poller.py upload-worker.py /
 
 # CUPS restricts admin operations (lpadmin) to members of the SystemGroup
 # (lpadmin by default per /etc/cups/cups-files.conf) -- root is not a member
