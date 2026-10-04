@@ -234,6 +234,15 @@ No unreferenced TBD/FIXME/XXX markers introduced.
   containers on the host network). Whether this answer caused or merely follows the 09:14:57 conflict is not proven; the
   verifier's own queries are read-only and cannot register names.
 
+**Diagnosis update (2026-10-04, plan 21-09).** The 09:14:57 rename is attributed to our own local test container, not to
+an unknown foreign announcer (that wording is superseded): podman created and started the Phase 22 verifier image at
+09:14:55 (`journalctl --user`, corroborated by podman's own event history, which lists the container-create event of the
+verifier's happy-path container at that second), and its fixtures carried no `avahi_hostname`, so the default `cups` was
+announced through pasta networking onto the real LAN two seconds before the live avahi renamed itself.
+Label: strongly indicated, confirmed by timing; final confirmation = quiet observation in plan 21-10. Truths #13 and
+#14 remain open until then. Plan 21-08 removed the cause (isolated local test containers), plan 21-09 added `--watch`
+to measure it.
+
 ### Human Verification Required
 
 None. The failure is directly observed and persists. The next step needs a mutating decision (investigate/capture the

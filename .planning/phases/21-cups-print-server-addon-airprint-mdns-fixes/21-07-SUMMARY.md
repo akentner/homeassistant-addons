@@ -148,3 +148,20 @@ and the 21-04 capture experiment was never run.
 - Task 1 was executed by the orchestrator on explicit user instruction rather than left to the user.
 - Live mutations were executed by the user; no mutating command was run by an agent.
 - `--settle-wait 60` instead of 180 (see Limits).
+
+## Diagnosis update (2026-10-04)
+
+Appended by plan 21-09; the sections above are unchanged. The sentence "The conflicting announcer is still unidentified"
+in the correction section is superseded by the following reading.
+
+- **Attribution.** The 09:14:57 rename to `cups-2` is attributed to our own local test container. podman created and
+  started the Phase 22 verifier image at 09:14:55 (`journalctl --user`); podman's own event history corroborates it and
+  lists the container-create event of the verifier's happy-path container at that second. Those fixtures were written
+  without `avahi_hostname`, so the container announced the default host name `cups` through pasta networking onto the
+  real LAN, and the live avahi, which had held the name since boot, renamed itself two seconds later.
+- **Confidence.** Label: strongly indicated, confirmed by timing; final confirmation = quiet observation in plan 21-10. Truths
+  #13 and #14 stay open until that observation is clean.
+- **Wording.** "Unknown foreign announcer" is superseded by the above.
+- **Consequences.** Plan 21-08 isolates every local cups test container from the LAN. Plan 21-09 adds `--watch` to the
+  live verifier (continuity, host-name-conflict and workstation-quiet checks) and writes the quiet-window rule into its
+  header: no podman/docker verifiers on the workstation while a live proof runs.
