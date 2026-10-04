@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: opentofu-bridge
-current_phase: 11
-current_phase_name: Bridge Read API
+current_phase: 22
+current_phase_name: cups-paperless-ngx-pdf-document-upload
 current_plan: Not started
 status: Phase 22 complete — verification passed (17/17), re-verified 2026-10-03
 stopped_at: Phase 21 complete, ready to plan Phase 11
-last_updated: "2026-10-04T17:49:08.410Z"
-state_head: 837db1240b98a4ee3f660e3b8d86b8577e22008e
+last_updated: "2026-10-04T18:16:06.745Z"
+state_head: 36bdfe74fe84d4dedc541d8614bdb977f7c3e3d9
 progress:
   total_phases: 10
   completed_phases: 12
-  total_plans: 33
+  total_plans: 34
   completed_plans: 32
-  percent: 97
+  percent: 30
 ---
 
 # Project State
@@ -108,9 +108,9 @@ parallelize after Phase 16 stabilises the contracts).
 ## Current Position
 
 Current Plan: Not started
-Total Plans in Phase: 10
+Total Plans in Phase: 4
 
-Phase: 11 — Bridge Read API
+Phase: 22 (cups-paperless-ngx-pdf-document-upload) — READY TO EXECUTE
 
 Phase 20 (litellm-addon) — 21 atomic commits on main (4 planning + 14 execution + 4 plan SUMMARYs). All 4 plans landed:
 
