@@ -8,7 +8,9 @@ scripted answers. It proves that:
   - an HTTP 3xx answer is never followed (exactly one request reaches the stub, and it is the POST)
     and is reported as a failed attempt, so the document follows retry -> failed/ and is never
     recorded in sent/;
-  - the redirect WARNING names the Location target (path only) and never echoes the token.
+  - the redirect WARNING names the Location target (path only) and never echoes the token;
+  - a document counts as sent only for HTTP 200 with a non-empty JSON-string task id; JSON objects,
+    HTML, empty bodies, blank task ids and non-200 2xx answers are failed attempts.
 
 Needs a host python3 with `requests` installed. It is a manual tool and is NOT wired into
 pre-commit or `make check-all`. `--worker PATH` points the probe at another copy of the worker
@@ -190,6 +192,53 @@ def check_redirect_routing(worker: ModuleType, state: StubState, config: dict, t
     )
 
 
+TASK_ID_BODY = b'"11111111-2222-3333-4444-555555555555"'
+
+# (label, status, content type, body, expected upload_document() result)
+BODY_CASES: tuple[tuple[str, int, str, bytes, bool], ...] = (
+    ("200 with task-id JSON string", 200, "application/json", TASK_ID_BODY, True),
+    ("200 with JSON object", 200, "application/json", b'{"task_id": "abc"}', False),
+    ("200 with HTML login page", 200, "text/html", LOGIN_HTML, False),
+    ("200 with empty body", 200, "application/json", b"", False),
+    ("200 with empty JSON string", 200, "application/json", b'""', False),
+    ("200 with whitespace-only JSON string", 200, "application/json", b'"   "', False),
+    ("202 with task-id JSON string", 202, "application/json", TASK_ID_BODY, False),
+    ("204 with empty body", 204, "application/json", b"", False),
+)
+
+
+def check_body_matrix(worker: ModuleType, state: StubState, config: dict, tmp: Path) -> None:
+    for index, (label, status, content_type, body, expected) in enumerate(BODY_CASES):
+        state.script(status, body=body, content_type=content_type)
+        pdf = make_pdf(tmp / f"body-{index}")
+        result, output = call_upload(worker, pdf, config)
+        check(result is expected, f"{label}: upload_document() returns {expected}")
+        check(TOKEN not in output, f"{label}: token absent from output")
+        if status == 200 and not expected:
+            check(
+                "not a task id" in output,
+                f"{label}: WARNING states the body is not a task id",
+            )
+
+
+def check_body_routing(worker: ModuleType, state: StubState, config: dict, tmp: Path) -> None:
+    route_config = dict(config, retry_count=1, retry_delay=1)
+
+    state.script(200, body=TASK_ID_BODY)
+    sent, failed, _ = run_route(worker, state, tmp / "route-ok", route_config)
+    check(any(sent.glob("*.pdf")), "valid task id routing: PDF ends in sent/")
+    check(not any(failed.iterdir()), "valid task id routing: failed/ is empty")
+
+    state.script(200, body=b'{"detail": "not a task id"}')
+    sent, failed, output = run_route(worker, state, tmp / "route-bad", route_config)
+    check(any(failed.glob("*.pdf")), "rejected 200 body routing: PDF ends in failed/")
+    check(not any(sent.iterdir()), "rejected 200 body routing: sent/ is empty")
+    check(
+        sum(1 for line in output.splitlines() if "upload exhausted" in line) == 1,
+        "rejected 200 body routing: exactly one 'upload exhausted' WARNING (D-15)",
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Probe cups/upload-worker.py redirect handling and success classification."
@@ -212,6 +261,8 @@ def main() -> int:
     try:
         check_redirect_matrix(worker, state, config, tmp)
         check_redirect_routing(worker, state, config, tmp)
+        check_body_matrix(worker, state, config, tmp)
+        check_body_routing(worker, state, config, tmp)
     finally:
         server.shutdown()
         shutil.rmtree(tmp, ignore_errors=True)

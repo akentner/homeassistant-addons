@@ -26,7 +26,9 @@ the full rationale):
     (D-11) when it is missing or malformed -- the upload must never be
     skipped just because a title could not be recovered.
   - Each PDF (+ its sidecar, if present) is atomically moved into
-    processing/ before an upload attempt, then to sent/ on success.
+    processing/ before an upload attempt, then to sent/ on success. Success
+    means HTTP 200 with the consumption-task id as a non-empty JSON string
+    (paperless-ngx's documented answer); redirects are never followed.
   - On failure, a companion `<basename>.retry.json` state file (attempts +
     next_attempt_at, a FIXED interval per D-09 -- not exponential, matching
     this add-on's stated preference for simple/predictable behavior over
@@ -237,11 +239,26 @@ def _safe_redirect_target(location: str) -> str:
     return target[:200]
 
 
+def _is_task_id_body(response: requests.Response) -> bool:
+    """Return True when the response body is a non-empty JSON string.
+
+    paperless-ngx answers an accepted upload with HTTP 200 and the consumption
+    task id as a bare JSON string (`Response(async_task.id)`). The id format is
+    deliberately not pattern-checked: it is a Celery implementation detail.
+    """
+    try:
+        parsed = response.json()
+    except ValueError:
+        return False
+    return isinstance(parsed, str) and bool(parsed.strip())
+
+
 def upload_document(pdf_path: Path, config: dict) -> bool:
     """Attempt one upload of `pdf_path` to paperless-ngx.
 
-    Returns True on a 2xx response, False on any exception, any 3xx redirect
-    or any other non-2xx response. Redirects are never followed (CR-01): a
+    Returns True only on HTTP 200 whose body is a non-empty JSON string (the
+    consumption-task id); False on any exception, any 3xx redirect, any other
+    2xx or any other non-2xx response. Redirects are never followed (CR-01): a
     followed redirect could land on a login page that answers 2xx and record a
     document as delivered that paperless-ngx never received. Never raises --
     callers treat both outcomes as ordinary control flow, not exceptional.
@@ -278,7 +295,15 @@ def upload_document(pdf_path: Path, config: dict) -> bool:
         )
         return False
 
-    if 200 <= response.status_code < 300:
+    if response.status_code == 200 and not _is_task_id_body(response):
+        print(
+            f"WARNING: paperless-ngx upload for {pdf_path.name} returned HTTP 200 but the "
+            f"response body is not a task id: {response.text.strip()[:200]!r}",
+            flush=True,
+        )
+        return False
+
+    if response.status_code == 200:
         print(
             f"INFO: uploaded {pdf_path.name} to paperless-ngx (title={title!r}, "
             f"response={response.text.strip()[:200]!r})",
