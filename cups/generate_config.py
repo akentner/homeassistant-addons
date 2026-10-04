@@ -283,6 +283,11 @@ TAILSCALE_CGNAT_CIDR = "100.64.0.0/10"
 # reinforcing the stock-backup-based idempotency above.
 LISTEN_LOCALHOST_RE = re.compile(r"^Listen localhost:631\s*$", re.MULTILINE)
 
+# Alpine's stock cupsd.conf ships `IdleExitTimeout 60`, but this cupsd build has no
+# systemd/launchd support, so it logs "Unknown directive IdleExitTimeout" (level E) on
+# every start. The directive has no effect here; drop it from the patched copy.
+IDLE_EXIT_TIMEOUT_RE = re.compile(r"^IdleExitTimeout\b.*\n?", re.MULTILINE)
+
 # Matches the stock top-level `<Location />` block (CUPS's whole-server access
 # control, distinct from `<Location /admin>` etc. -- the literal "/>" only
 # appears for the root Location). Non-greedy body capture stops at this
@@ -597,6 +602,7 @@ def build_cupsd_conf(iface: str | None, options: dict) -> str | None:
         return None
 
     patched = LISTEN_LOCALHOST_RE.sub(f"Listen {ip}:631", template, count=1)
+    patched = IDLE_EXIT_TIMEOUT_RE.sub("", patched)
 
     aliases = parse_server_aliases(options.get("server_aliases", "*"))
     if aliases:
