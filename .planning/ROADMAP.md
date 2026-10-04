@@ -99,7 +99,8 @@ options instead of upstream's hardcoded `options: {} / schema: []`, then roll th
 replacing `f1c878cb_cups`.
 **Requirements**: D-01..D-13 (CONTEXT.md decisions — no REQUIREMENTS.md IDs mapped to this ad-hoc phase)
 **Depends on:** Phase 20
-**Plans:** 7/7 plans executed (21-04..21-07 are gap-closure plans from 21-VERIFICATION.md, 4 more waves)
+**Plans:** 7/10 plans executed (21-04..21-07 gap-closure round 1; 21-08..21-10 round 2 after re-verification;
+21-11/21-12 parked as `*-PLAN-OUTLINE.md`, optional guard supervision pending a user decision)
 
 Plans:
 - [x] 21-01-PLAN.md
@@ -109,6 +110,9 @@ Plans:
 - [x] 21-05-PLAN.md
 - [x] 21-06-PLAN.md
 - [x] 21-07-PLAN.md
+- [ ] 21-08-PLAN.md
+- [ ] 21-09-PLAN.md
+- [ ] 21-10-PLAN.md
 - [x] `21-01-PLAN.md` — Tracer: cups/ 4-file scaffold + generated avahi-daemon.conf (reflector-off, fixed hostname,
       IPv6-off) + one printer registered end-to-end (checkpoint: printers[].uri schema type)
 - [x] `21-02-PLAN.md` — internal/base-image-config.yaml tracking + cups/README.md + cups/DOCS.md + root README.md
@@ -128,6 +132,16 @@ Gap closure (from 21-VERIFICATION.md: truth #13 fixed hostname lost, truth #14 `
       to 0.1.0-16
 - [ ] `21-07-PLAN.md` — Wave 4: publish, live update + two restarts on haos-op3050-1, LAN-client verification
       (`avahi-browse -r _ipp._tcp` resolved `=` line, fixed host name)
+
+Gap closure round 2 (from the 2026-10-04 re-verification: the name was lost 2 s after a local test container of the
+Phase 22 verifier announced the default `cups.local` on the real LAN):
+
+- [ ] `21-08-PLAN.md` — Wave 1: isolate test containers from LAN mDNS (shared helper, explicit non-default
+      hostnames, multicast off), hardening enforcement with RED proofs
+- [ ] `21-09-PLAN.md` — Wave 1: read-only `--watch` mode for the live verifier + self-test, review-disposition
+      ledger update, diagnosis note
+- [ ] `21-10-PLAN.md` — Wave 2: human-run live proof with quiet observation (current boot + two restarts, +2/+10/+30
+      min milestones)
 
 ### Phase 22: cups: paperless-ngx PDF document upload
 
