@@ -3,65 +3,90 @@ phase: 22
 review: 22-REVIEW.md
 titles: json
 findings:
-  - id: WR-01
-    severity: warning
-    disposition: open
-    title: "D-15 exhaustion log line reports the pre-disambiguation filename on a `failed/` collision"
-  - id: WR-02
-    severity: warning
-    disposition: open
-    title: "retry-state hardening validates the JSON is a dict but not its field types"
-  - id: IN-01
-    severity: info
-    disposition: open
-    title: "internal finding ID \"(WR-05)\" leaks into a production log line"
-  - id: IN-02
-    severity: info
-    disposition: open
-    title: "`collision_tag` sharing between PDF and sidecar is only reliable when the PDF itself collides"
-  - id: IN-03
-    severity: info
-    disposition: open
-    title: "pre-existing falsy-zero coercion bug in numeric option parsing (out of this diff's scope)"
   - id: CR-01
     severity: critical
     disposition: open
-    title: "`is_due()` runs outside per-document error isolation — one corrupted retry-state file can silently stall the entire upload queue"
+    title: "HTTP redirects turn the upload into a GET and the worker records it as a success"
+  - id: WR-01
+    severity: warning
+    disposition: open
+    title: "Worker can pick up a PDF that cups-pdf is still writing, and can race the title-sidecar hook"
+  - id: WR-02
+    severity: warning
+    disposition: open
+    title: "`process_new_document` silently overwrites a same-named document that is still in `processing/`"
   - id: WR-03
     severity: warning
     disposition: open
-    title: "No validation that `url`/`token` are set when `paperless_upload.enabled: true`"
+    title: "Retry-state field types are not validated, one bad file stalls that document forever"
   - id: WR-04
     severity: warning
     disposition: open
-    title: "No uniqueness check between `paperless_upload.queue_name` and `printers[].name`"
+    title: "Exhaustion WARNING names the pre-disambiguation filename"
   - id: WR-05
     severity: warning
     disposition: open
-    title: "Outbox `sent/`/`failed/` moves silently overwrite same-named files across add-on restarts"
+    title: "No validation of `url`/`token` when the feature is enabled; every document is dead-lettered silently"
   - id: WR-06
     severity: warning
     disposition: open
-    title: "Upload response body is logged verbatim; the \"token never leaks\" verification does not generalize"
-open: 10
-total: 10
-recorded: 2026-09-29T16:42:36.565Z
+    title: "Success path deletes sidecar and retry state before the PDF is moved, so a failure re-uploads the document"
+  - id: WR-07
+    severity: warning
+    disposition: open
+    title: "Verifier cannot detect a broken title-recovery mechanism"
+  - id: WR-08
+    severity: warning
+    disposition: open
+    title: "`paperless_upload.queue_name` can collide with a `printers[]` name"
+  - id: IN-01
+    severity: info
+    disposition: open
+    title: "Internal finding ID \"(WR-05)\" appears in a runtime log line"
+  - id: IN-02
+    severity: info
+    disposition: open
+    title: "Shared `collision_tag` only holds when the PDF itself collides"
+  - id: IN-03
+    severity: info
+    disposition: open
+    title: "Falsy-zero coercion of numeric options"
+  - id: IN-04
+    severity: info
+    disposition: open
+    title: "DOCS.md and the worker docstring disagree about the sidecar on success"
+  - id: IN-05
+    severity: info
+    disposition: open
+    title: "Stage directories are all `0o777`, no sticky bit, and `https` verification cannot be configured"
+  - id: IN-06
+    severity: info
+    disposition: open
+    title: "`avahi_guard_start` claims it always leaves avahi running"
+open: 15
+total: 15
+recorded: 2026-10-04T17:57:04.211Z
 ---
 
 # Phase 22: Code Review Disposition
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
+| CR-01 | critical | open | - |
 | WR-01 | warning | open | - |
 | WR-02 | warning | open | - |
+| WR-03 | warning | open | - |
+| WR-04 | warning | open | - |
+| WR-05 | warning | open | - |
+| WR-06 | warning | open | - |
+| WR-07 | warning | open | - |
+| WR-08 | warning | open | - |
 | IN-01 | info | open | - |
 | IN-02 | info | open | - |
 | IN-03 | info | open | - |
-| CR-01 | critical | open | - (not in the current review) |
-| WR-03 | warning | open | - (not in the current review) |
-| WR-04 | warning | open | - (not in the current review) |
-| WR-05 | warning | open | - (not in the current review) |
-| WR-06 | warning | open | - (not in the current review) |
+| IN-04 | info | open | - |
+| IN-05 | info | open | - |
+| IN-06 | info | open | - |
 
 Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.
 Set `deferred` by hand and put the reason in the Source cell; both are preserved. A `|` in the reason is kept as prose and escaped on the next run.
