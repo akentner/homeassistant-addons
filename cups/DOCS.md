@@ -138,8 +138,8 @@ Every PDF printed to the `paperless_upload` queue moves through four stage direc
 2. **`processing/`** — the background upload worker (`upload-worker.py`, polling every ~20 seconds) atomically moves a
    new document here before its first upload attempt, and re-attempts it here on every later poll cycle once its retry
    backoff has elapsed.
-3. **`sent/`** — on a successful upload (HTTP 2xx from paperless-ngx), the PDF and any leftover sidecar/retry-state
-   files move here.
+3. **`sent/`** — on a successful upload (HTTP 200 from paperless-ngx carrying the consumption-task id in the response
+   body), the PDF and any leftover sidecar/retry-state files move here.
 4. **`failed/`** — once `retry_count` attempts are exhausted, the PDF and its title sidecar (if still present) move
    here. **Documents in `failed/` are never automatically deleted or retried again** — they must be triaged and
    resubmitted manually (e.g. re-printed, or uploaded to paperless-ngx by hand). This mirrors
@@ -155,6 +155,12 @@ Every PDF printed to the `paperless_upload` queue moves through four stage direc
   back into the pipeline; manual intervention is required.
 - **No automatic rotation or pruning of `sent/`/`failed/`.** Both directories grow indefinitely under normal operation;
   prune them manually if they become large.
+- **Redirects are not followed.** An HTTP 3xx answer (for example an http-to-https redirect, a trailing-slash redirect,
+  or a login redirect from a reverse proxy or SSO) counts as a failed attempt and follows the normal retry path to
+  `failed/`. The WARNING in the add-on log shows the redirect target (scheme, host and path only). Set `url` to the
+  final address that answers the POST directly, e.g. the `https://` URL.
+- **`sent/` means accepted, not processed.** A document is moved to `sent/` once paperless-ngx has accepted the upload
+  and queued its consumption task; it does not mean the document finished processing inside paperless-ngx.
 
 ## Design notes
 

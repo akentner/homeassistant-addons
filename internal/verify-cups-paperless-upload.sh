@@ -13,6 +13,9 @@
 #      documents, a malformed .json title sidecar never stalls a document,
 #      and a sent/failed filename collision is disambiguated, never
 #      silently overwritten
+#   5. redirect refusal (CR-01 / truth 18): a stub that answers the POST with
+#      a 302 -> /login/ never gets the redirect followed; the document ends in
+#      failed/ (never sent/) with exactly one exhausted-upload WARNING
 #
 # Mirrors internal/verify-cups-scaffold.sh (DATA_DIR + options.json fixture,
 # docker build, docker run -v mount, trap cleanup, red/green/yellow helpers,
@@ -95,6 +98,17 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
+    def do_GET(self):
+        # A followed redirect would land here; recording it makes that observable.
+        with open(LOG_PATH, "a") as f:
+            f.write(json.dumps({"method": "GET", "path": self.path}) + "\n")
+        body = b"<html>login</html>"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length)
@@ -113,7 +127,7 @@ class Handler(BaseHTTPRequestHandler):
                         title = segment[1].rstrip(b"\r\n--").decode(errors="replace")
                     break
 
-        record = {"path": self.path, "authorization": auth, "title": title}
+        record = {"path": self.path, "authorization": auth, "title": title, "method": "POST"}
         with open(LOG_PATH, "a") as f:
             f.write(json.dumps(record) + "\n")
 
@@ -124,7 +138,12 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             pass
 
-        if mode == "fail":
+        if mode == "redirect":
+            self.send_response(302)
+            self.send_header("Location", "/login/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        elif mode == "fail":
             self.send_response(500)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -649,6 +668,134 @@ fi
 
 docker rm -f "${RESIL_CONTAINER}" >/dev/null 2>&1 || true
 kill "${RESIL_STUB_PID}" >/dev/null 2>&1 || true
+
+# =============================================================================
+# Scenario 5: redirect refusal (CR-01 / truth 18)
+# =============================================================================
+yellow "=== Scenario 5: redirect refusal (CR-01 / truth 18) ==="
+
+REDIR_PORT=8795
+REDIR_LOG="${SCRATCH_DIR}/redirect-requests.jsonl"
+REDIR_MODE="${SCRATCH_DIR}/redirect-mode.txt"
+REDIR_STUB_PID=$(start_stub_server "${REDIR_PORT}" "${REDIR_LOG}" "${REDIR_MODE}")
+STUB_PIDS+=("${REDIR_STUB_PID}")
+echo "redirect" > "${REDIR_MODE}"
+sleep 1
+
+REDIR_CONTAINER="cups-paperless-verify-redirect-${STAMP}"
+CONTAINERS_STARTED+=("${REDIR_CONTAINER}")
+REDIR_DATA_DIR="${SCRATCH_DIR}/redirect-data"
+mkdir -p "${REDIR_DATA_DIR}"
+cat > "${REDIR_DATA_DIR}/options.json" <<JSON
+{
+  "avahi_reflector": false,
+  "avahi_hostname": "$(cups_test_hostname pl-redirect)",
+  "printers": [],
+  "log_level": "info",
+  "paperless_upload": {
+    "enabled": true,
+    "queue_name": "verify-pdf-queue",
+    "location": "",
+    "url": "http://host.docker.internal:${REDIR_PORT}",
+    "token": "verify-fake-token-5",
+    "timeout": 10,
+    "retry_count": 2,
+    "retry_delay": 2
+  }
+}
+JSON
+
+cups_isolated_run "${IMAGE_NAME}" --rm -d --name "${REDIR_CONTAINER}" \
+    --add-host=host.docker.internal:host-gateway \
+    -v "${REDIR_DATA_DIR}:/data" >/dev/null
+
+if ! wait_for_container_ready "${REDIR_CONTAINER}"; then
+    red "cupsd did not become ready in the redirect-refusal container"
+    docker logs "${REDIR_CONTAINER}" 2>&1 || true
+    FAIL=1
+elif ! wait_for_queue "${REDIR_CONTAINER}" "verify-pdf-queue"; then
+    red "FAIL: verify-pdf-queue did not register within timeout (redirect-refusal container)"
+    docker logs "${REDIR_CONTAINER}" 2>&1 || true
+    FAIL=1
+else
+    docker exec "${REDIR_CONTAINER}" sh -c 'echo "verify redirect-refusal payload" > /tmp/redirect.txt'
+    docker exec "${REDIR_CONTAINER}" lp -d verify-pdf-queue -t "Redirect Refusal Title" /tmp/redirect.txt >/dev/null
+
+    REDIR_FAILED_SEEN=0
+    for _ in $(seq 1 60); do
+        if [[ -n "$(ls -A "${REDIR_DATA_DIR}/paperless_upload/failed" 2>/dev/null)" ]]; then
+            REDIR_FAILED_SEEN=1
+            break
+        fi
+        sleep 1
+    done
+
+    REDIR_LOGS=$(docker logs "${REDIR_CONTAINER}" 2>&1)
+
+    REDIR_FAILED_PDF_COUNT=$(find "${REDIR_DATA_DIR}/paperless_upload/failed" -name '*.pdf' 2>/dev/null | wc -l)
+    if [[ "${REDIR_FAILED_SEEN}" == "1" && "${REDIR_FAILED_PDF_COUNT}" -ge 1 ]]; then
+        green "PASS: redirected upload ended in failed/ with the PDF retained (retry path engaged)"
+    else
+        red "FAIL: no PDF appeared in failed/ for the redirecting stub within timeout"
+        echo "${REDIR_LOGS}"
+        FAIL=1
+    fi
+
+    REDIR_SENT_LEFTOVER=$(ls -A "${REDIR_DATA_DIR}/paperless_upload/sent" 2>/dev/null || true)
+    if [[ -z "${REDIR_SENT_LEFTOVER}" ]]; then
+        green "PASS: sent/ is empty -- a redirect is never recorded as delivered (CR-01)"
+    else
+        red "FAIL: sent/ holds ${REDIR_SENT_LEFTOVER} although paperless-ngx only ever answered with a redirect"
+        FAIL=1
+    fi
+
+    REDIR_GET_COUNT=$(grep -c '"method": "GET"' "${REDIR_LOG}" || true)
+    REDIR_POST_COUNT=$(grep -c '"method": "POST"' "${REDIR_LOG}" || true)
+    if [[ "${REDIR_GET_COUNT}" == "0" ]]; then
+        green "PASS: the stub received zero GET requests (redirect never followed)"
+    else
+        red "FAIL: the stub received ${REDIR_GET_COUNT} GET request(s) -- the worker followed the redirect"
+        FAIL=1
+    fi
+    if [[ "${REDIR_POST_COUNT}" -ge 2 ]]; then
+        green "PASS: the stub received ${REDIR_POST_COUNT} POST attempts (retry_count=2)"
+    else
+        red "FAIL: expected at least 2 POST attempts, the stub saw ${REDIR_POST_COUNT}"
+        FAIL=1
+    fi
+
+    REDIR_WARNING_COUNT=$(echo "${REDIR_LOGS}" | grep -c "WARNING: paperless-ngx upload exhausted" || true)
+    if [[ "${REDIR_WARNING_COUNT}" == "1" ]]; then
+        green "PASS: exactly one 'WARNING: paperless-ngx upload exhausted' log line (D-15)"
+    else
+        red "FAIL: expected exactly 1 exhausted-upload WARNING, found ${REDIR_WARNING_COUNT}"
+        FAIL=1
+    fi
+
+    if echo "${REDIR_LOGS}" | grep -F "redirects are not followed" | grep -qF "/login/"; then
+        green "PASS: the redirect-refusal WARNING names the Location target /login/"
+    else
+        red "FAIL: no 'redirects are not followed' WARNING naming /login/ in container logs"
+        FAIL=1
+    fi
+
+    if echo "${REDIR_LOGS}" | grep -q "INFO: uploaded "; then
+        red "FAIL: the worker logged a success line although paperless-ngx only answered with a redirect"
+        FAIL=1
+    else
+        green "PASS: no success 'INFO: uploaded' line was logged"
+    fi
+
+    if echo "${REDIR_LOGS}" | grep -qF "verify-fake-token-5"; then
+        red "FAIL: the fixture token appears verbatim in container logs (redirect-refusal container)"
+        FAIL=1
+    else
+        green "PASS: paperless_upload.token never appears in container logs (redirect-refusal container)"
+    fi
+fi
+
+docker rm -f "${REDIR_CONTAINER}" >/dev/null 2>&1 || true
+kill "${REDIR_STUB_PID}" >/dev/null 2>&1 || true
 
 if [[ "${FAIL}" == "1" ]]; then
     echo
