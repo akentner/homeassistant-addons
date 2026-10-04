@@ -185,7 +185,7 @@ re-litigate during planning:
 
 **Requirements**: D-01..D-15 (CONTEXT.md decisions — no REQUIREMENTS.md IDs mapped to this ad-hoc phase)
 **Depends on:** Phase 21
-**Plans:** 3/3 plans complete in 3 waves (22-03 is a gap-closure plan from 22-VERIFICATION.md)
+**Plans:** 3/4 plans complete in 4 waves (22-03 and 22-04 are gap-closure plans from 22-VERIFICATION.md)
 
 Plans:
 **Wave 1**
@@ -197,6 +197,9 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [x] 22-03-PLAN.md
+
+**Wave 4** *(gap closure from the 2026-10-04 re-verification, blocked on Wave 3 completion)*
+- [ ] 22-04-PLAN.md
       mechanism + upload-worker.py (happy path + retry/backoff/failed-state + D-07 disabled-by-default regression) +
       internal/verify-cups-paperless-upload.sh
 - [ ] `22-02-PLAN.md` — cups/DOCS.md + cups/README.md documentation, cross-checked against shipped defaults via a
@@ -204,6 +207,9 @@ Plans:
 - [ ] `22-03-PLAN.md` — Gap closure: CR-01/WR-02/WR-05 defensive-validation fixes in upload-worker.py (malformed
       retry-state poison-pill, malformed title sidecar, sent/failed collision overwrite), Scenario 4 in
       internal/verify-cups-paperless-upload.sh, version bump to 0.1.0-15
+- [ ] `22-04-PLAN.md` — Gap closure (22-VERIFICATION.md truth 18 / CR-01): refuse HTTP redirects and require HTTP 200 +
+      task-id JSON body before recording a document as sent, host-side probe with RED proof, redirect-stub Scenario 5
+      in internal/verify-cups-paperless-upload.sh, DOCS correction, version bump to 0.1.0-17
 
 ### 📋 v1.4 iac-runner (Phases 16-19) — PLANNING
 
