@@ -6,6 +6,11 @@
 # verify-litellm-scaffold.sh (DATA_DIR + options.json fixture, docker build,
 # docker run -v mount, trap cleanup).
 #
+# Every container is started through internal/cups-test-isolation.sh (Plan 21-08, D-11): LAN multicast is
+# switched off on the container's interfaces so a test container can never announce a host name on the real
+# LAN. The fixture host name stays `cups-verify` (assertions depend on it; it is not the live name).
+# Do not run this verifier while a live proof is in progress (Plan 21-10).
+#
 # Usage: bash internal/verify-cups-scaffold.sh [--keep]
 
 set -euo pipefail
@@ -14,6 +19,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # CUPS_ADDON_DIR points the test at a modified copy of cups/ (used to prove the checks can fail).
 ADDON_DIR="${CUPS_ADDON_DIR:-${REPO_ROOT}/cups}"
+# shellcheck source=internal/cups-test-isolation.sh
+. "${SCRIPT_DIR}/cups-test-isolation.sh"
 
 STAMP="$(date +%s)"
 IMAGE_NAME="cups-verify:${STAMP}"
@@ -72,9 +79,8 @@ green "image built"
 
 # Identical flags for the first start and for the recreation in the UUID-stability section.
 start_container() {
-    docker run --rm -d --name "${CONTAINER_NAME}" \
-        -v "${DATA_DIR}:/data" \
-        "${IMAGE_NAME}" >/dev/null
+    cups_isolated_run "${IMAGE_NAME}" --rm -d --name "${CONTAINER_NAME}" \
+        -v "${DATA_DIR}:/data" >/dev/null
 }
 
 start_container
@@ -94,6 +100,17 @@ if [[ "${READY}" != "1" ]]; then
     exit 1
 fi
 green "cupsd is ready"
+
+# D-11 (Plan 21-08): the test container must not take part in LAN mDNS. Captured into a variable first (WR-07).
+yellow "Checking the test container is isolated from LAN mDNS..."
+ISOLATION_LOGS=$(docker logs "${CONTAINER_NAME}" 2>&1)
+ISOLATION_JOINS=$(grep -F 'Joining mDNS multicast group on interface' <<<"${ISOLATION_LOGS}" | grep -vE 'on interface lo\.' || true)
+if [[ -z "${ISOLATION_JOINS}" ]]; then
+    green "   PASS: no mDNS multicast group joined on any interface except lo (no LAN mDNS)"
+else
+    red "   FAIL: avahi joined an mDNS multicast group on a real interface: $(head -n 1 <<<"${ISOLATION_JOINS}")"
+    exit 1
+fi
 
 # Give run.sh a moment to finish printer registration after cupsd came up.
 # Polls rather than a fixed sleep: run.sh's own registration retry loop (up
@@ -228,7 +245,7 @@ with open('${DEBUG_DATA_DIR}/options.json', 'w') as f:
     json.dump(d, f)
 "
 DEBUG_CONTAINER_NAME="${CONTAINER_NAME}-debug"
-docker run --rm -d --name "${DEBUG_CONTAINER_NAME}" -v "${DEBUG_DATA_DIR}:/data" "${IMAGE_NAME}" >/dev/null
+cups_isolated_run "${IMAGE_NAME}" --rm -d --name "${DEBUG_CONTAINER_NAME}" -v "${DEBUG_DATA_DIR}:/data" >/dev/null
 DEBUG_READY=0
 for _ in $(seq 1 40); do
     if docker exec "${DEBUG_CONTAINER_NAME}" lpstat -r >/dev/null 2>&1; then

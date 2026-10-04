@@ -18,6 +18,12 @@
 # docker build, docker run -v mount, trap cleanup, red/green/yellow helpers,
 # FAIL accumulator, final PASS/FAIL summary with container logs on failure).
 #
+# Every container is started through internal/cups-test-isolation.sh (Plan 21-08, D-11): each fixture names a
+# unique cups-vf-pl-* avahi_hostname and LAN multicast is switched off on the container's interfaces. The
+# stub HTTP servers stay reachable via host.docker.internal (only the multicast flag is turned off). The earlier
+# version announced the default `cups.local` on the real LAN and displaced the live add-on's host name.
+# Do not run this verifier while a live proof is in progress (Plan 21-10).
+#
 # Usage: bash internal/verify-cups-paperless-upload.sh [--keep]
 
 set -uo pipefail
@@ -25,6 +31,8 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ADDON_DIR="${REPO_ROOT}/cups"
+# shellcheck source=internal/cups-test-isolation.sh
+. "${SCRIPT_DIR}/cups-test-isolation.sh"
 
 STAMP="$(date +%s)"
 IMAGE_NAME="cups-paperless-verify:${STAMP}"
@@ -200,6 +208,7 @@ mkdir -p "${HAPPY_DATA_DIR}"
 cat > "${HAPPY_DATA_DIR}/options.json" <<JSON
 {
   "avahi_reflector": false,
+  "avahi_hostname": "$(cups_test_hostname pl-happy)",
   "printers": [],
   "log_level": "info",
   "paperless_upload": {
@@ -215,10 +224,9 @@ cat > "${HAPPY_DATA_DIR}/options.json" <<JSON
 }
 JSON
 
-docker run --rm -d --name "${HAPPY_CONTAINER}" \
+cups_isolated_run "${IMAGE_NAME}" --rm -d --name "${HAPPY_CONTAINER}" \
     --add-host=host.docker.internal:host-gateway \
-    -v "${HAPPY_DATA_DIR}:/data" \
-    "${IMAGE_NAME}" >/dev/null
+    -v "${HAPPY_DATA_DIR}:/data" >/dev/null
 
 if ! wait_for_container_ready "${HAPPY_CONTAINER}"; then
     red "cupsd did not become ready in the happy-path container"
@@ -227,7 +235,14 @@ if ! wait_for_container_ready "${HAPPY_CONTAINER}"; then
 else
     if wait_for_queue "${HAPPY_CONTAINER}" "verify-pdf-queue"; then
         green "PASS: verify-pdf-queue registered"
-        DEVICE_URI=$(docker exec "${HAPPY_CONTAINER}" lpstat -v verify-pdf-queue 2>/dev/null || true)
+        # Polled: run.sh's UUID-fixup restarts cupsd shortly after the first readiness, so a single lpstat
+        # right after wait_for_queue can hit the restart window and print nothing.
+        DEVICE_URI=""
+        for _ in $(seq 1 15); do
+            DEVICE_URI=$(docker exec "${HAPPY_CONTAINER}" lpstat -v verify-pdf-queue 2>/dev/null || true)
+            [[ -n "${DEVICE_URI}" ]] && break
+            sleep 1
+        done
         if echo "${DEVICE_URI}" | grep -qF "cups-pdf:/"; then
             green "PASS: verify-pdf-queue device uri is cups-pdf:/"
         else
@@ -313,17 +328,17 @@ DISABLED_CONTAINER="cups-paperless-verify-disabled-${STAMP}"
 CONTAINERS_STARTED+=("${DISABLED_CONTAINER}")
 DISABLED_DATA_DIR="${SCRATCH_DIR}/disabled-data"
 mkdir -p "${DISABLED_DATA_DIR}"
-cat > "${DISABLED_DATA_DIR}/options.json" <<'JSON'
+cat > "${DISABLED_DATA_DIR}/options.json" <<JSON
 {
+  "avahi_hostname": "$(cups_test_hostname pl-disabled)",
   "avahi_reflector": false,
   "printers": [],
   "log_level": "info"
 }
 JSON
 
-docker run --rm -d --name "${DISABLED_CONTAINER}" \
-    -v "${DISABLED_DATA_DIR}:/data" \
-    "${IMAGE_NAME}" >/dev/null
+cups_isolated_run "${IMAGE_NAME}" --rm -d --name "${DISABLED_CONTAINER}" \
+    -v "${DISABLED_DATA_DIR}:/data" >/dev/null
 
 if ! wait_for_container_ready "${DISABLED_CONTAINER}"; then
     red "cupsd did not become ready in the disabled-fixture container"
@@ -375,6 +390,7 @@ mkdir -p "${RETRY_DATA_DIR}"
 cat > "${RETRY_DATA_DIR}/options.json" <<JSON
 {
   "avahi_reflector": false,
+  "avahi_hostname": "$(cups_test_hostname pl-retry)",
   "printers": [],
   "log_level": "info",
   "paperless_upload": {
@@ -390,10 +406,9 @@ cat > "${RETRY_DATA_DIR}/options.json" <<JSON
 }
 JSON
 
-docker run --rm -d --name "${RETRY_CONTAINER}" \
+cups_isolated_run "${IMAGE_NAME}" --rm -d --name "${RETRY_CONTAINER}" \
     --add-host=host.docker.internal:host-gateway \
-    -v "${RETRY_DATA_DIR}:/data" \
-    "${IMAGE_NAME}" >/dev/null
+    -v "${RETRY_DATA_DIR}:/data" >/dev/null
 
 if ! wait_for_container_ready "${RETRY_CONTAINER}"; then
     red "cupsd did not become ready in the retry-exhaustion container"
@@ -491,6 +506,7 @@ mkdir -p "${RESIL_DATA_DIR}"
 cat > "${RESIL_DATA_DIR}/options.json" <<JSON
 {
   "avahi_reflector": false,
+  "avahi_hostname": "$(cups_test_hostname pl-resil)",
   "printers": [],
   "log_level": "info",
   "paperless_upload": {
@@ -506,10 +522,9 @@ cat > "${RESIL_DATA_DIR}/options.json" <<JSON
 }
 JSON
 
-docker run --rm -d --name "${RESIL_CONTAINER}" \
+cups_isolated_run "${IMAGE_NAME}" --rm -d --name "${RESIL_CONTAINER}" \
     --add-host=host.docker.internal:host-gateway \
-    -v "${RESIL_DATA_DIR}:/data" \
-    "${IMAGE_NAME}" >/dev/null
+    -v "${RESIL_DATA_DIR}:/data" >/dev/null
 
 if ! wait_for_container_ready "${RESIL_CONTAINER}"; then
     red "cupsd did not become ready in the resilience container"
