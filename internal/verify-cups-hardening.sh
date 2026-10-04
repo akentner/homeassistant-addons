@@ -5,6 +5,11 @@
 # Imports generate_config.py directly and calls its builders with crafted options. Set CUPS_ADDON_DIR to
 # point the checks at a modified copy of the add-on directory (used to prove the checks can fail).
 #
+# Plan 21-08 section: the local-test-container isolation rule (D-11). Exercises internal/cups-test-isolation.sh
+# with a stub `docker` (the real docker is never invoked) and statically scans internal/verify-cups-*.sh for
+# raw `docker run` calls. Set CUPS_VERIFIER_DIR to scan a modified copy of internal/ (used to prove the scan can
+# fail, e.g. against the pre-change paperless verifier).
+#
 # Usage: bash internal/verify-cups-hardening.sh
 # Exit: 0 all checks passed, 1 a check failed, 2 environment error.
 
@@ -13,7 +18,8 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CUPS_ADDON_DIR="${CUPS_ADDON_DIR:-${REPO_ROOT}/cups}"
-export CUPS_ADDON_DIR REPO_ROOT
+CUPS_VERIFIER_DIR="${CUPS_VERIFIER_DIR:-${SCRIPT_DIR}}"
+export CUPS_ADDON_DIR REPO_ROOT CUPS_VERIFIER_DIR
 
 if [[ ! -f "${CUPS_ADDON_DIR}/generate_config.py" ]]; then
     printf 'generate_config.py not found in %s\n' "${CUPS_ADDON_DIR}" >&2
@@ -286,6 +292,116 @@ else:
         and entries[1]["uri"] == 'ipp://192.0.2.21/ipp/print?x="y"',
         "helper output parses as YAML with three entries and the quote preserved",
     )
+
+print("Section: local test containers cannot claim the live host name (isolation, Plan 21-08)")
+
+ISOLATION_LIB = os.path.join(os.environ["REPO_ROOT"], "internal", "cups-test-isolation.sh")
+DOCKER_STUB = """#!/bin/sh
+# Stub docker: records its argv (one line per call) and succeeds; the real docker is never reached.
+echo "$*" >> "$DOCKER_STUB_LOG"
+exit 0
+"""
+
+
+def run_isolation_helper(shell_body: str, data_dir_json):
+    """Run shell_body (with $DATA, $LIB set) under a stub docker; return (rc, stdout, stderr, docker_calls).
+
+    data_dir_json: None -> DATA is an empty directory (no options.json); otherwise the raw options.json text.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        stub = os.path.join(tmp, "docker")
+        log = os.path.join(tmp, "docker-calls.log")
+        with open(stub, "w") as handle:
+            handle.write(DOCKER_STUB)
+        os.chmod(stub, 0o755)
+        data = os.path.join(tmp, "data")
+        os.mkdir(data)
+        if data_dir_json is not None:
+            with open(os.path.join(data, "options.json"), "w") as handle:
+                handle.write(data_dir_json)
+        env = dict(os.environ, PATH=tmp + os.pathsep + os.environ["PATH"], DOCKER_STUB_LOG=log, DATA=data, LIB=ISOLATION_LIB)
+        proc = subprocess.run(
+            ["bash", "-c", '. "$LIB"; ' + shell_body], capture_output=True, text=True, env=env, timeout=30
+        )
+        calls = open(log).read().splitlines() if os.path.exists(log) else []
+    return proc.returncode, proc.stdout, proc.stderr, calls
+
+
+RUN_WITH_MOUNT = 'cups_isolated_run img:test --rm -d --name n -v "$DATA:/data"'
+FIXTURES = [
+    ("a data dir without options.json", None),
+    ("an options.json without avahi_hostname", '{"avahi_reflector": false}'),
+    ("an options.json with the default avahi_hostname 'cups'", '{"avahi_hostname": "cups"}'),
+    ("an options.json with an empty avahi_hostname", '{"avahi_hostname": ""}'),
+]
+
+# Test 1: refusals -- exit 2, docker never called.
+for description, options in FIXTURES:
+    rc, _, err, calls = run_isolation_helper(RUN_WITH_MOUNT, options)
+    report(
+        rc == 2 and calls == [] and "refusing to start a cups test container" in err,
+        f"cups_isolated_run refuses {description} (exit 2, docker not called)",
+    )
+rc, _, err, calls = run_isolation_helper("cups_isolated_run img:test --rm -d --name n", '{"avahi_hostname": "cups-vf-x"}')
+report(rc == 2 and calls == [], "cups_isolated_run refuses a call without any /data mount (exit 2, docker not called)")
+for entry in ('cups_isolated_bash img:test "true" -v "$DATA:/data"', 'cups_lan_run img:test -v "$DATA:/data"'):
+    rc, _, _, calls = run_isolation_helper(entry, '{"avahi_hostname": "cups"}')
+    report(rc == 2 and calls == [], f"{entry.split()[0]} refuses the default host name 'cups' (exit 2, docker not called)")
+
+# Test 2: acceptance -- the unique name passes; isolation flags appear for the isolated entry points only.
+GOOD = '{"avahi_hostname": "cups-vf-x"}'
+for entry in (RUN_WITH_MOUNT, 'cups_isolated_bash img:test "true" --rm -v "$DATA:/data"'):
+    rc, _, _, calls = run_isolation_helper(entry, GOOD)
+    joined = " ".join(calls)
+    report(
+        rc == 0
+        and len(calls) == 1
+        and "--cap-add NET_ADMIN" in joined
+        and "img:test" in joined
+        and "multicast off" in joined,
+        f"{entry.split()[0]} accepts a unique name and runs docker with NET_ADMIN and multicast off",
+    )
+rc, _, _, calls = run_isolation_helper('cups_lan_run img:test --rm -v "$DATA:/data"', GOOD)
+joined = " ".join(calls)
+report(
+    rc == 0 and len(calls) == 1 and "img:test" in joined and "multicast off" not in joined and "NET_ADMIN" not in joined,
+    "cups_lan_run accepts a unique name and runs docker WITHOUT the isolation",
+)
+for label, form in (("--volume SRC:/data", '--volume "$DATA:/data"'), ("--volume=SRC:/data", '--volume="$DATA:/data"')):
+    rc, _, _, calls = run_isolation_helper("cups_isolated_run img:test " + form, GOOD)
+    report(rc == 0 and len(calls) == 1, f"the /data mount is recognised in the form {label}")
+rc, _, _, calls = run_isolation_helper(RUN_WITH_MOUNT, '{"avahi_hostname": "cups-guard\\n"}')
+report(rc == 0 and len(calls) == 1, "an invalid-looking name (trailing newline) is let through to the add-on's own refusal")
+
+# Test 3: cups_test_hostname.
+rc, out, _, _ = run_isolation_helper("cups_test_hostname paperless-happy", None)
+name = out.strip()
+report(
+    rc == 0 and re.fullmatch(r"cups-vf-paperless-happy-[0-9]+", name) is not None and len(name) <= 63 and name != "cups",
+    "cups_test_hostname paperless-happy matches cups-vf-<tag>-<stamp>, at most 63 chars, never 'cups'",
+)
+for bad_tag in ("a" * 21, "UPPER", "has_underscore", ""):
+    rc, out, _, _ = run_isolation_helper(f'cups_test_hostname "{bad_tag}"', None)
+    report(rc != 0 and out.strip() == "", f"cups_test_hostname rejects the tag {bad_tag!r}")
+
+# Test 4: static scan -- every docker-using cups verifier goes through the helper.
+VERIFIER_DIR = os.environ["CUPS_VERIFIER_DIR"]
+RAW_RUN = re.compile(r"\b(?:docker|podman)\s+(?:run|create)\b")
+DOCKER_BUILD = re.compile(r"\bdocker\s+build\b")
+scanned = []
+for entry in sorted(os.listdir(VERIFIER_DIR)):
+    if not re.fullmatch(r"verify-cups-[a-z0-9-]+\.sh", entry) or entry == "verify-cups-hardening.sh":
+        continue
+    with open(os.path.join(VERIFIER_DIR, entry)) as handle:
+        code = [line for line in handle.read().splitlines() if not line.lstrip().startswith("#")]
+    if not any(DOCKER_BUILD.search(line) for line in code):
+        continue
+    scanned.append(entry)
+    raw = [line.strip() for line in code if RAW_RUN.search(line)]
+    sources_helper = any(re.search(r"(?:^|\s)(?:\.|source)\s+\S*cups-test-isolation\.sh", line) for line in code)
+    report(not raw, f"internal/{entry} contains no raw docker run / docker create / podman run" + (f" (found: {raw[0]})" if raw else ""))
+    report(sources_helper, f"internal/{entry} sources cups-test-isolation.sh")
+report(len(scanned) >= 3, f"static scan covers at least the guard, scaffold and paperless verifiers (scanned {len(scanned)})")
 
 # <<hardening sections appended by later plans go above this line>>
 
