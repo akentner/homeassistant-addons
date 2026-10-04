@@ -5,7 +5,7 @@ titles: json
 findings:
   - id: CR-01
     severity: critical
-    disposition: open
+    disposition: fixed
     title: "HTTP redirects turn the upload into a GET and the worker records it as a success"
   - id: WR-01
     severity: warning
@@ -63,7 +63,7 @@ findings:
     severity: info
     disposition: open
     title: "`avahi_guard_start` claims it always leaves avahi running"
-open: 15
+open: 14
 total: 15
 recorded: 2026-10-04T17:57:04.211Z
 ---
@@ -72,7 +72,7 @@ recorded: 2026-10-04T17:57:04.211Z
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | open | - |
+| CR-01 | critical | fixed | 22-04 (commits 3ffbf09, 8a98342, 17d3553) |
 | WR-01 | warning | open | - |
 | WR-02 | warning | open | - |
 | WR-03 | warning | open | - |

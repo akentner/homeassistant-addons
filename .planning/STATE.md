@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: opentofu-bridge
 current_phase: 22
-current_phase_name: cups-paperless-ngx-pdf-document-upload
-current_plan: Not started
-status: Phase 22 complete — verification passed (17/17), re-verified 2026-10-03
-stopped_at: Phase 21 complete, ready to plan Phase 11
-last_updated: "2026-10-04T18:16:06.745Z"
-state_head: 36bdfe74fe84d4dedc541d8614bdb977f7c3e3d9
+current_phase_name: "cups: paperless-ngx PDF document upload"
+current_plan: 2
+status: Phase 22 gap-closure 22-04 executed (CR-01) — awaiting re-verification
+stopped_at: Completed 22-04-PLAN.md
+last_updated: "2026-10-04T18:45:49.944Z"
+state_head: 17d35532bde1071d1858c2bd0f9510a3d955482b
 progress:
   total_phases: 10
   completed_phases: 12
   total_plans: 34
-  completed_plans: 32
-  percent: 30
+  completed_plans: 33
+  percent: 97
 ---
 
 # Project State
@@ -107,10 +107,10 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Current Plan: Not started
+Current Plan: 2
 Total Plans in Phase: 4
 
-Phase: 22 (cups-paperless-ngx-pdf-document-upload) — READY TO EXECUTE
+Phase: 22 (cups: paperless-ngx PDF document upload) — EXECUTING
 
 Phase 20 (litellm-addon) — 21 atomic commits on main (4 planning + 14 execution + 4 plan SUMMARYs). All 4 plans landed:
 
@@ -378,6 +378,7 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 | Phase 21 P04 | interactive | 3 tasks | 1 files |
 | Phase 21 P08 | 35min | 3 tasks | 5 files |
 | Phase 21 P09 | 11min | 3 tasks | 6 files |
+| Phase 22 P04 | 25min | 3 tasks | 6 files |
 
 ## Quick Tasks Completed
 
@@ -420,9 +421,9 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 
 **Resume file:** None
 
-**Stopped at:** Phase 21 complete, ready to plan Phase 11
+**Stopped at:** Completed 22-04-PLAN.md
 
-Last session: 2026-10-04T10:20:25.850Z
+Last session: 2026-10-04T18:45:49.693Z
 
 ---
 
@@ -499,3 +500,5 @@ skipped; Phase 16 ready to plan_
 - [Phase 21]: 21-08: local cups test containers are LAN-mDNS-isolated via multicast off on non-lo interfaces (NET_ADMIN) and refuse the default host name; enforced by a host-side static scan
 - [Phase 21]: 21-09: watch result PASS only when local container-event history is verified (else exit 4); rounds after a local cups event are non-quiet so such failures are INVALID
 - [Phase 21]: 21-09: continuity and host-name-conflict are watch-only checks so --assert output stays byte-identical
+- [Phase 22]: 22-04: upload_document() is the single success producer; HTTP 200 + non-empty JSON-string task id required, all 3xx refused (allow_redirects=False); attempt_and_route untouched
+- [Phase 22]: 22-04: cups bumped to 0.1.0-17 with NO_TAG/NO_PUSH; release tag left to operator

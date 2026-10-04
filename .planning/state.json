@@ -5,7 +5,7 @@
   "next": {
     "command": "/gsd:progress --next",
     "label": "Advance to the next step (verify)",
-    "reason": "Phase 21 of 10 \u00b7 97% \u00b7 ready to verify"
+    "reason": "Phase 22 of 10 \u00b7 97% \u00b7 ready to verify"
   },
   "phases": [
     {
@@ -101,8 +101,8 @@
     {
       "name": "CUPS print server AirPrint/mDNS",
       "number": "21",
-      "status": "in_progress"
+      "status": "complete"
     }
   ],
-  "updated_at": "2026-10-04T07:13:27.760Z"
+  "updated_at": "2026-10-04T18:45:47.568Z"
 }
