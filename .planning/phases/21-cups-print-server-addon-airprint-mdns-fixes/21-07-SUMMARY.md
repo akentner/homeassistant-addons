@@ -30,13 +30,14 @@ key-decisions:
 requirements-completed: [D-11, D-12]
 
 completed: 2026-10-04
-status: complete
+status: gaps_found
 ---
 
 # Phase 21 Plan 07: Live proof on haos-op3050-1 Summary
 
 **The fixed host name `cups.local` is claimed on the first guard attempt after an add-on update and after two plain
-restarts; all four previously failing checks pass from a LAN client.**
+restarts, but it was NOT kept on the restart-2 boot: avahi renamed itself to `cups-2` 2 min 34 s after the claim.
+Truths #13 and #14 are therefore still open.**
 
 ## Task 1: Publication
 
@@ -100,17 +101,35 @@ Additional observations:
 
 | Truth | Verdict |
 |-------|---------|
-| #13 fixed host name claimed and kept across restart/update | **Closed on live host** (3 boots, claimed on attempt 1 each time) |
-| #14 `_ipp._tcp` resolvable from a LAN client | **Closed on live host** (`PASS lan-service-resolve` x3) |
-| D-10 no AAAA over IPv4 | **Closed** (`PASS lan-no-aaaa` x3; was FAIL on 0.1.0-13) |
-| D-11 / D-12 live proof with retained transcript | **Closed** (this document) |
+| #13 fixed host name claimed AND kept | **Open.** Claimed at boot 3 of 3; kept for 9.5 h on the restart-1 boot but lost on the restart-2 boot (see below) |
+| #14 `_ipp._tcp` resolvable from a LAN client | **Open.** `PASS lan-service-resolve` held only while the name was held; fails again after the rename (browse works, resolve fails) |
+| D-10 no AAAA over IPv4 | **Closed** (`PASS lan-no-aaaa` in every run, also after the rename) |
+| D-11 / D-12 live proof with retained transcript | Transcripts retained; they prove the claim at boot, not that the name is kept |
+
+## Correction after re-verification (2026-10-04)
+
+The first version of this summary reported #13/#14 as closed. That was wrong: every `--assert` PASS above was taken
+within about 2 minutes of the boot. The add-on log of the restart-2 boot (container started 09:12:17) shows:
+
+```text
+[avahi-guard] INFO: hostname claimed: cups.local (attempt 1/3)      (09:12)
+[avahi-guard] RESULT: claimed
+Host name conflict, retrying with cups-2                             (09:14:57, same daemon, cookie 3354254864)
+Server startup complete. Host name is cups-2.local.
+```
+
+Re-run at 09:21: `FAIL daemon-fqdn` (`cups-2.local`), `FAIL lan-forward-v4`, `FAIL lan-service-resolve`,
+`RESULT: FAIL (3 failed)`. Cause in our code: `cups/avahi-guard.sh` is startup-only (returns after 5 stable polls), so a
+conflict minutes later is neither detected nor retried, and cupsd keeps announcing the service with the stale target.
+The conflicting announcer is still unidentified because avahi does not log the conflicting record without `--debug`
+and the 21-04 capture experiment was never run.
 
 ## Limits of this proof
 
 - Restart 1 and the update were not each followed by the plan's literal `--settle-wait 180`; 60 s was used, and the
   guard claimed on attempt 1 in every boot (worst-case guard duration was therefore not exercised).
-- The loss on 0.1.0-13 was intermittent (recovered once, recurred later). Three clean boots on 0.1.0-16 are strong
-  but not statistical proof that the cold-start race is gone; the guard lines now make a recurrence visible.
+- The loss is intermittent and NOT limited to cold start: the restart-1 boot held the name for at least 9.5 h, the
+  restart-2 boot lost it after 2.5 min. Three clean claims at boot do not show that the name is kept.
 - The conflict-capture experiment of 21-04 was never run, so a persistent foreign claimant of `cups.local` was
   neither proven nor excluded; the guard only makes a loss visible and keeps the published name consistent.
 - The optional iPhone/iPad/Mac check (printer selectable and prints) was not performed.
