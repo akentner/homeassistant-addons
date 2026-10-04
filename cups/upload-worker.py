@@ -49,6 +49,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import requests
 
@@ -217,12 +218,33 @@ def is_due(pdf_path: Path) -> bool:
     return datetime.now(timezone.utc) >= next_attempt_at
 
 
+def _safe_redirect_target(location: str) -> str:
+    """Return a log-safe rendering of a redirect `Location` header value.
+
+    Keeps scheme, host[:port] and path only; query string, fragment and userinfo
+    (SSO redirects commonly carry state or credentials there) are dropped. A
+    relative Location yields the path only. Capped at 200 characters.
+    """
+    location = (location or "").strip()
+    if not location:
+        return "(no Location header)"
+    parts = urlsplit(location)
+    host = parts.netloc.rsplit("@", 1)[-1]
+    if parts.scheme and host:
+        target = f"{parts.scheme}://{host}{parts.path}"
+    else:
+        target = parts.path or "/"
+    return target[:200]
+
+
 def upload_document(pdf_path: Path, config: dict) -> bool:
     """Attempt one upload of `pdf_path` to paperless-ngx.
 
-    Returns True on a 2xx response, False on any exception or non-2xx
-    response. Never raises -- callers treat both outcomes as ordinary
-    control flow, not exceptional.
+    Returns True on a 2xx response, False on any exception, any 3xx redirect
+    or any other non-2xx response. Redirects are never followed (CR-01): a
+    followed redirect could land on a login page that answers 2xx and record a
+    document as delivered that paperless-ngx never received. Never raises --
+    callers treat both outcomes as ordinary control flow, not exceptional.
     """
     url = str(config.get("url", "") or "").rstrip("/")
     token = str(config.get("token", "") or "")
@@ -237,10 +259,21 @@ def upload_document(pdf_path: Path, config: dict) -> bool:
                 files={"document": (pdf_path.name, fh, "application/pdf")},
                 data={"title": title},
                 timeout=timeout,
+                allow_redirects=False,
             )
     except requests.RequestException as exc:
         print(
             f"WARNING: paperless-ngx upload request failed for {pdf_path.name}: {exc}",
+            flush=True,
+        )
+        return False
+
+    if 300 <= response.status_code < 400:
+        print(
+            f"WARNING: paperless-ngx upload for {pdf_path.name} returned HTTP "
+            f"{response.status_code} redirect to "
+            f"{_safe_redirect_target(response.headers.get('Location', ''))} -- redirects are "
+            "not followed; set paperless_upload.url to the final address",
             flush=True,
         )
         return False
