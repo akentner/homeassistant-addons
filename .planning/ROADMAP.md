@@ -715,7 +715,7 @@ exercised. Operator documentation (`README.md` + `DOCS.md`) is written from obse
 | 17. Git + Apply Jobs                | v1.4      | 8/8                                                           | In Progress         |            |
 | 18. MQTT + HA Entities              | v1.4      | 0/TBD                                                         | Planned             | —          |
 | 19. E2E + DOCS                      | v1.4      | 0/TBD                                                         | Planned             | —          |
-| 21. CUPS print server AirPrint/mDNS | —         | 10/10 | In Progress|  |
+| 21. CUPS print server AirPrint/mDNS | —         | 10/10 | Complete | 2026-10-04 |
 
 ---
 
