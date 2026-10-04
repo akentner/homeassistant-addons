@@ -4,17 +4,17 @@ milestone: v1.3
 milestone_name: opentofu-bridge
 current_phase: 21
 current_phase_name: cups print server addon airprint mdns fixes
-current_plan: 9
+current_plan: 10
 status: Phase 22 complete — verification passed (17/17), re-verified 2026-10-03
-stopped_at: Completed 21-08-PLAN.md
-last_updated: "2026-10-04T10:08:25.123Z"
-state_head: 7db64ee7b5e3dcb14b5ee8cdeceeed235887954d
+stopped_at: Completed 21-09-PLAN.md
+last_updated: "2026-10-04T10:20:26.095Z"
+state_head: 9f12447b8942c4f77e2f105664ea05317e8f11c8
 progress:
   total_phases: 10
   completed_phases: 12
   total_plans: 33
-  completed_plans: 30
-  percent: 91
+  completed_plans: 31
+  percent: 94
 ---
 
 # Project State
@@ -107,7 +107,7 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Current Plan: 9
+Current Plan: 10
 Total Plans in Phase: 10
 
 Phase: 21 (cups print server addon airprint mdns fixes) — EXECUTING
@@ -377,6 +377,7 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 | Phase 22 P03 | 15min | 2 tasks | 3 files |
 | Phase 21 P04 | interactive | 3 tasks | 1 files |
 | Phase 21 P08 | 35min | 3 tasks | 5 files |
+| Phase 21 P09 | 11min | 3 tasks | 6 files |
 
 ## Quick Tasks Completed
 
@@ -419,9 +420,9 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 
 **Resume file:** None
 
-**Stopped at:** Completed 21-08-PLAN.md
+**Stopped at:** Completed 21-09-PLAN.md
 
-Last session: 2026-10-04T10:08:24.889Z
+Last session: 2026-10-04T10:20:25.850Z
 
 ---
 
@@ -496,3 +497,5 @@ skipped; Phase 16 ready to plan_
 - [Phase 22]: CR-01 fixed at both data-validation and control-flow layers (defense in depth); WR-05 shares one collision_tag across a colliding PDF+sidecar pair for correlated triage — 22-VERIFICATION.md flagged CR-01/WR-02/WR-05 as still-open gaps; this gap-closure plan closes them with defensive isinstance(dict) validation and a new unique_destination() helper, proven end-to-end via a new Scenario 4
 - [Phase 21]: 21-04: diagnosis classified inconclusive (experiment not run); decision proceed with guard plans 21-05..21-07
 - [Phase 21]: 21-08: local cups test containers are LAN-mDNS-isolated via multicast off on non-lo interfaces (NET_ADMIN) and refuse the default host name; enforced by a host-side static scan
+- [Phase 21]: 21-09: watch result PASS only when local container-event history is verified (else exit 4); rounds after a local cups event are non-quiet so such failures are INVALID
+- [Phase 21]: 21-09: continuity and host-name-conflict are watch-only checks so --assert output stays byte-identical
