@@ -185,7 +185,7 @@ re-litigate during planning:
 
 **Requirements**: D-01..D-15 (CONTEXT.md decisions — no REQUIREMENTS.md IDs mapped to this ad-hoc phase)
 **Depends on:** Phase 21
-**Plans:** 4/4 plans executed in 4 waves (22-03 and 22-04 are gap-closure plans from 22-VERIFICATION.md)
+**Plans:** 4/4 plans complete in 4 waves (22-03 and 22-04 are gap-closure plans from 22-VERIFICATION.md)
 
 Plans:
 **Wave 1**
