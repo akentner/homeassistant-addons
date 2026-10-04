@@ -66,6 +66,18 @@ findings:
 open: 14
 total: 15
 recorded: 2026-10-04T17:57:04.211Z
+  - id: WR-09
+    severity: warning
+    disposition: open
+    title: "Malformed Location header makes _safe_redirect_target() raise; document is re-POSTed forever"
+  - id: IN-07
+    severity: info
+    disposition: open
+    title: "Redirect probe only covers Location /login/; sanitising and cap untested"
+  - id: IN-08
+    severity: info
+    disposition: open
+    title: "Only HTTP 200 counts as success; 201/202/204 are dead-lettered"
 ---
 
 # Phase 22: Code Review Disposition
@@ -87,6 +99,9 @@ recorded: 2026-10-04T17:57:04.211Z
 | IN-04 | info | open | - |
 | IN-05 | info | open | - |
 | IN-06 | info | open | - |
+| WR-09 | warning | open | - |
+| IN-07 | info | open | - |
+| IN-08 | info | open | - |
 
 Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.
 Set `deferred` by hand and put the reason in the Source cell; both are preserved. A `|` in the reason is kept as prose and escaped on the next run.
