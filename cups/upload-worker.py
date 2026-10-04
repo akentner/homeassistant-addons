@@ -225,12 +225,17 @@ def _safe_redirect_target(location: str) -> str:
 
     Keeps scheme, host[:port] and path only; query string, fragment and userinfo
     (SSO redirects commonly carry state or credentials there) are dropped. A
-    relative Location yields the path only. Capped at 200 characters.
+    relative Location yields the path only. A malformed value yields a placeholder.
+    Capped at 200 characters.
     """
     location = (location or "").strip()
     if not location:
         return "(no Location header)"
-    parts = urlsplit(location)
+    try:
+        parts = urlsplit(location)
+    except ValueError:
+        # Malformed value (e.g. unbalanced IPv6 bracket); never let logging raise
+        return "(malformed Location header)"
     host = parts.netloc.rsplit("@", 1)[-1]
     if parts.scheme and host:
         target = f"{parts.scheme}://{host}{parts.path}"
