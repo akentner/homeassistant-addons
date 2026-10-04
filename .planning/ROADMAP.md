@@ -99,7 +99,7 @@ options instead of upstream's hardcoded `options: {} / schema: []`, then roll th
 replacing `f1c878cb_cups`.
 **Requirements**: D-01..D-13 (CONTEXT.md decisions — no REQUIREMENTS.md IDs mapped to this ad-hoc phase)
 **Depends on:** Phase 20
-**Plans:** 10/10 plans executed (21-04..21-07 gap-closure round 1; 21-08..21-10 round 2 after re-verification;
+**Plans:** 10/10 plans complete (21-04..21-07 gap-closure round 1; 21-08..21-10 round 2 after re-verification;
 21-11/21-12 parked as `*-PLAN-OUTLINE.md`, optional guard supervision pending a user decision)
 
 Plans:
