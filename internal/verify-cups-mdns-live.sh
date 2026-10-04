@@ -16,7 +16,8 @@
 # It never issues a mutating Supervisor or docker verb and never signals a process.
 #
 # Usage: ./internal/verify-cups-mdns-live.sh [--assert | --diagnose [--out FILE] |
-#                                            --watch MINUTES | --watch-seconds N [--interval SECONDS]]
+#                                            --watch MINUTES | --watch-seconds N [--interval SECONDS]
+#                                            [--quiet-since SPEC]]
 #                                            [--host H] [--slug S] [--host-ip IP] [--settle-wait SECONDS]
 #                                            [--mask] [-h|--help]
 #
@@ -32,9 +33,30 @@
 # --watch MINUTES (--watch-seconds N is the primitive, --watch is MINUTES*60) repeats the --assert checks every
 # --interval SECONDS (default 120, minimum 1) for the given duration, without restarting anything. Each round prints
 # `WATCH round=<n> t=+MM:SS age=+MM:SS` (t = time since the watch started, age = age of the add-on container), the
-# check lines, and `WATCH round=<n> verdict=PASS|FAIL(<k>)`. Mutually exclusive with --diagnose. --settle-wait applies
-# once, before round 1. Exit status: 0 = `WATCH RESULT: PASS`, 1 = `WATCH RESULT: FAIL`, 2 = usage or prerequisite
-# error; see the end of this header for the classification exit codes 3 and 4.
+# check lines, `WATCH round=<n> quiet=yes|NO:<names>|unknown` and `WATCH round=<n> verdict=PASS|FAIL(<k>)`. Mutually
+# exclusive with --diagnose. --settle-wait applies once, before round 1. Extra per-round checks (watch only):
+# `continuity` (the add-on container's StartedAt must not change and the add-on must stay started) and
+# `host-name-conflict` (no `Host name conflict` line in the container log since the container start). The first
+# failing round also prints a `WATCH CONTEXT` block with the matching container-log lines.
+#
+# After the last round: `WATCH MILESTONES: age+2m=.. age+10m=.. age+30m=..` (PASS/FAIL of the first round at or
+# beyond that container age, NOT-REACHED otherwise), `WATCH QUIET-WINDOW: since=<ISO> container-start=<ISO>
+# covers-container-start=yes|no events=OK|UNVERIFIED|UNAVAILABLE`, `WATCH SUMMARY: ...` and exactly one result line:
+#   WATCH RESULT: PASS                  exit 0  every round passed, every round was quiet, local events verified
+#   WATCH RESULT: FAIL                  exit 1  a quiet round failed (the summary names the first one)
+#   WATCH RESULT: INVALID               exit 3  a local cups container was running, or was created/started, inside
+#                                               the quiet window: the observation proves nothing about the add-on
+#   WATCH RESULT: PASS-UNVERIFIED-QUIET exit 4  all rounds passed and were quiet but the local container-event
+#                                               history could not be verified (never a closing PASS)
+# Exit status 2 stays "usage or prerequisite error".
+#
+# --quiet-since SPEC sets where the quiet window (checked post hoc with `docker events --since`) starts:
+# `container-start` (default: the add-on container's StartedAt, so the gap between the restart and the first round is
+# covered), `watch-start`, or an epoch / ISO timestamp (the moment the operator's quiet promise began). The window is
+# `covers-container-start=no` when it opens after the container start; that earlier period is then covered only by
+# the host-name-conflict and continuity checks. The events history is verified (events=OK) only for podman with a
+# persistent event logger or when the output shows events near the window start; a plain docker engine with an empty
+# answer is UNVERIFIED.
 #
 # QUIET-WINDOW RULE (D-11): do not run podman/docker verifiers (verify-cups-*.sh) or start any cups container on this
 # workstation while a live proof is in progress -- a local container that announces the host name `cups` on the real
@@ -48,6 +70,7 @@ HOST_IP=""
 SETTLE_WAIT=0
 WATCH_SECONDS=""
 INTERVAL=120
+QUIET_SINCE="container-start"
 MASK=0
 MODE="assert"
 OUT=""
@@ -109,6 +132,16 @@ while [[ $# -gt 0 ]]; do
         INTERVAL="$2"
         shift
         ;;
+    --quiet-since)
+        [[ $# -ge 2 ]] || die "--quiet-since needs a value"
+        case "$2" in
+        container-start | watch-start) ;;
+        *) date -u -d "$2" +%s >/dev/null 2>&1 || [[ "$2" =~ ^[0-9]{9,}$ ]] ||
+            die "--quiet-since must be container-start, watch-start, an epoch or an ISO timestamp" ;;
+        esac
+        QUIET_SINCE="$2"
+        shift
+        ;;
     --mask) MASK=1 ;;
     -h | --help)
         usage
@@ -123,6 +156,8 @@ done
 if [[ -n "${WATCH_SECONDS}" ]]; then
     [[ "${MODE}" != "diagnose" ]] || die "--watch/--watch-seconds and --diagnose are mutually exclusive"
     MODE="watch"
+elif [[ "${QUIET_SINCE}" != "container-start" ]]; then
+    die "--quiet-since is only valid with --watch/--watch-seconds"
 fi
 
 # Rewrite every dotted-quad IPv4 and every IPv6 literal so output can be pasted into a committed document.
@@ -443,30 +478,174 @@ fmt_mmss() {
     printf '%02d:%02d' $((secs / 60)) $((secs % 60))
 }
 
-# --watch: repeat run_checks at fixed due times (start + n*interval, so the cadence does not drift).
+iso_of() { date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf 'unknown'; }
+
+read_started_at() { rssh "docker inspect --format '{{.State.StartedAt}}' ${CONTAINER}" 2>/dev/null || true; }
+
+read_app_state() {
+    rssh "ha apps info ${SLUG} --raw-json" 2>/dev/null | jq -r '.data.state // empty' 2>/dev/null || true
+}
+
+# Watch-only check: Avahi logs `Host name conflict, retrying with <name>-2` when it loses the claim to another
+# announcer. Only lines since the container start count, so earlier boots in an accumulated log are ignored.
+# Leaves the fetched log in LOG_TEXT for the first-failure context block.
+check_host_name_conflict() {
+    local lines count first
+    if ! LOG_TEXT="$(rssh "docker logs --since ${STARTED_AT} ${CONTAINER} 2>&1")"; then
+        LOG_TEXT=""
+        fail host-name-conflict "could not read the container log since ${STARTED_AT}"
+        return 0
+    fi
+    lines="$(printf '%s\n' "${LOG_TEXT}" | grep -a 'Host name conflict' || true)"
+    if [[ -z "${lines}" ]]; then
+        pass host-name-conflict "no 'Host name conflict' line in the container log since the container start"
+        return 0
+    fi
+    count="$(printf '%s\n' "${lines}" | wc -l)"
+    first="$(printf '%s\n' "${lines}" | head -1)"
+    fail host-name-conflict "${count} 'Host name conflict' line(s) since the container start: ${first}"
+    printf '%s\n' "${lines}" | sed -n '2,5p' | sed 's/^/  | /'
+}
+
+# Watch-only check: the premise of the observation is an add-on container that is never restarted.
+check_continuity() {
+    local state="$1" cur="$2"
+    if [[ "${state}" != "started" ]]; then
+        fail continuity "add-on state is '${state:-unreadable}', expected started (container StartedAt ${STARTED_AT})"
+    elif [[ -z "${cur}" || "${cur}" != "${STARTED_AT}" ]]; then
+        fail continuity "container StartedAt changed from ${STARTED_AT} to ${cur:-unreadable}: the container restarted"
+    else
+        pass continuity "container StartedAt unchanged (${STARTED_AT}), add-on state started"
+    fi
+}
+
+# Per-round quiet check: no local container whose name or image mentions cups. Sets ROUND_QUIET to yes, NO:<names>
+# or unknown.
+check_quiet_round() {
+    local ps names
+    ROUND_QUIET="unknown"
+    if [[ -z "${LOCAL_ENGINE}" ]]; then
+        info quiet "no local container engine (docker/podman) on this workstation; per-round quiet check skipped"
+        return 0
+    fi
+    if ! ps="$("${LOCAL_ENGINE}" ps --format '{{.Names}} {{.Image}}' 2>/dev/null)"; then
+        info quiet "'${LOCAL_ENGINE} ps' failed; per-round quiet check skipped"
+        return 0
+    fi
+    names="$(printf '%s\n' "${ps}" | awk 'tolower($0) ~ /cups/ { print $1 }' | sort -u | tr '\n' ',' | sed 's/,$//')"
+    if [[ -z "${names}" ]]; then
+        ROUND_QUIET="yes"
+    else
+        ROUND_QUIET="NO:${names}"
+    fi
+}
+
+# Post-hoc check of the workstation's container events from the quiet-window start. Sets EVENTS_STATE
+# (OK|UNVERIFIED|UNAVAILABLE) and EVENT_MATCHES (lines "<epoch> <action> <name> <image>" of cups containers that were
+# created, started or restarted). OK means an empty answer really means "nothing happened": the engine keeps a
+# persistent history (podman with the journald or file event logger), or the answer itself shows events dated close
+# to the window start, so the history demonstrably reaches back that far.
+check_local_events() {
+    local since="$1" raw rc=0 version logger first
+    EVENTS_STATE="UNAVAILABLE"
+    EVENT_MATCHES=""
+    [[ -n "${LOCAL_ENGINE}" ]] || return 0
+    raw="$(timeout 60 "${LOCAL_ENGINE}" events --since "${since}" --until "$(date +%s)" --filter type=container \
+        --format '{{json .}}' 2>/dev/null)" || rc=$?
+    [[ "${rc}" -eq 0 ]] || return 0
+    EVENT_MATCHES="$(printf '%s\n' "${raw}" | jq -R -r '
+        fromjson? | select(type == "object")
+        | (.Action // .Status // "") as $a
+        | (.Actor.Attributes.name // .Name // "") as $n
+        | (.Actor.Attributes.image // .Image // "") as $i
+        | select(($a == "create" or $a == "start" or $a == "restart") and (($n + " " + $i) | test("cups"; "i")))
+        | "\((.time // ((.timeNano // 0) / 1000000000) // 0) | floor) \($a) \($n) \($i)"' 2>/dev/null |
+        sort -n || true)"
+    version="$("${LOCAL_ENGINE}" --version 2>&1 || true)"
+    logger="$("${LOCAL_ENGINE}" info --format '{{.Host.EventLogger}}' 2>/dev/null || true)"
+    if grep -qi podman <<<"${version}" && [[ "${logger}" == "journald" || "${logger}" == "file" ]]; then
+        EVENTS_STATE="OK"
+        return 0
+    fi
+    first="$(printf '%s\n' "${raw}" | jq -R -r '
+        fromjson? | select(type == "object") | ((.time // ((.timeNano // 0) / 1000000000) // 0) | floor)
+        | select(. > 0)' 2>/dev/null | sort -n | head -1 || true)"
+    if [[ -n "${first}" && $((first - since)) -le 900 ]]; then
+        EVENTS_STATE="OK"
+    else
+        EVENTS_STATE="UNVERIFIED"
+    fi
+}
+
+# --watch: repeat run_checks at fixed due times (start + n*interval, so the cadence does not drift), then classify.
 watch_loop() {
-    local rounds=$((WATCH_SECONDS / INTERVAL + 1)) n=1 started now due t age verdict any_fail=0
-    started="$(rssh "docker inspect --format '{{.State.StartedAt}}' ${CONTAINER}" 2>/dev/null || true)"
-    local started_epoch watch_start
-    started_epoch="$(date -u -d "${started}" +%s 2>/dev/null || true)"
-    [[ -n "${started_epoch}" ]] || die "could not read the StartedAt of ${CONTAINER}"
+    local rounds=$((WATCH_SECONDS / INTERVAL + 1)) n=1 now due t age cur cur_epoch cur_state prev verdict
+    local watch_start window_start covers
+    STARTED_AT="$(read_started_at)"
+    STARTED_EPOCH="$(date -u -d "${STARTED_AT}" +%s 2>/dev/null || true)"
+    [[ -n "${STARTED_EPOCH}" ]] || die "could not read the StartedAt of ${CONTAINER}"
+    LOCAL_ENGINE=""
+    local engine
+    for engine in docker podman; do
+        if command -v "${engine}" >/dev/null 2>&1; then
+            LOCAL_ENGINE="${engine}"
+            break
+        fi
+    done
     watch_start="$(date +%s)"
-    printf 'WATCH START: host=%s container=%s duration=%ss interval=%ss rounds=%s\n' "${HOST}" "${CONTAINER}" \
-        "${WATCH_SECONDS}" "${INTERVAL}" "${rounds}"
+    case "${QUIET_SINCE}" in
+    container-start) window_start="${STARTED_EPOCH}" ;;
+    watch-start) window_start="${watch_start}" ;;
+    *)
+        if [[ "${QUIET_SINCE}" =~ ^[0-9]{9,}$ ]]; then
+            window_start="${QUIET_SINCE}"
+        else
+            window_start="$(date -u -d "${QUIET_SINCE}" +%s)"
+        fi
+        ;;
+    esac
+    printf 'WATCH START: host=%s container=%s container-start=%s duration=%ss interval=%ss rounds=%s\n' "${HOST}" \
+        "${CONTAINER}" "$(iso_of "${STARTED_EPOCH}")" "${WATCH_SECONDS}" "${INTERVAL}" "${rounds}"
+
+    local -a r_failed=() r_quiet=() r_end=() r_age=()
+    local first_fail="" first_fail_t="" first_fail_age="" restarts=0
+    prev="${STARTED_AT}"
     while [[ "${n}" -le "${rounds}" ]]; do
         now="$(date +%s)"
         t=$((now - watch_start))
-        age=$((now - started_epoch))
+        cur="$(read_started_at)"
+        cur_state="$(read_app_state)"
+        cur_epoch="$(date -u -d "${cur}" +%s 2>/dev/null || true)"
+        age=$((now - ${cur_epoch:-${STARTED_EPOCH}}))
         printf 'WATCH round=%s t=+%s age=+%s\n' "${n}" "$(fmt_mmss "${t}")" "$(fmt_mmss "${age}")"
         FAILS=0
+        [[ -z "${cur}" || "${cur}" == "${prev}" ]] || restarts=$((restarts + 1))
+        [[ -z "${cur}" ]] || prev="${cur}"
+        check_continuity "${cur_state}" "${cur}"
         run_checks
+        check_host_name_conflict
+        check_quiet_round
+        printf 'WATCH round=%s quiet=%s\n' "${n}" "${ROUND_QUIET}"
         if [[ "${FAILS}" -eq 0 ]]; then
             verdict="PASS"
+            r_failed[n]=0
         else
             verdict="FAIL(${FAILS})"
-            any_fail=1
+            r_failed[n]=1
         fi
         printf 'WATCH round=%s verdict=%s\n' "${n}" "${verdict}"
+        r_quiet[n]="${ROUND_QUIET}"
+        r_age[n]="${age}"
+        r_end[n]="$(date +%s)"
+        if [[ "${FAILS}" -gt 0 && -z "${first_fail}" ]]; then
+            first_fail="${n}"
+            first_fail_t="${t}"
+            first_fail_age="${age}"
+            printf 'WATCH CONTEXT round=%s (container log since start, up to 40 matching lines)\n' "${n}"
+            printf '%s\n' "${LOG_TEXT}" |
+                grep -aE 'Host name conflict|Server startup complete|\[avahi-guard\]|Withdrawing|Registering' |
+                head -40 | sed 's/^/  | /' || true
+        fi
         if [[ "${n}" -lt "${rounds}" ]]; then
             due=$((watch_start + n * INTERVAL))
             now="$(date +%s)"
@@ -474,12 +653,73 @@ watch_loop() {
         fi
         n=$((n + 1))
     done
-    if [[ "${any_fail}" -eq 0 ]]; then
-        printf 'WATCH RESULT: PASS\n'
-        return 0
+
+    check_local_events "${window_start}"
+    local ev_first="" ev_line quiet_violations=0 r
+    if [[ -n "${EVENT_MATCHES}" ]]; then
+        ev_first="$(printf '%s\n' "${EVENT_MATCHES}" | head -1 | cut -d' ' -f1)"
     fi
-    printf 'WATCH RESULT: FAIL\n'
-    return 1
+
+    # milestones: the first round at or beyond a container age decides that milestone
+    local ms="" thr label verdict_ms
+    for thr in 120 600 1800; do
+        verdict_ms="NOT-REACHED"
+        for ((r = 1; r <= rounds; r++)); do
+            if [[ "${r_age[r]}" -ge "${thr}" ]]; then
+                if [[ "${r_failed[r]}" -eq 0 ]]; then verdict_ms="PASS"; else verdict_ms="FAIL"; fi
+                break
+            fi
+        done
+        label="age+$((thr / 60))m"
+        ms="${ms:+${ms} }${label}=${verdict_ms}"
+    done
+    printf 'WATCH MILESTONES: %s\n' "${ms}"
+
+    covers="no"
+    [[ "${window_start}" -gt "${STARTED_EPOCH}" ]] || covers="yes"
+    printf 'WATCH QUIET-WINDOW: since=%s container-start=%s covers-container-start=%s events=%s\n' \
+        "$(iso_of "${window_start}")" "$(iso_of "${STARTED_EPOCH}")" "${covers}" "${EVENTS_STATE}"
+    while IFS= read -r ev_line; do
+        [[ -n "${ev_line}" ]] || continue
+        quiet_violations=$((quiet_violations + 1))
+        printf 'WATCH QUIET-VIOLATION: local container event %s %s\n' "$(iso_of "${ev_line%% *}")" "${ev_line#* }"
+    done <<<"${EVENT_MATCHES}"
+
+    # classification: a round is quiet unless a cups container was running during it or a matching local event
+    # happened at or before its end
+    local failed_quiet=0 tainted=0
+    for ((r = 1; r <= rounds; r++)); do
+        if [[ "${r_quiet[r]}" == NO:* ]]; then
+            quiet_violations=$((quiet_violations + 1))
+            tainted=1
+        elif [[ -n "${ev_first}" && "${ev_first}" -le "${r_end[r]}" ]]; then
+            tainted=1
+        elif [[ "${r_failed[r]}" -eq 1 ]]; then
+            failed_quiet=1
+        fi
+    done
+    [[ -z "${EVENT_MATCHES}" ]] || tainted=1
+    local ff="none"
+    if [[ -n "${first_fail}" ]]; then
+        ff="round ${first_fail} t=+$(fmt_mmss "${first_fail_t}") age=+$(fmt_mmss "${first_fail_age}")"
+    fi
+    printf 'WATCH SUMMARY: rounds=%s duration=%s first-failure=%s quiet-violations=%s restarts=%s\n' "${rounds}" \
+        "$(fmt_mmss $(($(date +%s) - watch_start)))" "${ff}" "${quiet_violations}" "${restarts}"
+
+    if [[ "${failed_quiet}" -eq 1 ]]; then
+        printf 'WATCH RESULT: FAIL\n'
+        return 1
+    fi
+    if [[ "${tainted}" -eq 1 ]]; then
+        printf 'WATCH RESULT: INVALID\n'
+        return 3
+    fi
+    if [[ "${EVENTS_STATE}" != "OK" ]]; then
+        printf 'WATCH RESULT: PASS-UNVERIFIED-QUIET\n'
+        return 4
+    fi
+    printf 'WATCH RESULT: PASS\n'
+    return 0
 }
 
 if [[ "${MODE}" == "watch" ]]; then
