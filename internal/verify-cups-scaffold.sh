@@ -172,6 +172,14 @@ else
     red "   FAIL: missing 'Allow from <subnet>' in the top-level <Location /> block"
     FAIL=1
 fi
+# Regression: Alpine's stock cupsd.conf ships `IdleExitTimeout 60`, which this cupsd build
+# rejects ("Unknown directive", level E) on every start. generate_config.py must drop it.
+if echo "${CUPSD_CONF}" | grep -qE '^\s*IdleExitTimeout\b'; then
+    red "   FAIL: patched cupsd.conf still contains IdleExitTimeout -- cupsd logs 'Unknown directive' at every start"
+    FAIL=1
+else
+    green "   PASS: unsupported IdleExitTimeout directive stripped from the patched cupsd.conf"
+fi
 if echo "${CUPSD_CONF}" | grep -A3 '<Location /admin>' | grep -q 'Require user @SYSTEM'; then
     green "   PASS: /admin still requires @SYSTEM auth (network scoping did not touch auth)"
 else
