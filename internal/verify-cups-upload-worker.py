@@ -180,6 +180,26 @@ def check_redirect_matrix(worker: ModuleType, state: StubState, config: dict, tm
         check(TOKEN not in output, f"{label}: token absent from output")
 
 
+def check_malformed_location(worker: ModuleType, state: StubState, config: dict, tmp: Path) -> None:
+    """WR-09: an unparseable Location must not make upload_document() raise."""
+    state.script(302, location="http://[::1/x")
+    pdf = make_pdf(tmp / "redirect-malformed")
+    try:
+        result, output = call_upload(worker, pdf, config)
+    except ValueError as exc:
+        check(False, f"malformed Location: upload_document() raised {exc!r}")
+        return
+    check(result is False, "malformed Location: upload_document() returns False")
+    check(
+        "WARNING" in output and "upload request failed" in output and TOKEN not in output,
+        "malformed Location: a 'request failed' WARNING is printed and the token stays out of it",
+    )
+    route_config = dict(config, retry_count=1, retry_delay=1)
+    _, failed, route_output = run_route(worker, state, tmp / "route-malformed", route_config)
+    check(any(failed.glob("*.pdf")), "malformed Location routing: PDF ends in failed/ (counted, not retried forever)")
+    check("upload exhausted" in route_output, "malformed Location routing: 'upload exhausted' WARNING printed")
+
+
 def check_redirect_routing(worker: ModuleType, state: StubState, config: dict, tmp: Path) -> None:
     state.script(302, location="/login/")
     route_config = dict(config, retry_count=1, retry_delay=1)
@@ -261,6 +281,7 @@ def main() -> int:
     try:
         check_redirect_matrix(worker, state, config, tmp)
         check_redirect_routing(worker, state, config, tmp)
+        check_malformed_location(worker, state, config, tmp)
         check_body_matrix(worker, state, config, tmp)
         check_body_routing(worker, state, config, tmp)
     finally:

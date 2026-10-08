@@ -283,7 +283,9 @@ def upload_document(pdf_path: Path, config: dict) -> bool:
                 timeout=timeout,
                 allow_redirects=False,
             )
-    except requests.RequestException as exc:
+    except (requests.RequestException, ValueError) as exc:
+        # ValueError: requests parses the Location header even with allow_redirects=False
+        # and raises it unwrapped for malformed values (e.g. "http://[::1/x") -- WR-09
         print(
             f"WARNING: paperless-ngx upload request failed for {pdf_path.name}: {exc}",
             flush=True,
