@@ -7,7 +7,7 @@ current_phase_name: Bridge Read API
 current_plan: Not started
 status: Phase 22 gap-closure 22-04 executed (CR-01) — awaiting re-verification
 stopped_at: Phase 22 complete, ready to plan Phase 11
-last_updated: "2026-10-04T18:54:06.838Z"
+last_updated: "2026-10-08T00:00:00.000Z"
 state_head: 68b466667722f7ace23edf0f9bcaa219528610be
 progress:
   total_phases: 10
@@ -416,6 +416,7 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 | 260927-vwt | docs: add-on presentation & metadata best practices (icon/logo, translations, changelog, operational lessons) | 2026-09-27 | 9f72846 | [260927-vwt-docs-add-on-presentation-metadata-best-p](./quick/260927-vwt-docs-add-on-presentation-metadata-best-p/) |
 | 260927-vbk | cups: official CUPS branding (icon/logo), configurable log_level with error/access log passthrough, print-job history persisted to /data as JSONL | 2026-09-27 | 9cd7bd8 | [260927-vbk-cups-add-logo-png-banner-configurable-lo](./quick/260927-vbk-cups-add-logo-png-banner-configurable-lo/) |
 | 260927-wzn | internal/update-version.py: defer git tagging until version-bump files are committed (fixes 260927-r2j/260927-vbk mis-tag class); RED-before-GREEN regression test wired into make check-all | 2026-09-27 | ee0e859 | [260927-wzn-fix-internal-update-version-py-tag-timin](./quick/260927-wzn-fix-internal-update-version-py-tag-timin/) |
+| 260-wr09 | cups: WR-09 malformed Location header no longer makes upload_document() raise (retry-forever loop); probe row added, bump to 0.1.0-20 | 2026-10-08 | dba7553 | — |
 
 ## Session Continuity
 
@@ -502,3 +503,4 @@ skipped; Phase 16 ready to plan_
 - [Phase 21]: 21-09: continuity and host-name-conflict are watch-only checks so --assert output stays byte-identical
 - [Phase 22]: 22-04: upload_document() is the single success producer; HTTP 200 + non-empty JSON-string task id required, all 3xx refused (allow_redirects=False); attempt_and_route untouched
 - [Phase 22]: 22-04: cups bumped to 0.1.0-17 with NO_TAG/NO_PUSH; release tag left to operator
+- [Phase 22]: WR-09 fixed in cups 0.1.0-20 (caf46b2, dba7553): guarding `_safe_redirect_target()` alone was not enough -- `requests.post(allow_redirects=False)` itself raises an unwrapped `ValueError` on a malformed `Location` (resolve_redirects pre-parses it), so `upload_document()` now catches `(RequestException, ValueError)`; proven by a new RED-before-GREEN row in internal/verify-cups-upload-worker.py (the first fix, 0.1.0-18/19, still raised)

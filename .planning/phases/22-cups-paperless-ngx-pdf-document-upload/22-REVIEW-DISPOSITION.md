@@ -63,12 +63,12 @@ findings:
     severity: info
     disposition: open
     title: "`avahi_guard_start` claims it always leaves avahi running"
-open: 14
+open: 13
 total: 15
 recorded: 2026-10-04T17:57:04.211Z
   - id: WR-09
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "Malformed Location header makes _safe_redirect_target() raise; document is re-POSTed forever"
   - id: IN-07
     severity: info
@@ -99,7 +99,7 @@ recorded: 2026-10-04T17:57:04.211Z
 | IN-04 | info | open | - |
 | IN-05 | info | open | - |
 | IN-06 | info | open | - |
-| WR-09 | warning | open | - |
+| WR-09 | warning | fixed | cups 0.1.0-20 (commits caf46b2, dba7553) |
 | IN-07 | info | open | - |
 | IN-08 | info | open | - |
 
