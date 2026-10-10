@@ -383,6 +383,23 @@ export HA_URL
 export HA_TOKEN
 export SUPERVISOR_TOKEN
 
+# Claude Code authentication from the optional add-on password options. Exported into THIS process environment
+# only, so ttyd, sshd and everything they spawn inherit them; never written to /etc/profile.d, the fish conf.d file
+# (persistent in /data) or a log line. An unset option reads as "null" (and an empty one as ""): exporting an empty
+# ANTHROPIC_API_KEY would switch Claude into API-key mode with an empty key, so only real values are exported.
+# Precedence in Claude Code when both are set: ANTHROPIC_API_KEY beats CLAUDE_CODE_OAUTH_TOKEN.
+CLAUDE_AUTH_OAUTH=$(bashio::config 'claude_code_oauth_token') || CLAUDE_AUTH_OAUTH=""
+if [[ -n "${CLAUDE_AUTH_OAUTH}" && "${CLAUDE_AUTH_OAUTH}" != "null" ]]; then
+    export CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_AUTH_OAUTH}"
+    bashio::log.info "Exported CLAUDE_CODE_OAUTH_TOKEN from the add-on options"
+fi
+CLAUDE_AUTH_API_KEY=$(bashio::config 'anthropic_api_key') || CLAUDE_AUTH_API_KEY=""
+if [[ -n "${CLAUDE_AUTH_API_KEY}" && "${CLAUDE_AUTH_API_KEY}" != "null" ]]; then
+    export ANTHROPIC_API_KEY="${CLAUDE_AUTH_API_KEY}"
+    bashio::log.info "Exported ANTHROPIC_API_KEY from the add-on options"
+fi
+unset CLAUDE_AUTH_OAUTH CLAUDE_AUTH_API_KEY
+
 # Inject user-configured env vars
 if jq -e '.env_vars | length > 0' /data/options.json > /dev/null 2>&1; then
     while IFS= read -r entry; do

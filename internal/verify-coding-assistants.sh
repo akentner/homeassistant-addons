@@ -19,6 +19,8 @@
 #                    `claude --version` works from a login shell, versions.json carries the version
 #   claude-state     ~/.claude state persistence (+ legacy migration), TOOLS.md block in CLAUDE.md rewritten on
 #                    every start with user text preserved, seed/newest selection against real re-creations
+#   claude-auth      claude_code_oauth_token / anthropic_api_key exported into the ttyd process environment only
+#                    when set and non-empty; never written to profile files or logs
 #
 # Container model: every add-on start is a NEW container on the same /data volume (Supervisor semantics), so a
 # "restart" is `docker rm -f` followed by a fresh `docker run` (restart_ca), never `docker restart`. Containers
@@ -61,7 +63,7 @@ declare -A CA_OPTS=()
 declare -A CA_EXTRA=()
 
 # Registered scenarios: NAME -> function scenario_<NAME with - replaced by _>
-SCENARIOS=(claude-launcher claude-state)
+SCENARIOS=(claude-launcher claude-state claude-auth)
 
 cleanup() {
     local pid c
@@ -433,6 +435,72 @@ scenario_claude_state() {
     assert_ok "seed binary was copied into the persistent versions dir" \
         ca_exec state test -x "/data/.local/share/claude/versions/${seed}"
     assert_ok "older persisted 0.0.1 was left in place" ca_exec state test -f /data/.local/share/claude/versions/0.0.1
+}
+
+# =============================================================================
+# Scenario claude-auth
+# =============================================================================
+# Fixture values deliberately do not look like real provider keys (keeps secret scanners quiet).
+CA_OAUTH_FIXTURE="verify-oauth-token-value"
+CA_APIKEY_FIXTURE="verify-api-key-value"
+
+# claude_auth_env_count NAME PID VAR -- number of VAR=... lines in the process environment
+claude_auth_env_count() { ca_environ "$1" "$2" | grep -c "^$3=" || true; }
+
+scenario_claude_auth() {
+    local data opts pid env logs
+
+    # Container A: both options set
+    data="${SCRATCH_DIR}/auth-a/data"
+    mkdir -p "${data}"
+    opts="${data}/options.json"
+    write_options "${opts}" ".claude_code_oauth_token=\"${CA_OAUTH_FIXTURE}\" | .anthropic_api_key=\"${CA_APIKEY_FIXTURE}\""
+    start_ca auth-a "${data}" "${opts}"
+    if wait_ca auth-a; then
+        pid="$(ca_pid auth-a ttyd)"
+        if [[ -z "${pid}" ]]; then
+            fail "ttyd process not found in container A"
+        else
+            env="$(ca_environ auth-a "${pid}")"
+            assert_ok "ttyd environment has CLAUDE_CODE_OAUTH_TOKEN with the option value" \
+                grep -qxF "CLAUDE_CODE_OAUTH_TOKEN=${CA_OAUTH_FIXTURE}" <<<"${env}"
+            assert_ok "ttyd environment has ANTHROPIC_API_KEY with the option value" \
+                grep -qxF "ANTHROPIC_API_KEY=${CA_APIKEY_FIXTURE}" <<<"${env}"
+        fi
+        assert_eq "oauth token value is absent from /etc/profile.d/00-coding-assistants.sh" \
+            "$(ca_count auth-a "${CA_OAUTH_FIXTURE}" /etc/profile.d/00-coding-assistants.sh)" "0"
+        assert_eq "api key value is absent from /etc/profile.d/00-coding-assistants.sh" \
+            "$(ca_count auth-a "${CA_APIKEY_FIXTURE}" /etc/profile.d/00-coding-assistants.sh)" "0"
+        assert_eq "oauth token value is absent from the fish conf.d file" \
+            "$(ca_count auth-a "${CA_OAUTH_FIXTURE}" /data/.config/fish/conf.d/00-coding-assistants.fish)" "0"
+        assert_eq "api key value is absent from the fish conf.d file" \
+            "$(ca_count auth-a "${CA_APIKEY_FIXTURE}" /data/.config/fish/conf.d/00-coding-assistants.fish)" "0"
+        logs="$(ca_logs auth-a)"
+        assert_eq "neither secret value appears in the container log" \
+            "$(grep -c -e "${CA_OAUTH_FIXTURE}" -e "${CA_APIKEY_FIXTURE}" <<<"${logs}" || true)" "0"
+    fi
+
+    # Containers B1 / B2: options absent, then empty strings -- nothing may be exported, not even empty
+    local variant filter
+    for variant in absent empty; do
+        data="${SCRATCH_DIR}/auth-b-${variant}/data"
+        mkdir -p "${data}"
+        opts="${data}/options.json"
+        filter="."
+        [[ "${variant}" == "empty" ]] && filter='.claude_code_oauth_token="" | .anthropic_api_key=""'
+        write_options "${opts}" "${filter}"
+        start_ca "auth-b-${variant}" "${data}" "${opts}"
+        wait_ca "auth-b-${variant}" || continue
+        pid="$(ca_pid "auth-b-${variant}" ttyd)"
+        if [[ -z "${pid}" ]]; then
+            fail "ttyd process not found in container B (${variant})"
+            continue
+        fi
+        assert_eq "no CLAUDE_CODE_OAUTH_TOKEN in the ttyd environment (options ${variant})" \
+            "$(claude_auth_env_count "auth-b-${variant}" "${pid}" CLAUDE_CODE_OAUTH_TOKEN)" "0"
+        assert_eq "no ANTHROPIC_API_KEY in the ttyd environment (options ${variant})" \
+            "$(claude_auth_env_count "auth-b-${variant}" "${pid}" ANTHROPIC_API_KEY)" "0"
+    done
 }
 
 # --- Dispatcher --------------------------------------------------------------------------------------------------

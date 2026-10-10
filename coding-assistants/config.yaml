@@ -34,6 +34,7 @@ backup_exclude:
   - ".local/share/opencode/cache/*"
   - ".npm/*"
   - ".cache/*"
+  - ".local/share/claude/*"
 
 options:
   log_level: "info"
@@ -74,6 +75,8 @@ schema:
   terminal_font_family: str
   ha_url: str
   ha_token: str
+  claude_code_oauth_token: password?
+  anthropic_api_key: password?
   zigbee2mqtt:
     enabled: bool?
     mqtt_broker_url: str?
