@@ -4,20 +4,6 @@
 LOG_LEVEL=$(bashio::config 'log_level')
 bashio::log.level "${LOG_LEVEL}"
 
-# Write MOTD with current addon version and tool versions
-ADDON_VERSION=$(bashio::addon.version)
-OPENCODE_VERSION=$(opencode --version 2>/dev/null | head -1)
-MOTD_HA_URL=$(bashio::config 'ha_url')
-cat > /etc/motd << EOF
-Coding Assistants ${ADDON_VERSION}  |  opencode ${OPENCODE_VERSION}
-HA: ${MOTD_HA_URL}
-EOF
-
-# Version info for web UI
-printf '{"addon":"%s","opencode":"%s"}\n' \
-    "${ADDON_VERSION}" "${OPENCODE_VERSION}" \
-    > /opt/coding-assistants/versions.json
-
 # Persist /data directories for all coding assistants
 mkdir -p \
     /data/.config/opencode \
@@ -51,6 +37,47 @@ if [[ ! -e /data/opencode/bin/opencode ]]; then
 fi
 rm -rf /root/.opencode/bin
 ln -s /data/opencode/bin /root/.opencode/bin
+
+# Claude Code binary persistence — the native installer layout is kept, rooted in /data. The updater honours
+# XDG_DATA_HOME=/data/.local/share (exported further below) and writes new versions to
+# /data/.local/share/claude/versions, so `claude update` only takes effect when the launcher
+# /root/.local/bin/claude points INTO that directory. Hence the launcher is re-created on every start and points
+# at the newest persisted version; the image seed in /opt/claude-initial is copied in only when it is strictly
+# newer (rebuilds never downgrade and never lose an update). Absolute paths only: the XDG exports come later.
+# bashio runs this script with errexit + pipefail: pipelines that may legitimately yield nothing end in `|| true`.
+CLAUDE_VERSIONS_DIR="/data/.local/share/claude/versions"
+mkdir -p "${CLAUDE_VERSIONS_DIR}" /root/.local/bin
+CLAUDE_SEED=$(find /opt/claude-initial -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | head -n 1) || true
+if [[ -z "${CLAUDE_SEED}" ]]; then
+    bashio::log.warning "No Claude Code seed in /opt/claude-initial — skipping Claude Code launcher setup"
+else
+    CLAUDE_NEWEST=$(find "${CLAUDE_VERSIONS_DIR}" -maxdepth 1 -type f -perm /u+x -printf '%f\n' \
+        | grep -E '^[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -n 1) || true
+    if [[ -z "${CLAUDE_NEWEST}" ]] \
+        || [[ "$(printf '%s\n%s\n' "${CLAUDE_SEED}" "${CLAUDE_NEWEST}" | sort -V | tail -n 1)" != "${CLAUDE_NEWEST}" ]]; then
+        cp -a "/opt/claude-initial/${CLAUDE_SEED}" "${CLAUDE_VERSIONS_DIR}/.${CLAUDE_SEED}.tmp"
+        mv -f "${CLAUDE_VERSIONS_DIR}/.${CLAUDE_SEED}.tmp" "${CLAUDE_VERSIONS_DIR}/${CLAUDE_SEED}"
+        CLAUDE_NEWEST="${CLAUDE_SEED}"
+        bashio::log.info "Seeded Claude Code ${CLAUDE_SEED} into persistent storage"
+    fi
+    ln -sfn "${CLAUDE_VERSIONS_DIR}/${CLAUDE_NEWEST}" /root/.local/bin/claude
+    bashio::log.info "Claude Code ${CLAUDE_NEWEST} ready"
+fi
+
+# Write MOTD with current addon version and tool versions (absolute launcher path: PATH is not extended yet)
+ADDON_VERSION=$(bashio::addon.version)
+CLAUDE_VERSION=$(/root/.local/bin/claude --version 2>/dev/null | head -n 1 | cut -d' ' -f1) || true
+OPENCODE_VERSION=$(opencode --version 2>/dev/null | head -1)
+MOTD_HA_URL=$(bashio::config 'ha_url')
+cat > /etc/motd << EOF
+Coding Assistants ${ADDON_VERSION}  |  claude ${CLAUDE_VERSION}  |  opencode ${OPENCODE_VERSION}
+HA: ${MOTD_HA_URL}
+EOF
+
+# Version info for web UI
+printf '{"addon":"%s","claude":"%s","opencode":"%s"}\n' \
+    "${ADDON_VERSION}" "${CLAUDE_VERSION}" "${OPENCODE_VERSION}" \
+    > /opt/coding-assistants/versions.json
 
 # Fish config persistence — copy defaults on first run, then symlink
 if [[ ! -d /data/.config/fish ]]; then

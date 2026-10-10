@@ -133,7 +133,7 @@ RUN TAG=$(curl -sf https://api.github.com/repos/dandavison/delta/releases/latest
 RUN mkdir -p /tmp/difft \
     && curl -fsSL \
         "$(curl -sf https://api.github.com/repos/Wilfred/difftastic/releases/latest \
-            | jq -r '.assets[] | select(.name == "difft-x86_64-unknown-linux-gnu.tar.gz") | .browser_download_url')" \
+            | jq -r '.assets[] | select(.name | test("^difft-(.+-)?x86_64-unknown-linux-gnu[.]tar[.]gz$")) | .browser_download_url')" \
         | tar xz -C /tmp/difft \
     && mv /tmp/difft/difft /usr/local/bin/ \
     && rm -rf /tmp/difft
@@ -190,6 +190,24 @@ RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
     && mkdir -p /opt/opencode-initial \
     && cp /root/.opencode/bin/opencode /opt/opencode-initial/opencode \
     && ln -sf /root/.opencode/bin/opencode /usr/local/bin/opencode
+
+# Claude Code — native installer (no Node dependency). The installer places the versioned binary in
+# /root/.local/share/claude/versions/<ver> and a launcher symlink in /root/.local/bin/claude; both are moved out
+# of /root so no per-user state is baked into the image. The single binary (~250 MB) is kept once, as a seed in
+# /opt/claude-initial. run.sh seeds it into the persistent /data/.local/share/claude/versions (only when it is
+# newer than what is persisted) and re-creates the launcher /root/.local/bin/claude on EVERY start, pointing it
+# into that directory. This works because the updater honours XDG_DATA_HOME=/data/.local/share and writes new
+# versions to $XDG_DATA_HOME/claude/versions, so `claude update` really replaces the running version and
+# survives image rebuilds. This replaces the originally locked /data/claude/bin layout (phase 23, user decision
+# 1): with a launcher symlink pointing outside versions/, `claude update` was reproduced as a silent no-op.
+# The seed is executed once with --version so a broken download fails the build.
+RUN curl -fsSL https://claude.ai/install.sh | bash \
+    && mkdir -p /opt/claude-initial \
+    && mv /root/.local/share/claude/versions/* /opt/claude-initial/ \
+    && set -- /opt/claude-initial/* \
+    && [ "$#" -eq 1 ] \
+    && "$1" --version \
+    && rm -rf /root/.local/bin/claude /root/.local/share/claude /root/.claude /root/.claude.json
 
 # OpenCode + GitHub Copilot CLI + fx JSON viewer + MariaDB/MySQL MCP server via npm
 # hadolint ignore=DL3016
