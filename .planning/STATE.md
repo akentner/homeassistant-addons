@@ -6,11 +6,11 @@ current_phase: 11
 current_phase_name: Bridge Read API
 current_plan: Not started
 status: Phase 22 gap-closure 22-04 executed (CR-01) — awaiting re-verification
-stopped_at: Phase 22 complete, ready to plan Phase 11
-last_updated: "2026-10-08T00:00:00.000Z"
-state_head: 68b466667722f7ace23edf0f9bcaa219528610be
+stopped_at: Phase 23 context gathered
+last_updated: "2026-10-10T13:55:28.079Z"
+state_head: 9f8941a23faa5880c9071386acb80a4eede69f4a
 progress:
-  total_phases: 10
+  total_phases: 11
   completed_phases: 12
   total_plans: 34
   completed_plans: 33
@@ -421,11 +421,11 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 
 ## Session Continuity
 
-**Resume file:** None
+**Resume file:** .planning/phases/23-coding-assistants-claude-code-herdr-replaces-tmux/23-CONTEXT.md
 
-**Stopped at:** Phase 22 complete, ready to plan Phase 11
+**Stopped at:** Phase 23 context gathered
 
-Last session: 2026-10-04T18:45:49.693Z
+Last session: 2026-10-10T13:55:27.833Z
 
 ---
 
