@@ -17,6 +17,8 @@
 # Scenarios:
 #   claude-launcher  Claude Code seeded into /data/.local/share/claude/versions, launcher points into it,
 #                    `claude --version` works from a login shell, versions.json carries the version
+#   claude-state     ~/.claude state persistence (+ legacy migration), TOOLS.md block in CLAUDE.md rewritten on
+#                    every start with user text preserved, seed/newest selection against real re-creations
 #
 # Container model: every add-on start is a NEW container on the same /data volume (Supervisor semantics), so a
 # "restart" is `docker rm -f` followed by a fresh `docker run` (restart_ca), never `docker restart`. Containers
@@ -59,7 +61,7 @@ declare -A CA_OPTS=()
 declare -A CA_EXTRA=()
 
 # Registered scenarios: NAME -> function scenario_<NAME with - replaced by _>
-SCENARIOS=(claude-launcher)
+SCENARIOS=(claude-launcher claude-state)
 
 cleanup() {
     local pid c
@@ -351,6 +353,86 @@ scenario_claude_launcher() {
     json_ver="$(jq -r '.claude' <<<"${versions_json}" 2>/dev/null)"
     assert_match "versions.json carries a claude semver" "${json_ver}" '^[0-9]+\.[0-9]+\.[0-9]+'
     assert_eq "versions.json claude field equals the launcher version" "${json_ver}" "${ver}"
+}
+
+# =============================================================================
+# Scenario claude-state
+# =============================================================================
+# ca_count NAME PATTERN FILE -- number of lines matching PATTERN (grep -c, never fails)
+ca_count() { ca_exec "$1" grep -c -- "$2" "$3" || true; }
+
+# claude_block_equals_tools NAME -- the span between the markers equals coding-assistants/TOOLS.md
+claude_block_equals_tools() {
+    diff -B <(ca_exec "$1" sed -n '/^<!-- coding-assistants:begin -->$/,/^<!-- coding-assistants:end -->$/p' \
+        /data/.claude/CLAUDE.md | sed '1d;$d') "${ADDON_DIR}/TOOLS.md"
+}
+
+# claude_write_fake_version NAME VERSION -- executable stub "claude" inside the persistent versions dir
+claude_write_fake_version() {
+    # shellcheck disable=SC2016
+    ca_exec "$1" sh -c 'printf "#!/bin/sh\necho \"%s (Claude Code)\"\n" "$1" > "/data/.local/share/claude/versions/$1" \
+        && chmod +x "/data/.local/share/claude/versions/$1"' sh "$2"
+}
+
+scenario_claude_state() {
+    local data="${SCRATCH_DIR}/state/data" opts note1 note2 seed link
+    mkdir -p "${data}/claude/.claude"
+    opts="${data}/options.json"
+    write_options "${opts}"
+
+    # Stage 1: legacy volume (/data/claude/.claude*) with a user CLAUDE.md holding a stale block
+    printf 'legacy\n' >"${data}/claude/.claude/legacy.txt"
+    printf 'USER-NOTE-1\n<!-- coding-assistants:begin -->\nstale\n<!-- coding-assistants:end -->\n' \
+        >"${data}/claude/.claude/CLAUDE.md"
+    printf '{"legacyKey":true}\n' >"${data}/claude/.claude.json"
+    start_ca state "${data}" "${opts}"
+    wait_ca state || return 0
+
+    assert_ok "legacy .claude content was migrated" ca_exec state test -f /data/.claude/legacy.txt
+    assert_eq "legacy .claude.json was migrated" "$(ca_exec state jq -r '.legacyKey' /data/.claude.json)" "true"
+    assert_eq "/root/.claude points to /data/.claude" "$(ca_exec state readlink /root/.claude)" "/data/.claude"
+    assert_eq "/root/.claude.json points to /data/.claude.json" "$(ca_exec state readlink /root/.claude.json)" \
+        "/data/.claude.json"
+    assert_eq "/data/.claude mode is 700" "$(ca_exec state stat -c %a /data/.claude)" "700"
+    assert_eq "/data/.claude.json mode is 600" "$(ca_exec state stat -c %a /data/.claude.json)" "600"
+    assert_ok "CLAUDE.md block equals TOOLS.md" claude_block_equals_tools state
+    assert_eq "stale block text is gone" "$(ca_count state '^stale$' /data/.claude/CLAUDE.md)" "0"
+    assert_eq "USER-NOTE-1 appears exactly once" "$(ca_count state '^USER-NOTE-1$' /data/.claude/CLAUDE.md)" "1"
+    assert_ok "legacy .claude file still exists" ca_exec state test -f /data/claude/.claude/legacy.txt
+    assert_ok "legacy .claude.json still exists" ca_exec state test -f /data/claude/.claude.json
+
+    # Stage 2: user text after the block survives a re-creation; the block is rewritten, not duplicated
+    ca_exec state sh -c 'echo USER-NOTE-2 >> /data/.claude/CLAUDE.md'
+    restart_ca state
+    wait_ca state || return 0
+    note1="$(ca_count state '^USER-NOTE-1$' /data/.claude/CLAUDE.md)"
+    note2="$(ca_count state '^USER-NOTE-2$' /data/.claude/CLAUDE.md)"
+    assert_eq "USER-NOTE-1 still appears exactly once after a restart" "${note1}" "1"
+    assert_eq "USER-NOTE-2 appears exactly once after a restart" "${note2}" "1"
+    assert_eq "exactly one begin marker after a restart" \
+        "$(ca_count state '^<!-- coding-assistants:begin -->$' /data/.claude/CLAUDE.md)" "1"
+    assert_ok "CLAUDE.md block still equals TOOLS.md after a restart" claude_block_equals_tools state
+
+    # Stage 3: a newer persisted version wins over the image seed
+    claude_write_fake_version state 99.0.0
+    restart_ca state
+    wait_ca state || return 0
+    link="$(ca_exec state readlink /root/.local/bin/claude)"
+    assert_match "launcher targets the newer persisted version" "${link}" '/99\.0\.0$'
+    assert_eq "claude --version prints the persisted version" \
+        "$(ca_exec state bash -lc 'claude --version' | head -n 1 | cut -d' ' -f1)" "99.0.0"
+
+    # Stage 4: a strictly newer image seed is copied in when the persisted set is older
+    seed="$(docker run --rm --entrypoint sh "${IMAGE_NAME}" -c 'ls /opt/claude-initial' | head -n 1)"
+    ca_exec state sh -c 'rm -rf /data/.local/share/claude/versions/* /data/.local/share/claude/versions/.[!.]*'
+    claude_write_fake_version state 0.0.1
+    restart_ca state
+    wait_ca state || return 0
+    link="$(ca_exec state readlink /root/.local/bin/claude)"
+    assert_eq "launcher targets the image seed version" "${link}" "/data/.local/share/claude/versions/${seed}"
+    assert_ok "seed binary was copied into the persistent versions dir" \
+        ca_exec state test -x "/data/.local/share/claude/versions/${seed}"
+    assert_ok "older persisted 0.0.1 was left in place" ca_exec state test -f /data/.local/share/claude/versions/0.0.1
 }
 
 # --- Dispatcher --------------------------------------------------------------------------------------------------

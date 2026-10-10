@@ -64,6 +64,58 @@ else
     bashio::log.info "Claude Code ${CLAUDE_NEWEST} ready"
 fi
 
+# Claude Code state persistence — ~/.claude and ~/.claude.json are symlinks into /data so credentials, settings
+# and Claude's own rewrites land on the volume. One-time migration of the legacy layout (/data/claude/.claude*):
+# copy only when the new path is absent; the legacy files are never deleted.
+if [[ ! -e /data/.claude && -d /data/claude/.claude ]]; then
+    cp -a /data/claude/.claude /data/.claude
+    bashio::log.info "Migrated legacy /data/claude/.claude to /data/.claude"
+fi
+if [[ ! -e /data/.claude.json && -f /data/claude/.claude.json ]]; then
+    cp -a /data/claude/.claude.json /data/.claude.json
+    bashio::log.info "Migrated legacy /data/claude/.claude.json to /data/.claude.json"
+fi
+mkdir -p /data/.claude
+chmod 700 /data/.claude
+[[ -f /data/.claude.json ]] || echo '{}' > /data/.claude.json
+chmod 600 /data/.claude.json
+rm -rf /root/.claude /root/.claude.json
+ln -s /data/.claude /root/.claude
+ln -s /data/.claude.json /root/.claude.json
+
+# Tool context for Claude Code — TOOLS.md is injected into the user-level /data/.claude/CLAUDE.md as a marked block
+# that is rewritten on every start; all text outside the markers is preserved. Placed after the state persistence
+# above so a legacy volume is migrated before /data/.claude is first used. Block-level HTML comments are stripped
+# before injection into Claude's context, so the markers cost no tokens.
+python3 - <<'PYEOF'
+import pathlib
+import re
+
+BEGIN = "<!-- coding-assistants:begin -->"
+END = "<!-- coding-assistants:end -->"
+
+tools = pathlib.Path("/etc/coding-assistants/TOOLS.md").read_text()
+if not tools.endswith("\n"):
+    tools += "\n"
+block = BEGIN + "\n" + tools + "\n" + END + "\n"
+
+target = pathlib.Path("/data/.claude/CLAUDE.md")
+content = target.read_text() if target.exists() else ""
+span = re.compile(
+    r"^" + re.escape(BEGIN) + r"[ \t]*\n.*?^" + re.escape(END) + r"[ \t]*(?:\n|\Z)",
+    re.DOTALL | re.MULTILINE,
+)
+if not content.strip():
+    content = block
+elif span.search(content):
+    # Function replacement: backslashes in TOOLS.md must never be read as group references.
+    content = span.sub(lambda _match: block, content, count=1)
+else:
+    content = content.rstrip("\n") + "\n\n" + block
+target.write_text(content)
+PYEOF
+bashio::log.info "Updated tool context in Claude Code CLAUDE.md"
+
 # Write MOTD with current addon version and tool versions (absolute launcher path: PATH is not extended yet)
 ADDON_VERSION=$(bashio::addon.version)
 CLAUDE_VERSION=$(/root/.local/bin/claude --version 2>/dev/null | head -n 1 | cut -d' ' -f1) || true

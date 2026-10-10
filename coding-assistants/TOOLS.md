@@ -52,6 +52,9 @@ Persistent storage is at `/data`.
 
 ## AI & MCP
 
+- `claude` — Claude Code CLI (native installer; updates itself, `claude update`). Auth through the add-on options
+  `claude_code_oauth_token` / `anthropic_api_key` or interactively with `claude login`; MCP servers from the add-on
+  options are registered for it at user scope
 - `opencode` — OpenCode AI CLI
 - `gh copilot` — GitHub Copilot CLI (`gh copilot suggest`, `gh copilot explain`)
 - `fff-mcp` — fast file search MCP server (auto-registered in OpenCode via the `mcp_servers:` config block)
