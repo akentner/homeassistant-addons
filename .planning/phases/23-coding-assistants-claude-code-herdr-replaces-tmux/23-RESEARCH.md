@@ -520,9 +520,9 @@ bootstrap, so move the Claude bootstrap above the MOTD/versions block.
 | A8 | The three plugin repos are legitimate and stay stable at their pinned SHAs (no authoritative source; days-old projects). | Package Legitimacy | Supply-chain risk -> human review checkpoint. |
 | A9 | Pinning Claude to `latest` at build (not an ARG) is acceptable, like opencode. | Standard Stack | User may want `CLAUDE_VERSION` ARG. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **D-02 vs plugin wiring (needs user decision).** herdr defaults show nothing for `claude-limits` (needs
+1. **D-02 vs plugin wiring (needs user decision).** herdr defaults show nothing for `claude-limits` (needs RESOLVED: user chose no config, documented opt-ins (23-06, 23-08).
    `[ui] tab_bar_right` command entry + optional `[[keys.command]]`) and the sub-agent sidebar/popup key needs
    `herdr plugin action invoke subagent.watch.setup`, which edits `~/.claude/settings.json` hooks **and**
    `config.toml`. herdr also shows a first-run onboarding dialog until `onboarding = false` is saved.
@@ -531,25 +531,25 @@ bootstrap, so move the Claude bootstrap above the MOTD/versions block.
    - Recommendation: honour D-02/D-04 literally (write no `config.toml`, no `settings.json`); ship the plugins linked and
      document copy-paste snippets and the CLI invocations in DOCS.md as opt-in. Alternative: seed a minimal
      plugin-wiring `config.toml` only when absent (needs explicit user OK because it bends D-02).
-2. **Claude persistence path (needs user confirmation).** Locked: `/data/claude/bin` + symlinked launcher; verified
+2. **Claude persistence path (needs user confirmation).** Locked: `/data/claude/bin` + symlinked launcher; verified RESOLVED: user chose the versions-dir layout (23-01).
    to break `claude update`. Recommendation: `/data/.local/share/claude/versions` (Pattern 2). The seed stays in
    `/opt/claude-initial` as locked.
-3. **web-service password.** Without a password the UI returns 503. Recommendation: add an optional `password?` option
+3. **web-service password.** Without a password the UI returns 503. Recommendation: add an optional `password?` option RESOLVED: user chose the optional `herdr_web_password` option (23-07).
    (e.g. `herdr_web_password`) that run.sh pipes to `bun scripts/plugin.ts set-password` with
    `HERDR_PLUGIN_CONFIG_DIR=$(herdr plugin config-dir imontes.herdr-web-service)` after linking; if unset, log a clear
    info line. Also validate the plugin's password rules before piping (otherwise the call fails and only a warning is
    logged, per D-07).
-4. **Patching a third-party plugin at build time** (Summary item 3). D-06 says "git clone at a pinned commit"; the sub-path fix
+4. **Patching a third-party plugin at build time** (Summary item 3). D-06 says "git clone at a pinned commit"; the sub-path fix RESOLVED: user chose patch plus spike/verify checkpoint (23-02, 23-04).
    needs ~6 sed/patch edits (`web/src/api.ts`, `roster.ts:48`, `main.tsx:13`, `InstallBanner.tsx:18`,
    `ChatView.tsx:467-468`, build with `vite build --base ./`). Recommendation: keep a `patches/*.patch` file applied with
    `patch -p1` (fails the build loudly if the pin moves) and gate the tab behind a verify script. Alternative: skip
    web-service ingress and publish a port (rejected by the ROADMAP) or drop the plugin.
-5. **CI arg forwarding.** Recommendation: Dockerfile defaults + mirror in `build.yaml` + drift check (no CI change).
+5. **CI arg forwarding.** Recommendation: Dockerfile defaults + mirror in `build.yaml` + drift check (no CI change). RESOLVED: Dockerfile defaults, build.yaml mirror, drift check (23-05, 23-06).
    Alternative: extend `_build-template.yml` to forward all `build.yaml` args (cross-add-on change, out of scope).
-6. **Stale MCP defaults** (Pitfall 8): ledger approach vs documented limitation.
-7. **claude-limits "zero-config" caveat** (Pitfall 7): only with interactive `claude login`.
-8. **Migrate old `/data/claude/.claude*`?** Optional one-time copy if the new paths are absent.
-9. **Version bump size.** D-08 says subpatch (`1.0.0-3`); the change is feature-sized, a user may prefer `1.1.0-0`.
+6. **Stale MCP defaults** (Pitfall 8): ledger approach vs documented limitation. RESOLVED: documented limitation, no ledger (23-03, 23-08).
+7. **claude-limits "zero-config" caveat** (Pitfall 7): only with interactive `claude login`. RESOLVED: documented caveat (23-08).
+8. **Migrate old `/data/claude/.claude*`?** Optional one-time copy if the new paths are absent. RESOLVED: trivial one-time copy (23-01).
+9. **Version bump size.** D-08 says subpatch (`1.0.0-3`); the change is feature-sized, a user may prefer `1.1.0-0`. RESOLVED: decided at the 23-09 checkpoint.
    Follow D-08 unless told otherwise; use `make update-version ADDON=coding-assistants VERSION=1.0.0-3` (add `NO_TAG=yes`
    / `NO_PUSH=yes` per the repo's recent convention; release tag left to the operator).
 
