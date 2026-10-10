@@ -185,6 +185,7 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
   `21-03-SUMMARY.md` on 2026-10-02 after confirming via live SSH that the new `cups` add-on is running with a real
   printer configured and `f1c878cb_cups` is already removed)
 - Phase 22 added: cups: paperless-ngx PDF document upload
+- Phase 23 added: coding-assistants: Claude Code + herdr (replaces tmux)
 
 ### Key Decisions (v1.3)
 

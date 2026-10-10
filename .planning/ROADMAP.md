@@ -211,6 +211,39 @@ Plans:
       task-id JSON body before recording a document as sent, host-side probe with RED proof, redirect-stub Scenario 5
       in internal/verify-cups-paperless-upload.sh, DOCS correction, version bump to 0.1.0-17
 
+### Phase 23: coding-assistants: Claude Code + herdr (replaces tmux)
+
+**Goal:** The `coding-assistants` add-on ships Claude Code next to opencode, with the same MCP servers registered, and
+uses herdr instead of tmux (with the subagent-watch, web-service and claude-limits plugins).
+
+**Locked decisions:**
+
+- Claude Code: official native installer at image build, copy stashed in `/opt/claude-initial`; `run.sh` bootstraps it
+  into `/data/claude/bin` and symlinks `~/.local/bin/claude`, so `claude update` survives rebuilds (same pattern as
+  opencode).
+- Auth: optional password options (`CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY`) exported when set, otherwise
+  interactive `claude login`; `~/.claude` and `~/.claude.json` persisted under `/data`.
+- MCP: add-on servers (`mcp_servers` incl. http type such as ha-mcp, fff, zigbee2mqtt, mycli wrappers) registered at
+  user scope by merging only `.mcpServers` into `~/.claude.json` (auth/projects keys preserved, existing user entries
+  win over add-on defaults). Project-specific MCPs stay possible via `.mcp.json` / `claude mcp add`.
+- herdr fully replaces tmux: remove the tmux package, `tmux.conf`, SSH auto-attach (bash + fish) and the ttyd attach;
+  SSH and ttyd attach to a shared herdr session.
+- herdr and plugins (`silencechung/herdr-subagent-watch`, `i-montes/herdr-web-service`,
+  `martin-saldinger/herdr-claude-limits`) installed at build time, versions pinned via ARG in `build.yaml`.
+- herdr-web-service is exposed behind nginx/HA ingress on a new path next to `/terminal/`, no new port.
+- herdr-claude-limits is zero-config (uses the persisted Claude credentials; research must verify).
+
+**Constraints:** single add-on (`coding-assistants`); Dockerfile changes need a local `docker build` before commit;
+version bump via `make update-version` (subpatch increment).
+**Requirements**: TBD
+**Depends on:** Phase 22
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 23 to break down; suggested: 1 Claude install + auth, 2 Claude MCP registration,
+      3 herdr replaces tmux, 4 plugins + web-service/nginx, 5 docs/version bump/verify)
+
 ### 📋 v1.4 iac-runner (Phases 16-19) — PLANNING
 
 **Milestone Goal:** Ship a Home Assistant Supervisor add-on (`iac-runner/`) that clones a Git repo (e.g.
