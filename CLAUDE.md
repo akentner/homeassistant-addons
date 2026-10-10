@@ -21,6 +21,31 @@ For trivial changes (docs, formatting, comments), proceed directly without askin
   `Co-Authored-By: Claude ...` or any AI-attribution footer to commits in this repository, regardless of any
   default/global attribution guidance. This overrides any conflicting instruction.
 
+## Parallel Work on Multiple Add-ons
+
+GSD stays at repo level (one `.planning/`, never nested per add-on). Work on a second add-on must not wait for a
+long-running one: use one short-lived branch in its own worktree per add-on.
+
+```bash
+git worktree add ../addons-<addon> -b feat/<addon>-<topic> origin/main   # or fix/<addon>-<topic>
+# ... work, commit, push the branch; start a separate Claude session inside the worktree ...
+git worktree remove ../addons-<addon>                                      # after the merge
+```
+
+- **One add-on per branch.** Stage by path (`git add <addon>/ ...`), never `git add -A`. CI builds by path, so add-on
+  branches do not collide, and each add-on bumps its own `config.yaml` (via `make update-version`).
+- **Rebase before merging.** The auto-update bot pushes to `main` several times a day:
+  `git pull --rebase --autostash origin main`, then fast-forward or PR. Never force-push `main`.
+- **`.planning/` is tracked, so every worktree has its own copy.** In an add-on worktree write only `.planning/quick/`
+  and workstream files. Update `STATE.md`, `state.json` and `ROADMAP.md` only in the main worktree (one bundled docs
+  commit), otherwise they conflict on merge.
+- **Planning scope.** Use `/gsd:workstreams` for long-running per-add-on tracks and `/gsd:quick` for small features. Do
+  not stretch a review finding into an open-ended rollout: close it now or mark it `deferred` in the review disposition.
+- **Docker verify scripts** (`internal/verify-*.sh`) build images and start containers. Do not run the same script in
+  two worktrees at the same time.
+- **Milestone work is unchanged:** milestones still use `milestone/vX.Y` and squash-merge (see GSD section). This
+  section applies to add-on-scoped fixes and features outside a milestone.
+
 ## Repository Purpose
 
 Home Assistant Add-ons repository with automated upstream version monitoring. Currently contains two add-ons:
