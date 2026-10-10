@@ -27,9 +27,13 @@ GSD stays at repo level (one `.planning/`, never nested per add-on). Work on a s
 long-running one: use one short-lived branch in its own worktree per add-on.
 
 ```bash
+# Inside Herdr (HERDR_ENV=1): creates the worktree and its workspace in one step
+herdr worktree create --cwd "$PWD" --branch feat/<addon>-<topic> --base origin/main --path ../addons-<addon> --no-focus
+# Plain git (outside Herdr), then optionally `herdr worktree open --cwd "$PWD" --branch <branch>`:
 git worktree add ../addons-<addon> -b feat/<addon>-<topic> origin/main   # or fix/<addon>-<topic>
-# ... work, commit, push the branch; start a separate Claude session inside the worktree ...
-git worktree remove ../addons-<addon>                                      # after the merge
+git branch --unset-upstream   # in the worktree, if the branch tracks origin/main (a bare `git push` must not target main)
+# ... work, commit, `git push -u origin <branch>`; start a separate Claude session inside the worktree ...
+herdr worktree remove --workspace <id>   # after the merge (Herdr-created); else: git worktree remove ../addons-<addon>
 ```
 
 - **One add-on per branch.** Stage by path (`git add <addon>/ ...`), never `git add -A`. CI builds by path, so add-on
