@@ -237,9 +237,18 @@ uses herdr instead of tmux (with the subagent-watch, web-service and claude-limi
 version bump via `make update-version` (subpatch increment).
 **Requirements**: TBD
 **Depends on:** Phase 22
-**Plans:** 0 plans
+**Plans:** 1/9 plans executed
 
 Plans:
+- [x] 23-01-PLAN.md
+- [ ] 23-02-PLAN.md
+- [ ] 23-03-PLAN.md
+- [ ] 23-04-PLAN.md
+- [ ] 23-05-PLAN.md
+- [ ] 23-06-PLAN.md
+- [ ] 23-07-PLAN.md
+- [ ] 23-08-PLAN.md
+- [ ] 23-09-PLAN.md
 
 - [ ] TBD (run /gsd-plan-phase 23 to break down; suggested: 1 Claude install + auth, 2 Claude MCP registration,
       3 herdr replaces tmux, 4 plugins + web-service/nginx, 5 docs/version bump/verify)

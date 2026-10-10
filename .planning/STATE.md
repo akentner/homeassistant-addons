@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: opentofu-bridge
-current_phase: 11
-current_phase_name: Bridge Read API
-current_plan: Not started
+current_phase: 23
+current_phase_name: "coding-assistants: Claude Code + herdr (replaces tmux)"
+current_plan: 2
 status: Phase 22 gap-closure 22-04 executed (CR-01) — awaiting re-verification
-stopped_at: Phase 23 context gathered
-last_updated: "2026-10-10T13:55:28.079Z"
-state_head: 9f8941a23faa5880c9071386acb80a4eede69f4a
+stopped_at: Completed 23-01-PLAN.md
+last_updated: "2026-10-10T15:50:37.676Z"
+state_head: ee50e053ba9e4fd6f8efe468c6bdc7b809dd031a
 progress:
   total_phases: 11
   completed_phases: 12
-  total_plans: 34
-  completed_plans: 33
-  percent: 97
+  total_plans: 43
+  completed_plans: 34
+  percent: 79
 ---
 
 # Project State
@@ -107,10 +107,10 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Current Plan: Not started
-Total Plans in Phase: 4
+Current Plan: 2
+Total Plans in Phase: 9
 
-Phase: 11 — Bridge Read API
+Phase: 23 (coding-assistants: Claude Code + herdr (replaces tmux)) — EXECUTING
 
 Phase 20 (litellm-addon) — 21 atomic commits on main (4 planning + 14 execution + 4 plan SUMMARYs). All 4 plans landed:
 
@@ -380,6 +380,7 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 | Phase 21 P08 | 35min | 3 tasks | 5 files |
 | Phase 21 P09 | 11min | 3 tasks | 6 files |
 | Phase 22 P04 | 25min | 3 tasks | 6 files |
+| Phase 23 P01 | 55 min | 3 tasks | 5 files |
 
 ## Quick Tasks Completed
 
@@ -421,11 +422,11 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 
 ## Session Continuity
 
-**Resume file:** .planning/phases/23-coding-assistants-claude-code-herdr-replaces-tmux/23-CONTEXT.md
+**Resume file:** None
 
-**Stopped at:** Phase 23 context gathered
+**Stopped at:** Completed 23-01-PLAN.md
 
-Last session: 2026-10-10T13:55:27.833Z
+Last session: 2026-10-10T15:50:37.422Z
 
 ---
 
@@ -505,3 +506,6 @@ skipped; Phase 16 ready to plan_
 - [Phase 22]: 22-04: upload_document() is the single success producer; HTTP 200 + non-empty JSON-string task id required, all 3xx refused (allow_redirects=False); attempt_and_route untouched
 - [Phase 22]: 22-04: cups bumped to 0.1.0-17 with NO_TAG/NO_PUSH; release tag left to operator
 - [Phase 22]: WR-09 fixed in cups 0.1.0-20 (caf46b2, dba7553): guarding `_safe_redirect_target()` alone was not enough -- `requests.post(allow_redirects=False)` itself raises an unwrapped `ValueError` on a malformed `Location` (resolve_redirects pre-parses it), so `upload_document()` now catches `(RequestException, ValueError)`; proven by a new RED-before-GREEN row in internal/verify-cups-upload-worker.py (the first fix, 0.1.0-18/19, still raised)
+- [Phase 23]: Claude persistence layout: /data/.local/share/claude/versions with launcher ~/.local/bin/claude pointing into it (replaces /data/claude/bin); seed in /opt/claude-initial copied only when strictly newer
+- [Phase 23]: bashio runs run.sh with errexit+pipefail: pipelines that may yield nothing must end in || true
+- [Phase 23]: Auth options claude_code_oauth_token / anthropic_api_key exported to the run.sh process env only, never to profile files or logs
