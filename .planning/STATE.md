@@ -4,17 +4,17 @@ milestone: v1.3
 milestone_name: opentofu-bridge
 current_phase: 23
 current_phase_name: "coding-assistants: Claude Code + herdr (replaces tmux)"
-current_plan: 8
+current_plan: 9
 status: Phase 22 gap-closure 22-04 executed (CR-01) — awaiting re-verification
-stopped_at: Completed 23-07-PLAN.md
-last_updated: "2026-10-11T20:36:18.594Z"
-state_head: "0b8a03fc74803f68a83aad1ec7e060645162c7d5"
+stopped_at: Completed 23-08-PLAN.md
+last_updated: "2026-10-11T21:03:36.827Z"
+state_head: 0ad4df5af422b72757e1119fffd2af0817d4348c
 progress:
   total_phases: 11
   completed_phases: 12
   total_plans: 43
-  completed_plans: 40
-  percent: 93
+  completed_plans: 41
+  percent: 95
 ---
 
 # Project State
@@ -107,7 +107,7 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Current Plan: 8
+Current Plan: 9
 Total Plans in Phase: 9
 
 Phase: 23 (coding-assistants: Claude Code + herdr (replaces tmux)) — EXECUTING
@@ -387,6 +387,7 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 | Phase 23 P05 | 57 min | 3 tasks | 9 files |
 | Phase 23 P06 | 33min | 2 tasks | 4 files |
 | Phase 23 P07 | 70min | 2 tasks | 6 files |
+| Phase 23 P08 | 45 min | 2 tasks | 7 files |
 
 ## Quick Tasks Completed
 
@@ -430,9 +431,9 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 
 **Resume file:** None
 
-**Stopped at:** Completed 23-07-PLAN.md
+**Stopped at:** Completed 23-08-PLAN.md
 
-Last session: 2026-10-11T20:36:18.322Z
+Last session: 2026-10-11T21:03:36.570Z
 
 ---
 
@@ -522,3 +523,4 @@ skipped; Phase 16 ready to plan_
 - [Phase 23]: 23-05: herdr pins live as Dockerfile ARG defaults mirrored in build.yaml and drift-checked by harness scenario drift (CI forwards only the standard build args)
 - [Phase 23]: [23-06] Plugin blocks placed after the last download layer so a pin bump or patch edit does not re-run the GitHub-API-heavy layers
 - [Phase 23]: [23-07] Option herdr_web_password (password?, no default) feeds the plugin's set-password over stdin on every start; empty/null only logs an info line; failed logins capped at two per container in the harness
+- [Phase 23]: 23-08: the three herdr plugins are documented as linked-but-not-configured opt-ins; the web-service setup wizard is advised against; the migration section is the only place the old multiplexer is named in DOCS.md
