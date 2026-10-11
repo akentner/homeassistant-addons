@@ -1,0 +1,265 @@
+diff --git a/web/public/manifest.webmanifest b/web/public/manifest.webmanifest
+index ac89f66..e358887 100644
+--- a/web/public/manifest.webmanifest
++++ b/web/public/manifest.webmanifest
+@@ -3,15 +3,15 @@
+   "short_name": "Herdr",
+   "description": "Your Herdr agents from the browser.",
+   "lang": "en",
+-  "id": "/",
+-  "start_url": "/",
+-  "scope": "/",
++  "id": "./",
++  "start_url": "./",
++  "scope": "./",
+   "display": "standalone",
+   "background_color": "#f3f1ea",
+   "theme_color": "#f3f1ea",
+   "icons": [
+-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+-    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
++    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
++    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
++    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+   ]
+ }
+diff --git a/web/public/sw.js b/web/public/sw.js
+deleted file mode 100644
+index bc95521..0000000
+--- a/web/public/sw.js
++++ /dev/null
+@@ -1,82 +0,0 @@
+-// Herdr Web service worker: makes the app installable and keeps the shell (HTML, JS, CSS,
+-// fonts, icons) for a flaky connection. Never touches /api or /ws: data and auth always go to
+-// the network, so nothing private is cached.
+-const CACHE = "herdr-web-v1";
+-
+-self.addEventListener("install", () => self.skipWaiting());
+-
+-self.addEventListener("activate", (event) => {
+-  event.waitUntil(
+-    caches.keys()
+-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+-      .then(() => self.clients.claim()),
+-  );
+-});
+-
+-self.addEventListener("fetch", (event) => {
+-  const request = event.request;
+-  const url = new URL(request.url);
+-  if (request.method !== "GET" || url.origin !== self.location.origin) return;
+-  if (url.pathname.startsWith("/api/") || url.pathname === "/ws") return;
+-
+-  // hashed build assets never change: cache first
+-  if (url.pathname.startsWith("/assets/")) {
+-    event.respondWith(
+-      caches.match(request).then((hit) => hit ?? fetch(request).then((res) => {
+-        if (res.ok) caches.open(CACHE).then((c) => c.put(request, res.clone()));
+-        return res;
+-      })),
+-    );
+-    return;
+-  }
+-
+-  // the page and the rest: network first, the cached copy when offline
+-  event.respondWith(
+-    fetch(request)
+-      .then((res) => {
+-        if (res.ok) {
+-          const copy = res.clone();
+-          caches.open(CACHE).then((c) => c.put(request.mode === "navigate" ? "/" : request, copy));
+-        }
+-        return res;
+-      })
+-      .catch(() => caches.match(request.mode === "navigate" ? "/" : request).then((hit) => hit ?? Response.error())),
+-  );
+-});
+-
+-// push notifications: the server sends { title, body, url, tag, kind }, encrypted end to end
+-self.addEventListener("push", (event) => {
+-  let data = {};
+-  try {
+-    data = event.data ? event.data.json() : {};
+-  } catch {
+-    /* not JSON: the generic text below */
+-  }
+-  const title = data.title || "Herdr";
+-  event.waitUntil(
+-    self.registration.showNotification(title, {
+-      body: data.body || "",
+-      // one notification per session: a newer notice replaces the older one, and still alerts
+-      tag: data.tag || undefined,
+-      renotify: Boolean(data.tag),
+-      icon: "/icon-192.png",
+-      badge: "/icon-192.png",
+-      data: { url: data.url || "/" },
+-    }),
+-  );
+-});
+-
+-// a tap opens the session: in the app's window when one is open, otherwise in a new one
+-self.addEventListener("notificationclick", (event) => {
+-  event.notification.close();
+-  const url = new URL(event.notification.data?.url || "/", self.location.origin).href;
+-  event.waitUntil(
+-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+-      const open = windows.find((w) => new URL(w.url).origin === self.location.origin);
+-      if (!open) return self.clients.openWindow(url);
+-      // the app routes by hash: it switches session itself, without reloading
+-      open.postMessage({ type: "open", url });
+-      return open.focus();
+-    }),
+-  );
+-});
+diff --git a/web/src/ChatView.tsx b/web/src/ChatView.tsx
+index 4a185fe..645c35f 100644
+--- a/web/src/ChatView.tsx
++++ b/web/src/ChatView.tsx
+@@ -464,8 +464,8 @@ function UserBubble({ text, queued = false }: { text: string; queued?: boolean }
+       {images.length > 0 && (
+         <div className="flex flex-wrap justify-end gap-1.5">
+           {images.map((name) => (
+-            <a key={name} href={`/api/uploads/${name}`} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl border border-line">
+-              <img src={`/api/uploads/${name}`} alt="Sent image" loading="lazy" className="max-h-48 max-w-[240px] object-cover" />
++            <a key={name} href={`api/uploads/${name}`} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl border border-line">
++              <img src={`api/uploads/${name}`} alt="Sent image" loading="lazy" className="max-h-48 max-w-[240px] object-cover" />
+             </a>
+           ))}
+         </div>
+diff --git a/web/src/InstallBanner.tsx b/web/src/InstallBanner.tsx
+index 4f192aa..42156bb 100644
+--- a/web/src/InstallBanner.tsx
++++ b/web/src/InstallBanner.tsx
+@@ -15,7 +15,7 @@ export function InstallBanner() {
+       className="fixed inset-x-4 bottom-[calc(96px+env(safe-area-inset-bottom))] z-30 flex flex-col gap-3 rounded-[18px] border border-line bg-surface p-4 shadow-dialog lg:inset-x-auto lg:right-6 lg:bottom-6 lg:w-[380px]"
+     >
+       <div className="flex items-start gap-3">
+-        <img src="/icon-192.png" alt="" width={44} height={44} className="size-11 shrink-0 rounded-xl" />
++        <img src="icon-192.png" alt="" width={44} height={44} className="size-11 shrink-0 rounded-xl" />
+         <div className="flex min-w-0 flex-col gap-1">
+           <h2 id="install-title" className="text-[17px] font-bold">Install Herdr</h2>
+           {offer.kind === "native" ? (
+diff --git a/web/src/alerts.ts b/web/src/alerts.ts
+index e52abd2..cf1cf27 100644
+--- a/web/src/alerts.ts
++++ b/web/src/alerts.ts
+@@ -89,7 +89,8 @@ function setPush(state: PushState, sub: PushSubscription | null): void {
+   changed();
+ }
+ 
+-const supported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
++// push needs a registered service worker, which cannot work under a sub-path (HA ingress, /services/)
++const supported = () => false;
+ 
+ async function registration(): Promise<ServiceWorkerRegistration | null> {
+   if (!("serviceWorker" in navigator)) return null;
+diff --git a/web/src/api.ts b/web/src/api.ts
+index 042f19c..458ef45 100644
+--- a/web/src/api.ts
++++ b/web/src/api.ts
+@@ -12,6 +12,8 @@ export class ApiFailure extends Error {
+   }
+ }
+ 
++// API paths are relative on purpose: the page is served under a sub-path (HA ingress, /services/)
++// and its URL always ends in a slash, so "api/x" resolves to "<prefix>/services/api/x"
+ async function call<T>(path: string, init?: RequestInit): Promise<T> {
+   const response = await fetch(path, { credentials: "same-origin", ...init });
+   if (response.status === 204) return undefined as T;
+@@ -45,30 +47,30 @@ export interface NewSessionBody {
+ export type PaneKey = "enter" | "esc" | "tab" | "up" | "down" | "left" | "right" | "backspace" | "ctrl+c" | "ctrl+d";
+ 
+ const post = (body: unknown): RequestInit => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+-const pane = (id: string, action: string) => `/api/panes/${encodeURIComponent(id)}/${action}`;
++const pane = (id: string, action: string) => `api/panes/${encodeURIComponent(id)}/${action}`;
+ 
+ export const api = {
+-  session: () => call<SessionInfo>("/api/session"),
++  session: () => call<SessionInfo>("api/session"),
+   login: (password: string, remember: boolean) =>
+-    call<void>("/api/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password, remember }) }),
+-  logout: () => call<void>("/api/auth/logout", { method: "POST" }),
+-  roster: () => call<Roster>("/api/roster"),
+-  folders: (path: string) => call<{ path: string; dirs: { name: string; git: string | null }[] }>(`/api/fs?path=${encodeURIComponent(path)}`),
+-  createSession: (body: NewSessionBody) => call<{ pane_id: string }>("/api/sessions", post(body)),
++    call<void>("api/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password, remember }) }),
++  logout: () => call<void>("api/auth/logout", { method: "POST" }),
++  roster: () => call<Roster>("api/roster"),
++  folders: (path: string) => call<{ path: string; dirs: { name: string; git: string | null }[] }>(`api/fs?path=${encodeURIComponent(path)}`),
++  createSession: (body: NewSessionBody) => call<{ pane_id: string }>("api/sessions", post(body)),
+   screen: (id: string) => call<{ text: string }>(pane(id, "screen")),
+   input: (id: string, body: { text?: string; keys?: PaneKey[]; enter?: boolean }) => call<void>(pane(id, "input"), post(body)),
+   closePane: (id: string) => call<void>(pane(id, "close"), { method: "POST" }),
+-  upload: (file: Blob) => call<{ name: string; path: string; type: string; size: number }>("/api/uploads", { method: "POST", headers: { "content-type": file.type || "application/octet-stream" }, body: file }),
++  upload: (file: Blob) => call<{ name: string; path: string; type: string; size: number }>("api/uploads", { method: "POST", headers: { "content-type": file.type || "application/octet-stream" }, body: file }),
+   chat: (id: string, version: string | null) => call<ChatResponse>(pane(id, "chat") + (version ? `?v=${encodeURIComponent(version)}` : "")),
+   prompt: (id: string, text: string) => call<void>(pane(id, "prompt"), post({ text })),
+   choose: (id: string, index: number) => call<void>(pane(id, "choose"), post({ index })),
+   opencodeOptions: (id: string) => call<OpencodeOptions>(pane(id, "models")),
+   opencodeModel: (id: string, provider: string, model: string) => call<void>(pane(id, "model"), post({ provider, model })),
+   opencodeVariant: (id: string, variant: string | null) => call<void>(pane(id, "variant"), post({ variant })),
+-  pushKey: () => call<{ key: string }>("/api/push/key"),
+-  pushSubscribe: (subscription: PushSubscriptionJSON) => call<void>("/api/push/subscribe", post(subscription)),
+-  pushUnsubscribe: (endpoint: string) => call<void>("/api/push/unsubscribe", post({ endpoint })),
+-  signIns: () => call<SignIn[]>("/api/auth/sessions"),
+-  signOutDevice: (id: string) => call<void>("/api/auth/sessions/revoke", post({ id })),
+-  signOutOthers: () => call<void>("/api/auth/sessions/revoke-others", { method: "POST" }),
++  pushKey: () => call<{ key: string }>("api/push/key"),
++  pushSubscribe: (subscription: PushSubscriptionJSON) => call<void>("api/push/subscribe", post(subscription)),
++  pushUnsubscribe: (endpoint: string) => call<void>("api/push/unsubscribe", post({ endpoint })),
++  signIns: () => call<SignIn[]>("api/auth/sessions"),
++  signOutDevice: (id: string) => call<void>("api/auth/sessions/revoke", post({ id })),
++  signOutOthers: () => call<void>("api/auth/sessions/revoke-others", { method: "POST" }),
+ };
+diff --git a/web/src/main.tsx b/web/src/main.tsx
+index 0d9abbb..dea95d9 100644
+--- a/web/src/main.tsx
++++ b/web/src/main.tsx
+@@ -8,16 +8,7 @@ import { initTheme } from "./theme.ts";
+ initTheme();
+ captureInstallPrompt();
+ 
+-// installable app; browsers only allow service workers on HTTPS or localhost
+-if ("serviceWorker" in navigator && window.isSecureContext) {
+-  navigator.serviceWorker.register("/sw.js").catch(() => {});
+-  // a tapped notification: the service worker hands over the session to open
+-  navigator.serviceWorker.addEventListener("message", (event: MessageEvent<{ type?: string; url?: string }>) => {
+-    if (event.data?.type !== "open" || !event.data.url) return;
+-    const target = new URL(event.data.url, location.origin);
+-    if (target.origin === location.origin) location.hash = target.hash;
+-  });
+-}
++// no service worker: a root-scoped /sw.js cannot work under a sub-path (HA ingress, /services/)
+ 
+ createRoot(document.getElementById("root")!).render(
+   <StrictMode>
+diff --git a/web/src/roster.ts b/web/src/roster.ts
+index 7ce06e8..e1cbcc7 100644
+--- a/web/src/roster.ts
++++ b/web/src/roster.ts
+@@ -44,8 +44,9 @@ export function useRoster(initiallyConnected: boolean): { roster: Roster; connec
+     const connect = () => {
+       clearTimeout(retry);
+       if (stopped || (ws && ws.readyState <= WebSocket.OPEN)) return;
+-      const protocol = location.protocol === "https:" ? "wss" : "ws";
+-      const socket = new WebSocket(`${protocol}://${location.host}/ws`);
++      const url = new URL("ws", location.href);
++      url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
++      const socket = new WebSocket(url);
+       ws = socket;
+       socket.onopen = () => {
+         delay = 1000;
+diff --git a/web/vite.config.ts b/web/vite.config.ts
+index e483f40..6f33dfe 100644
+--- a/web/vite.config.ts
++++ b/web/vite.config.ts
+@@ -8,6 +8,8 @@ const backend = `http://127.0.0.1:${process.env["PORT"] || 7340}`;
+ 
+ export default defineConfig({
+   root,
++  // relative asset URLs: the page is served under a sub-path (HA ingress, /services/)
++  base: "./",
+   plugins: [react(), tailwindcss()],
+   build: { outDir: fileURLToPath(new URL("../dist", import.meta.url)), emptyOutDir: true },
+   server: {
