@@ -561,6 +561,40 @@ if [[ "${KEY_COUNT}" -eq 0 ]]; then
     bashio::log.warning "No SSH authorized_keys configured — SSH login will be impossible."
 fi
 
+# herdr server -- started HERE (after every export above, the env_vars injection and the fish conf) and never by a
+# client: the server's environment becomes the environment of every pane, so panes get PATH (/root/.local/bin),
+# HA_URL/HA_TOKEN/SUPERVISOR_TOKEN and the Claude auth variables. SHELL/LANG/LC_ALL are set for this one command only.
+# Respawn loop (D-07): a crashed or stopped server (`herdr server stop` therefore acts as a restart) must not leave
+# SSH and the web terminal without a session; clients fall back to a plain fish shell meanwhile. `|| rc=$?` keeps
+# errexit from ending the loop.
+mkdir -p /data/.config/herdr
+(
+    cd /homeassistant || cd /
+    while true; do
+        rc=0
+        SHELL=/usr/bin/fish LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 herdr server || rc=$?
+        bashio::log.warning "herdr server exited (status ${rc}), restarting in 3 s"
+        sleep 3
+    done
+) &
+
+HERDR_UP=0
+for _ in $(seq 1 50); do
+    if herdr status --json 2>/dev/null | jq -e '.server.running == true' > /dev/null 2>&1; then
+        HERDR_UP=1
+        break
+    fi
+    sleep 0.2
+done
+if [[ "${HERDR_UP}" == "1" ]]; then
+    # Workspace `main` (cwd /homeassistant) exists before the first client attaches.
+    coding-assistants-attach --ensure \
+        || bashio::log.warning "Could not create the herdr workspace 'main' (clients will retry)"
+    bashio::log.info "herdr server is running"
+else
+    bashio::log.warning "herdr server did not answer within 10 s (clients fall back to a plain fish shell until it does)"
+fi
+
 # Start sshd (background)
 bashio::log.info "Starting SSH server on port 2222..."
 /usr/sbin/sshd -D -f /etc/ssh/sshd_config &

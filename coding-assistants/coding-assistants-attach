@@ -1,0 +1,76 @@
+#!/bin/sh
+# coding-assistants-attach -- the ONE way into the shared herdr session.
+#
+# ttyd (web terminal) and the SSH login hooks in /etc/profile.d and the fish conf.d file call this script, so every
+# client lands in the same herdr session. It attaches to a session that run.sh already started; it NEVER starts a
+# herdr server itself: a server started by a client inherits the client's environment (no HA tokens, wrong cwd),
+# and that environment becomes the environment of every pane. If no server answers, the user still gets a usable
+# terminal (plain fish shell plus a message), never a dead connection.
+#
+# Usage: coding-assistants-attach [--ensure]
+#   --ensure   only make sure workspace `main` exists (run.sh calls this once before sshd/ttyd start), do not attach
+
+ENSURE=0
+case "${1:-}" in
+    "") ;;
+    --ensure) ENSURE=1 ;;
+    *)
+        echo "usage: coding-assistants-attach [--ensure]" >&2
+        exit 2
+        ;;
+esac
+
+# Already inside a herdr pane: never nest clients.
+if [ -n "${HERDR_ENV:-}" ]; then
+    echo "coding-assistants-attach: already inside a herdr pane, not attaching again"
+    exit 0
+fi
+
+# Defaults for callers without the add-on environment (a bare ttyd child, an SSH login); user-set values win.
+: "${XDG_CONFIG_HOME:=/data/.config}"
+: "${XDG_DATA_HOME:=/data/.local/share}"
+: "${LANG:=en_US.UTF-8}"
+: "${LC_ALL:=en_US.UTF-8}"
+: "${TERM:=xterm-256color}"
+PATH="/root/.local/bin:/usr/local/bin:${PATH}"
+export XDG_CONFIG_HOME XDG_DATA_HOME LANG LC_ALL TERM PATH
+
+server_running() {
+    herdr status --json 2>/dev/null | jq -e '.server.running == true' >/dev/null 2>&1
+}
+
+# Wait up to ~8 s for the server (a client may arrive while run.sh is still booting it).
+tries=0
+while ! server_running; do
+    tries=$((tries + 1))
+    if [ "${tries}" -ge 20 ]; then
+        echo "coding-assistants-attach: herdr server is not running, starting a plain fish shell (see the add-on log)" >&2
+        if [ "${ENSURE}" = "1" ]; then
+            exit 1
+        fi
+        # The variable keeps the login-profile hooks from capturing this fallback shell in an exec loop.
+        CODING_ASSISTANTS_NO_ATTACH=1 exec fish
+    fi
+    sleep 0.4
+done
+
+# An emptied session would open the next workspace in $HOME; recreate `main` at /homeassistant instead. The lock
+# keeps two simultaneous first clients from both creating a workspace.
+(
+    flock 9
+    if herdr workspace list 2>/dev/null | jq -e '.result.workspaces | length > 0' >/dev/null 2>&1; then
+        exit 0
+    fi
+    herdr workspace create --cwd /homeassistant --label main --no-focus >/dev/null 2>&1 || {
+        echo "coding-assistants-attach: could not create workspace main" >&2
+        exit 1
+    }
+) 9>/run/coding-assistants-attach.lock
+ensure_rc=$?
+
+if [ "${ENSURE}" = "1" ]; then
+    exit "${ensure_rc}"
+fi
+
+# A bare herdr attaches to the persistent default session (the server is running, so it does not start one).
+exec herdr

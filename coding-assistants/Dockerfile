@@ -87,6 +87,27 @@ RUN TTYD_VER=$(curl -sf https://api.github.com/repos/tsl0922/ttyd/releases/lates
         -o /usr/local/bin/ttyd \
     && chmod +x /usr/local/bin/ttyd
 
+# herdr — terminal workspace manager for coding agents (static release binary, replaces the previous multiplexer).
+# CI forwards only the standard build args (BUILD_FROM, VERSION, BUILD_*), so build.yaml args never reach this build:
+# the pins live here as ARG defaults and are mirrored 1:1 in build.yaml (internal/verify-coding-assistants.sh, scenario
+# `drift`, fails when they diverge). The digests are the GitHub release asset digests of the tag. The architecture
+# is picked with `uname -m`; any other value fails the build.
+ARG HERDR_VERSION=0.9.3
+ARG HERDR_SHA256_X86_64=18a8dc65f1c2fa485884344356dea1cfd911c6f06cf46fa78e193f4087f4dba7
+ARG HERDR_SHA256_AARCH64=4de7aa3e25678812e92960de64f7c2aaa1bca1f0f80a3c5e559837e231e1f5c0
+RUN ARCH=$(uname -m) \
+    && case "${ARCH}" in \
+        x86_64) HERDR_SHA256="${HERDR_SHA256_X86_64}" ;; \
+        aarch64) HERDR_SHA256="${HERDR_SHA256_AARCH64}" ;; \
+        *) echo "herdr: unsupported architecture ${ARCH}" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL \
+        "https://github.com/herdrdev/herdr/releases/download/v${HERDR_VERSION}/herdr-linux-${ARCH}" \
+        -o /usr/local/bin/herdr \
+    && echo "${HERDR_SHA256}  /usr/local/bin/herdr" | sha256sum -c - \
+    && chmod +x /usr/local/bin/herdr \
+    && [ "$(herdr --version | cut -d' ' -f2)" = "${HERDR_VERSION}" ]
+
 # fff-mcp — fast file search MCP server for AI agents (glibc build for Debian)
 RUN FFF_VER=$(curl -sf https://api.github.com/repos/dmtrKovalenko/fff/releases/latest \
         | jq -r '.tag_name | ltrimstr("v")') \
@@ -225,6 +246,11 @@ COPY TOOLS.md /etc/coding-assistants/TOOLS.md
 # SSH config
 COPY sshd_config /etc/ssh/sshd_config
 RUN mkdir -p /run/sshd
+
+# Attach-or-create wrapper — the only way into the shared herdr session (ttyd and the SSH login hooks call it).
+# Kept next to the end of the file on purpose: a change here must not invalidate the download layers above.
+COPY coding-assistants-attach /usr/local/bin/coding-assistants-attach
+RUN chmod +x /usr/local/bin/coding-assistants-attach
 
 # System-wide tmux config
 COPY tmux.conf /etc/tmux.conf

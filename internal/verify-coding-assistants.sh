@@ -25,6 +25,11 @@
 #                    keys survive, a corrupt file is never clobbered, no secret in the log); OpenCode unchanged
 #   mcp-integrations zigbee2mqtt (explicit env) and mariadb-<name> wrapper entries in .mcpServers, user edits win
 #                    across a container re-creation, no MQTT/database secret in either container log
+#   drift            (static, no Docker) build.yaml args mirror the Dockerfile ARG defaults 1:1; a deliberately
+#                    changed copy must FAIL the comparison (negative control)
+#   herdr-core       herdr server owned by run.sh (workspace main at /homeassistant, fish panes with the add-on
+#                    environment, respawn after kill -9), two concurrent clients share ONE session, a missing
+#                    server degrades to a plain fish shell
 #
 # Container model: every add-on start is a NEW container on the same /data volume (Supervisor semantics), so a
 # "restart" is `docker rm -f` followed by a fresh `docker run` (restart_ca), never `docker restart`. Containers
@@ -67,7 +72,9 @@ declare -A CA_OPTS=()
 declare -A CA_EXTRA=()
 
 # Registered scenarios: NAME -> function scenario_<NAME with - replaced by _>
-SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers mcp-integrations)
+SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers mcp-integrations drift herdr-core)
+# Scenarios that need neither Docker nor the image: when only these are selected the image build is skipped.
+STATIC_SCENARIOS=(drift)
 
 cleanup() {
     local pid c
@@ -130,19 +137,30 @@ for want in "${REQUESTED[@]}"; do
     done
 done
 
-for tool in docker jq python3; do
+NEEDS_IMAGE=0
+for s in "${SELECTED[@]}"; do
+    [[ " ${STATIC_SCENARIOS[*]} " == *" ${s} "* ]] || NEEDS_IMAGE=1
+done
+for tool in jq python3; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         red "${tool} not found in PATH"
         exit 2
     fi
 done
+if [[ "${NEEDS_IMAGE}" == "1" ]] && ! command -v docker >/dev/null 2>&1; then
+    red "docker not found in PATH"
+    exit 2
+fi
 if [[ ! -d "${ADDON_DIR}" ]]; then
     red "coding-assistants/ add-on directory not found: ${ADDON_DIR}"
     exit 2
 fi
 
 # --- Image build (mirrors CI, which forwards only the standard build args) --------------------------------------
-if [[ "${REUSE_IMAGE}" == "1" ]]; then
+if [[ "${NEEDS_IMAGE}" == "0" ]]; then
+    REUSE_IMAGE=1 # nothing built, nothing to remove in cleanup
+    yellow "Only static scenarios selected -- image build skipped"
+elif [[ "${REUSE_IMAGE}" == "1" ]]; then
     yellow "Reusing image ${IMAGE_NAME} (CA_VERIFY_IMAGE) -- build skipped"
 else
     BUILD_FROM=$(grep -E '^\s*amd64:' "${ADDON_DIR}/build.yaml" | sed -E 's/^\s*amd64: "(.*)"/\1/')
@@ -659,6 +677,311 @@ scenario_mcp_integrations() {
         "$(grep -c -e "${CA_MQTT_PASS_FIXTURE}" -e "${CA_DB_PASS_FIXTURE}" <<<"${logs1}" || true)" "0"
     assert_eq "no MQTT/database secret in the second container log" \
         "$(grep -c -e "${CA_MQTT_PASS_FIXTURE}" -e "${CA_DB_PASS_FIXTURE}" <<<"${logs2}" || true)" "0"
+}
+
+# =============================================================================
+# Scenario drift (static: no container, no image)
+# =============================================================================
+# CI forwards only the standard build args, so the herdr pins live as Dockerfile ARG defaults and are mirrored in
+# build.yaml `args:`. Every build.yaml arg except VERSION must equal the Dockerfile default, and every Dockerfile
+# `ARG HERDR_*=` default must exist in build.yaml.
+
+# build_yaml_args FILE -- the `args:` block as KEY<TAB>VALUE lines (quotes stripped)
+build_yaml_args() {
+    awk '
+        /^args:/ { in_args = 1; next }
+        in_args && /^[^[:space:]#]/ { in_args = 0 }
+        in_args && /^[[:space:]]+[A-Za-z0-9_]+:/ {
+            line = $0
+            sub(/^[[:space:]]+/, "", line)
+            key = substr(line, 1, index(line, ":") - 1)
+            value = substr(line, index(line, ":") + 1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            gsub(/^"|"$/, "", value)
+            printf "%s\t%s\n", key, value
+        }' "$1"
+}
+
+# drift_compare BUILD_YAML DOCKERFILE -- prints every mismatch, returns 1 when there is at least one
+drift_compare() {
+    local build_yaml="$1" dockerfile="$2" rc=0 key value default keys=""
+    while IFS=$'\t' read -r key value; do
+        keys="${keys} ${key} "
+        [[ "${key}" == "VERSION" ]] && continue
+        default="$(grep -E "^ARG ${key}=" "${dockerfile}" | head -n 1 | cut -d= -f2-)"
+        if [[ -z "${default}" ]]; then
+            echo "drift: build.yaml arg ${key} has no 'ARG ${key}=' default in the Dockerfile"
+            rc=1
+        elif [[ "${default}" != "${value}" ]]; then
+            echo "drift: ${key} differs (build.yaml '${value}', Dockerfile '${default}')"
+            rc=1
+        fi
+    done < <(build_yaml_args "${build_yaml}")
+    while IFS= read -r key; do
+        [[ "${keys}" == *" ${key} "* ]] || {
+            echo "drift: Dockerfile ARG ${key} has no key in build.yaml args"
+            rc=1
+        }
+    done < <(grep -E '^ARG HERDR_[A-Z0-9_]+=' "${dockerfile}" | sed -E 's/^ARG ([A-Z0-9_]+)=.*/\1/')
+    return "${rc}"
+}
+
+scenario_drift() {
+    local by="${ADDON_DIR}/build.yaml" df="${ADDON_DIR}/Dockerfile" tmp="${SCRATCH_DIR}/drift"
+    mkdir -p "${tmp}"
+    if out="$(drift_compare "${by}" "${df}")"; then
+        pass "build.yaml args mirror the Dockerfile ARG defaults"
+    else
+        fail "build.yaml and the Dockerfile ARG defaults drifted: ${out}"
+    fi
+    assert_eq "build.yaml carries the three herdr pins" \
+        "$(build_yaml_args "${by}" | grep -c '^HERDR_')" "3"
+
+    # Negative controls: the comparison must fail on a changed value and on a pin missing from build.yaml.
+    sed -E 's/^(  HERDR_VERSION: ").*(")$/\10.0.0-drift\2/' "${by}" >"${tmp}/changed-value.yaml"
+    if drift_compare "${tmp}/changed-value.yaml" "${df}" >/dev/null; then
+        fail "negative control: a changed HERDR_VERSION did not fail the drift check"
+    else
+        pass "negative control: a changed HERDR_VERSION fails the drift check"
+    fi
+    grep -v '^  HERDR_SHA256_AARCH64:' "${by}" >"${tmp}/missing-key.yaml"
+    if drift_compare "${tmp}/missing-key.yaml" "${df}" >/dev/null; then
+        fail "negative control: a pin missing from build.yaml did not fail the drift check"
+    else
+        pass "negative control: a pin missing from build.yaml fails the drift check"
+    fi
+}
+
+# =============================================================================
+# Scenario herdr-core
+# =============================================================================
+# ca_pty_probe CONTAINER SECONDS COUNT CMD... -- run CMD COUNT times concurrently, each in its own pseudo-terminal
+# (120 columns by 40 rows) inside the container, let them run for SECONDS, then print one line per client:
+#   comm=<comm of the pty child after the wait> alive=<0|1> bytes=<bytes read> text=<first 400 printable chars>
+# and kill the children. The script is piped to `docker exec -i` (stdin of the exec is the script, the children get
+# the pty as stdin).
+CA_PTY_PROBE_PY='
+import fcntl
+import os
+import pty
+import select
+import signal
+import struct
+import sys
+import termios
+import time
+
+seconds = float(sys.argv[1])
+count = int(sys.argv[2])
+cmd = sys.argv[3:]
+winsize = struct.pack("HHHH", 40, 120, 0, 0)
+
+clients = []
+for _ in range(count):
+    pid, fd = pty.fork()
+    if pid == 0:
+        fcntl.ioctl(0, termios.TIOCSWINSZ, winsize)
+        os.environ.setdefault("TERM", "xterm-256color")
+        try:
+            os.execvp(cmd[0], cmd)
+        except OSError as exc:
+            os.write(2, ("exec failed: %s\n" % exc).encode())
+            os._exit(127)
+    clients.append({"pid": pid, "fd": fd, "open": True, "data": b""})
+
+end = time.time() + seconds
+while time.time() < end:
+    fds = [c["fd"] for c in clients if c["open"]]
+    if not fds:
+        time.sleep(0.2)
+        continue
+    ready, _, _ = select.select(fds, [], [], 0.2)
+    for client in clients:
+        if client["open"] and client["fd"] in ready:
+            try:
+                chunk = os.read(client["fd"], 65536)
+            except OSError:
+                chunk = b""
+            if chunk:
+                client["data"] += chunk
+            else:
+                client["open"] = False
+
+for client in clients:
+    pid = client["pid"]
+    try:
+        with open("/proc/%d/comm" % pid) as handle:
+            comm = handle.read().strip()
+    except OSError:
+        comm = "gone"
+    done, _ = os.waitpid(pid, os.WNOHANG)
+    alive = 1 if done == 0 else 0
+    text = []
+    for char in client["data"].decode("utf-8", "replace"):
+        if char == "\n":
+            text.append("\\n")
+        elif " " <= char <= "~":
+            text.append(char)
+        if len(text) >= 400:
+            break
+    print("comm=%s alive=%d bytes=%d text=%s" % (comm, alive, len(client["data"]), "".join(text)[:400]), flush=True)
+
+for client in clients:
+    for sig in (signal.SIGKILL,):
+        try:
+            os.killpg(client["pid"], sig)
+        except OSError:
+            try:
+                os.kill(client["pid"], sig)
+            except OSError:
+                pass
+    try:
+        os.waitpid(client["pid"], 0)
+    except OSError:
+        pass
+'
+
+ca_pty_probe() {
+    local container="$1" seconds="$2" count="$3"
+    shift 3
+    printf '%s' "${CA_PTY_PROBE_PY}" | docker exec -i "${container}" python3 -I - "${seconds}" "${count}" "$@"
+}
+
+# probe_field LINE FIELD -- value of comm|alive|bytes from a ca_pty_probe line
+probe_field() { sed -nE "s/^.*\b$2=([^ ]*).*$/\1/p" <<<"$1" | head -n 1; }
+# probe_text LINE -- everything after "text="
+probe_text() { sed -nE 's/^.* text=(.*)$/\1/p' <<<"$1"; }
+
+# ca_herdr NAME ARGS... -- herdr CLI with the add-on's config dir (docker exec does not carry run.sh's exports)
+ca_herdr() { ca_exec "$1" env XDG_CONFIG_HOME=/data/.config herdr "${@:2}"; }
+
+# herdr_server_pid NAME -- PID of the `herdr server` process (comm herdr, command line contains "server")
+herdr_server_pid() {
+    # shellcheck disable=SC2016
+    ca_exec "$1" sh -c 'for d in /proc/[0-9]*; do
+        if [ "$(cat "$d/comm" 2>/dev/null)" = herdr ] && tr "\0" " " < "$d/cmdline" 2>/dev/null | grep -q server; then
+            echo "${d#/proc/}"; break
+        fi
+    done'
+}
+
+# herdr_count NAME -- number of processes whose comm is herdr (server plus attached clients)
+herdr_count() {
+    # shellcheck disable=SC2016
+    ca_exec "$1" sh -c 'n=0; for d in /proc/[0-9]*; do
+        [ "$(cat "$d/comm" 2>/dev/null)" = herdr ] && n=$((n + 1))
+    done; echo "$n"'
+}
+
+# herdr_wait_server NAME [NOT_PID] -- wait up to 20 s for a running server (with a pid different from NOT_PID)
+herdr_wait_server() {
+    local i pid
+    for i in $(seq 1 40); do
+        if [[ "$(ca_herdr "$1" status --json 2>/dev/null | jq -r '.server.running' 2>/dev/null)" == "true" ]]; then
+            pid="$(herdr_server_pid "$1")"
+            if [[ -n "${pid}" && "${pid}" != "${2:-}" ]]; then
+                return 0
+            fi
+        fi
+        sleep 0.5
+    done
+    return 1
+}
+
+# herdr_main_workspaces NAME -- number of workspaces labelled main
+herdr_main_workspaces() {
+    ca_herdr "$1" workspace list 2>/dev/null | jq '[.result.workspaces[] | select(.label == "main")] | length'
+}
+
+scenario_herdr_core() {
+    local data opts want_ver out ws_count ws_id pane_id pane_json i pid1 pid2 expected got line1 line2 text
+    data="${SCRATCH_DIR}/herdr-core/data"
+    mkdir -p "${data}"
+    opts="${data}/options.json"
+    write_options "${opts}" ".claude_code_oauth_token=\"${CA_OAUTH_FIXTURE}\""
+    start_ca herdr-core "${data}" "${opts}"
+    wait_ca herdr-core || return 0
+
+    want_ver="$(build_yaml_args "${ADDON_DIR}/build.yaml" | awk -F'\t' '$1 == "HERDR_VERSION" { print $2 }')"
+    assert_eq "herdr --version shows the build.yaml pin" "$(ca_exec herdr-core herdr --version | cut -d' ' -f2)" \
+        "${want_ver}"
+
+    out="$(ca_herdr herdr-core status --json)"
+    json_check "herdr server is running" "${out}" '.server.running == true'
+    json_check "herdr socket lives under /data/.config/herdr/" "${out}" \
+        '.server.socket | startswith("/data/.config/herdr/")'
+
+    out="$(ca_herdr herdr-core workspace list)"
+    ws_count="$(jq '.result.workspaces | length' <<<"${out}")"
+    assert_eq "exactly one workspace exists before the first client" "${ws_count}" "1"
+    assert_eq "that workspace is labelled main" "$(jq -r '.result.workspaces[0].label' <<<"${out}")" "main"
+    ws_id="$(jq -r '.result.workspaces[0].workspace_id' <<<"${out}")"
+    pane_json="$(ca_herdr herdr-core pane list)"
+    pane_id="$(jq -r --arg ws "${ws_id}" '[.result.panes[] | select(.workspace_id == $ws or (.pane_id | startswith($ws + ":")))][0].pane_id' <<<"${pane_json}")"
+    assert_eq "root pane of main has cwd /homeassistant" \
+        "$(jq -r --arg p "${pane_id}" '.result.panes[] | select(.pane_id == $p) | .cwd' <<<"${pane_json}")" \
+        "/homeassistant"
+
+    # The pane environment is the server's environment: fish panes, the add-on exports, PATH with the launcher.
+    ca_exec herdr-core rm -f /tmp/pane-env.txt
+    ca_herdr herdr-core pane run "${pane_id}" \
+        "string join '|' \$SHELL \$HA_URL \$HERDR_ENV \$CLAUDE_CODE_OAUTH_TOKEN (command -v claude) > /tmp/pane-env.txt" \
+        >/dev/null 2>&1
+    expected="/usr/bin/fish|http://homeassistant:8123|1|${CA_OAUTH_FIXTURE}|/root/.local/bin/claude"
+    got=""
+    for i in $(seq 1 30); do
+        got="$(ca_exec herdr-core cat /tmp/pane-env.txt 2>/dev/null || true)"
+        [[ -n "${got}" ]] && break
+        sleep 0.5
+    done
+    assert_eq "pane environment (SHELL|HA_URL|HERDR_ENV|oauth token|claude path)" "${got}" "${expected}"
+
+    # Respawn: kill -9 the server, run.sh's loop must bring up a different one within 20 s.
+    pid1="$(herdr_server_pid herdr-core)"
+    if [[ -z "${pid1}" ]]; then
+        fail "could not find the herdr server process"
+    else
+        ca_exec herdr-core kill -9 "${pid1}"
+        if herdr_wait_server herdr-core "${pid1}"; then
+            pid2="$(herdr_server_pid herdr-core)"
+            pass "server respawned within 20 s (pid ${pid1} -> ${pid2})"
+        else
+            fail "no new herdr server within 20 s after kill -9 of pid ${pid1}"
+        fi
+        assert_match "the respawn is logged as a warning" "$(ca_logs herdr-core)" 'WARNING.*herdr server exited'
+    fi
+
+    # Shared session: empty the session, then two simultaneous clients through the wrapper. Both must stay alive in
+    # herdr, share ONE session and leave exactly one workspace main (the flock in the wrapper).
+    for ws_id in $(ca_herdr herdr-core workspace list 2>/dev/null | jq -r '.result.workspaces[].workspace_id'); do
+        ca_herdr herdr-core workspace close "${ws_id}" >/dev/null 2>&1
+    done
+    assert_eq "the session is empty before the clients attach" \
+        "$(ca_herdr herdr-core workspace list | jq '.result.workspaces | length')" "0"
+    out="$(ca_pty_probe "$(ca_cname herdr-core)" 6 2 coding-assistants-attach)"
+    line1="$(sed -n 1p <<<"${out}")"
+    line2="$(sed -n 2p <<<"${out}")"
+    for i in 1 2; do
+        line="${line1}"
+        [[ "${i}" == "2" ]] && line="${line2}"
+        assert_eq "client ${i} is alive" "$(probe_field "${line}" alive)" "1"
+        assert_eq "client ${i} runs herdr" "$(probe_field "${line}" comm)" "herdr"
+        if [[ "$(probe_field "${line}" bytes)" -gt 0 ]] 2>/dev/null; then
+            pass "client ${i} produced output"
+        else
+            fail "client ${i} produced no output (${line})"
+        fi
+    done
+    assert_eq "exactly one workspace main after two concurrent first clients" "$(herdr_main_workspaces herdr-core)" "1"
+    assert_eq "no other workspace was created" \
+        "$(ca_herdr herdr-core workspace list | jq '.result.workspaces | length')" "1"
+
+    # Fallback: no server answers (empty config dir) -> message and a plain fish shell, never a dead terminal.
+    out="$(ca_pty_probe "$(ca_cname herdr-core)" 14 1 env XDG_CONFIG_HOME=/tmp/no-herdr-here coding-assistants-attach)"
+    text="$(probe_text "${out}")"
+    assert_match "fallback message is shown" "${text}" 'herdr server is not running, starting a plain fish shell'
+    assert_eq "fallback shell is fish" "$(probe_field "${out}" comm)" "fish"
+    assert_eq "fallback shell stays alive" "$(probe_field "${out}" alive)" "1"
 }
 
 # --- Dispatcher --------------------------------------------------------------------------------------------------
