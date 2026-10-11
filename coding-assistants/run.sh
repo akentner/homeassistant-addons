@@ -238,6 +238,21 @@ if bashio::config.true 'zigbee2mqtt.enabled'; then
 
     bashio::log.info "Registered zigbee2mqtt MCP server in OpenCode config"
 
+    # Claude Code (user scope): the entry carries an explicit env object. Claude's stdio servers are not guaranteed
+    # to inherit the add-on environment, and the MQTT_* exports appended to the profile files below are lost again
+    # when those files are rewritten later in this script (the OpenCode entry silently depends on them).
+    Z2M_OBJ_CLAUDE=$(jq -n --argjson env "${Z2M_ENV_JSON}" '{
+        zigbee2mqtt: {
+            type: "stdio",
+            command: "node",
+            args: ["/opt/mcp2zigbee2mqtt/dist/index.js"],
+            env: $env
+        }
+    }')
+    if claude_mcp_merge "${Z2M_OBJ_CLAUDE}"; then
+        bashio::log.info "Registered zigbee2mqtt MCP server in Claude Code config"
+    fi
+
     # Inject MQTT env vars into profile scripts for use by other tools
     {
         printf 'export MQTT_BROKER_URL=%q\n' "${Z2M_BROKER_URL}"
@@ -324,6 +339,7 @@ PYEOF
     bashio::log.info "Wrote /data/.myclirc with ${CONNECTION_COUNT} connection(s); default='${MYCLI_DEFAULT}'"
 
     # Per connection: generate env-baked wrapper script + register as MCP server
+    CLAUDE_MARIADB_COUNT=0
     while IFS= read -r entry; do
         name=$(echo "${entry}" | jq -r '.name')
         host=$(echo "${entry}" | jq -r '.host')
@@ -355,9 +371,16 @@ PYEOF
             '.mcp[$n] = { type: "local", command: [$cmd], enabled: true }' "${OPENCODE_JSON}" > "${tmp}"
         cp "${tmp}" "${OPENCODE_JSON}"
         rm "${tmp}"
+
+        # Register in Claude Code (/data/.claude.json → mcpServers); the wrapper bakes in MYSQL_*, so env stays empty
+        if claude_mcp_merge "$(jq -cn --arg n "${mcp_name}" --arg cmd "${mcp_script}" \
+            '{ ($n): { type: "stdio", command: $cmd, args: [], env: {} } }')"; then
+            CLAUDE_MARIADB_COUNT=$((CLAUDE_MARIADB_COUNT + 1))
+        fi
     done < <(jq -c '.mycli.connections[]' /data/options.json)
 
     bashio::log.info "Registered ${CONNECTION_COUNT} mariadb-mcp server(s) in OpenCode config"
+    bashio::log.info "Registered ${CLAUDE_MARIADB_COUNT} mariadb-mcp server(s) in Claude Code config"
 
     # Stash default-connection values for the late fish append (below)
     MYCLI_DEFAULT_HOST=$(jq -r --arg n "${MYCLI_DEFAULT}" '.mycli.connections[] | select(.name == $n) | .host' /data/options.json)

@@ -23,6 +23,8 @@
 #                    when set and non-empty; never written to profile files or logs
 #   mcp-servers      `mcp_servers` option merged into /data/.claude.json `.mcpServers` (existing entries win, other
 #                    keys survive, a corrupt file is never clobbered, no secret in the log); OpenCode unchanged
+#   mcp-integrations zigbee2mqtt (explicit env) and mariadb-<name> wrapper entries in .mcpServers, user edits win
+#                    across a container re-creation, no MQTT/database secret in either container log
 #
 # Container model: every add-on start is a NEW container on the same /data volume (Supervisor semantics), so a
 # "restart" is `docker rm -f` followed by a fresh `docker run` (restart_ca), never `docker restart`. Containers
@@ -65,7 +67,7 @@ declare -A CA_OPTS=()
 declare -A CA_EXTRA=()
 
 # Registered scenarios: NAME -> function scenario_<NAME with - replaced by _>
-SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers)
+SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers mcp-integrations)
 
 cleanup() {
     local pid c
@@ -592,6 +594,71 @@ scenario_mcp_servers() {
             "$(grep -c -e "${CA_MCP_URL_SECRET}" -e "${CA_MCP_API_KEY}" <<<"${logs}" || true)" "0"
         pass "C: run.sh still reached its end (nginx answered)"
     fi
+}
+
+# =============================================================================
+# Scenario mcp-integrations
+# =============================================================================
+CA_MQTT_PASS_FIXTURE="verify-mqtt-pass"
+CA_DB_PASS_FIXTURE="verify-db-pass"
+
+scenario_mcp_integrations() {
+    local data opts cj oc logs1 logs2
+    data="${SCRATCH_DIR}/mcpi/data"
+    mkdir -p "${data}"
+    opts="${data}/options.json"
+    write_options "${opts}" '
+        .zigbee2mqtt = {enabled: true, mqtt_broker_url: "mqtt://mqtt.invalid:1883", mqtt_username: "verify-mqtt-user",
+            mqtt_password: "verify-mqtt-pass", mqtt_base_topic: "z2m-verify", db_path: "/data/zigbee2mqtt-mcp.db",
+            log_level: "info"}
+        | .mycli = {enabled: true, default: "homeassistant", connections: [
+            {name: "homeassistant", host: "db.invalid", port: 3306, username: "verify-db-user",
+             password: "verify-db-pass", database: "verify"},
+            {name: "analytics", host: "db.invalid", port: 3306, username: "verify-db-user",
+             password: "verify-db-pass", database: "verify"}]}
+        | .mcp_servers = []'
+    start_ca mcpi "${data}" "${opts}"
+    wait_ca mcpi || return 0
+
+    cj="$(ca_exec mcpi cat /data/.claude.json)"
+    json_check "zigbee2mqtt command and args" "${cj}" \
+        '.mcpServers.zigbee2mqtt.type == "stdio" and .mcpServers.zigbee2mqtt.command == "node"
+         and .mcpServers.zigbee2mqtt.args == ["/opt/mcp2zigbee2mqtt/dist/index.js"]'
+    json_check "zigbee2mqtt carries an explicit env object with the MQTT values" "${cj}" \
+        '.mcpServers.zigbee2mqtt.env.MQTT_PASSWORD == "verify-mqtt-pass"
+         and .mcpServers.zigbee2mqtt.env.MQTT_BASE_TOPIC == "z2m-verify"
+         and .mcpServers.zigbee2mqtt.env.DB_PATH == "/data/zigbee2mqtt-mcp.db"'
+    local conn
+    for conn in homeassistant analytics; do
+        json_check "mariadb-${conn} is a stdio entry pointing at its wrapper" "${cj}" \
+            ".mcpServers[\"mariadb-${conn}\"].type == \"stdio\" and .mcpServers[\"mariadb-${conn}\"].command == \"/usr/local/bin/mariadb-${conn}\""
+        assert_ok "wrapper script mariadb-${conn} exists and is executable" ca_exec mcpi test -x "/usr/local/bin/mariadb-${conn}"
+    done
+
+    oc="$(ca_exec mcpi cat /data/.config/opencode/opencode.json)"
+    json_check "OpenCode still has zigbee2mqtt and both mariadb entries" "${oc}" \
+        '.mcp | has("zigbee2mqtt") and has("mariadb-homeassistant") and has("mariadb-analytics")'
+
+    # User edits win across a container re-creation (written through a temp file + cp, like run.sh does)
+    ca_exec mcpi sh -c 'jq ".mcpServers[\"mariadb-analytics\"].command = \"user-edited\"
+        | .mcpServers.zigbee2mqtt.env.MQTT_BASE_TOPIC = \"user-topic\"" /data/.claude.json > /tmp/edit.json \
+        && cp /tmp/edit.json /data/.claude.json'
+    logs1="$(ca_logs mcpi)"
+    restart_ca mcpi
+    wait_ca mcpi || return 0
+    cj="$(ca_exec mcpi cat /data/.claude.json)"
+    json_check "edited mariadb-analytics command survived the re-creation" "${cj}" \
+        '.mcpServers["mariadb-analytics"].command == "user-edited"'
+    json_check "edited zigbee2mqtt MQTT_BASE_TOPIC survived the re-creation" "${cj}" \
+        '.mcpServers.zigbee2mqtt.env.MQTT_BASE_TOPIC == "user-topic"'
+    json_check "unedited entries are still present after the re-creation" "${cj}" \
+        '.mcpServers | has("mariadb-homeassistant") and has("zigbee2mqtt")'
+
+    logs2="$(ca_logs mcpi)"
+    assert_eq "no MQTT/database secret in the first container log" \
+        "$(grep -c -e "${CA_MQTT_PASS_FIXTURE}" -e "${CA_DB_PASS_FIXTURE}" <<<"${logs1}" || true)" "0"
+    assert_eq "no MQTT/database secret in the second container log" \
+        "$(grep -c -e "${CA_MQTT_PASS_FIXTURE}" -e "${CA_DB_PASS_FIXTURE}" <<<"${logs2}" || true)" "0"
 }
 
 # --- Dispatcher --------------------------------------------------------------------------------------------------
