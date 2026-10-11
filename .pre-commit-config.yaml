@@ -9,8 +9,11 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # patches/*.patch keep blank context lines (a single space) that git apply needs byte-exact
       - id: trailing-whitespace
+        exclude: ^[^/]+/patches/.*\.patch$
       - id: end-of-file-fixer
+        exclude: ^[^/]+/patches/.*\.patch$
       - id: check-yaml
         args: [--unsafe]  # Allow custom YAML tags used by Home Assistant
       - id: check-added-large-files
