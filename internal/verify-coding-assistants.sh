@@ -44,6 +44,10 @@
 #                    301, relative assets, exactly one CSP with frame-ancestors 'self', no HSTS, login closed (503)
 #                    without a password, WebSocket refused without a session, Services tab on the landing page,
 #                    /terminal/ unchanged, the plugin bound to loopback only
+#   services-auth    the herdr_web_password option through nginx: wrong password 401, right one 204 with an HttpOnly
+#                    cookie, session/roster/WebSocket gated by that cookie, hash file mode 600 without plaintext,
+#                    password in no log, hash survives a container re-creation; a rejected password is a warning
+#                    that names the unmet rule and never the value; no option keeps the login closed (503)
 #
 # Container model: every add-on start is a NEW container on the same /data volume (Supervisor semantics), so a
 # "restart" is `docker rm -f` followed by a fresh `docker run` (restart_ca), never `docker restart`. Containers
@@ -87,7 +91,7 @@ declare -A CA_EXTRA=()
 
 # Registered scenarios: NAME -> function scenario_<NAME with - replaced by _>
 SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers mcp-integrations drift herdr-core herdr-attach surface
-    plugins services)
+    plugins services services-auth)
 # Scenarios that need neither Docker nor the image: when only these are selected the image build is skipped.
 STATIC_SCENARIOS=(drift)
 
@@ -1424,6 +1428,137 @@ scenario_services() {
         pass "port 7340 is bound to 127.0.0.1 only"
     else
         fail "port 7340 is not bound to 127.0.0.1 only"
+    fi
+}
+
+# =============================================================================
+# Scenario services-auth
+# =============================================================================
+# Throwaway fixture password; it satisfies the plugin's rules (6+ characters, symbol, number, uppercase letter).
+CA_WEB_PASSWORD='Verify-Pass1!'
+CA_WEB_CONFIG_DIR="/data/.config/herdr/plugins/config/imontes.herdr-web-service"
+
+# services_login NAME PASSWORD -- login through nginx; prints the response headers (CR stripped)
+services_login() {
+    local body
+    body="$(jq -cn --arg p "$2" '{password: $p, remember: false}')"
+    ca_ingress "$1" -o /dev/null -D - -X POST -H 'content-type: application/json' --data "${body}" \
+        http://127.0.0.1:8099/services/api/auth/login | tr -d '\r'
+}
+
+# services_wait_health NAME -- wait until /services/api/health answers through nginx
+services_wait_health() {
+    wait_for "$1" 30 curl -fsS "${CA_INGRESS_HEADERS[@]}" http://127.0.0.1:8099/services/api/health
+}
+
+# services_first_status HEADERS -- the status code of the first response line
+services_first_status() { head -n 1 <<<"$1" | awk '{ print $2 }'; }
+
+scenario_services_auth() {
+    local data opts hdr cookie logs out
+
+    # --- Container A: a valid password ------------------------------------------------------------------------
+    data="${SCRATCH_DIR}/services-auth/a/data"
+    mkdir -p "${data}"
+    opts="${data}/options.json"
+    write_options "${opts}" ". + {herdr_web_password: \"${CA_WEB_PASSWORD}\"}"
+    start_ca svcauth-a "${data}" "${opts}"
+    wait_ca svcauth-a || return 0
+    if services_wait_health svcauth-a; then
+        pass "A: /services/api/health answers through nginx"
+    else
+        fail "A: /services/api/health did not answer within 30 s"
+        return 0
+    fi
+
+    # At most two failed logins per container: every request through nginx shares the loopback client address.
+    hdr="$(services_login svcauth-a 'Wrong-Pass9?')"
+    assert_eq "A: a wrong password is refused with 401" "$(services_first_status "${hdr}")" "401"
+    hdr="$(services_login svcauth-a "${CA_WEB_PASSWORD}")"
+    assert_eq "A: the right password returns 204" "$(services_first_status "${hdr}")" "204"
+    assert_match "A: Set-Cookie carries hwv_session" "${hdr}" $'(^|\n)[Ss]et-[Cc]ookie: hwv_session='
+    assert_match "A: the session cookie is HttpOnly" "${hdr}" $'[Ss]et-[Cc]ookie: hwv_session=[^\n]*; HttpOnly'
+    assert_fail "A: the session cookie is not Secure (nginx clears X-Forwarded-Proto)" \
+        grep -qi '^set-cookie:.*; secure' <<<"${hdr}"
+    cookie="$(sed -nE 's/^[Ss]et-[Cc]ookie: (hwv_session=[^;]+).*/\1/p' <<<"${hdr}" | head -n 1)"
+    if [[ -z "${cookie}" ]]; then
+        fail "A: no session cookie could be extracted, the authenticated checks are skipped"
+        return 0
+    fi
+
+    out="$(ca_ingress svcauth-a -H "Cookie: ${cookie}" http://127.0.0.1:8099/services/api/session)"
+    json_check "A: /api/session reports authenticated with the cookie" "${out}" '.authenticated == true'
+    out="$(ca_ingress svcauth-a http://127.0.0.1:8099/services/api/session)"
+    json_check "A: /api/session reports not authenticated without the cookie" "${out}" '.authenticated == false'
+    assert_eq "A: the gated /api/roster answers 200 with the cookie" \
+        "$(ca_ingress_status svcauth-a /services/api/roster -H "Cookie: ${cookie}")" "200"
+    assert_eq "A: the gated /api/roster answers 401 without the cookie" \
+        "$(ca_ingress_status svcauth-a /services/api/roster)" "401"
+    assert_eq "A: the WebSocket upgrade with the cookie returns 101" \
+        "$(ca_ws_status svcauth-a /services/ws -H "Cookie: ${cookie}")" "101"
+    out="$(ca_ws_status svcauth-a /services/ws)"
+    if [[ -n "${out}" && "${out}" != "101" ]]; then
+        pass "A: the WebSocket upgrade without the cookie is refused (${out})"
+    else
+        fail "A: the WebSocket upgrade without the cookie was not refused (status '${out}')"
+    fi
+
+    # The hash is persistent and private; the plaintext exists nowhere on disk or in the log.
+    assert_eq "A: the auth file in the plugin config dir has mode 600" \
+        "$(ca_exec svcauth-a stat -c '%a' "${CA_WEB_CONFIG_DIR}/auth.json" 2>/dev/null)" "600"
+    assert_fail "A: the plaintext password is not in the plugin config dir" \
+        ca_exec svcauth-a grep -rqF -- "${CA_WEB_PASSWORD}" "${CA_WEB_CONFIG_DIR}"
+    logs="$(ca_logs svcauth-a)"
+    assert_match "A: run.sh logged that the login password was set" "${logs}" 'herdr-web-service login password set'
+    assert_fail "A: the plaintext password is not in the container log" grep -qF -- "${CA_WEB_PASSWORD}" <<<"${logs}"
+
+    # Re-creation on the same /data: the hash survives, the login works again without any new step.
+    restart_ca svcauth-a
+    wait_ca svcauth-a || return 0
+    if services_wait_health svcauth-a; then
+        hdr="$(services_login svcauth-a "${CA_WEB_PASSWORD}")"
+        assert_eq "A: after a container re-creation the same password still returns 204" \
+            "$(services_first_status "${hdr}")" "204"
+    else
+        fail "A: /services/api/health did not answer within 30 s after the re-creation"
+    fi
+    assert_fail "A: the plaintext password is not in the log after the re-creation either" \
+        grep -qF -- "${CA_WEB_PASSWORD}" <<<"$(ca_logs svcauth-a)"
+
+    # --- Container B: a password the plugin rejects (no uppercase letter) -------------------------------------
+    data="${SCRATCH_DIR}/services-auth/b/data"
+    mkdir -p "${data}"
+    opts="${data}/options.json"
+    write_options "${opts}" '. + {herdr_web_password: "short1!"}'
+    start_ca svcauth-b "${data}" "${opts}"
+    wait_ca svcauth-b || return 0
+    logs="$(ca_logs svcauth-b)"
+    assert_match "B: a rejected password is a warning" "${logs}" 'WARNING.*herdr-web-service rejected herdr_web_password'
+    assert_match "B: the warning names the unmet rule (uppercase letter)" "${logs}" '[Uu]pper'
+    assert_fail "B: the rejected password is not in the container log" grep -qF -- 'short1!' <<<"${logs}"
+    assert_ok "B: nginx still answers (the weak password did not stop run.sh)" \
+        ca_exec svcauth-b curl -fsS -o /dev/null http://127.0.0.1:8099/terminal/
+    if services_wait_health svcauth-b; then
+        hdr="$(services_login svcauth-b "${CA_WEB_PASSWORD}")"
+        assert_eq "B: the login stays closed (503)" "$(services_first_status "${hdr}")" "503"
+    else
+        fail "B: /services/api/health did not answer within 30 s"
+    fi
+
+    # --- Container C: no option at all -----------------------------------------------------------------------
+    data="${SCRATCH_DIR}/services-auth/c/data"
+    mkdir -p "${data}"
+    opts="${data}/options.json"
+    write_options "${opts}"
+    start_ca svcauth-c "${data}" "${opts}"
+    wait_ca svcauth-c || return 0
+    assert_match "C: the log says the login is disabled until herdr_web_password is set" "$(ca_logs svcauth-c)" \
+        'login is disabled until the add-on option herdr_web_password is set'
+    if services_wait_health svcauth-c; then
+        hdr="$(services_login svcauth-c "${CA_WEB_PASSWORD}")"
+        assert_eq "C: the login answers 503" "$(services_first_status "${hdr}")" "503"
+    else
+        fail "C: /services/api/health did not answer within 30 s"
     fi
 }
 

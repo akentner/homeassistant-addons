@@ -80,6 +80,7 @@ schema:
   ha_token: str
   claude_code_oauth_token: password?
   anthropic_api_key: password?
+  herdr_web_password: password?
   zigbee2mqtt:
     enabled: bool?
     mqtt_broker_url: str?

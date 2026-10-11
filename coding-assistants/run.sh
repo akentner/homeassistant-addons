@@ -581,6 +581,36 @@ done
 PLUGIN_COUNT=$(herdr plugin list --json 2>/dev/null | jq -r '.result.plugins | length' 2>/dev/null) || PLUGIN_COUNT="?"
 bashio::log.info "herdr plugins registered: ${PLUGIN_COUNT}"
 
+# herdr-web-service login password (user decision 4): the plugin creates its password only through a host-side setup
+# pane, so the optional add-on option `herdr_web_password` feeds the plugin's own `set-password`. The value goes over
+# STDIN with the printf builtin (never as an argument, never into a file or a log line); the plugin stores only an
+# argon2id hash in its config dir (mode 600, persistent in /data) and reads it per request, so no restart is needed.
+# The option is the source of truth on every start; removing it later does NOT delete an existing auth file. Without a
+# password the login answers 503. A password the plugin rejects is only a warning (D-07) and its message lists the unmet
+# rules, never the password. Never enable xtrace in this block.
+if [[ -d /opt/herdr-plugins/herdr-web-service ]]; then
+    HERDR_WEB_PASSWORD=$(bashio::config 'herdr_web_password') || HERDR_WEB_PASSWORD=""
+    if [[ -z "${HERDR_WEB_PASSWORD}" || "${HERDR_WEB_PASSWORD}" == "null" ]]; then
+        bashio::log.info "herdr-web-service login is disabled until the add-on option herdr_web_password is set"
+    else
+        WEB_CONFIG_DIR=$(herdr plugin config-dir imontes.herdr-web-service 2> /dev/null) || WEB_CONFIG_DIR=""
+        if [[ -z "${WEB_CONFIG_DIR}" ]]; then
+            bashio::log.warning "herdr-web-service config dir is unknown, login password not set"
+        else
+            mkdir -p "${WEB_CONFIG_DIR}"
+            if WEB_PASSWORD_OUT=$(printf '%s\n' "${HERDR_WEB_PASSWORD}" \
+                | HERDR_PLUGIN_CONFIG_DIR="${WEB_CONFIG_DIR}" \
+                    sh /opt/herdr-plugins/herdr-web-service/scripts/bun.sh \
+                    /opt/herdr-plugins/herdr-web-service/scripts/plugin.ts set-password 2>&1); then
+                bashio::log.info "herdr-web-service login password set from herdr_web_password"
+            else
+                bashio::log.warning "herdr-web-service rejected herdr_web_password, login stays closed: ${WEB_PASSWORD_OUT}"
+            fi
+        fi
+    fi
+    unset HERDR_WEB_PASSWORD WEB_PASSWORD_OUT WEB_CONFIG_DIR
+fi
+
 # herdr server -- started HERE (after every export above, the env_vars injection and the fish conf) and never by a
 # client: the server's environment becomes the environment of every pane, so panes get PATH (/root/.local/bin),
 # HA_URL/HA_TOKEN/SUPERVISOR_TOKEN and the Claude auth variables. SHELL/LANG/LC_ALL are set for this one command only.
