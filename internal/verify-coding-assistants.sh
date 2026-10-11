@@ -35,6 +35,10 @@
 #                    herdr config.toml is written, the previous multiplexer is gone from image and code
 #   surface          versions.json carries claude and herdr, MOTD shows herdr, info.html has the version rows,
 #                    backup_exclude lists the herdr runtime files, no previous-multiplexer text in TOOLS.md/info.html
+#   plugins          the approved herdr plugins (23-PLUGIN-REVIEW.md) are registered at their pinned checkouts, a broken
+#                    plugin directory only yields a warning (D-07), no herdr config.toml / Claude settings.json is
+#                    written (D-02, D-04), claude-limits' poller starts without credentials, subagent-watch's launcher
+#                    works (setup --dry-run)
 #
 # Container model: every add-on start is a NEW container on the same /data volume (Supervisor semantics), so a
 # "restart" is `docker rm -f` followed by a fresh `docker run` (restart_ca), never `docker restart`. Containers
@@ -77,7 +81,8 @@ declare -A CA_OPTS=()
 declare -A CA_EXTRA=()
 
 # Registered scenarios: NAME -> function scenario_<NAME with - replaced by _>
-SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers mcp-integrations drift herdr-core herdr-attach surface)
+SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers mcp-integrations drift herdr-core herdr-attach surface
+    plugins)
 # Scenarios that need neither Docker nor the image: when only these are selected the image build is skipped.
 STATIC_SCENARIOS=(drift)
 
@@ -739,8 +744,13 @@ scenario_drift() {
     else
         fail "build.yaml and the Dockerfile ARG defaults drifted: ${out}"
     fi
-    assert_eq "build.yaml carries the three herdr pins" \
-        "$(build_yaml_args "${by}" | grep -c '^HERDR_')" "3"
+    local key
+    for key in HERDR_VERSION HERDR_SHA256_X86_64 HERDR_SHA256_AARCH64 HERDR_SUBAGENT_WATCH_REF HERDR_CLAUDE_LIMITS_REF; do
+        assert_eq "build.yaml carries the pin ${key}" \
+            "$(build_yaml_args "${by}" | grep -c "^${key}"$'\t')" "1"
+    done
+    assert_match "plugin pins are full 40-character commit SHAs" \
+        "$(build_yaml_args "${by}" | awk -F'\t' '$1 ~ /_REF$/ { print $2 }' | tr '\n' ' ')" '^([0-9a-f]{40} )+$'
 
     # Negative controls: the comparison must fail on a changed value and on a pin missing from build.yaml.
     sed -E 's/^(  HERDR_VERSION: ").*(")$/\10.0.0-drift\2/' "${by}" >"${tmp}/changed-value.yaml"
@@ -1131,6 +1141,91 @@ scenario_surface() {
     json_check "versions.json herdr field equals the build.yaml pin (${want_ver})" "${vj}" \
         ".herdr == \"${want_ver}\""
     assert_ok "/etc/motd shows the herdr version" ca_exec surface grep -q "herdr ${want_ver}" /etc/motd
+}
+
+# =============================================================================
+# Scenario plugins
+# =============================================================================
+# State directory of a plugin (follows $HOME, not XDG_CONFIG_HOME: inside the container filesystem, not /data)
+CA_PLUGIN_STATE_DIR="/root/.local/state/herdr/plugins"
+
+# plugin_ids NAME -- sorted, comma-joined ids of the plugins registered in the running herdr server
+plugin_ids() {
+    ca_herdr "$1" plugin list --json 2>/dev/null | jq -r '.result.plugins[].plugin_id' | sort | paste -sd, -
+}
+
+# wait_for NAME SECONDS CMD... -- run CMD inside the container once per second until it succeeds
+wait_for() {
+    local name="$1" seconds="$2" i
+    shift 2
+    for i in $(seq 1 "${seconds}"); do
+        if ca_exec "${name}" "$@" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
+scenario_plugins() {
+    local data opts broken out logs ids actions
+
+    data="${SCRATCH_DIR}/plugins/data"
+    broken="${SCRATCH_DIR}/plugins/zz-broken"
+    mkdir -p "${data}" "${broken}"
+    opts="${data}/options.json"
+    write_options "${opts}"
+    # A syntactically invalid manifest: `herdr plugin link` must fail for it and run.sh must carry on (D-07).
+    printf 'id = "zz.broken"\n[[actions\nthis is = not toml "\n' >"${broken}/herdr-plugin.toml"
+    start_ca plugins "${data}" "${opts}" -v "${broken}:/opt/herdr-plugins/zz-broken:ro"
+    wait_ca plugins || return 0
+
+    # D-02 / D-04 invariants, checked first: the add-on itself writes neither a herdr config nor Claude settings.
+    assert_fail "no herdr config.toml exists after the start" ca_exec plugins test -e /data/.config/herdr/config.toml
+    assert_fail "no Claude settings.json exists after the start" ca_exec plugins test -e /data/.claude/settings.json
+
+    # Registration: exactly the approved set, the broken directory is not part of it.
+    ids="$(plugin_ids plugins)"
+    assert_eq "registered plugins are exactly the approved set" "${ids}" \
+        "martin.claude-limits,subagent.watch"
+    logs="$(ca_logs plugins)"
+    assert_match "the broken plugin directory only logged a link warning" "${logs}" \
+        'WARNING.*herdr plugin link failed for /opt/herdr-plugins/zz-broken'
+
+    # D-07 isolation: nginx answered (wait_ca), herdr and the terminal are healthy despite the broken plugin.
+    out="$(ca_herdr plugins status --json)"
+    json_check "herdr server is running" "${out}" '.server.running == true'
+    assert_ok "the web terminal answers through nginx" \
+        ca_exec plugins curl -fsS -o /dev/null http://127.0.0.1:8099/terminal/
+
+    # subagent-watch: actions are registered, the Node launcher works, the dry-run writes nothing.
+    actions="$(ca_herdr plugins plugin action list 2>/dev/null \
+        | jq -r '.result.actions[] | select(.plugin_id == "subagent.watch") | .action_id' | sort | paste -sd, -)"
+    assert_eq "subagent.watch registers the actions open, remove and setup" "${actions}" "open,remove,setup"
+    assert_ok "subagent-watch setup --dry-run runs through the Node launcher (exit 0)" \
+        ca_exec plugins sh -c 'cd /opt/herdr-plugins/herdr-subagent-watch && sh bin/run.sh scripts/setup.mjs --dry-run'
+    assert_fail "the dry-run did not create a herdr config.toml" ca_exec plugins test -e /data/.config/herdr/config.toml
+    assert_fail "the dry-run did not create a config.toml under the default path either" \
+        ca_exec plugins test -e /root/.config/herdr/config.toml
+    assert_fail "the dry-run did not create a Claude settings.json" ca_exec plugins test -e /data/.claude/settings.json
+
+    # claude-limits: the startup hook started the poller although no credentials exist; everything stays usable.
+    assert_fail "no Claude credentials file exists" ca_exec plugins test -e /data/.claude/.credentials.json
+    if wait_for plugins 20 test -s "${CA_PLUGIN_STATE_DIR}/martin.claude-limits/poller.pid"; then
+        pass "claude-limits startup hook ran (poller.pid exists)"
+    else
+        fail "claude-limits poller.pid did not appear within 20 s"
+    fi
+    assert_match "the claude-limits poller reports the missing credentials and keeps running" \
+        "$(ca_exec plugins cat "${CA_PLUGIN_STATE_DIR}/martin.claude-limits/poller.log" 2>/dev/null)" \
+        'no Claude Code credentials found'
+    assert_ok "the claude-limits poller process is alive" \
+        ca_exec plugins sh -c "kill -0 \$(cat ${CA_PLUGIN_STATE_DIR}/martin.claude-limits/poller.pid)"
+    assert_ok "herdr still answers after the plugin startup hooks" ca_herdr plugins status --json
+    assert_ok "the web terminal still answers" \
+        ca_exec plugins curl -fsS -o /dev/null http://127.0.0.1:8099/terminal/
+    assert_fail "still no herdr config.toml at the end" ca_exec plugins test -e /data/.config/herdr/config.toml
+    assert_fail "still no Claude settings.json at the end" ca_exec plugins test -e /data/.claude/settings.json
 }
 
 # --- Dispatcher --------------------------------------------------------------------------------------------------

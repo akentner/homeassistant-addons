@@ -564,6 +564,23 @@ if [[ "${KEY_COUNT}" -eq 0 ]]; then
     bashio::log.warning "No SSH authorized_keys configured — SSH login will be impossible."
 fi
 
+# herdr plugins -- every directory under /opt/herdr-plugins (checked out at pinned commits by the Dockerfile) is linked
+# into herdr BEFORE the server starts, because the plugins' [[startup]] hooks (web-service server, claude-limits poller)
+# run when the server comes up. `herdr plugin link` needs an absolute path, works without a server and is idempotent
+# (the registry lives in /data/.config/herdr). A failing link is only a warning (D-07): a plugin problem must never
+# stop the terminal. The add-on deliberately runs NO plugin setup action and writes NO herdr config.toml and NO Claude
+# settings.json (D-02, D-04, user decision 2): key bindings, sidebar rows and tab-bar entries are documented opt-ins.
+mkdir -p /data/.config/herdr
+for plugin_dir in /opt/herdr-plugins/*/; do
+    [[ -d "${plugin_dir}" ]] || continue
+    plugin_dir="${plugin_dir%/}"
+    if ! herdr plugin link "${plugin_dir}" > /dev/null 2>&1; then
+        bashio::log.warning "herdr plugin link failed for ${plugin_dir}, continuing"
+    fi
+done
+PLUGIN_COUNT=$(herdr plugin list --json 2>/dev/null | jq -r '.result.plugins | length' 2>/dev/null) || PLUGIN_COUNT="?"
+bashio::log.info "herdr plugins registered: ${PLUGIN_COUNT}"
+
 # herdr server -- started HERE (after every export above, the env_vars injection and the fish conf) and never by a
 # client: the server's environment becomes the environment of every pane, so panes get PATH (/root/.local/bin),
 # HA_URL/HA_TOKEN/SUPERVISOR_TOKEN and the Claude auth variables. SHELL/LANG/LC_ALL are set for this one command only.

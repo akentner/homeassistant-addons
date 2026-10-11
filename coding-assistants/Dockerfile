@@ -234,6 +234,36 @@ RUN curl -fsSL https://claude.ai/install.sh | bash \
 # hadolint ignore=DL3016
 RUN npm install -g @github/copilot fx mcp-server-mysql
 
+# herdr plugins (phase 23, plugin review gate 23-PLUGIN-REVIEW.md). Each plugin is checked out at a pinned COMMIT into
+# /opt/herdr-plugins/<repository-name>: none of the repositories has a tag, so a tag pin is not possible (D-06). The pins
+# are ARG defaults, mirrored 1:1 in build.yaml and compared by `internal/verify-coding-assistants.sh drift`. The commit
+# is fetched directly (`git fetch --depth 1 origin <sha>`), checked out detached, and `git rev-parse HEAD` must equal
+# the pin or the build fails. `.git` is removed afterwards. run.sh links every directory below /opt/herdr-plugins into
+# herdr before the server starts (the plugins' startup hooks run when the server comes up).
+# No plugin setup action runs at build time or at runtime, and the add-on writes no herdr config.toml and no Claude
+# settings.json (D-02, D-04): wiring such as subagent-watch's key binding or claude-limits' tab-bar entry stays opt-in.
+# subagent-watch needs Node >= 22 (NodeSource 24.x above); claude-limits needs jq and curl (installed above).
+# These blocks sit after all the download layers on purpose, so a pin bump does not invalidate them.
+ARG HERDR_SUBAGENT_WATCH_REF=c47d49b247d8ca3387d88d5bb9731a3b7bf4f6a8
+RUN PLUGIN_DIR=/opt/herdr-plugins/herdr-subagent-watch \
+    && mkdir -p "${PLUGIN_DIR}" \
+    && git -C "${PLUGIN_DIR}" init -q \
+    && git -C "${PLUGIN_DIR}" remote add origin https://github.com/silencechung/herdr-subagent-watch.git \
+    && git -C "${PLUGIN_DIR}" fetch -q --depth 1 origin "${HERDR_SUBAGENT_WATCH_REF}" \
+    && git -C "${PLUGIN_DIR}" -c advice.detachedHead=false checkout -q --detach FETCH_HEAD \
+    && [ "$(git -C "${PLUGIN_DIR}" rev-parse HEAD)" = "${HERDR_SUBAGENT_WATCH_REF}" ] \
+    && rm -rf "${PLUGIN_DIR}/.git"
+
+ARG HERDR_CLAUDE_LIMITS_REF=9c0c9a1931ac91f9d865031e2dc58d66a7d1b594
+RUN PLUGIN_DIR=/opt/herdr-plugins/herdr-claude-limits \
+    && mkdir -p "${PLUGIN_DIR}" \
+    && git -C "${PLUGIN_DIR}" init -q \
+    && git -C "${PLUGIN_DIR}" remote add origin https://github.com/martin-saldinger/herdr-claude-limits.git \
+    && git -C "${PLUGIN_DIR}" fetch -q --depth 1 origin "${HERDR_CLAUDE_LIMITS_REF}" \
+    && git -C "${PLUGIN_DIR}" -c advice.detachedHead=false checkout -q --detach FETCH_HEAD \
+    && [ "$(git -C "${PLUGIN_DIR}" rev-parse HEAD)" = "${HERDR_CLAUDE_LIMITS_REF}" ] \
+    && rm -rf "${PLUGIN_DIR}/.git"
+
 # Web UI + nginx config
 RUN mkdir -p /opt/coding-assistants
 COPY index.html info.html /opt/coding-assistants/
