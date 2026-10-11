@@ -9,6 +9,8 @@ Persistent storage is at `/data`.
   terminal attach to ONE shared session. Default prefix `ctrl+b`: `prefix+q` detaches without stopping anything,
   `prefix+?` shows help. From inside a pane, the `herdr pane` and `herdr agent` commands control neighbouring panes and
   agents (`herdr --skill` prints the agent skill file)
+- herdr plugins (subagent-watch, claude-limits, web-service) are linked but not configured; `herdr plugin list` shows
+  them and `herdr plugin action invoke ID` runs an action. Configuration is opt-in and described in the add-on's DOCS.md
 - `zoxide` — frecency-based smart `cd`; use `z <partial>` instead of `cd`
 - `yazi` / `ya` — terminal file manager
 - `direnv` — auto-loads `.envrc` per directory

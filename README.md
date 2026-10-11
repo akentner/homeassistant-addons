@@ -180,11 +180,11 @@ TLS for production use.
 
 ![Supports amd64 and aarch64 Architectures][amd64-shield] ![Supports amd64 and aarch64 Architectures][aarch64-shield]
 
-_Terminal with OpenCode and GitHub Copilot CLI — accessible via SSH and web terminal._
+_Terminal with Claude Code, OpenCode and GitHub Copilot CLI in herdr sessions — accessible via SSH and web terminal._
 
-Pre-alpha developer add-on that bundles OpenCode and the GitHub Copilot CLI into a single container exposed via SSH and
-a web terminal. Designed for Home Assistant OS / Supervised installations where installing these tools on the host is
-not practical.
+Pre-alpha developer add-on that bundles Claude Code, OpenCode and the GitHub Copilot CLI into a single container exposed
+via SSH and a web terminal, with sessions managed by herdr. Designed for Home Assistant OS / Supervised installations
+where installing these tools on the host is not practical.
 
 **Status:** Pre-alpha — APIs and configuration may change without notice.
 
