@@ -38,7 +38,8 @@
 #   plugins          the approved herdr plugins (23-PLUGIN-REVIEW.md) are registered at their pinned checkouts, a broken
 #                    plugin directory only yields a warning (D-07), no herdr config.toml / Claude settings.json is
 #                    written (D-02, D-04), claude-limits' poller starts without credentials, subagent-watch's launcher
-#                    works (setup --dry-run)
+#                    works (setup --dry-run), the patched web-service answers /api/health through its startup hook,
+#                    serves a relative-URL client and refuses login (503) while no password exists
 #
 # Container model: every add-on start is a NEW container on the same /data volume (Supervisor semantics), so a
 # "restart" is `docker rm -f` followed by a fresh `docker run` (restart_ca), never `docker restart`. Containers
@@ -745,7 +746,8 @@ scenario_drift() {
         fail "build.yaml and the Dockerfile ARG defaults drifted: ${out}"
     fi
     local key
-    for key in HERDR_VERSION HERDR_SHA256_X86_64 HERDR_SHA256_AARCH64 HERDR_SUBAGENT_WATCH_REF HERDR_CLAUDE_LIMITS_REF; do
+    for key in HERDR_VERSION HERDR_SHA256_X86_64 HERDR_SHA256_AARCH64 HERDR_SUBAGENT_WATCH_REF HERDR_WEB_SERVICE_REF \
+        HERDR_CLAUDE_LIMITS_REF; do
         assert_eq "build.yaml carries the pin ${key}" \
             "$(build_yaml_args "${by}" | grep -c "^${key}"$'\t')" "1"
     done
@@ -1187,7 +1189,7 @@ scenario_plugins() {
     # Registration: exactly the approved set, the broken directory is not part of it.
     ids="$(plugin_ids plugins)"
     assert_eq "registered plugins are exactly the approved set" "${ids}" \
-        "martin.claude-limits,subagent.watch"
+        "imontes.herdr-web-service,martin.claude-limits,subagent.watch"
     logs="$(ca_logs plugins)"
     assert_match "the broken plugin directory only logged a link warning" "${logs}" \
         'WARNING.*herdr plugin link failed for /opt/herdr-plugins/zz-broken'
@@ -1226,6 +1228,29 @@ scenario_plugins() {
         ca_exec plugins curl -fsS -o /dev/null http://127.0.0.1:8099/terminal/
     assert_fail "still no herdr config.toml at the end" ca_exec plugins test -e /data/.config/herdr/config.toml
     assert_fail "still no Claude settings.json at the end" ca_exec plugins test -e /data/.claude/settings.json
+
+    # herdr-web-service (patched and built in the image): the startup hook brought the server up on loopback.
+    if wait_for plugins 30 curl -fsS http://127.0.0.1:7340/api/health; then
+        pass "web-service /api/health answers on 127.0.0.1:7340 (startup hook ran)"
+    else
+        fail "web-service /api/health did not answer within 30 s"
+    fi
+    assert_ok "web-service server.pid exists" \
+        ca_exec plugins test -s "${CA_PLUGIN_STATE_DIR}/imontes.herdr-web-service/server.pid"
+    assert_ok "built client dist/index.html exists" \
+        ca_exec plugins test -f /opt/herdr-plugins/herdr-web-service/dist/index.html
+    assert_fail "the pinned checkout carries no .git directory" \
+        ca_exec plugins test -e /opt/herdr-plugins/herdr-web-service/.git
+    out="$(ca_exec plugins curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:7340/ 2>/dev/null)"
+    assert_eq "web-service index answers 200" "${out}" "200"
+    out="$(ca_exec plugins curl -sS http://127.0.0.1:7340/ 2>/dev/null)"
+    assert_ok "the index HTML references its assets" grep -q 'assets/' <<<"${out}"
+    assert_fail "the index HTML has no root-absolute src= or href= attribute" grep -qE '(src|href)="/' <<<"${out}"
+    out="$(ca_exec plugins curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' \
+        -H 'Host: 127.0.0.1:7340' -H 'Origin: http://127.0.0.1:7340' \
+        --data '{"password":"verify-not-a-password","remember":false}' http://127.0.0.1:7340/api/auth/login 2>/dev/null)"
+    assert_eq "login answers 503 while no password exists (closed until herdr_web_password is set)" "${out}" "503"
+    yellow "INFO: image size $(docker image inspect --format '{{.Size}}' "${IMAGE_NAME}" 2>/dev/null) bytes (${IMAGE_NAME})"
 }
 
 # --- Dispatcher --------------------------------------------------------------------------------------------------

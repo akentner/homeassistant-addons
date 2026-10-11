@@ -264,6 +264,39 @@ RUN PLUGIN_DIR=/opt/herdr-plugins/herdr-claude-limits \
     && [ "$(git -C "${PLUGIN_DIR}" rev-parse HEAD)" = "${HERDR_CLAUDE_LIMITS_REF}" ] \
     && rm -rf "${PLUGIN_DIR}/.git"
 
+# herdr-web-service — fetched like the plugins above, then PATCHED and BUILT here: the stock client hard-codes
+# root-absolute URLs (/api/..., /ws, /sw.js, ...) that cannot work behind the HA ingress sub-path (user decision 3), so
+# patches/herdr-web-service-subpath.patch (9 client files, no server file) makes every URL relative. The patch was
+# validated against exactly this pin by internal/spike-herdr-web-service.sh (23-SPIKE-WEB-SERVICE.md). A build failure at
+# `git apply` therefore means the pin moved: re-validate the patch with the spike script before bumping.
+# `herdr plugin link` skips the manifest [[build]] steps, so the build runs here: `bun install --frozen-lockfile` (the
+# plugin's own lockfile), `bun run build` (vite -> dist/), then the production prune proven in the spike (node_modules
+# 148 MB -> 19 MB, server still starts) and removal of the bun install cache. The final asserts fail the build when
+# dist/index.html is missing or the built JavaScript still contains a root-absolute /api/, /ws, ... string.
+ARG HERDR_WEB_SERVICE_REF=e9082b3fb969064e89153a8c6b2170366982f7f9
+COPY patches/herdr-web-service-subpath.patch /tmp/herdr-web-service-subpath.patch
+# hadolint ignore=DL3003
+RUN PLUGIN_DIR=/opt/herdr-plugins/herdr-web-service \
+    && mkdir -p "${PLUGIN_DIR}" \
+    && cd "${PLUGIN_DIR}" \
+    && git init -q . \
+    && git remote add origin https://github.com/i-montes/herdr-web-service.git \
+    && git fetch -q --depth 1 origin "${HERDR_WEB_SERVICE_REF}" \
+    && git -c advice.detachedHead=false checkout -q --detach FETCH_HEAD \
+    && [ "$(git rev-parse HEAD)" = "${HERDR_WEB_SERVICE_REF}" ] \
+    && git apply --check /tmp/herdr-web-service-subpath.patch \
+    && git apply /tmp/herdr-web-service-subpath.patch \
+    && bun install --frozen-lockfile \
+    && bun run build \
+    && test -f dist/index.html \
+    && rm -rf node_modules \
+    && bun install --frozen-lockfile --production \
+    && rm -rf /root/.bun/install/cache /tmp/herdr-web-service-subpath.patch .git \
+    && test -f dist/index.html \
+    && if grep -rEq "[\"'\`]/(api/|ws[\"'\`]|sw\\.js|assets/|manifest|icon|apple-touch)" dist --include='*.js'; then \
+        echo "herdr-web-service: root-absolute URL left in the built client" >&2; exit 1; \
+    fi
+
 # Web UI + nginx config
 RUN mkdir -p /opt/coding-assistants
 COPY index.html info.html /opt/coding-assistants/
