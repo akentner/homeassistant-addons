@@ -30,6 +30,9 @@
 #   herdr-core       herdr server owned by run.sh (workspace main at /homeassistant, fish panes with the add-on
 #                    environment, respawn after kill -9), two concurrent clients share ONE session, a missing
 #                    server degrades to a plain fish shell
+#   herdr-attach     SSH login hooks (bash + fish) and the ttyd command go through coding-assistants-attach, the
+#                    escape variables keep scripted/nested shells out, a real sshd round trip lands in herdr, no
+#                    herdr config.toml is written, the previous multiplexer is gone from image and code
 #
 # Container model: every add-on start is a NEW container on the same /data volume (Supervisor semantics), so a
 # "restart" is `docker rm -f` followed by a fresh `docker run` (restart_ca), never `docker restart`. Containers
@@ -72,7 +75,7 @@ declare -A CA_OPTS=()
 declare -A CA_EXTRA=()
 
 # Registered scenarios: NAME -> function scenario_<NAME with - replaced by _>
-SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers mcp-integrations drift herdr-core)
+SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers mcp-integrations drift herdr-core herdr-attach)
 # Scenarios that need neither Docker nor the image: when only these are selected the image build is skipped.
 STATIC_SCENARIOS=(drift)
 
@@ -982,6 +985,105 @@ scenario_herdr_core() {
     assert_match "fallback message is shown" "${text}" 'herdr server is not running, starting a plain fish shell'
     assert_eq "fallback shell is fish" "$(probe_field "${out}" comm)" "fish"
     assert_eq "fallback shell stays alive" "$(probe_field "${out}" alive)" "1"
+}
+
+# =============================================================================
+# Scenario herdr-attach
+# =============================================================================
+# legacy_multiplexer_sweep FILE... -- case-insensitive whole-word search for the previous multiplexer. Shell scripts
+# are searched without their comment lines (a comment may explain what was removed); every other file in full.
+# Prints each hit, returns 1 when there is at least one.
+legacy_multiplexer_sweep() {
+    local file hits rc=0
+    for file in "$@"; do
+        if [[ "${file}" == *.sh ]]; then
+            hits="$(grep -v '^[[:space:]]*#' "${file}" | grep -niw 'tmux' || true)"
+        else
+            hits="$(grep -niw 'tmux' "${file}" || true)"
+        fi
+        if [[ -n "${hits}" ]]; then
+            echo "${file}: ${hits}"
+            rc=1
+        fi
+    done
+    return "${rc}"
+}
+
+scenario_herdr_attach() {
+    local data opts cname pid cmdline out line sweep_out bg_out baseline during
+    data="${SCRATCH_DIR}/herdr-attach/data"
+    mkdir -p "${data}"
+    opts="${data}/options.json"
+    write_options "${opts}"
+    start_ca herdr-attach "${data}" "${opts}"
+    wait_ca herdr-attach || return 0
+    cname="$(ca_cname herdr-attach)"
+
+    # No client has attached yet: the add-on itself must not have written a herdr config (D-02, herdr defaults only).
+    assert_fail "no herdr config.toml exists before any client attached" \
+        ca_exec herdr-attach test -e /data/.config/herdr/config.toml
+
+    assert_eq "profile.d hook calls the wrapper" \
+        "$(ca_count herdr-attach 'exec coding-assistants-attach' /etc/profile.d/00-coding-assistants.sh)" "1"
+    assert_eq "fish conf hook calls the wrapper" \
+        "$(ca_count herdr-attach 'exec coding-assistants-attach' /data/.config/fish/conf.d/00-coding-assistants.fish)" "1"
+
+    pid="$(ca_pid herdr-attach ttyd)"
+    if [[ -z "${pid}" ]]; then
+        fail "ttyd process not found"
+    else
+        # shellcheck disable=SC2016
+        cmdline="$(ca_exec herdr-attach sh -c 'tr "\0" " " < "/proc/$1/cmdline"' sh "${pid}")"
+        assert_match "ttyd command line ends in coding-assistants-attach" "${cmdline}" 'coding-assistants-attach $'
+    fi
+    assert_ok "the web terminal answers through nginx" \
+        ca_exec herdr-attach curl -fsS -o /dev/null http://127.0.0.1:8099/terminal/
+
+    # Login-hook guards, exercised with a real login shell in a pseudo-terminal: only an interactive SSH login
+    # without the escape variables is captured by the wrapper (the client replaces the login shell: comm herdr).
+    out="$(ca_pty_probe "${cname}" 5 1 env "SSH_CONNECTION=127.0.0.1 1 127.0.0.1 2222" bash -l)"
+    assert_eq "SSH login shell is replaced by the herdr client" "$(probe_field "${out}" comm)" "herdr"
+    out="$(ca_pty_probe "${cname}" 5 1 env "SSH_CONNECTION=127.0.0.1 1 127.0.0.1 2222" CODING_ASSISTANTS_NO_ATTACH=1 bash -l)"
+    assert_eq "CODING_ASSISTANTS_NO_ATTACH keeps the login shell" "$(probe_field "${out}" comm)" "bash"
+    out="$(ca_pty_probe "${cname}" 5 1 env "SSH_CONNECTION=127.0.0.1 1 127.0.0.1 2222" HERDR_ENV=1 bash -l)"
+    assert_eq "HERDR_ENV (inside a pane) keeps the login shell" "$(probe_field "${out}" comm)" "bash"
+    out="$(ca_pty_probe "${cname}" 5 1 bash -l)"
+    assert_eq "a login shell without SSH_CONNECTION is not captured" "$(probe_field "${out}" comm)" "bash"
+
+    # Real sshd round trip: the profile hook must start a herdr client next to the server.
+    ca_exec herdr-attach sh -c 'rm -f /tmp/verify-ssh-key /tmp/verify-ssh-key.pub \
+        && ssh-keygen -q -t ed25519 -N "" -f /tmp/verify-ssh-key \
+        && cat /tmp/verify-ssh-key.pub >> /root/.ssh/authorized_keys'
+    baseline="$(herdr_count herdr-attach)"
+    bg_out="${SCRATCH_DIR}/herdr-attach-ssh.out"
+    ca_pty_probe "${cname}" 8 1 ssh -tt -p 2222 -i /tmp/verify-ssh-key -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR root@127.0.0.1 >"${bg_out}" 2>&1 &
+    local probe_pid=$!
+    sleep 5
+    during="$(herdr_count herdr-attach)"
+    wait "${probe_pid}"
+    line="$(cat "${bg_out}")"
+    if [[ "${during}" -gt "${baseline}" ]]; then
+        pass "ssh login started a second herdr process (${baseline} -> ${during}) through the profile hook"
+    else
+        fail "ssh login did not start a herdr client (herdr processes ${baseline} -> ${during}): ${line}"
+    fi
+    if [[ "$(probe_field "${line}" bytes)" -gt 0 ]] 2>/dev/null; then
+        pass "ssh round trip produced output"
+    else
+        fail "ssh round trip produced no output (${line})"
+    fi
+
+    # The previous multiplexer is gone: image and repository.
+    assert_fail "the previous multiplexer is not installed in the image" \
+        ca_exec herdr-attach sh -c 'command -v tmux'
+    assert_fail "its system-wide config file is not in the image" ca_exec herdr-attach test -e /etc/tmux.conf
+    assert_fail "its config file is gone from the repository" test -e "${ADDON_DIR}/tmux.conf"
+    if sweep_out="$(legacy_multiplexer_sweep "${ADDON_DIR}/Dockerfile" "${ADDON_DIR}/nginx.conf" "${ADDON_DIR}/run.sh")"; then
+        pass "no mention of the previous multiplexer in Dockerfile, nginx.conf and run.sh (code lines)"
+    else
+        fail "leftover of the previous multiplexer: ${sweep_out}"
+    fi
 }
 
 # --- Dispatcher --------------------------------------------------------------------------------------------------

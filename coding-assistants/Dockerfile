@@ -5,7 +5,7 @@ FROM $BUILD_FROM
 # to pin to Node 24.x via NodeSource (Bookworm's main repo only ships Node 18).
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash tmux \
+    bash \
     openssh-server openssh-client \
     nginx \
     curl wget git jq make \
@@ -251,9 +251,6 @@ RUN mkdir -p /run/sshd
 # Kept next to the end of the file on purpose: a change here must not invalidate the download layers above.
 COPY coding-assistants-attach /usr/local/bin/coding-assistants-attach
 RUN chmod +x /usr/local/bin/coding-assistants-attach
-
-# System-wide tmux config
-COPY tmux.conf /etc/tmux.conf
 
 ARG BUILD_ARCH
 ARG BUILD_DATE

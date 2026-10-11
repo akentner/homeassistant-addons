@@ -399,7 +399,7 @@ PYEOF
     } >> /etc/profile.d/00-coding-assistants.sh
 fi
 
-# Write env profile (picked up by SSH login shells and ttyd/tmux via bash -l)
+# Write env profile (picked up by SSH login shells)
 mkdir -p /etc/profile.d
 : > /etc/profile.d/00-coding-assistants.sh
 chmod +x /etc/profile.d/00-coding-assistants.sh
@@ -421,9 +421,11 @@ EOF
     printf 'export HA_TOKEN=%q\n' "${HA_TOKEN}"
     printf 'export SUPERVISOR_TOKEN=%q\n' "${SUPERVISOR_TOKEN}"
     cat << 'EOF'
-# SSH: auto-attach to shared tmux session (enables web/SSH tmux sharing)
-if [[ -n "$SSH_CONNECTION" ]] && [[ -z "$TMUX" ]]; then
-    exec tmux new-session -A -s main -c /homeassistant
+# SSH: attach to the shared herdr session (SSH and the web terminal end in the same session). Only for interactive
+# SSH logins: HERDR_ENV marks a shell inside a herdr pane (never nest), CODING_ASSISTANTS_NO_ATTACH is the escape
+# hatch (also set by the wrapper's plain-shell fallback), a non-terminal stdin is a scripted login.
+if [[ -n "$SSH_CONNECTION" ]] && [[ -z "$HERDR_ENV" ]] && [[ -z "$CODING_ASSISTANTS_NO_ATTACH" ]] && [[ -t 0 ]]; then
+    exec coding-assistants-attach
 fi
 EOF
 } > /etc/profile.d/00-coding-assistants.sh
@@ -499,9 +501,9 @@ EOF
     printf 'set -x SUPERVISOR_TOKEN %s\n' "${SUPERVISOR_TOKEN}"
     cat << 'EOF'
 
-# SSH: auto-attach to shared tmux session
-if set -q SSH_CONNECTION; and not set -q TMUX
-    exec tmux new-session -A -s main -c /homeassistant
+# SSH: attach to the shared herdr session (same guards as the bash profile hook; panes have HERDR_ENV=1)
+if set -q SSH_CONNECTION; and not set -q HERDR_ENV; and not set -q CODING_ASSISTANTS_NO_ATTACH; and status is-interactive
+    exec coding-assistants-attach
 end
 EOF
 } > "${FISH_CONF}"
@@ -639,7 +641,7 @@ ttyd \
     --client-option "fontSize=${FONT_SIZE}" \
     --client-option "fontFamily=${FONT_FAMILY}" \
     --client-option "theme=${THEME_JSON}" \
-    tmux new-session -A -s main -c /homeassistant &
+    coding-assistants-attach &
 
 # Start nginx — serves landing page + proxies sub-services (port 8099 = ingress)
 bashio::log.info "Starting nginx on port 8099..."
