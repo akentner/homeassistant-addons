@@ -459,4 +459,29 @@ Nothing from this plugin was installed or executed during this review.
 
 ## Decision
 
-PENDING
+Date: 2026-10-11
+
+User answer (verbatim): `approved: all`
+
+All three plugins are approved at the reviewed research pins. No re-pin was requested. The approval also covers:
+
+- the redistribution of herdr-claude-limits (no licence file) in the public ghcr.io image,
+- the execution surface (plugins run as root inside the add-on with HA_TOKEN / SUPERVISOR_TOKEN in the herdr server
+  environment),
+- `vite` 8.3.4 and `@vitejs/plugin-react` 6.1.2 (both flagged `too-new`) as build-time dependencies resolved from the
+  plugin's own `bun.lock`.
+
+Accepted risks (recorded by the user's approval):
+
+- herdr-claude-limits has no licence file: the code is all-rights-reserved, and bundling it in a public image is a
+  redistribution the author has not permitted. Accepted by the user on 2026-10-11.
+- herdr-subagent-watch is pinned to the older `c47d49b247d8ca3387d88d5bb9731a3b7bf4f6a8`; upstream `main`
+  (`c9cf7538855606af8b54ba30097eea6a6ec48be5`) is 10 commits ahead and fixes hook, setup and viewer defects (PATH
+  lookup, runtime directory checks, terminal escape stripping). The weaker paths are inactive in the add-on because
+  `setup` is never run. Kept at the reviewed pin; a re-pin would need a diff review first.
+
+Final pins (machine-readable, consumed by plans 23-04, 23-06 and 23-07):
+
+PIN HERDR_SUBAGENT_WATCH_REF c47d49b247d8ca3387d88d5bb9731a3b7bf4f6a8
+PIN HERDR_WEB_SERVICE_REF e9082b3fb969064e89153a8c6b2170366982f7f9
+PIN HERDR_CLAUDE_LIMITS_REF 9c0c9a1931ac91f9d865031e2dc58d66a7d1b594
