@@ -119,16 +119,17 @@ bashio::log.info "Updated tool context in Claude Code CLAUDE.md"
 # Write MOTD with current addon version and tool versions (absolute launcher path: PATH is not extended yet)
 ADDON_VERSION=$(bashio::addon.version)
 CLAUDE_VERSION=$(/root/.local/bin/claude --version 2>/dev/null | head -n 1 | cut -d' ' -f1) || true
+HERDR_BIN_VERSION=$(herdr --version 2>/dev/null | head -n 1 | cut -d' ' -f2) || true
 OPENCODE_VERSION=$(opencode --version 2>/dev/null | head -1)
 MOTD_HA_URL=$(bashio::config 'ha_url')
 cat > /etc/motd << EOF
-Coding Assistants ${ADDON_VERSION}  |  claude ${CLAUDE_VERSION}  |  opencode ${OPENCODE_VERSION}
+Coding Assistants ${ADDON_VERSION}  |  claude ${CLAUDE_VERSION}  |  herdr ${HERDR_BIN_VERSION}  |  opencode ${OPENCODE_VERSION}
 HA: ${MOTD_HA_URL}
 EOF
 
 # Version info for web UI
-printf '{"addon":"%s","claude":"%s","opencode":"%s"}\n' \
-    "${ADDON_VERSION}" "${CLAUDE_VERSION}" "${OPENCODE_VERSION}" \
+printf '{"addon":"%s","claude":"%s","herdr":"%s","opencode":"%s"}\n' \
+    "${ADDON_VERSION}" "${CLAUDE_VERSION}" "${HERDR_BIN_VERSION}" "${OPENCODE_VERSION}" \
     > /opt/coding-assistants/versions.json
 
 # Fish config persistence — copy defaults on first run, then symlink

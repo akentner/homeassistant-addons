@@ -35,6 +35,9 @@ backup_exclude:
   - ".npm/*"
   - ".cache/*"
   - ".local/share/claude/*"
+  - ".config/herdr/*.sock"
+  - ".config/herdr/*.log"
+  - ".config/herdr/session-snapshots/*"
 
 options:
   log_level: "info"

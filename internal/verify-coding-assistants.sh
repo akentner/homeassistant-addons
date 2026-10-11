@@ -33,6 +33,8 @@
 #   herdr-attach     SSH login hooks (bash + fish) and the ttyd command go through coding-assistants-attach, the
 #                    escape variables keep scripted/nested shells out, a real sshd round trip lands in herdr, no
 #                    herdr config.toml is written, the previous multiplexer is gone from image and code
+#   surface          versions.json carries claude and herdr, MOTD shows herdr, info.html has the version rows,
+#                    backup_exclude lists the herdr runtime files, no previous-multiplexer text in TOOLS.md/info.html
 #
 # Container model: every add-on start is a NEW container on the same /data volume (Supervisor semantics), so a
 # "restart" is `docker rm -f` followed by a fresh `docker run` (restart_ca), never `docker restart`. Containers
@@ -75,7 +77,7 @@ declare -A CA_OPTS=()
 declare -A CA_EXTRA=()
 
 # Registered scenarios: NAME -> function scenario_<NAME with - replaced by _>
-SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers mcp-integrations drift herdr-core herdr-attach)
+SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers mcp-integrations drift herdr-core herdr-attach surface)
 # Scenarios that need neither Docker nor the image: when only these are selected the image build is skipped.
 STATIC_SCENARIOS=(drift)
 
@@ -1084,6 +1086,51 @@ scenario_herdr_attach() {
     else
         fail "leftover of the previous multiplexer: ${sweep_out}"
     fi
+}
+
+# =============================================================================
+# Scenario surface
+# =============================================================================
+# yaml_list_has FILE KEY ENTRY -- the top-level YAML list KEY in FILE contains the quoted entry ENTRY
+yaml_list_has() {
+    awk -v key="$2" '
+        $0 ~ "^" key ":" { in_list = 1; next }
+        in_list && /^[^[:space:]-]/ { in_list = 0 }
+        in_list { print }' "$1" | grep -qxF "  - \"$3\""
+}
+
+scenario_surface() {
+    local data opts want_ver vj entry
+    want_ver="$(build_yaml_args "${ADDON_DIR}/build.yaml" | awk -F'\t' '$1 == "HERDR_VERSION" { print $2 }')"
+
+    # Static: info.html rows and script, backup_exclude, legacy-multiplexer sweep over the user-visible files.
+    for entry in 'id="v-claude"' 'id="v-herdr"' 'v.claude' 'v.herdr'; do
+        assert_ok "info.html contains ${entry}" grep -qF -- "${entry}" "${ADDON_DIR}/info.html"
+    done
+    for entry in '.config/herdr/*.sock' '.config/herdr/*.log' '.config/herdr/session-snapshots/*' \
+        '.local/share/claude/*'; do
+        assert_ok "backup_exclude contains ${entry}" yaml_list_has "${ADDON_DIR}/config.yaml" backup_exclude "${entry}"
+    done
+    assert_ok "TOOLS.md mentions herdr" grep -qw herdr "${ADDON_DIR}/TOOLS.md"
+    if entry="$(legacy_multiplexer_sweep "${ADDON_DIR}/Dockerfile" "${ADDON_DIR}/nginx.conf" "${ADDON_DIR}/run.sh" \
+        "${ADDON_DIR}/TOOLS.md" "${ADDON_DIR}/info.html")"; then
+        pass "no mention of the previous multiplexer in Dockerfile, nginx.conf, run.sh, TOOLS.md, info.html"
+    else
+        fail "leftover of the previous multiplexer: ${entry}"
+    fi
+
+    # Runtime: versions.json and MOTD of a real container.
+    data="${SCRATCH_DIR}/surface/data"
+    mkdir -p "${data}"
+    opts="${data}/options.json"
+    write_options "${opts}"
+    start_ca surface "${data}" "${opts}"
+    wait_ca surface || return 0
+    vj="$(ca_exec surface curl -fsS http://127.0.0.1:8099/versions.json)"
+    json_check "versions.json has a non-empty claude field" "${vj}" '(.claude | length) > 0'
+    json_check "versions.json herdr field equals the build.yaml pin (${want_ver})" "${vj}" \
+        ".herdr == \"${want_ver}\""
+    assert_ok "/etc/motd shows the herdr version" ca_exec surface grep -q "herdr ${want_ver}" /etc/motd
 }
 
 # --- Dispatcher --------------------------------------------------------------------------------------------------

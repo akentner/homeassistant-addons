@@ -5,7 +5,10 @@ Persistent storage is at `/data`.
 
 ## Terminal & Navigation
 
-- `tmux` — terminal multiplexer; session `main`, prefix `Ctrl-a`
+- `herdr` — terminal workspace manager for coding agents (workspaces, tabs, panes, mouse support); SSH and the web
+  terminal attach to ONE shared session. Default prefix `ctrl+b`: `prefix+q` detaches without stopping anything,
+  `prefix+?` shows help. From inside a pane, the `herdr pane` and `herdr agent` commands control neighbouring panes and
+  agents (`herdr --skill` prints the agent skill file)
 - `zoxide` — frecency-based smart `cd`; use `z <partial>` instead of `cd`
 - `yazi` / `ya` — terminal file manager
 - `direnv` — auto-loads `.envrc` per directory
