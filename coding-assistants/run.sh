@@ -139,6 +139,30 @@ fi
 rm -rf /root/.config/fish
 ln -s /data/.config/fish /root/.config/fish
 
+# claude_mcp_merge JSON_OBJECT — merge MCP servers into Claude Code's user-scope config (/data/.claude.json).
+# Argument: one JSON object mapping server name to a Claude-format entry. Only `.mcpServers` is assigned, so every
+# other key (oauthAccount, projects, ...) passes through untouched, and the add-on defaults sit on the LEFT of the
+# object addition so entries that already exist (user edits, earlier starts) win. The result is copied back with
+# `cp` (never `mv`: the file is the target of the ~/.claude.json symlink) and ONLY when jq succeeded and produced
+# output; otherwise the file stays byte-identical, because a blind copy of a failed jq run would wipe all of
+# Claude's auth and project state. Returns 1 after a warning (callers must test it: run.sh runs under errexit).
+# Entry contents carry secrets and are never logged, only counts.
+claude_mcp_merge() {
+    local target="/data/.claude.json" tmp count
+    [[ -f "${target}" ]] || echo '{}' > "${target}"
+    tmp=$(mktemp)
+    count=$(jq -r 'length' <<< "$1" 2>/dev/null) || count="?"
+    if jq --argjson add "$1" '.mcpServers = ($add + (.mcpServers // {}))' "${target}" > "${tmp}" 2>/dev/null \
+        && [[ -s "${tmp}" ]]; then
+        cp "${tmp}" "${target}"
+        rm -f "${tmp}"
+        return 0
+    fi
+    bashio::log.warning "Could not merge MCP servers (${count} entries) into ${target}; leaving it untouched"
+    rm -f "${tmp}"
+    return 1
+}
+
 # MCP server auto-registration — merge addon config into OpenCode's opencode.json
 if jq -e '.mcp_servers | length > 0' /data/options.json > /dev/null 2>&1; then
     # OpenCode format: { name: { type: "local", command: [...], enabled } }
@@ -157,6 +181,21 @@ if jq -e '.mcp_servers | length > 0' /data/options.json > /dev/null 2>&1; then
 
     MCP_COUNT=$(jq -r '.mcp_servers | length' /data/options.json)
     bashio::log.info "Registered ${MCP_COUNT} MCP server(s) in OpenCode config"
+
+    # Claude Code format (user scope, /data/.claude.json): http -> { type, url }; everything else -> stdio with
+    # args and an env object. Existing entries win (see claude_mcp_merge).
+    MCP_OBJ_CLAUDE=$(jq -c '
+        .mcp_servers
+        | map(if .type == "http"
+              then { (.name): { type: "http", url: .url } }
+              else { (.name): { type: "stdio", command: .command, args: (.args // []),
+                                env: ((.env // []) | map({ (.name): .value }) | add // {}) } }
+              end)
+        | add // {}
+    ' /data/options.json)
+    if claude_mcp_merge "${MCP_OBJ_CLAUDE}"; then
+        bashio::log.info "Registered $(jq -r 'length' <<< "${MCP_OBJ_CLAUDE}") MCP server(s) in Claude Code config"
+    fi
 fi
 
 # Zigbee2MQTT MCP auto-registration — registers the dedicated MCP server when enabled

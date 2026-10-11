@@ -21,6 +21,8 @@
 #                    every start with user text preserved, seed/newest selection against real re-creations
 #   claude-auth      claude_code_oauth_token / anthropic_api_key exported into the ttyd process environment only
 #                    when set and non-empty; never written to profile files or logs
+#   mcp-servers      `mcp_servers` option merged into /data/.claude.json `.mcpServers` (existing entries win, other
+#                    keys survive, a corrupt file is never clobbered, no secret in the log); OpenCode unchanged
 #
 # Container model: every add-on start is a NEW container on the same /data volume (Supervisor semantics), so a
 # "restart" is `docker rm -f` followed by a fresh `docker run` (restart_ca), never `docker restart`. Containers
@@ -63,7 +65,7 @@ declare -A CA_OPTS=()
 declare -A CA_EXTRA=()
 
 # Registered scenarios: NAME -> function scenario_<NAME with - replaced by _>
-SCENARIOS=(claude-launcher claude-state claude-auth)
+SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers)
 
 cleanup() {
     local pid c
@@ -501,6 +503,95 @@ scenario_claude_auth() {
         assert_eq "no ANTHROPIC_API_KEY in the ttyd environment (options ${variant})" \
             "$(claude_auth_env_count "auth-b-${variant}" "${pid}" ANTHROPIC_API_KEY)" "0"
     done
+}
+
+# =============================================================================
+# Scenario mcp-servers
+# =============================================================================
+# Fixture values deliberately do not look like real credentials (keeps secret scanners quiet).
+CA_MCP_URL_SECRET="private_verify_secret"
+CA_MCP_API_KEY="verify-api-key"
+CA_MCP_SERVERS_FIXTURE='[
+    {"name":"ha-mcp","type":"http","url":"http://ha-mcp.invalid:9583/private_verify_secret"},
+    {"name":"fff","type":"stdio","command":"/usr/local/bin/fff-mcp"},
+    {"name":"with-extras","type":"stdio","command":"node","args":["/opt/x/index.js","--flag"],
+     "env":[{"name":"API_KEY","value":"verify-api-key"}]}
+]'
+
+# json_check DESC JSON JQ_EXPR -- PASS when `jq -e EXPR` is truthy on JSON
+json_check() {
+    if jq -e "$3" <<<"$2" >/dev/null 2>&1; then pass "$1"; else fail "$1 (jq: $3)"; fi
+}
+
+# ca_sha256 NAME FILE -- sha256 of a file inside the container
+ca_sha256() { ca_exec "$1" sha256sum "$2" | cut -d' ' -f1; }
+
+scenario_mcp_servers() {
+    local data opts cj oc logs seed_sha
+
+    # Container A: pre-seeded Claude state with a user-edited ha-mcp entry
+    data="${SCRATCH_DIR}/mcp-a/data"
+    mkdir -p "${data}"
+    opts="${data}/options.json"
+    write_options "${opts}" ".mcp_servers=${CA_MCP_SERVERS_FIXTURE}"
+    printf '%s' '{"oauthAccount":{"emailAddress":"verify@example.invalid"},"projects":{"/homeassistant":{"allowedTools":[]}},"mcpServers":{"ha-mcp":{"type":"http","url":"http://user-edited.invalid/"}}}' \
+        >"${data}/.claude.json"
+    start_ca mcp-a "${data}" "${opts}"
+    if wait_ca mcp-a; then
+        cj="$(ca_exec mcp-a cat /data/.claude.json)"
+        json_check "A: oauthAccount survived" "${cj}" '.oauthAccount.emailAddress == "verify@example.invalid"'
+        json_check "A: projects survived" "${cj}" '.projects["/homeassistant"].allowedTools == []'
+        json_check "A: user-edited ha-mcp entry wins over the add-on default" "${cj}" \
+            '.mcpServers["ha-mcp"].url == "http://user-edited.invalid/"'
+        json_check "A: fff entry has Claude's stdio shape" "${cj}" \
+            '.mcpServers.fff == {"type":"stdio","command":"/usr/local/bin/fff-mcp","args":[],"env":{}}'
+        json_check "A: with-extras carries args and env" "${cj}" \
+            '.mcpServers["with-extras"].args == ["/opt/x/index.js","--flag"] and .mcpServers["with-extras"].env.API_KEY == "verify-api-key"'
+        assert_ok "A: /root/.claude.json is still a symlink" ca_exec mcp-a test -L /root/.claude.json
+        assert_eq "A: /data/.claude.json mode is 600" "$(ca_exec mcp-a stat -c %a /data/.claude.json)" "600"
+
+        oc="$(ca_exec mcp-a cat /data/.config/opencode/opencode.json)"
+        json_check "A: OpenCode still registers fff and with-extras" "${oc}" \
+            '.mcp | has("fff") and has("with-extras")'
+        json_check "A: OpenCode still skips the http server" "${oc}" '.mcp | has("ha-mcp") | not'
+        json_check "A: OpenCode fff command unchanged" "${oc}" '.mcp.fff.command == ["/usr/local/bin/fff-mcp"]'
+
+        logs="$(ca_logs mcp-a)"
+        assert_eq "A: no MCP secret in the container log" \
+            "$(grep -c -e "${CA_MCP_URL_SECRET}" -e "${CA_MCP_API_KEY}" <<<"${logs}" || true)" "0"
+    fi
+
+    # Container B: fresh volume, no pre-seed
+    data="${SCRATCH_DIR}/mcp-b/data"
+    mkdir -p "${data}"
+    opts="${data}/options.json"
+    write_options "${opts}" ".mcp_servers=${CA_MCP_SERVERS_FIXTURE}"
+    start_ca mcp-b "${data}" "${opts}"
+    if wait_ca mcp-b; then
+        cj="$(ca_exec mcp-b cat /data/.claude.json)"
+        json_check "B: ha-mcp gets the add-on default http entry" "${cj}" \
+            '.mcpServers["ha-mcp"] == {"type":"http","url":"http://ha-mcp.invalid:9583/private_verify_secret"}'
+        json_check "B: exactly three servers registered" "${cj}" '.mcpServers | length == 3'
+    fi
+
+    # Container C: corrupt .claude.json must stay byte-identical and must not stop run.sh
+    data="${SCRATCH_DIR}/mcp-c/data"
+    mkdir -p "${data}"
+    opts="${data}/options.json"
+    write_options "${opts}" ".mcp_servers=${CA_MCP_SERVERS_FIXTURE}"
+    printf '%s' '{not json' >"${data}/.claude.json"
+    seed_sha="$(sha256sum "${data}/.claude.json" | cut -d' ' -f1)"
+    start_ca mcp-c "${data}" "${opts}"
+    if wait_ca mcp-c; then
+        assert_eq "C: corrupt .claude.json is byte-identical after the start" \
+            "$(ca_sha256 mcp-c /data/.claude.json)" "${seed_sha}"
+        logs="$(ca_logs mcp-c)"
+        assert_eq "C: the failed merge is logged as a warning" \
+            "$(grep -c 'WARNING.*Could not merge MCP servers' <<<"${logs}" || true)" "1"
+        assert_eq "C: no MCP secret in the container log" \
+            "$(grep -c -e "${CA_MCP_URL_SECRET}" -e "${CA_MCP_API_KEY}" <<<"${logs}" || true)" "0"
+        pass "C: run.sh still reached its end (nginx answered)"
+    fi
 }
 
 # --- Dispatcher --------------------------------------------------------------------------------------------------
