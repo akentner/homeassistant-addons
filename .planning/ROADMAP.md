@@ -237,14 +237,14 @@ uses herdr instead of tmux (with the subagent-watch, web-service and claude-limi
 version bump via `make update-version` (subpatch increment).
 **Requirements**: TBD
 **Depends on:** Phase 22
-**Plans:** 4/9 plans executed
+**Plans:** 5/9 plans executed
 
 Plans:
 - [x] 23-01-PLAN.md
 - [x] 23-02-PLAN.md
 - [x] 23-03-PLAN.md
 - [x] 23-04-PLAN.md
-- [ ] 23-05-PLAN.md
+- [x] 23-05-PLAN.md
 - [ ] 23-06-PLAN.md
 - [ ] 23-07-PLAN.md
 - [ ] 23-08-PLAN.md
