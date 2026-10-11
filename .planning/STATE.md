@@ -4,17 +4,17 @@ milestone: v1.3
 milestone_name: opentofu-bridge
 current_phase: 23
 current_phase_name: "coding-assistants: Claude Code + herdr (replaces tmux)"
-current_plan: 6
+current_plan: 7
 status: Phase 22 gap-closure 22-04 executed (CR-01) — awaiting re-verification
-stopped_at: Completed 23-05-PLAN.md
-last_updated: "2026-10-11T17:32:39.264Z"
-state_head: d074b988b74afe0779d8292de6804b4f8eff7c8a
+stopped_at: Completed 23-06-PLAN.md
+last_updated: "2026-10-11T18:08:47.828Z"
+state_head: ab9a45731b0afc030000fe4f66731b48123b795a
 progress:
   total_phases: 11
   completed_phases: 12
   total_plans: 43
-  completed_plans: 38
-  percent: 88
+  completed_plans: 39
+  percent: 91
 ---
 
 # Project State
@@ -107,7 +107,7 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Current Plan: 6
+Current Plan: 7
 Total Plans in Phase: 9
 
 Phase: 23 (coding-assistants: Claude Code + herdr (replaces tmux)) — EXECUTING
@@ -385,6 +385,7 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 | Phase 23 P03 | 30 min | 2 tasks | 2 files |
 | Phase 23 P04 | 15min | 2 tasks | 4 files |
 | Phase 23 P05 | 57 min | 3 tasks | 9 files |
+| Phase 23 P06 | 33min | 2 tasks | 4 files |
 
 ## Quick Tasks Completed
 
@@ -428,9 +429,9 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 
 **Resume file:** None
 
-**Stopped at:** Completed 23-05-PLAN.md
+**Stopped at:** Completed 23-06-PLAN.md
 
-Last session: 2026-10-11T17:32:39.015Z
+Last session: 2026-10-11T18:08:47.582Z
 
 ---
 
@@ -518,3 +519,4 @@ skipped; Phase 16 ready to plan_
 - [Phase 23]: 23-04: herdr-web-service /services/ spike VERDICT GO; client-only patch + nginx block validated through emulated HA ingress (9/9), X-Forwarded-For/Proto emptied in the block
 - [Phase 23]: 23-05: herdr server is owned by run.sh (started after all exports, respawn loop); the single coding-assistants-attach wrapper is the only attach path and falls back to a plain fish shell when no server answers
 - [Phase 23]: 23-05: herdr pins live as Dockerfile ARG defaults mirrored in build.yaml and drift-checked by harness scenario drift (CI forwards only the standard build args)
+- [Phase 23]: [23-06] Plugin blocks placed after the last download layer so a pin bump or patch edit does not re-run the GitHub-API-heavy layers
