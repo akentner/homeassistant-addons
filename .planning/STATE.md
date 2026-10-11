@@ -4,17 +4,17 @@ milestone: v1.3
 milestone_name: opentofu-bridge
 current_phase: 23
 current_phase_name: "coding-assistants: Claude Code + herdr (replaces tmux)"
-current_plan: 3
+current_plan: 4
 status: Phase 22 gap-closure 22-04 executed (CR-01) — awaiting re-verification
-stopped_at: Completed 23-02-PLAN.md
-last_updated: "2026-10-11T16:09:31.731Z"
-state_head: 3a411b7cf60af0a29a1b40bd17ae67ea7098ffd5
+stopped_at: Completed 23-03-PLAN.md
+last_updated: "2026-10-11T16:21:27.357Z"
+state_head: e02478cb47c90657a87d8585d4737a494a9327f0
 progress:
   total_phases: 11
   completed_phases: 12
   total_plans: 43
-  completed_plans: 35
-  percent: 81
+  completed_plans: 36
+  percent: 84
 ---
 
 # Project State
@@ -107,7 +107,7 @@ parallelize after Phase 16 stabilises the contracts).
 
 ## Current Position
 
-Current Plan: 3
+Current Plan: 4
 Total Plans in Phase: 9
 
 Phase: 23 (coding-assistants: Claude Code + herdr (replaces tmux)) — EXECUTING
@@ -382,6 +382,7 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 | Phase 22 P04 | 25min | 3 tasks | 6 files |
 | Phase 23 P01 | 55 min | 3 tasks | 5 files |
 | Phase 23 P02 | 40min | 3 tasks | 1 files |
+| Phase 23 P03 | 30 min | 2 tasks | 2 files |
 
 ## Quick Tasks Completed
 
@@ -425,9 +426,9 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 
 **Resume file:** None
 
-**Stopped at:** Completed 23-02-PLAN.md
+**Stopped at:** Completed 23-03-PLAN.md
 
-Last session: 2026-10-11T16:09:31.481Z
+Last session: 2026-10-11T16:21:27.102Z
 
 ---
 
@@ -511,3 +512,4 @@ skipped; Phase 16 ready to plan_
 - [Phase 23]: bashio runs run.sh with errexit+pipefail: pipelines that may yield nothing must end in || true
 - [Phase 23]: Auth options claude_code_oauth_token / anthropic_api_key exported to the run.sh process env only, never to profile files or logs
 - [Phase 23]: 23-02: all three herdr plugins approved at research pins (approved: all, 2026-10-11); claude-limits licence gap and subagent-watch pin drift accepted as risks
+- [Phase 23]: 23-03: claude_mcp_merge returns 1 after a warning and call sites test it (errexit-safe, no false success log); existing MCP entries win, add-on defaults frozen by design (no ledger)
