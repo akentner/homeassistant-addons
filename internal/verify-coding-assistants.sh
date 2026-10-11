@@ -48,6 +48,10 @@
 #                    cookie, session/roster/WebSocket gated by that cookie, hash file mode 600 without plaintext,
 #                    password in no log, hash survives a container re-creation; a rejected password is a warning
 #                    that names the unmet rule and never the value; no option keeps the login closed (503)
+#   docs             (static, no Docker) DOCS.md carries the headings, commands and paths of the phase, names only plugin
+#                    directories the Dockerfile creates and the pins of build.yaml, and the add-on documentation (DOCS.md
+#                    without its migration section, README.md, the root README entry, TOOLS.md) no longer names the
+#                    previous multiplexer; the sweep must fail on a fixture that does
 #
 # Container model: every add-on start is a NEW container on the same /data volume (Supervisor semantics), so a
 # "restart" is `docker rm -f` followed by a fresh `docker run` (restart_ca), never `docker restart`. Containers
@@ -91,9 +95,9 @@ declare -A CA_EXTRA=()
 
 # Registered scenarios: NAME -> function scenario_<NAME with - replaced by _>
 SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers mcp-integrations drift herdr-core herdr-attach surface
-    plugins services services-auth)
+    plugins services services-auth docs)
 # Scenarios that need neither Docker nor the image: when only these are selected the image build is skipped.
-STATIC_SCENARIOS=(drift)
+STATIC_SCENARIOS=(drift docs)
 
 cleanup() {
     local pid c
@@ -1559,6 +1563,87 @@ scenario_services_auth() {
         assert_eq "C: the login answers 503" "$(services_first_status "${hdr}")" "503"
     else
         fail "C: /services/api/health did not answer within 30 s"
+    fi
+}
+
+# =============================================================================
+# Scenario docs (static: no container, no image)
+# =============================================================================
+# markdown_without_section FILE HEADING -- FILE without the level-2 section that starts at the exact line HEADING (up to
+# the next `## ` heading)
+markdown_without_section() {
+    awk -v heading="$2" '/^## / { skip = ($0 == heading) } !skip' "$1"
+}
+
+# readme_entry FILE TITLE -- the lines of the `### [TITLE]` entry of the root README (up to the next `##` heading)
+readme_entry() {
+    awk -v title="$2" '
+        index($0, "### [" title "]") == 1 { on = 1; next }
+        on && /^##/ { exit }
+        on' "$1"
+}
+
+scenario_docs() {
+    local docs="${ADDON_DIR}/DOCS.md" tmp="${SCRATCH_DIR}/docs" item name sha key value migration="## Migrating from tmux"
+    mkdir -p "${tmp}"
+
+    # Headings of every user-facing part of the phase, and the three option sections.
+    # shellcheck disable=SC2016
+    for item in '## Claude Code' '## herdr' '## herdr plugins' '## Web UI (/services/)' "${migration}" \
+        '### `claude_code_oauth_token`' '### `anthropic_api_key`' '### `herdr_web_password`'; do
+        assert_ok "DOCS.md has the heading ${item}" grep -qxF -- "${item}" "${docs}"
+    done
+
+    # The exact commands, variables and paths the documentation promises.
+    for item in 'herdr plugin action invoke subagent.watch.setup' 'herdr plugin action invoke subagent.watch.open' \
+        'martin.claude-limits.show' '/opt/herdr-plugins/herdr-claude-limits/bin/status.sh' \
+        'herdr server reload-config' 'CODING_ASSISTANTS_NO_ATTACH' 'bash --noprofile' 'claude update' \
+        '/data/.local/share/claude/versions' 'claude mcp remove' 'imontes.herdr-web-service' \
+        'CLAUDE_CODE_OAUTH_TOKEN' 'ANTHROPIC_API_KEY' 'coding-assistants:begin'; do
+        assert_ok "DOCS.md mentions ${item}" grep -qF -- "${item}" "${docs}"
+    done
+
+    # Option names match the shipped schema.
+    for item in claude_code_oauth_token anthropic_api_key herdr_web_password; do
+        assert_ok "config.yaml schema declares ${item}" grep -qE "^  ${item}: password\?$" "${ADDON_DIR}/config.yaml"
+    done
+
+    # Every plugin directory the documentation names is created by the Dockerfile.
+    while IFS= read -r name; do
+        assert_ok "plugin directory ${name} named in DOCS.md exists in the Dockerfile" \
+            grep -qF "/opt/herdr-plugins/${name}" "${ADDON_DIR}/Dockerfile"
+    done < <(grep -oE '/opt/herdr-plugins/[A-Za-z0-9._-]+' "${docs}" | sed 's#^/opt/herdr-plugins/##' | sort -u)
+
+    # The documented plugin pins are the shipped ones.
+    while IFS=$'\t' read -r key value; do
+        assert_ok "DOCS.md names the build.yaml pin ${key}" grep -qF -- "${value}" "${docs}"
+    done < <(build_yaml_args "${ADDON_DIR}/build.yaml" | awk -F'\t' '$1 ~ /^HERDR_.*_REF$/')
+
+    # No mention of the previous multiplexer outside the migration section (CHANGELOG history is excluded on purpose).
+    markdown_without_section "${docs}" "${migration}" >"${tmp}/DOCS.md"
+    readme_entry "${REPO_ROOT}/README.md" "Coding Assistants" >"${tmp}/root-readme-entry.md"
+    assert_ok "the root README has a Coding Assistants entry" test -s "${tmp}/root-readme-entry.md"
+    if item="$(legacy_multiplexer_sweep "${tmp}/DOCS.md" "${ADDON_DIR}/README.md" "${tmp}/root-readme-entry.md" \
+        "${ADDON_DIR}/TOOLS.md")"; then
+        pass "no mention of the previous multiplexer in DOCS.md (outside the migration section), README.md, the root README entry, TOOLS.md"
+    else
+        fail "leftover of the previous multiplexer: ${item}"
+    fi
+
+    # Negative controls: the sweep sees a mention outside the migration section and ignores one inside it.
+    printf '# T\n\n## Intro\n\nUse tmux here.\n\n%s\n\nFrom tmux.\n' "${migration}" >"${tmp}/fixture-outside.md"
+    printf '# T\n\n## Intro\n\nNothing.\n\n%s\n\nFrom tmux.\n\n## After\n\nDone.\n' "${migration}" >"${tmp}/fixture-inside.md"
+    markdown_without_section "${tmp}/fixture-outside.md" "${migration}" >"${tmp}/stripped-outside.md"
+    markdown_without_section "${tmp}/fixture-inside.md" "${migration}" >"${tmp}/stripped-inside.md"
+    if legacy_multiplexer_sweep "${tmp}/stripped-outside.md" >/dev/null; then
+        fail "negative control: a mention outside the migration section was not found"
+    else
+        pass "negative control: a mention outside the migration section is found"
+    fi
+    if legacy_multiplexer_sweep "${tmp}/stripped-inside.md" >/dev/null; then
+        pass "negative control: a mention inside the migration section is allowed"
+    else
+        fail "negative control: a mention inside the migration section was reported"
     fi
 }
 
