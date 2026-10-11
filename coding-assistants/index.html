@@ -123,6 +123,7 @@
         <path d="M5.5 1H9v3.5L7.5 3 5 5.5 4.5 5 7 2.5z"/>
       </svg>
     </a>
+    <button class="tab-btn" onclick="show('services', this)">Services</button>
     <button class="tab-btn" onclick="show('info', this)">Info</button>
     <div class="spacer"></div>
     <div id="versions">
@@ -133,6 +134,7 @@
   </div>
   <div id="frames">
     <iframe id="frameTerminal" src="./terminal/"></iframe>
+    <iframe id="frameServices" class="hidden" data-src="./services/"></iframe>
     <iframe id="frameInfo" class="hidden" data-src="./info.html"></iframe>
   </div>
 
@@ -143,6 +145,7 @@
 
     const iframes = {
       terminal: 'frameTerminal',
+      services: 'frameServices',
       info:     'frameInfo',
     };
     const loaded = { terminal: true };

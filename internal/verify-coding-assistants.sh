@@ -40,6 +40,10 @@
 #                    written (D-02, D-04), claude-limits' poller starts without credentials, subagent-watch's launcher
 #                    works (setup --dry-run), the patched web-service answers /api/health through its startup hook,
 #                    serves a relative-URL client and refuses login (503) while no password exists
+#   services         herdr-web-service behind the add-on nginx at /services/ (ingress-style Host/Origin headers): relative
+#                    301, relative assets, exactly one CSP with frame-ancestors 'self', no HSTS, login closed (503)
+#                    without a password, WebSocket refused without a session, Services tab on the landing page,
+#                    /terminal/ unchanged, the plugin bound to loopback only
 #
 # Container model: every add-on start is a NEW container on the same /data volume (Supervisor semantics), so a
 # "restart" is `docker rm -f` followed by a fresh `docker run` (restart_ca), never `docker restart`. Containers
@@ -83,7 +87,7 @@ declare -A CA_EXTRA=()
 
 # Registered scenarios: NAME -> function scenario_<NAME with - replaced by _>
 SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers mcp-integrations drift herdr-core herdr-attach surface
-    plugins)
+    plugins services)
 # Scenarios that need neither Docker nor the image: when only these are selected the image build is skipped.
 STATIC_SCENARIOS=(drift)
 
@@ -1251,6 +1255,176 @@ scenario_plugins() {
         --data '{"password":"verify-not-a-password","remember":false}' http://127.0.0.1:7340/api/auth/login 2>/dev/null)"
     assert_eq "login answers 503 while no password exists (closed until herdr_web_password is set)" "${out}" "503"
     yellow "INFO: image size $(docker image inspect --format '{{.Size}}' "${IMAGE_NAME}" 2>/dev/null) bytes (${IMAGE_NAME})"
+}
+
+# =============================================================================
+# Scenario services
+# =============================================================================
+# The ingress-style request headers: HA ingress forwards the browser's Host and Origin, nginx must override both with
+# loopback values (the plugin's allow-list only accepts those).
+CA_INGRESS_HEADERS=(-H 'Origin: http://ha.invalid:8123' -H 'Host: ha.invalid:8123')
+# The upgrade nonce is 16 fixed bytes, base64-encoded at runtime (a literal would trip the secret scanner).
+CA_WS_HEADERS=(--http1.1 --max-time 3 -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13'
+    -H "Sec-WebSocket-Key: $(printf 'verify-ws-nonce-' | base64)")
+
+# ca_ingress NAME CURL_ARGS... -- curl inside the container, through the add-on nginx, with ingress-style headers
+ca_ingress() {
+    local name="$1"
+    shift
+    ca_exec "${name}" curl -sS "${CA_INGRESS_HEADERS[@]}" "$@"
+}
+
+# ca_ingress_headers NAME PATH [CURL_ARGS...] -- the response headers (CR stripped) of a request to /PATH, body dropped
+ca_ingress_headers() {
+    local name="$1" path="$2"
+    shift 2
+    ca_ingress "${name}" -o /dev/null -D - "$@" "http://127.0.0.1:8099${path}" | tr -d '\r'
+}
+
+# ca_ingress_status NAME PATH [CURL_ARGS...] -- the HTTP status code of a request to /PATH
+ca_ingress_status() {
+    local name="$1" path="$2"
+    shift 2
+    ca_ingress "${name}" -o /dev/null -w '%{http_code}' "$@" "http://127.0.0.1:8099${path}"
+}
+
+# ca_ws_status NAME PATH [CURL_ARGS...] -- the status code of a WebSocket upgrade request (curl stays attached after a
+# 101 and is ended by --max-time, so the status line is read from the headers, not from -w)
+ca_ws_status() {
+    local name="$1" path="$2"
+    shift 2
+    ca_ingress "${name}" "${CA_WS_HEADERS[@]}" -o /dev/null -D - "$@" "http://127.0.0.1:8099${path}" 2>/dev/null \
+        | tr -d '\r' | awk 'NR == 1 { print $2 }'
+}
+
+# The asset probe runs INSIDE the container (python3 -I): fetch the index, collect every src/href, resolve each against
+# the page URL and fetch it. Prints `index=S refs=N bad=M absolute=K` and one `BAD <url> <status>` line per failure.
+services_asset_probe_py() {
+    cat <<'PYEOF'
+import urllib.error
+import urllib.request
+from html.parser import HTMLParser
+from urllib.parse import urljoin
+
+BASE = "http://127.0.0.1:8099/services/"
+HEADERS = {"Origin": "http://ha.invalid:8123", "Host": "ha.invalid:8123"}
+
+
+def fetch(url):
+    request = urllib.request.Request(url, headers=HEADERS)
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return response.status, response.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as err:
+        return err.code, ""
+
+
+class Refs(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.refs = []
+
+    def handle_starttag(self, tag, attrs):
+        for name, value in attrs:
+            if name in ("src", "href") and value:
+                self.refs.append(value)
+
+
+status, html = fetch(BASE)
+parser = Refs()
+parser.feed(html)
+bad = 0
+absolute = 0
+for ref in parser.refs:
+    if ref.startswith("/"):
+        absolute += 1
+    code, _ = fetch(urljoin(BASE, ref))
+    if code != 200:
+        bad += 1
+        print("BAD", urljoin(BASE, ref), code)
+print("index=%d refs=%d bad=%d absolute=%d" % (status, len(parser.refs), bad, absolute))
+PYEOF
+}
+
+# services_loopback_only NAME -- succeeds when port 7340 listens on 127.0.0.1 and on no wildcard address
+services_loopback_only() {
+    local name="$1" listing
+    if ca_exec "${name}" sh -c 'command -v ss' >/dev/null 2>&1; then
+        listing="$(ca_exec "${name}" ss -ltn)"
+        grep -qE '(^|[[:space:]])127\.0\.0\.1:7340([[:space:]]|$)' <<<"${listing}" || return 1
+        ! grep -qE '(^|[[:space:]])(0\.0\.0\.0|\*|\[::\]):7340([[:space:]]|$)' <<<"${listing}"
+    else
+        yellow "INFO: ss not available, checking /proc/net/tcp instead"
+        listing="$(ca_exec "${name}" sh -c 'cat /proc/net/tcp /proc/net/tcp6')"
+        grep -qE '0100007F:1CAC [0-9A-F]+:0000 0A' <<<"${listing}" || return 1
+        ! grep -qiE '^ *[0-9]+: (0{8}|0{32}):1CAC ' <<<"${listing}"
+    fi
+}
+
+scenario_services() {
+    local data opts out hdr body
+
+    data="${SCRATCH_DIR}/services/data"
+    mkdir -p "${data}"
+    opts="${data}/options.json"
+    write_options "${opts}"
+    start_ca services "${data}" "${opts}"
+    wait_ca services || return 0
+
+    # The plugin's startup hook brings the server up shortly after herdr; wait before the first request through nginx.
+    if wait_for services 30 curl -fsS http://127.0.0.1:7340/api/health; then
+        pass "web-service /api/health answers on 127.0.0.1:7340"
+    else
+        fail "web-service /api/health did not answer within 30 s"
+        return 0
+    fi
+
+    # Relative redirect: an absolute Location would leave the HA ingress prefix.
+    hdr="$(ca_ingress_headers services /services)"
+    assert_match "GET /services returns 301" "$(head -n 1 <<<"${hdr}")" ' 301 '
+    assert_match "the redirect Location is the relative services/" "${hdr}" $'(^|\n)[Ll]ocation: services/(\n|$)'
+
+    # Index and assets: everything resolves relative to /services/ and answers 200 (Host/Origin spoof included).
+    out="$(ca_exec services python3 -I -c "$(services_asset_probe_py)")"
+    assert_match "GET /services/ returns 200, every referenced asset resolves and answers 200" "${out}" \
+        'index=200 refs=[1-9][0-9]* bad=0 absolute=0'
+    [[ "${out}" == *BAD* ]] && yellow "${out}"
+
+    # Headers: exactly one CSP that allows framing by the landing page, no HSTS from the plugin.
+    hdr="$(ca_ingress_headers services /services/)"
+    assert_eq "exactly one Content-Security-Policy header" "$(grep -ci '^content-security-policy:' <<<"${hdr}")" "1"
+    assert_match "the CSP carries frame-ancestors 'self'" "${hdr}" "frame-ancestors 'self'"
+    assert_fail "the CSP has no frame-ancestors 'none'" grep -qi "frame-ancestors 'none'" <<<"${hdr}"
+    assert_fail "no Strict-Transport-Security header on the index" grep -qi '^strict-transport-security:' <<<"${hdr}"
+
+    # Closed login without a password (503), and no Strict-Transport-Security on the login response either.
+    out="$(ca_ingress services -o /dev/null -D - -X POST -H 'content-type: application/json' \
+        --data '{"password":"verify-not-a-password","remember":false}' \
+        http://127.0.0.1:8099/services/api/auth/login | tr -d '\r')"
+    assert_match "login answers 503 while no password exists" "$(head -n 1 <<<"${out}")" ' 503 '
+    assert_fail "no Strict-Transport-Security header on the login response" grep -qi '^strict-transport-security:' \
+        <<<"${out}"
+
+    # An unauthenticated WebSocket upgrade must not get through.
+    out="$(ca_ws_status services /services/ws)"
+    if [[ -n "${out}" && "${out}" != "101" ]]; then
+        pass "unauthenticated WebSocket upgrade to /services/ws is refused (${out})"
+    else
+        fail "unauthenticated WebSocket upgrade to /services/ws was not refused (status '${out}')"
+    fi
+
+    # Landing page and the terminal regression.
+    body="$(ca_exec services curl -fsS http://127.0.0.1:8099/)"
+    assert_match "the landing page has the Services tab" "${body}" "show\('services', this\)"
+    assert_match "the landing page lazy-loads ./services/ in an iframe" "${body}" 'data-src="\./services/"'
+    assert_eq "GET /terminal/ still answers 200" "$(ca_ingress_status services /terminal/)" "200"
+
+    # The plugin is reachable only through nginx: loopback bind (the add-on publishes only 2222 and 4096).
+    if services_loopback_only services; then
+        pass "port 7340 is bound to 127.0.0.1 only"
+    else
+        fail "port 7340 is not bound to 127.0.0.1 only"
+    fi
 }
 
 # --- Dispatcher --------------------------------------------------------------------------------------------------
