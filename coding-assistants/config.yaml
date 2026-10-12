@@ -1,6 +1,6 @@
 name: "Coding Assistants"
 description: "Terminal with Claude Code, OpenCode and GitHub Copilot CLI — herdr sessions over SSH + web terminal"
-version: "1.0.0-2"
+version: "1.1.0-0"
 slug: "coding_assistants"
 init: false
 hassio_api: true
