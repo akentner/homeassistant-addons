@@ -1,25 +1,20 @@
 ---
-status: testing
+status: partial
 phase: 23-coding-assistants-claude-code-herdr-replaces-tmux
 source: [23-VERIFICATION.md]
 started: 2026-10-12T00:58:49Z
-updated: 2026-10-12T00:58:49Z
+updated: 2026-10-13T00:00:00Z
 ---
 
 ## Current Test
 
-number: 1
-name: Services tab in a real browser behind HA ingress
-expected: |
-  /services/ loads inside the iframe under the ingress prefix, login with herdr_web_password works,
-  roster and WebSocket work, no console errors
-awaiting: user response
+[testing paused — 3 items outstanding; resume with /gsd-verify-work 23 after pushing and installing on Nextgen]
 
 ## Tests
 
 ### 1. Services tab in a real browser behind HA ingress
 expected: /services/ loads in the iframe under the ingress prefix (no CSP frame block, no asset 404), login works, roster renders, WebSocket connects, no console errors
-result: [pending]
+result: pass
 
 ### 2. claude update end to end, then container re-creation
 expected: a newer version lands in /data/.local/share/claude/versions, ~/.local/bin/claude points to it, and the newer persisted version still wins over the image seed after re-creation
@@ -36,9 +31,9 @@ result: [pending]
 ## Summary
 
 total: 4
-passed: 0
+passed: 1
 issues: 0
-pending: 4
+pending: 3
 skipped: 0
 blocked: 0
 
