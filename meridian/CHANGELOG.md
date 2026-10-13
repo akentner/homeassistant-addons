@@ -1,3 +1,37 @@
+## [1.81.0](https://github.com/rynfar/meridian/compare/meridian-v1.80.0...meridian-v1.81.0) (2026-10-12)
+
+### Features
+
+- allow opt-in Home Manager service environment isolation ([#1320](https://github.com/rynfar/meridian/issues/1320))
+  ([aee79ae](https://github.com/rynfar/meridian/commit/aee79ae3966b8b1d32f8d2a7fde3ec01f7ec2686))
+- choose the Claude Code executable for subsequent turns ([#1321](https://github.com/rynfar/meridian/issues/1321))
+  ([0d86379](https://github.com/rynfar/meridian/commit/0d86379b42cf6ad26979d146c755eb858553d1f0))
+- **models:** support Claude Haiku 5.5 ([#1337](https://github.com/rynfar/meridian/issues/1337))
+  ([4dfdfe4](https://github.com/rynfar/meridian/commit/4dfdfe4e215de13ca71040dc3714d61ebeada384))
+
+### Bug Fixes
+
+- **auth:** finish slow checks without blocking health callers ([#1300](https://github.com/rynfar/meridian/issues/1300))
+  ([30c738d](https://github.com/rynfar/meridian/commit/30c738d77d5e7839577ebc5d144b74da4590e319))
+- **auth:** record explicit Claude logout instead of cached login
+  ([#1331](https://github.com/rynfar/meridian/issues/1331))
+  ([85db81f](https://github.com/rynfar/meridian/commit/85db81fee02dc00e08f8d3bb9d910aecc8bc1124))
+- avoid publishing identical transcript locators ([#1336](https://github.com/rynfar/meridian/issues/1336))
+  ([e68b9bc](https://github.com/rynfar/meridian/commit/e68b9bcadd7597d16724a3655b7322cd02a965ad))
+- **build:** retain source identity after fingerprint failure ([#1333](https://github.com/rynfar/meridian/issues/1333))
+  ([109cf9e](https://github.com/rynfar/meridian/commit/109cf9e45ca26f63e8d247e5356f64c9feca4558))
+- honor plugin message histories in SDK execution ([#1324](https://github.com/rynfar/meridian/issues/1324))
+  ([cd55dd9](https://github.com/rynfar/meridian/commit/cd55dd9c94d39bea0dc009c8d011e6e352f42d3b))
+- **profiles:** flag accounts that need a login on Profiles ([#1318](https://github.com/rynfar/meridian/issues/1318))
+  ([74ee551](https://github.com/rynfar/meridian/commit/74ee5515cde58a4df03a48c0ca38abb20ccad648))
+- **session:** deliver answered turns when lifecycle publication stalls
+  ([097530c](https://github.com/rynfar/meridian/commit/097530c824c7c2096c82b89de85fd6550479b603))
+- **telemetry:** preserve request rows across transient writer contention
+  ([#1332](https://github.com/rynfar/meridian/issues/1332))
+  ([6e510db](https://github.com/rynfar/meridian/commit/6e510dbcb7713997e0299a7f954ee73bb45ceae7))
+- verify Antigravity paid-credit settings ([#1307](https://github.com/rynfar/meridian/issues/1307))
+  ([ff260ea](https://github.com/rynfar/meridian/commit/ff260ea217072cf842f319c64d563e122f4d6964))
+
 ## [1.80.0](https://github.com/rynfar/meridian/compare/meridian-v1.79.0...meridian-v1.80.0) (2026-10-07)
 
 ### Features
