@@ -1,3 +1,48 @@
+See https://docs.goauthentik.io/docs/releases/2026.8#fixed-in-202684
+
+## What Changed in 2026.8.4
+
+- common/saml: Fix metadata to serve only the leaf of a PEM chain (#26273)
+- core: handle overflow in duration validation (#26680)
+- endpoints: fix error during device lookup with one identifier missing (#26902)
+- endpoints: retain last fact snapshot (#26343)
+- enterprise/requests: show message after successful request (#26587)
+- events: fix group membership changes with OSS audit middleware (#26477)
+- flows: allow unauthenticated flows for re-authentication (#26785)
+- lifecycle: fix AWS cloudformation template defaults (#26807)
+- outposts/proxy: don't negotiate HTTP/2 to upstreams (#26281)
+- outposts/proxy: fetch embedded JWKS over the unix socket, not the browser host (#26448)
+- outposts/proxy: use HTTP/1.1 for OAuth backchannel requests (#26422)
+- packages/ak-axum/extract/client_ip: use the leftmost X-Forwarded-For IP (#26353)
+- packages/ak-common/config: fix list values from env variables parsing (#26081)
+- packages/django-channels-postgres: refresh pool credentials on connection attempts (#26505)
+- providers/proxy: fix startup reconcile not being atomic (#26344)
+- providers/scim: accept a service provider that reports bulk as unsupported (#25057)
+- providers/scim: fix scim user conflict resolution (#25998)
+- providers/scim: show remote error details for 4xx/5xx responses (#26906)
+- root, web, docs: revert pnpm to 11.20.0 on version-2026.8 (#26366)
+- root: don't fail websocket connections with non-UTF-8 headers (#26688)
+- root: fix client certificate header forwarded to the mTLS stage (#26438)
+- root: log full stacktrace for ASGI exception (#26415)
+- sources/kerberos, sources/ldap: Save source connections when linking an existing user/group (#26059)
+- sources/saml: Fallback NameID (#25713)
+- stages/consent: fix integrity error when re-consenting after consent expired (#26866)
+- web: Close command palette when opening About (#25734)
+- web: Fix denied template static form layout. (#26733)
+- web: Fix disabled token icon buttons. (#25527)
+- web: resolve themed icon URLs everywhere (#25103)
+- web/admin: fix device view page and outpost view page (#26383)
+- web/admin: restore file upload capability check (#26556)
+- web/admin: show agent connector local auth & compliance status (#26610)
+- web/admin: update oauth federated provider helptext wording (#26611)
+- web/elements: reload edit forms after cancel and on pk change (#26892)
+- web/flows: check if localStorage is available for continuous login (#26267)
+- web/flows: fix layout shift once initial challenge is loaded (#26758)
+- web/user: fix requests banner wording (#26586)
+- web/user: remove slug display in any display mode on the user application library page (#26441)
+
+**Full Changelog**: https://github.com/goauthentik/authentik/compare/version/2026.8.2...version/2026.8.3
+
 See <https://docs.goauthentik.io/docs/releases/2026.8#fixed-in-202683>
 
 ## What's Changed
