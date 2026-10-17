@@ -1,3 +1,21 @@
+## [1.83.1](https://github.com/rynfar/meridian/compare/meridian-v1.83.0...meridian-v1.83.1) (2026-10-16)
+
+### Bug Fixes
+
+- advertise native Opus and Fable context on Pro ([#1358](https://github.com/rynfar/meridian/issues/1358))
+  ([29a2467](https://github.com/rynfar/meridian/commit/29a24675673b6951c6645548f59d301e53300702))
+- preserve context overflow signals for client compaction ([#1388](https://github.com/rynfar/meridian/issues/1388))
+  ([f13f413](https://github.com/rynfar/meridian/commit/f13f413299bf95beecc832b437d19a37150186f7))
+- **profiles:** backfill missing Team seat tiers during token refresh
+  ([#1329](https://github.com/rynfar/meridian/issues/1329))
+  ([0e0adce](https://github.com/rynfar/meridian/commit/0e0adce6ad33626e61bee6fb63dcfb4810e8aa1c))
+- **profiles:** clear stale routing exhaustion and spent state on re-auth or refresh
+  ([#1392](https://github.com/rynfar/meridian/issues/1392))
+  ([458bba7](https://github.com/rynfar/meridian/commit/458bba70002ebaafc82ab12e69cd2d4ab9ebc7f0))
+- renew the OAuth usage token before expiry and after a run of 429s
+  ([#1389](https://github.com/rynfar/meridian/issues/1389))
+  ([dfe264d](https://github.com/rynfar/meridian/commit/dfe264daf2bca18fcc426e4e1268987ea166c427))
+
 ## [1.83.0](https://github.com/rynfar/meridian/compare/meridian-v1.82.0...meridian-v1.83.0) (2026-10-15)
 
 ### Features
