@@ -1,3 +1,16 @@
+See https://docs.goauthentik.io/docs/releases/2026.8#fixed-in-202685
+
+## What's Changed
+
+- endpoints: fix MultipleObjectsReturned (cherry-pick #26971 to version-2026.8) (#26972)
+- enterprise/providers/microsoft_entra: skip members already in the group (cherry-pick #26891 to version-2026.8)
+  (#26952)
+- root: bump cert-related deps due to emudhra (cherry-pick #27068 to version-2026.8) (#27071)
+- web/stages: Fix stage type errors (cherry-pick #25689 to version-2026.8) (#26194)
+- web/user: fix agents tab flashing without license (cherry-pick #27069 to version-2026.8) (#27073)
+
+**Full Changelog**: https://github.com/goauthentik/authentik/compare/version/2026.8.4...version/2026.8.5
+
 See https://docs.goauthentik.io/docs/releases/2026.8#fixed-in-202684
 
 ## What Changed in 2026.8.4
