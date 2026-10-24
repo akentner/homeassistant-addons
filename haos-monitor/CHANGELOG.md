@@ -5,8 +5,8 @@ upstream project, so every entry is add-on specific.
 
 ## [0.5.0-1] - 2026-10-24
 
-- Fix: `image:` pointed at `amd64-haos-monitor`, but CI publishes `amd64-haos_monitor`, so the Supervisor could not
-  pull the image (403 denied).
+- Fix: `image:` pointed at `amd64-haos-monitor`, but CI publishes `amd64-haos_monitor`, so the Supervisor could not pull
+  the image (403 denied).
 
 ## [0.5.0] - 2026-10-24
 
