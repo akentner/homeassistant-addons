@@ -1,3 +1,49 @@
+> [!IMPORTANT] **The image-signing key has changed.** Starting with this release, every Docker image and Helm chart is
+> signed with the new cosign key from commit
+> [`e82a3c6`](https://github.com/BerriAI/litellm/commit/e82a3c646908ba0a6ee0beddc4310d7a6cac4065). Verifying with the
+> previous key from commit `0112e53` will fail.
+>
+> Update anything that pins the old `cosign.pub`: `cosign verify` scripts, CI checks, and admission policies such as
+> Kyverno, Sigstore policy-controller or Connaisseur.
+>
+> New `cosign.pub` SHA-256: `e3fe3e08c44b16407fe0b37c43b4f8b603b3a0f4ee74c29e647bc022d762c2c0`
+
+## Verify this release
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub \
+  ghcr.io/berriai/litellm:v1.106.3
+```
+
+Same command for `litellm-database`, `litellm-non_root` and the `docker.io/litellm/*` images
+
+## What's new in 1.106.3
+
+4 PRs. 1 changed, 1 removed. 1 needs action
+
+### Action required
+
+- **Deployment:** Verify image signatures with the `cosign.pub` from commit `e82a3c6`, the previous key no longer
+  matches (#48103) <sup>Also in [1.103.8](https://github.com/BerriAI/litellm/releases/tag/v1.103.8),
+  [1.104.6](https://github.com/BerriAI/litellm/releases/tag/v1.104.6),
+  [1.105.4](https://github.com/BerriAI/litellm/releases/tag/v1.105.4)</sup>
+
+### Changes
+
+- **Deployment:** Removed the eMudhra root CA from every certificate bundle the SDK, proxy and Docker images trust
+  (#47670, #47969, #48139) <sup>Also in [1.103.8](https://github.com/BerriAI/litellm/releases/tag/v1.103.8),
+  [1.104.6](https://github.com/BerriAI/litellm/releases/tag/v1.104.6),
+  [1.105.4](https://github.com/BerriAI/litellm/releases/tag/v1.105.4)</sup>
+- **Deployment:** Changed the cosign key that signs Docker images and Helm charts to the one from commit `e82a3c6`
+  (#48103) <sup>Also in [1.103.8](https://github.com/BerriAI/litellm/releases/tag/v1.103.8),
+  [1.104.6](https://github.com/BerriAI/litellm/releases/tag/v1.104.6),
+  [1.105.4](https://github.com/BerriAI/litellm/releases/tag/v1.105.4)</sup>
+
+---
+
+Backport #48078 · Backport #48142 · [Full changelog](https://github.com/BerriAI/litellm/compare/v1.106.2...v1.106.3)
+
 ## Verify Docker Image Signature
 
 All LiteLLM Docker images are signed with [cosign](https://docs.sigstore.dev/cosign/overview/). Every release is signed
