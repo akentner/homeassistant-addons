@@ -23,6 +23,7 @@ ENTITIES='sensor|age|Age|s|duration|measurement|true
 sensor|io_full10|I/O full pressure|%||measurement|true
 sensor|sda_inflight|sda in-flight I/O|||measurement|true
 sensor|dstate|D-state tasks|||measurement|true
+sensor|kmsg_errors|Kernel errors (10 min)|||measurement|true
 sensor|load1|Load 1m|||measurement|true
 sensor|up|Uptime|s|duration|measurement|true
 sensor|io_some10|I/O some pressure|%||measurement|false
@@ -52,7 +53,7 @@ config_json() {
 }
 
 # Attributes of the problem sensor: which component fired, plus the values behind it
-PROBLEM_ATTRS="{{ {'reasons': value_json.reasons, 'stale': value_json.r_age == 1, 'io_full': value_json.r_io == 1, 'sda_inflight_high': value_json.r_sda == 1, 'dstate_tasks_found': value_json.r_dstate == 1, 'dstate_tasks': value_json.dstate_tasks, 'age': value_json.age, 'io_full10': value_json.io_full10, 'sda_inflight': value_json.sda_inflight, 'dstate': value_json.dstate} | tojson }}"
+PROBLEM_ATTRS="{{ {'reasons': value_json.reasons, 'stale': value_json.r_age == 1, 'io_full': value_json.r_io == 1, 'sda_inflight_high': value_json.r_sda == 1, 'dstate_tasks_found': value_json.r_dstate == 1, 'kmsg_found': value_json.r_kmsg == 1, 'kmsg_errors': value_json.kmsg_errors, 'kmsg_last': value_json.kmsg_last, 'dstate_tasks': value_json.dstate_tasks, 'age': value_json.age, 'io_full10': value_json.io_full10, 'sda_inflight': value_json.sda_inflight, 'dstate': value_json.dstate} | tojson }}"
 
 topic() { echo "$MQTT_PREFIX/$1/$DEV/$2/config"; }
 

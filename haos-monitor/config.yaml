@@ -1,6 +1,6 @@
 name: "HAOS Monitor"
 description: "Diagnostic: logs kernel log and I/O stalls of remote HAOS hosts, publishes status via HTTP and MQTT"
-version: "0.4.1-0"
+version: "0.5.0-0"
 slug: "haos_monitor"
 init: false
 arch:
@@ -26,6 +26,7 @@ options:
   problem_io_full10: 30
   problem_sda_inflight: 8
   problem_dstate: 1
+  problem_kmsg: 1
   mqtt_host: "a0d7b954-emqx"
   mqtt_port: 1883
   mqtt_user: ""
@@ -43,6 +44,7 @@ schema:
   problem_io_full10: "float(0,100)"
   problem_sda_inflight: "int(1,1000)"
   problem_dstate: "int(1,1000)"
+  problem_kmsg: "int(1,1000)"
   mqtt_host: "str"
   mqtt_port: "port"
   mqtt_user: "str"

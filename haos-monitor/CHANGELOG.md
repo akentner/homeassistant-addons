@@ -3,6 +3,16 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.5.0] - 2026-10-24
+
+- Kernel error detection: error-level kernel lines and known failure texts (I/O error, UAS abort, USB reset, OOM,
+  lockups) are logged as `KERR` and counted over the last 10 minutes of host uptime. New option `problem_kmsg`, sensor
+  `kmsg_errors`, problem reason `kmsg`, attributes `kmsg_found`, `kmsg_errors`, `kmsg_last`, metric
+  `haos_monitor_kmsg_errors`.
+- Kernel stack dump (`DSTACK`) of tasks stuck in D-state, read from `/proc/<pid>/stack` (no sysrq, no host change).
+- `INCIDENT start|change|end` marker lines when `problem` changes.
+- Samples are mirrored to a small `<slug>.log.state`, so a kernel log flood cannot hide them from the status code.
+
 ## [0.4.1] - 2026-10-24
 
 - Optional host port for `8099/tcp` (status JSON and metrics), closed by default.

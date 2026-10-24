@@ -26,10 +26,11 @@ def fam($n; $help; $rows):
   fam("haos_monitor_disk_inflight_requests"; "In-flight I/O requests per device";
       per2("device"; [["sda", "sda_inflight"], ["mmcblk1", "mmc_inflight"]])),
   fam("haos_monitor_dstate_tasks"; "Tasks in uninterruptible sleep (pipe waits ignored)"; per(.dstate)),
+  fam("haos_monitor_kmsg_errors"; "Kernel error lines within the last 10 minutes of host uptime"; per(.kmsg_errors)),
   fam("haos_monitor_ping_up"; "Observed host answers ping"; per(.ping)),
   fam("haos_monitor_port_open"; "TCP port reachable from the add-on";
       per2("port"; [["22222", "p22222"], ["1883", "p1883"], ["8123", "p8123"], ["4357", "p4357"]])),
   fam("haos_monitor_problem"; "1 if any problem threshold is exceeded"; per(.problem)),
   fam("haos_monitor_problem_reason"; "1 per fired problem component";
-      per2("reason"; [["stale", "r_age"], ["io_full10", "r_io"], ["sda_inflight", "r_sda"], ["dstate", "r_dstate"]]))
+      per2("reason"; [["stale", "r_age"], ["io_full10", "r_io"], ["sda_inflight", "r_sda"], ["dstate", "r_dstate"], ["kmsg", "r_kmsg"]]))
 '

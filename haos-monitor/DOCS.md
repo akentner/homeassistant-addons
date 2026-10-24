@@ -29,6 +29,7 @@ image is built and published by CI like the others (`image:` key). The other rep
 | `problem_io_full10`           | `30`                     | `problem=1` if `io_full10 >=` this (%)               |
 | `problem_sda_inflight`        | `8`                      | `problem=1` if `sda_inflight >=` this                |
 | `problem_dstate`              | `1`                      | `problem=1` if `dstate >=` this (pipe waits ignored) |
+| `problem_kmsg`                | `1`                      | `problem=1` if `kmsg_errors >=` this (last 10 min)   |
 | `mqtt_host` / `mqtt_port`     | `a0d7b954-emqx` / `1883` | Broker for discovery (not the observed host)         |
 | `mqtt_user` / `mqtt_password` |                          | Empty user = anonymous                               |
 | `mqtt_discovery_prefix`       | `homeassistant`          | Discovery prefix                                     |
@@ -39,11 +40,30 @@ those lines stay in the log but do not raise `problem`.
 
 A host with a missing or malformed key, or a duplicate slug, is skipped; the others keep running.
 
+## Evidence in the log
+
+`/share/haos-monitor/<slug>.log` (UTC) holds, besides the raw lines, markers meant for `grep` after an incident:
+
+| Line       | Meaning                                                                                              |
+| ---------- | ---------------------------------------------------------------------------------------------------- |
+| `KERR`     | Kernel line of level err or worse, or a known failure text (I/O error, UAS abort, USB reset, OOM, …) |
+| `DSTACK`   | Kernel stack of a task stuck in D-state, from `/proc/<pid>/stack`; once, then every minute           |
+| `INCIDENT` | `start` (with reasons and values), `change` and `end` (with duration) of the `problem` flag          |
+| `BOOT`     | Host uptime at connect; a lower value than before marks a reboot                                     |
+
+`DSTACK` shows where the I/O hangs (for example `blk_mq_get_tag` or `usb_*` frames) without changing any host setting.
+Pipe waits such as short-lived `runc` are skipped. `KERR` lines count per kernel message number and host boot, so the
+full kernel log replay after a reconnect does not count twice. Kernel errors right after a reboot also count for 10
+minutes of uptime, so a reboot can raise `problem` briefly.
+
+Samples, probes and `KERR` lines are mirrored to `<slug>.log.state` (trimmed at 1 MB), which the status code reads, so a
+kernel log flood cannot push the samples out of its window.
+
 ## Status endpoint
 
 `http://local-haos-monitor:8099/cgi-bin/status[?host=<slug>]` returns flat JSON (for Gatus): numbers plus the strings
-`reasons` and `dstate_tasks`. Without `host` the first configured host is returned; an unknown host gives HTTP 404
-`{"error":"unknown host"}`.
+`reasons`, `dstate_tasks` and `kmsg_last`. Without `host` the first configured host is returned; an unknown host gives
+HTTP 404 `{"error":"unknown host"}`.
 
 ## Metrics endpoint
 
@@ -62,6 +82,7 @@ the age and problem series.
 | `haos_monitor_memory_full_pressure_percent` |             | PSI memory full, avg10                         |
 | `haos_monitor_disk_inflight_requests`       | `device`    | In-flight I/O (`sda`, `mmcblk1`)               |
 | `haos_monitor_dstate_tasks`                 |             | D-state tasks (pipe waits ignored)             |
+| `haos_monitor_kmsg_errors`                  |             | Kernel error lines, last 10 min of host uptime |
 | `haos_monitor_ping_up`                      |             | Host answers ping                              |
 | `haos_monitor_port_open`                    | `port`      | `22222`, `1883`, `8123`, `4357` reachable      |
 | `haos_monitor_problem`                      |             | 1 if any threshold is exceeded                 |
@@ -87,7 +108,8 @@ endpoints have no authentication, so open it only in a trusted network.
 - State: `haos-monitor/<slug>/state`; availability (Last Will): `haos-monitor/<slug>/availability`.
 - Discovery: `<prefix>/sensor|binary_sensor/haos_monitor_<slug>/<field>/config`, one device `HAOS Monitor <name>`.
 - `binary_sensor.…_problem` carries attributes explaining the cause: `reasons` (comma list of `stale`, `io_full10`,
-  `sda_inflight`, `dstate`, or `none`), one boolean per component, the offending `dstate_tasks` (`pid (comm):wchan`) and
-  the values behind them. The same fields are in the status JSON (`reasons`, `r_age`, `r_io`, `r_sda`, `r_dstate`).
+  `sda_inflight`, `dstate`, `kmsg`, or `none`), one boolean per component, the offending `dstate_tasks`
+  (`pid (comm):wchan`) `kmsg_last` (the newest kernel error line) and the values behind them. The same fields are in the
+  status JSON (`reasons`, `r_age`, `r_io`, `r_sda`, `r_dstate`, `r_kmsg`, `kmsg_errors`, `kmsg_last`).
 - Remove entities: set `mqtt_clear_discovery: true` and restart (publishes empty retained payloads), or
   `mosquitto_pub -r -n -t '<topic>'` per topic. Set it back to `false` afterwards.

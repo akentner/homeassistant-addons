@@ -36,8 +36,24 @@ rotate() {
   mv "$LOG" "$LOG.1"
 }
 
+# Samples, probes and kernel error lines are mirrored into a small state file (read by status.sh), so a kernel log
+# flood in the main log cannot push them out of the tail window. Trimmed to its last 3000 lines when it exceeds 1 MB.
+STATE_MAX_BYTES=1048576
+_n=0
+trim_state() {
+  [ "$(wc -c < "$LOG.state")" -gt "$STATE_MAX_BYTES" ] || return 0
+  tail -n 3000 "$LOG.state" > "$LOG.state.tmp" && mv "$LOG.state.tmp" "$LOG.state"
+}
+
 log() {
-  printf '%s %s\n' "$(now)" "$*" >> "$LOG"
+  ts=$(now)
+  printf '%s %s\n' "$ts" "$*" >> "$LOG"
+  case $* in
+    SAMPLE*|DISK*|DSTATE*|PROBE*|BOOT*|KERR*)
+      printf '%s %s\n' "$ts" "$*" >> "$LOG.state"
+      _n=$((_n + 1))
+      [ $((_n % 200)) -ne 0 ] || trim_state ;;
+  esac
   rotate
 }
 
@@ -60,12 +76,35 @@ probe() {
 }
 
 # Runs on the host. Builtins only (no forks except sleep) so it still works
-# when the data disk stalls. Reports D-state tasks with their wchan.
+# when the data disk stalls. Reports D-state tasks with their wchan; for real
+# (non-pipe) waits it also dumps the kernel stack from /proc/<pid>/stack.
 # shellcheck disable=SC2016
 REMOTE='
 trap "kill 0" EXIT HUP
-( cat /dev/kmsg | while IFS= read -r l; do printf "KMSG %s\n" "$l"; done ) &
+# Kernel log: every line as KMSG; level <= err or known failure texts additionally as KERR
+kmsg_filter() {
+  while IFS= read -r l; do
+    printf "KMSG %s\n" "$l"
+    p=${l%%,*}
+    case $p in ""|*[!0-9]*) p=6 ;; esac
+    if [ $((p & 7)) -le 3 ]; then printf "KERR %s\n" "$l"; continue; fi
+    case $l in
+      *"I/O error"*|*blk_update_request*|*"Buffer I/O"*|*"EXT4-fs error"*|*"EXT4-fs warning"*|\
+      *"Out of memory"*|*oom-kill*|*"blocked for more than"*|*"soft lockup"*|*"self-detected stall"*|\
+      *"reset"*"USB device"*|*uas*abort*|*xhci*died*|*"timed out"*|*"hung task"*)
+        printf "KERR %s\n" "$l" ;;
+    esac
+  done
+}
+read -r up _ < /proc/uptime
+echo "BOOT up=$up"
+( cat /dev/kmsg | kmsg_filter ) &
+n=0
+dnow=""
 while :; do
+  n=$((n + 1))
+  seen=$dnow
+  dnow=""
   read -r up _ < /proc/uptime
   { read -r io_some; read -r io_full; } < /proc/pressure/io
   { read -r mem_some; read -r mem_full; } < /proc/pressure/memory
@@ -80,13 +119,45 @@ while :; do
       w=""
       read -r w < "$d/wchan" 2>/dev/null
       echo "DSTATE $pid $comm wchan=$w"
+      case $w in
+        anon_pipe_*|pipe_*) ;;
+        *)
+          dnow="$dnow $pid "
+          # first sight, then once a minute while the task stays blocked
+          case $seen in *" $pid "*) [ $((n % 6)) -eq 0 ] || continue ;; esac
+          if [ -r "$d/stack" ]; then
+            while IFS= read -r s; do echo "DSTACK $pid $comm $s"; done < "$d/stack"
+          fi ;;
+      esac
     fi
   done
   sleep '"$INTERVAL"'
 done
 '
 
+# Incident markers: problem 0->1, reasons change and 1->0 become greppable log lines
+incidents() {
+  prev=0 reasons_prev="" since=0
+  while :; do
+    sleep "$INTERVAL"
+    s=$("${STATUS_SH:-/status.sh}" "$SLUG" 2>/dev/null) || continue
+    cur=$(printf '%s' "$s" | jq -r '.problem' 2>/dev/null)
+    case $cur in 0|1) ;; *) continue ;; esac
+    reasons=$(printf '%s' "$s" | jq -r '.reasons')
+    if [ "$cur" = 1 ] && [ "$prev" = 0 ]; then
+      since=$(date +%s)
+      log "INCIDENT start $(printf '%s' "$s" | jq -r '"reasons=\(.reasons) age=\(.age) io_full10=\(.io_full10) sda_inflight=\(.sda_inflight) dstate=\(.dstate) kmsg_errors=\(.kmsg_errors) tasks=[\(.dstate_tasks)] kmsg=[\(.kmsg_last)]"')"
+    elif [ "$cur" = 1 ] && [ "$reasons" != "$reasons_prev" ]; then
+      log "INCIDENT change reasons=$reasons"
+    elif [ "$cur" = 0 ] && [ "$prev" = 1 ]; then
+      log "INCIDENT end duration=$(($(date +%s) - since))s"
+    fi
+    prev=$cur reasons_prev=$reasons
+  done
+}
+
 probe &
+[ -z "${SLUG:-}" ] || incidents &
 
 log "START host=$HOST:$PORT interval=${INTERVAL}s"
 while :; do

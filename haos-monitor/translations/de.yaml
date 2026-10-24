@@ -28,6 +28,10 @@ configuration:
     description: >-
       Das Problem-Flag wird gesetzt, wenn mindestens so viele Tasks im unterbrechungsfreien Schlaf sind.
       Pipe-Waits (kurzlebiges runc) werden ignoriert.
+  problem_kmsg:
+    name: Problem - Kernel-Fehler
+    description: >-
+      Das Problem-Flag wird gesetzt, wenn in den letzten 10 Minuten Host-Uptime mindestens so viele Kernel-Fehlerzeilen auftraten (Level err oder schlimmer, I/O-Fehler, USB/UAS-Resets, OOM, Lockups).
   mqtt_host:
     name: MQTT-Host
     description: >-

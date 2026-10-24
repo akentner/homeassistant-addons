@@ -12,6 +12,7 @@ PROBLEM_AGE=$(jq -r '.problem_age' "$OPTS")
 PROBLEM_IO_FULL10=$(jq -r '.problem_io_full10' "$OPTS")
 PROBLEM_SDA_INFLIGHT=$(jq -r '.problem_sda_inflight' "$OPTS")
 PROBLEM_DSTATE=$(jq -r '.problem_dstate' "$OPTS")
+PROBLEM_KMSG=$(jq -r '.problem_kmsg' "$OPTS")
 EOT
 
 # Rebuild a PEM key from the options value: the UI may flatten newlines (spaces, CR, literal \n)
@@ -50,7 +51,7 @@ while [ "$i" -lt "$COUNT" ]; do
 
   # Supervised, isolated per-host monitor; a crash only restarts that host
   (
-    export TARGET_HOST="$HOST" TARGET_PORT="$PORT" KEY_FILE INTERVAL
+    export TARGET_HOST="$HOST" TARGET_PORT="$PORT" KEY_FILE INTERVAL SLUG
     export LOG_FILE="$LOGDIR/$SLUG.log" KNOWN_HOSTS="/tmp/known_hosts_$SLUG"
     while :; do /monitor.sh || true; sleep 5; done
   ) &

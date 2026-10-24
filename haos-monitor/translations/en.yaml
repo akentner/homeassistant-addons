@@ -26,6 +26,10 @@ configuration:
     description: >-
       The problem flag is raised when at least this many tasks sit in uninterruptible sleep. Pipe waits
       (short-lived runc) are ignored.
+  problem_kmsg:
+    name: Problem - kernel errors
+    description: >-
+      The problem flag is raised when at least this many kernel error lines (level err or worse, I/O errors, USB/UAS resets, OOM, lockups) appeared within the last 10 minutes of host uptime.
   mqtt_host:
     name: MQTT host
     description: >-
