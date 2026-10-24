@@ -37,7 +37,7 @@
 <script>
 // Relative URLs on purpose: Ingress serves this page below a token path
 var ROWS = [
-  ["age", "Sample age (s)", "r_age"], ["up", "Host uptime (s)"], ["load1", "Load (1 min)"],
+  ["age", "Sample age (s)", "r_age"], ["up", "Host booted"], ["load1", "Load (1 min)"],
   ["io_some10", "I/O some (10 s avg %)"], ["io_full10", "I/O full (10 s avg %)", "r_io"],
   ["mem_full10", "Memory full (10 s avg %)"], ["sda_inflight", "sda in-flight requests", "r_sda"],
   ["mmc_inflight", "mmc in-flight requests"], ["dstate", "Tasks in D-state", "r_dstate"],
@@ -53,6 +53,18 @@ function el(tag, cls, text) {
   return e;
 }
 function num(v) { return v < 0 ? "–" : String(v); }
+function pad(n) { return (n < 10 ? "0" : "") + n; }
+// Boot time (local, sample time minus uptime) plus the relative uptime like "5d 1h ago"
+function uptime(v, s) {
+  if (v < 0) return "–";
+  var t = Math.floor(v), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60);
+  var d = Math.floor(h / 24);
+  var rel = d > 0 ? d + "d " + (h % 24) + "h" : h > 0 ? h + "h " + m + "m" : m > 0 ? m + "m" : "<1m";
+  var b = new Date(Date.now() - (v + Math.max(s.age, 0)) * 1000);
+  return b.getFullYear() + "-" + pad(b.getMonth() + 1) + "-" + pad(b.getDate()) + " " +
+    pad(b.getHours()) + ":" + pad(b.getMinutes()) + ":" + pad(b.getSeconds()) + " (" + rel + " ago)";
+}
+var FMT = {up: uptime};
 function get(url) {
   return fetch(url, {cache: "no-store"}).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
 }
@@ -72,7 +84,7 @@ function render(h, s, inc) {
   ROWS.forEach(function (r) {
     var tr = el("tr", s[r[2]] ? "bad" : "");
     tr.appendChild(el("td", "", r[1]));
-    tr.appendChild(el("td", "", num(s[r[0]])));
+    tr.appendChild(el("td", "", (FMT[r[0]] || num)(s[r[0]], s)));
     t.appendChild(tr);
   });
   c.appendChild(t);
