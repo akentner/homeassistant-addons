@@ -3,6 +3,10 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.6.0-1] - 2026-10-25
+
+- Status page: add a "Reload" button that refreshes all hosts immediately.
+
 ## [0.6.0] - 2026-10-25
 
 - Add Ingress: sidebar entry and "Open Web UI" button with a status page per host (values, violated thresholds, ports,
