@@ -1,11 +1,11 @@
 name: "HAOS Monitor"
 description: "Diagnostic: logs kernel log and I/O stalls of remote HAOS hosts, publishes status via HTTP and MQTT"
-version: "0.5.0-0"
+version: "0.5.0-1"
 slug: "haos_monitor"
 init: false
 arch:
   - amd64
-image: "ghcr.io/akentner/homeassistant-addons/{arch}-haos-monitor"
+image: "ghcr.io/akentner/homeassistant-addons/{arch}-haos_monitor"
 url: "https://github.com/akentner/homeassistant-addons"
 startup: "application"
 boot: "auto"
