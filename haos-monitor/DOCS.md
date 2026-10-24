@@ -45,6 +45,41 @@ A host with a missing or malformed key, or a duplicate slug, is skipped; the oth
 `reasons` and `dstate_tasks`. Without `host` the first configured host is returned; an unknown host gives HTTP 404
 `{"error":"unknown host"}`.
 
+## Metrics endpoint
+
+`http://local-haos-monitor:8099/cgi-bin/metrics` returns all hosts in Prometheus text format (also for VictoriaMetrics /
+vmagent). Every sample carries `host="<slug>"`; values that are unknown are omitted, so a host without data only shows
+the age and problem series.
+
+| Metric                                      | Extra label | Meaning                                        |
+| ------------------------------------------- | ----------- | ---------------------------------------------- |
+| `haos_monitor_sample_age_seconds`           |             | Age of the newest SSH sample                   |
+| `haos_monitor_probe_age_seconds`            |             | Age of the newest port probe                   |
+| `haos_monitor_host_uptime_seconds`          |             | Uptime of the observed host                    |
+| `haos_monitor_load1`                        |             | 1 minute load average                          |
+| `haos_monitor_io_some_pressure_percent`     |             | PSI io some, avg10                             |
+| `haos_monitor_io_full_pressure_percent`     |             | PSI io full, avg10                             |
+| `haos_monitor_memory_full_pressure_percent` |             | PSI memory full, avg10                         |
+| `haos_monitor_disk_inflight_requests`       | `device`    | In-flight I/O (`sda`, `mmcblk1`)               |
+| `haos_monitor_dstate_tasks`                 |             | D-state tasks (pipe waits ignored)             |
+| `haos_monitor_ping_up`                      |             | Host answers ping                              |
+| `haos_monitor_port_open`                    | `port`      | `22222`, `1883`, `8123`, `4357` reachable      |
+| `haos_monitor_problem`                      |             | 1 if any threshold is exceeded                 |
+| `haos_monitor_problem_reason`               | `reason`    | `stale`, `io_full10`, `sda_inflight`, `dstate` |
+
+Scrape example (Prometheus / vmagent):
+
+```yaml
+scrape_configs:
+  - job_name: haos-monitor
+    metrics_path: /cgi-bin/metrics
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["local-haos-monitor:8099"]
+```
+
+The port is not published; the scraper must reach the add-on network (`local-haos-monitor`, e.g. via Supervisor DNS).
+
 ## MQTT
 
 - State: `haos-monitor/<slug>/state`; availability (Last Will): `haos-monitor/<slug>/availability`.

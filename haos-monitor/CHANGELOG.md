@@ -3,6 +3,11 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.4.0] - 2026-10-24
+
+- Prometheus/VictoriaMetrics endpoint `/cgi-bin/metrics` (all hosts, label `host`), built from the same status data as
+  the JSON endpoint and MQTT.
+
 ## [0.3.0] - 2026-10-24
 
 - First published release: image `ghcr.io/akentner/homeassistant-addons/{arch}-haos-monitor` built by CI, icon, logo,

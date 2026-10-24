@@ -17,6 +17,7 @@ It is our own code, not an upstream wrapper (see the exception in [DOCS.md][docs
 
 - Several hosts per add-on, one log file each in `/share/haos-monitor/<slug>.log` (rotated at 20 MB × 5)
 - Status JSON for Gatus at `http://local-haos-monitor:8099/cgi-bin/status[?host=<slug>]`
+- Prometheus/VictoriaMetrics metrics at `http://local-haos-monitor:8099/cgi-bin/metrics`
 - MQTT discovery: one device per host with sensors and binary sensors, availability via Last Will
 - `problem` sensor with the reasons as attributes (stale data, I/O pressure, in-flight I/O, D-state tasks)
 - Remote side uses shell builtins only, so it keeps working while the data disk is stalled
@@ -31,5 +32,5 @@ See [DOCS.md][docs] for all options, the status endpoint and the MQTT entities.
 [docs]: DOCS.md
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
-[release-shield]: https://img.shields.io/badge/version-v0.3.0-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v0.3.0
+[release-shield]: https://img.shields.io/badge/version-v0.4.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v0.4.0
