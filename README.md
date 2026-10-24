@@ -155,6 +155,21 @@ daily and bumps the add-on version when a new release ships.
 - Configurable alert destinations (Slack, Discord, email, …)
 - Themeable status page served as a Docsify-like SPA
 
+### [HAOS Monitor](./haos-monitor)
+
+![Supports amd64 Architecture][amd64-shield]
+
+_Diagnostic monitor that records kernel log and I/O stalls of HAOS hosts that hang without a trace._
+
+Own code, no upstream project. Keeps an SSH session to each observed host, logs kernel messages and I/O pressure to
+`/share/haos-monitor/` and exposes the state as status JSON (for Gatus) and as MQTT discovery entities.
+
+**Features:**
+
+- Multiple hosts per add-on, one rotated log file each
+- `problem` sensor with the reasons as attributes (stale data, I/O pressure, in-flight I/O, D-state tasks)
+- Remote side uses shell builtins only, so it keeps working while the data disk is stalled
+
 ### [Authentik](./authentik)
 
 ![Supports amd64 Architecture][amd64-shield]
