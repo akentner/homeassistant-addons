@@ -16,8 +16,8 @@ It is our own code, not an upstream wrapper (see the exception in [DOCS.md][docs
 ## Features
 
 - Several hosts per add-on, one log file each in `/share/haos-monitor/<slug>.log` (rotated at 20 MB × 5)
-- Status JSON for Gatus at `http://local-haos-monitor:8099/cgi-bin/status[?host=<slug>]`
-- Prometheus/VictoriaMetrics metrics at `http://local-haos-monitor:8099/cgi-bin/metrics`
+- Status JSON for Gatus at `http://72a005f5-haos-monitor:8099/cgi-bin/status[?host=<slug>]`
+- Prometheus/VictoriaMetrics metrics at `http://72a005f5-haos-monitor:8099/cgi-bin/metrics`
 - MQTT discovery: one device per host with sensors and binary sensors, availability via Last Will
 - `problem` sensor with the reasons as attributes (stale data, I/O pressure, in-flight I/O, D-state tasks, kernel
   errors)

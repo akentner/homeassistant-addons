@@ -61,15 +61,18 @@ kernel log flood cannot push the samples out of its window.
 
 ## Status endpoint
 
-`http://local-haos-monitor:8099/cgi-bin/status[?host=<slug>]` returns flat JSON (for Gatus): numbers plus the strings
+The add-on hostname is `<repository-id>-haos-monitor`; for this repository it is `72a005f5-haos-monitor` (also shown on
+the add-on's Info page). A locally built copy (`/addons/haos-monitor`) would be `local-haos-monitor` instead.
+
+`http://72a005f5-haos-monitor:8099/cgi-bin/status[?host=<slug>]` returns flat JSON (for Gatus): numbers plus the strings
 `reasons`, `dstate_tasks` and `kmsg_last`. Without `host` the first configured host is returned; an unknown host gives
 HTTP 404 `{"error":"unknown host"}`.
 
 ## Metrics endpoint
 
-`http://local-haos-monitor:8099/cgi-bin/metrics` returns all hosts in Prometheus text format (also for VictoriaMetrics /
-vmagent). Every sample carries `host="<slug>"`; values that are unknown are omitted, so a host without data only shows
-the age and problem series.
+`http://72a005f5-haos-monitor:8099/cgi-bin/metrics` returns all hosts in Prometheus text format (also for
+VictoriaMetrics / vmagent). Every sample carries `host="<slug>"`; values that are unknown are omitted, so a host without
+data only shows the age and problem series.
 
 | Metric                                      | Extra label | Meaning                                        |
 | ------------------------------------------- | ----------- | ---------------------------------------------- |
@@ -96,10 +99,10 @@ scrape_configs:
     metrics_path: /cgi-bin/metrics
     scrape_interval: 15s
     static_configs:
-      - targets: ["local-haos-monitor:8099"]
+      - targets: ["72a005f5-haos-monitor:8099"]
 ```
 
-The port is closed by default; the scraper must reach the add-on network (`local-haos-monitor`, e.g. via Supervisor
+The port is closed by default; the scraper must reach the add-on network (`72a005f5-haos-monitor`, e.g. via Supervisor
 DNS). To scrape from elsewhere in the LAN, set a host port for `8099/tcp` in the add-on's Network tab (optional). The
 endpoints have no authentication, so open it only in a trusted network.
 
