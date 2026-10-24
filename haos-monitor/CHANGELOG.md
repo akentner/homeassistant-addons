@@ -3,6 +3,11 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.5.0-1] - 2026-10-24
+
+- Fix: `image:` pointed at `amd64-haos-monitor`, but CI publishes `amd64-haos_monitor`, so the Supervisor could not
+  pull the image (403 denied).
+
 ## [0.5.0] - 2026-10-24
 
 - Kernel error detection: error-level kernel lines and known failure texts (I/O error, UAS abort, USB reset, OOM,
