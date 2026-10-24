@@ -37,7 +37,7 @@ binary_sensor|p4357|Observer port||connectivity||true
 binary_sensor|problem|Problem||problem||true'
 
 config_json() {
-  jq -nc --arg kind "$1" --arg f "$2" --arg n "$3" --arg u "$4" --arg dc "$5" --arg sc "$6" --arg en "$7" \
+  jq -nc --arg attrs "$PROBLEM_ATTRS" --arg kind "$1" --arg f "$2" --arg n "$3" --arg u "$4" --arg dc "$5" --arg sc "$6" --arg en "$7" \
     --arg dev "$DEV" --arg devname "HAOS Monitor $NAME" --arg state "$STATE" --arg avail "$AVAIL" \
     --argjson exp "$EXPIRE" '
     {name: $n, unique_id: ($dev + "_" + $f), default_entity_id: ($kind + "." + $dev + "_" + $f),
@@ -45,10 +45,14 @@ config_json() {
      availability_topic: $avail, expire_after: $exp, enabled_by_default: ($en == "true"),
      device: {identifiers: [$dev], name: $devname, manufacturer: "akentner", model: "haos-monitor"}}
     + (if $kind == "binary_sensor" then {payload_on: "1", payload_off: "0"} else {} end)
+    + (if $f == "problem" then {json_attributes_topic: $state, json_attributes_template: $attrs} else {} end)
     + (if $u != "" then {unit_of_measurement: $u} else {} end)
     + (if $dc != "" then {device_class: $dc} else {} end)
     + (if $sc != "" then {state_class: $sc} else {} end)'
 }
+
+# Attributes of the problem sensor: which component fired, plus the values behind it
+PROBLEM_ATTRS="{{ {'reasons': value_json.reasons, 'stale': value_json.r_age == 1, 'io_full': value_json.r_io == 1, 'sda_inflight_high': value_json.r_sda == 1, 'dstate_tasks_found': value_json.r_dstate == 1, 'dstate_tasks': value_json.dstate_tasks, 'age': value_json.age, 'io_full10': value_json.io_full10, 'sda_inflight': value_json.sda_inflight, 'dstate': value_json.dstate} | tojson }}"
 
 topic() { echo "$MQTT_PREFIX/$1/$DEV/$2/config"; }
 
