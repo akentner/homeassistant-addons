@@ -1,6 +1,6 @@
 name: "HAOS Monitor"
 description: "Diagnostic: logs kernel log and I/O stalls of remote HAOS hosts, publishes status via HTTP and MQTT"
-version: "0.5.0-1"
+version: "0.6.0-0"
 slug: "haos_monitor"
 init: false
 arch:
@@ -9,10 +9,15 @@ image: "ghcr.io/akentner/homeassistant-addons/{arch}-haos_monitor"
 url: "https://github.com/akentner/homeassistant-addons"
 startup: "application"
 boot: "auto"
+ingress: true
+ingress_port: 8099
+panel_icon: "mdi:heart-pulse"
+panel_title: "HAOS Monitor"
+panel_admin: true
 ports:
   8099/tcp: null
 ports_description:
-  8099/tcp: "Status JSON (/cgi-bin/status) and Prometheus metrics (/cgi-bin/metrics), optional"
+  8099/tcp: "Status JSON (/api/status.json) and Prometheus metrics (/api/metrics.txt), optional"
 map:
   - share:rw
 options:

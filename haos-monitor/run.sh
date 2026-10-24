@@ -70,6 +70,6 @@ done
 
 [ -s "$HOSTS" ] || { echo "no usable host configured" >&2; exit 1; }
 
-httpd -p 8099 -h /www
+httpd -p 8099 -h /www -c /etc/httpd.conf
 # Children are supervised individually; keep the container running regardless
 while :; do sleep 3600; done

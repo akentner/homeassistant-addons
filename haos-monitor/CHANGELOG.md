@@ -3,6 +3,13 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.6.0] - 2026-10-25
+
+- Add Ingress: sidebar entry and "Open Web UI" button with a status page per host (values, violated thresholds, ports,
+  blocked tasks, last kernel error, recent incidents).
+- Add `/api/status.json`, `/api/metrics.txt`, `/api/hosts.json` and `/api/incidents.json`. `/cgi-bin/status` and
+  `/cgi-bin/metrics` keep working.
+
 ## [0.5.0-1] - 2026-10-24
 
 - Fix: `image:` pointed at `amd64-haos-monitor`, but CI publishes `amd64-haos_monitor`, so the Supervisor could not pull

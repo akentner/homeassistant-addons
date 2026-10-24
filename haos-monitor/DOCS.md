@@ -59,18 +59,27 @@ minutes of uptime, so a reboot can raise `problem` briefly.
 Samples, probes and `KERR` lines are mirrored to `<slug>.log.state` (trimmed at 1 MB), which the status code reads, so a
 kernel log flood cannot push the samples out of its window.
 
+## Web UI (Ingress)
+
+The add-on adds a sidebar entry "HAOS Monitor" (admin only) and the "Open Web UI" button. The page shows one card per
+host: verdict and reasons, all values (violated thresholds highlighted), port reachability, blocked tasks, the last
+kernel error and the last 10 `INCIDENT` log lines. It refreshes every 10 seconds.
+
 ## Status endpoint
 
 The add-on hostname is `<repository-id>-haos-monitor`; for this repository it is `72a005f5-haos-monitor` (also shown on
 the add-on's Info page). A locally built copy (`/addons/haos-monitor`) would be `local-haos-monitor` instead.
 
-`http://72a005f5-haos-monitor:8099/cgi-bin/status[?host=<slug>]` returns flat JSON (for Gatus): numbers plus the strings
-`reasons`, `dstate_tasks` and `kmsg_last`. Without `host` the first configured host is returned; an unknown host gives
-HTTP 404 `{"error":"unknown host"}`.
+`http://72a005f5-haos-monitor:8099/api/status.json[?host=<slug>]` returns flat JSON (for Gatus): numbers plus the
+strings `reasons`, `dstate_tasks` and `kmsg_last`. Without `host` the first configured host is returned; an unknown host
+gives HTTP 404 `{"error":"unknown host"}`.
+
+The same endpoints are available under `/cgi-bin/status` and `/cgi-bin/metrics` (kept for existing Gatus and Prometheus
+configs). `/api/hosts.json` lists the hosts and `/api/incidents.json?host=<slug>` the recent incidents.
 
 ## Metrics endpoint
 
-`http://72a005f5-haos-monitor:8099/cgi-bin/metrics` returns all hosts in Prometheus text format (also for
+`http://72a005f5-haos-monitor:8099/api/metrics.txt` returns all hosts in Prometheus text format (also for
 VictoriaMetrics / vmagent). Every sample carries `host="<slug>"`; values that are unknown are omitted, so a host without
 data only shows the age and problem series.
 
@@ -96,7 +105,7 @@ Scrape example (Prometheus / vmagent):
 ```yaml
 scrape_configs:
   - job_name: haos-monitor
-    metrics_path: /cgi-bin/metrics
+    metrics_path: /api/metrics.txt
     scrape_interval: 15s
     static_configs:
       - targets: ["72a005f5-haos-monitor:8099"]
