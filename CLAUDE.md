@@ -122,6 +122,13 @@ yq eval --unsafe '.version' phone-logger/config.yaml
 - Shell: shellcheck with SC1091 and SC2034 ignored (`.pre-commit-config.yaml`)
 - Actions: relaxed shellcheck rules for workflows (`.actionlint.yml`)
 
+## Exception: `haos-monitor` (own code)
+
+The "wrapper around upstream" model above does not apply to `haos-monitor/`. It is our own diagnostic tool with no
+upstream project, so it has no `.upstream.yaml` and no auto-update, and its scripts live in the add-on directory. It is
+built locally by the Supervisor (no `image:` key). Still applies: HA base image only, 3-file version sync via
+`make update-version`, and a local `docker build` before committing Dockerfile changes. See `haos-monitor/DOCS.md`.
+
 <!-- GSD:project-start source:PROJECT.md -->
 
 ## Project
