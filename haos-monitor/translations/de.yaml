@@ -58,4 +58,4 @@ configuration:
       Veröffentlicht leere retained Discovery-Payloads, um die Entities zu entfernen, und wartet dann.
       Danach wieder ausschalten.
 network:
-  8099/tcp: "Status-JSON (/cgi-bin/status) und Prometheus-Metriken (/cgi-bin/metrics). Optional; leer lassen, um den Port geschlossen zu halten."
+  8099/tcp: "Status-JSON (/api/status.json) und Prometheus-Metriken (/api/metrics.txt). Optional; leer lassen, um den Port geschlossen zu halten."
