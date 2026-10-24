@@ -70,12 +70,12 @@ kernel error and the last 10 `INCIDENT` log lines. It refreshes every 10 seconds
 The add-on hostname is `<repository-id>-haos-monitor`; for this repository it is `72a005f5-haos-monitor` (also shown on
 the add-on's Info page). A locally built copy (`/addons/haos-monitor`) would be `local-haos-monitor` instead.
 
-`http://72a005f5-haos-monitor:8099/api/status.json[?host=<slug>]` returns flat JSON (for Gatus): numbers plus the strings
-`reasons`, `dstate_tasks` and `kmsg_last`. Without `host` the first configured host is returned; an unknown host gives
-HTTP 404 `{"error":"unknown host"}`.
+`http://72a005f5-haos-monitor:8099/api/status.json[?host=<slug>]` returns flat JSON (for Gatus): numbers plus the
+strings `reasons`, `dstate_tasks` and `kmsg_last`. Without `host` the first configured host is returned; an unknown host
+gives HTTP 404 `{"error":"unknown host"}`.
 
-The same endpoints are available under `/cgi-bin/status` and `/cgi-bin/metrics` (kept for existing Gatus and
-Prometheus configs). `/api/hosts.json` lists the hosts and `/api/incidents.json?host=<slug>` the recent incidents.
+The same endpoints are available under `/cgi-bin/status` and `/cgi-bin/metrics` (kept for existing Gatus and Prometheus
+configs). `/api/hosts.json` lists the hosts and `/api/incidents.json?host=<slug>` the recent incidents.
 
 ## Metrics endpoint
 
