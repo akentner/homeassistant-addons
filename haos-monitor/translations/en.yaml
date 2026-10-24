@@ -1,0 +1,53 @@
+configuration:
+  hosts:
+    name: Observed hosts
+    description: >-
+      HAOS hosts to monitor. Each entry needs a display name (also used for the log file and MQTT
+      device), the host or IP, the host SSH port (HAOS default 22222) and a private key that is
+      authorized on that host.
+  interval:
+    name: Interval (seconds)
+    description: >-
+      Sampling interval on the observed host and publish interval for MQTT.
+  problem_age:
+    name: Problem - data age (seconds)
+    description: >-
+      The problem flag is raised when the newest sample is at least this old (SSH session hung or lost).
+  problem_io_full10:
+    name: Problem - I/O full pressure (%)
+    description: >-
+      The problem flag is raised when the 10 s average of /proc/pressure/io "full" reaches this value.
+  problem_sda_inflight:
+    name: Problem - in-flight I/O on sda
+    description: >-
+      The problem flag is raised when sda has at least this many requests in flight.
+  problem_dstate:
+    name: Problem - D-state tasks
+    description: >-
+      The problem flag is raised when at least this many tasks sit in uninterruptible sleep. Pipe waits
+      (short-lived runc) are ignored.
+  mqtt_host:
+    name: MQTT host
+    description: >-
+      Broker used for MQTT discovery and state (not the observed host).
+  mqtt_port:
+    name: MQTT port
+    description: >-
+      Broker port.
+  mqtt_user:
+    name: MQTT user
+    description: >-
+      Broker user. Leave empty for an anonymous connection.
+  mqtt_password:
+    name: MQTT password
+    description: >-
+      Broker password.
+  mqtt_discovery_prefix:
+    name: MQTT discovery prefix
+    description: >-
+      Home Assistant discovery prefix (default homeassistant).
+  mqtt_clear_discovery:
+    name: Clear MQTT discovery
+    description: >-
+      Publishes empty retained discovery payloads to remove the entities, then idles. Switch it back
+      off afterwards.

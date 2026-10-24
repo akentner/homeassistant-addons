@@ -1,0 +1,55 @@
+configuration:
+  hosts:
+    name: Überwachte Hosts
+    description: >-
+      HAOS-Hosts, die überwacht werden. Jeder Eintrag braucht einen Anzeigenamen (auch für Logdatei und
+      MQTT-Gerät), Host oder IP, den Host-SSH-Port (HAOS-Standard 22222) und einen privaten Schlüssel,
+      der auf dem Host autorisiert ist.
+  interval:
+    name: Intervall (Sekunden)
+    description: >-
+      Abtastintervall auf dem überwachten Host und Veröffentlichungsintervall für MQTT.
+  problem_age:
+    name: Problem - Alter der Daten (Sekunden)
+    description: >-
+      Das Problem-Flag wird gesetzt, wenn das neueste Sample mindestens so alt ist (SSH-Sitzung hängt
+      oder ist weg).
+  problem_io_full10:
+    name: Problem - I/O-Full-Pressure (%)
+    description: >-
+      Das Problem-Flag wird gesetzt, wenn der 10-s-Durchschnitt von /proc/pressure/io "full" diesen Wert
+      erreicht.
+  problem_sda_inflight:
+    name: Problem - laufende I/O auf sda
+    description: >-
+      Das Problem-Flag wird gesetzt, wenn auf sda mindestens so viele Requests in Bearbeitung sind.
+  problem_dstate:
+    name: Problem - Tasks im D-State
+    description: >-
+      Das Problem-Flag wird gesetzt, wenn mindestens so viele Tasks im unterbrechungsfreien Schlaf sind.
+      Pipe-Waits (kurzlebiges runc) werden ignoriert.
+  mqtt_host:
+    name: MQTT-Host
+    description: >-
+      Broker für MQTT-Discovery und Status (nicht der überwachte Host).
+  mqtt_port:
+    name: MQTT-Port
+    description: >-
+      Port des Brokers.
+  mqtt_user:
+    name: MQTT-Benutzer
+    description: >-
+      Benutzer des Brokers. Leer lassen für eine anonyme Verbindung.
+  mqtt_password:
+    name: MQTT-Passwort
+    description: >-
+      Passwort des Brokers.
+  mqtt_discovery_prefix:
+    name: MQTT-Discovery-Präfix
+    description: >-
+      Discovery-Präfix von Home Assistant (Standard homeassistant).
+  mqtt_clear_discovery:
+    name: MQTT-Discovery löschen
+    description: >-
+      Veröffentlicht leere retained Discovery-Payloads, um die Entities zu entfernen, und wartet dann.
+      Danach wieder ausschalten.
