@@ -3,6 +3,10 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.4.1] - 2026-10-24
+
+- Optional host port for `8099/tcp` (status JSON and metrics), closed by default.
+
 ## [0.4.0] - 2026-10-24
 
 - Prometheus/VictoriaMetrics endpoint `/cgi-bin/metrics` (all hosts, label `host`), built from the same status data as

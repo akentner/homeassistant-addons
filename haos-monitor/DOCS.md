@@ -78,7 +78,9 @@ scrape_configs:
       - targets: ["local-haos-monitor:8099"]
 ```
 
-The port is not published; the scraper must reach the add-on network (`local-haos-monitor`, e.g. via Supervisor DNS).
+The port is closed by default; the scraper must reach the add-on network (`local-haos-monitor`, e.g. via Supervisor
+DNS). To scrape from elsewhere in the LAN, set a host port for `8099/tcp` in the add-on's Network tab (optional). The
+endpoints have no authentication, so open it only in a trusted network.
 
 ## MQTT
 

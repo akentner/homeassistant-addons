@@ -51,3 +51,5 @@ configuration:
     description: >-
       Publishes empty retained discovery payloads to remove the entities, then idles. Switch it back
       off afterwards.
+network:
+  8099/tcp: "Status JSON (/cgi-bin/status) and Prometheus metrics (/cgi-bin/metrics). Optional; leave empty to keep the port closed."
