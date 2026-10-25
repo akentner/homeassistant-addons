@@ -1,3 +1,30 @@
+## Verify this release
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub \
+  ghcr.io/berriai/litellm:v1.106.4
+```
+
+Same command for `litellm-database`, `litellm-non_root` and the `docker.io/litellm/*` images
+
+## What's new in 1.106.4
+
+3 PRs. 2 fixed. No action needed to upgrade
+
+### Changes
+
+- **Deployment:** Fixed the proxy sometimes exiting on startup with an `ImportError` when it cannot reach the remote
+  model cost map, broken since v1.104.0 (#46711) <sup>Also in
+  [1.104.7](https://github.com/BerriAI/litellm/releases/tag/v1.104.7),
+  [1.105.5](https://github.com/BerriAI/litellm/releases/tag/v1.105.5)</sup>
+- **Deployment:** Fixed image scans flagging brotli 1.2.0, the emSign ECC Root CA - G3 and unused lockfile packages
+  (#48283, #48300)
+
+---
+
+Backport #48294 · [Full changelog](https://github.com/BerriAI/litellm/compare/v1.106.3...v1.106.4)
+
 > [!IMPORTANT] **The image-signing key has changed.** Starting with this release, every Docker image and Helm chart is
 > signed with the new cosign key from commit
 > [`e82a3c6`](https://github.com/BerriAI/litellm/commit/e82a3c646908ba0a6ee0beddc4310d7a6cac4065). Verifying with the
