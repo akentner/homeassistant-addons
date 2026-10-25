@@ -61,6 +61,19 @@
       "matchManagers": [
         "github-actions"
       ]
+    },
+    {
+      "allowedVersions": "3.13",
+      "description": "litellm builder must match the python3.13 of the Debian trixie runtime stage",
+      "matchDepNames": [
+        "python"
+      ],
+      "matchFileNames": [
+        "litellm/Dockerfile"
+      ],
+      "matchManagers": [
+        "dockerfile"
+      ]
     }
   ],
   "platformAutomerge": false,
