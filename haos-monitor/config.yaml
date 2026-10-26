@@ -1,6 +1,6 @@
 name: "HAOS Monitor"
 description: "Diagnostic: logs kernel log and I/O stalls of remote HAOS hosts, publishes status via HTTP and MQTT"
-version: "0.6.0-2"
+version: "0.6.1-0"
 slug: "haos_monitor"
 init: false
 arch:
