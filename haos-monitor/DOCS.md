@@ -18,25 +18,27 @@ image is built and published by CI like the others (`image:` key). The other rep
 
 ## Options
 
-| Option                        | Default                  | Description                                          |
-| ----------------------------- | ------------------------ | ---------------------------------------------------- |
-| `hosts[].name`                | `ha-backup`              | Display name; slug = lowercase, non-alphanumeric→`_` |
-| `hosts[].host`                | `192.168.178.9`          | Host or IP to observe                                |
-| `hosts[].port`                | `22222`                  | SSH port                                             |
-| `hosts[].ssh_private_key`     |                          | Private key (full content)                           |
-| `interval`                    | `10`                     | Sampling and MQTT publish interval (s)               |
-| `problem_age`                 | `60`                     | `problem=1` if `age >=` this (s)                     |
-| `problem_io_full10`           | `30`                     | `problem=1` if `io_full10 >=` this (%)               |
-| `problem_sda_inflight`        | `8`                      | `problem=1` if `sda_inflight >=` this                |
-| `problem_dstate`              | `1`                      | `problem=1` if `dstate >=` this (pipe waits ignored) |
-| `problem_kmsg`                | `1`                      | `problem=1` if `kmsg_errors >=` this (last 10 min)   |
-| `mqtt_host` / `mqtt_port`     | `a0d7b954-emqx` / `1883` | Broker for discovery (not the observed host)         |
-| `mqtt_user` / `mqtt_password` |                          | Empty user = anonymous                               |
-| `mqtt_discovery_prefix`       | `homeassistant`          | Discovery prefix                                     |
-| `mqtt_clear_discovery`        | `false`                  | Clear retained topics, then idle (see below)         |
+| Option                        | Default                  | Description                                              |
+| ----------------------------- | ------------------------ | -------------------------------------------------------- |
+| `hosts[].name`                | `ha-backup`              | Display name; slug = lowercase, non-alphanumeric→`_`     |
+| `hosts[].host`                | `192.168.178.9`          | Host or IP to observe                                    |
+| `hosts[].port`                | `22222`                  | SSH port                                                 |
+| `hosts[].ssh_private_key`     |                          | Private key (full content)                               |
+| `interval`                    | `10`                     | Sampling and MQTT publish interval (s)                   |
+| `problem_age`                 | `60`                     | `problem=1` if `age >=` this (s)                         |
+| `problem_io_full10`           | `30`                     | `problem=1` if `io_full10 >=` this (%)                   |
+| `problem_sda_inflight`        | `8`                      | `problem=1` if `sda_inflight >=` this                    |
+| `problem_dstate`              | `1`                      | `problem=1` if `dstate >=` this (harmless waits ignored) |
+| `problem_kmsg`                | `1`                      | `problem=1` if `kmsg_errors >=` this (last 10 min)       |
+| `mqtt_host` / `mqtt_port`     | `a0d7b954-emqx` / `1883` | Broker for discovery (not the observed host)             |
+| `mqtt_user` / `mqtt_password` |                          | Empty user = anonymous                                   |
+| `mqtt_discovery_prefix`       | `homeassistant`          | Discovery prefix                                         |
+| `mqtt_clear_discovery`        | `false`                  | Clear retained topics, then idle (see below)             |
 
-`dstate` counts only D-state tasks whose wchan is not a pipe wait (`anon_pipe_read` etc., e.g. short-lived `runc`);
-those lines stay in the log but do not raise `problem`.
+`dstate` counts only D-state tasks that are a real sign of blocked I/O. Not counted are pipe waits (`anon_pipe_read`
+etc., e.g. short-lived `runc`), idle kernel workers (`worker_thread`) and the ext4 journal thread waiting for its commit
+(`jbd2/…` on `__wait_on_buffer`, a few seconds now and then). Those lines stay in the log but do not raise `problem`. A
+real stall still shows up through the other tasks, `io_full10`, `sda_inflight` or kernel errors.
 
 A host with a missing or malformed key, or a duplicate slug, is skipped; the others keep running.
 
@@ -93,7 +95,7 @@ data only shows the age and problem series.
 | `haos_monitor_io_full_pressure_percent`     |             | PSI io full, avg10                             |
 | `haos_monitor_memory_full_pressure_percent` |             | PSI memory full, avg10                         |
 | `haos_monitor_disk_inflight_requests`       | `device`    | In-flight I/O (`sda`, `mmcblk1`)               |
-| `haos_monitor_dstate_tasks`                 |             | D-state tasks (pipe waits ignored)             |
+| `haos_monitor_dstate_tasks`                 |             | D-state tasks (harmless waits ignored)         |
 | `haos_monitor_kmsg_errors`                  |             | Kernel error lines, last 10 min of host uptime |
 | `haos_monitor_ping_up`                      |             | Host answers ping                              |
 | `haos_monitor_port_open`                    | `port`      | `22222`, `1883`, `8123`, `4357` reachable      |

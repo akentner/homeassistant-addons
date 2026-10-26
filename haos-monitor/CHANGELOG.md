@@ -3,6 +3,11 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.6.1] - 2026-10-26
+
+- `dstate` no longer counts the ext4 journal thread (`jbd2/…`) waiting on `__wait_on_buffer` and idle kernel workers
+  (`worker_thread`). They caused about one short `problem` per three hours on a healthy host.
+
 ## [0.6.0-2] - 2026-10-25
 
 - Status page: show the host boot time (local time) with the relative uptime, e.g. `2026-10-20 08:12:33 (5d 1h ago)`.

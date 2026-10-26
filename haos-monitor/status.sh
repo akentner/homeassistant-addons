@@ -8,7 +8,9 @@ PROBLEM_AGE=60 PROBLEM_IO_FULL10=30 PROBLEM_SDA_INFLIGHT=8 PROBLEM_DSTATE=1 PROB
 # Kernel error lines (KERR) count when they are at most this many seconds older than the host uptime
 KMSG_WINDOW=600
 # D-state tasks waiting on these wchans are not disk stalls (e.g. short-lived runc) and do not count
-DSTATE_IGNORE='^(anon_pipe_read|anon_pipe_write|pipe_read|pipe_write)$'
+DSTATE_IGNORE='^(anon_pipe_read|anon_pipe_write|pipe_read|pipe_write|worker_thread)$'
+# The ext4 journal thread waits for its commit I/O for a few seconds now and then; that alone is not a stall
+# (a real one also shows io_full10, other blocked tasks or kernel errors)
 # shellcheck disable=SC1090
 [ -r "${ENV_FILE:-/etc/haos-monitor.env}" ] && . "${ENV_FILE:-/etc/haos-monitor.env}"
 FILTER='^[^ ]+ (SAMPLE|DISK|DSTATE|PROBE|BOOT|KERR) '
@@ -57,10 +59,10 @@ function reboot_check(u,   k) {
     if ($3 == "sda") sda = v; else if ($3 == "mmcblk1") mmc = v
   } else if (kind == "DSTATE") {
     w = val($NF)
-    if (w !~ ign) {
+    c = ""
+    for (i = 4; i < NF; i++) c = c (c == "" ? "" : " ") $i
+    if (w !~ ign && !(c ~ /^\(jbd2\// && w == "__wait_on_buffer")) {
       dstate++
-      c = ""
-      for (i = 4; i < NF; i++) c = c (c == "" ? "" : " ") $i
       t = $3 " " c ":" w
       gsub(/[^A-Za-z0-9 ():._\/-]/, "", t)
       tasks = tasks (tasks == "" ? "" : "; ") t
