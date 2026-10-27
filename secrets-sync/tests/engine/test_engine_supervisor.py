@@ -220,9 +220,11 @@ def test_provider_failure_after_restart_writes_nothing(tmp_path):
 
 
 def test_never_succeeded_is_error(tmp_path):
-    sup = make(tmp_path, {"bitwarden": FakeProvider("bitwarden", error=ProviderError("bw_auth_failed"))})
+    err = ProviderError("bw_auth_failed", "login rejected")
+    sup = make(tmp_path, {"bitwarden": FakeProvider("bitwarden", error=err)})
     assert sup.run_once() == "error"
     data = state(sup)
+    assert any("bw_auth_failed: login rejected" in e["message"] for e in data["events"])
     assert data["providers"]["bitwarden"]["status"] == "error" and data["error_code"] == "bw_auth_failed"
     assert data["last_success_at"] is None and data["age_seconds"] is None
 

@@ -181,8 +181,9 @@ class Supervisor:
             info = self._pinfo.setdefault(fetched.name, {"last_success_at": None, "items": 0, "revision": ""})
             info.update(status="degraded" if held is not None else "error", error_code=fetched.code,
                         problems=_problems(fetched.problems))
+            detail = f": {fetched.message}" if fetched.message and fetched.message != fetched.code else ""
             sigs.append(self._emit("error", fetched.code or "provider_error",
-                                   f"provider {fetched.name}: {fetched.code}", fetched.name))
+                                   f"provider {fetched.name}: {fetched.code}{detail}", fetched.name))
             for problem in fetched.problems or []:
                 if problem.severity == "error":
                     sigs.append(self._emit("error", problem.code, problem.message, fetched.name))
