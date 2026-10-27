@@ -149,3 +149,23 @@ def test_no_leak_no_tempfiles(encrypt, age_key, tmp_path, caplog, monkeypatch):
         make(path, bad).fetch()
     assert "s3cr3t" not in str(e.value) and "s3cr3t" not in repr(e.value)
     assert e.value.__cause__ is None
+
+
+def test_bw_env_not_passed_to_sops(encrypt, age_key, monkeypatch):
+    import subprocess
+
+    seen = {}
+    real_run = subprocess.run
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs["env"])
+        return real_run(*args, **kwargs)
+
+    monkeypatch.setenv("BW_CLIENTSECRET", "s3cr3t-bw")
+    monkeypatch.setenv("BW_PASSWORD", "s3cr3t-bw2")
+    monkeypatch.setenv("KEEP_ME", "1")
+    monkeypatch.setattr(subprocess, "run", spy)
+    assert make(encrypt(PLAIN), age_key[0]).fetch().secrets
+    assert not [k for k in seen if k.startswith("BW_")]
+    assert seen["KEEP_ME"] == "1"
+    assert seen["SOPS_AGE_KEY_FILE"] == str(age_key[0])

@@ -81,7 +81,8 @@ class Provider:
             raise ProviderError(code, message) from None
 
     def _decrypt(self, path: Path) -> Any:
-        env = dict(os.environ)
+        # The sops child needs no Bitwarden credentials
+        env = {k: v for k, v in os.environ.items() if not k.startswith("BW_")}
         env["SOPS_AGE_KEY_FILE"] = self._key_file
         try:
             proc = subprocess.run(
