@@ -3,6 +3,11 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.3.1-0] - 2026-10-27
+
+- Fix: archived and trashed Bitwarden items are no longer imported (`archivedDate`/`deletedDate`); only active items
+  become secrets. Info event `item_inactive` reports the count.
+
 ## [0.3.0-0] - 2026-10-27
 
 - Feature: SOPS git source. New `sops.source: git` with `git_url`, `git_branch`, `git_path`, `git_username`,
