@@ -1,0 +1,6 @@
+#!/bin/sh
+# Answers git credential prompts from the environment (never from argv or the URL).
+case "$1" in
+    Username*) printf '%s\n' "${SS_GIT_USERNAME:-x-access-token}" ;;
+    *) printf '%s\n' "${SS_GIT_TOKEN:-}" ;;
+esac
