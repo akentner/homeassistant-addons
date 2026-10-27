@@ -6,6 +6,11 @@ configuration:
   interval:
     name: Interval (seconds)
     description: Time between sync cycles (60 to 86400).
+  check_interval:
+    name: Change check interval (seconds)
+    description: How often a cheap check (git ls-remote) looks for changes in the SOPS git repository. A change
+      triggers a sync right away, the regular interval stays as fallback. 0 disables the check; 1 to 29 is raised
+      to 30.
   collision_policy:
     name: Collision policy
     description: '''error'' writes nothing when a key exists in two sources; ''priority'' lets the earlier provider
@@ -18,8 +23,8 @@ configuration:
     description: Verbosity of the add-on log. Secret values are never logged, at any level.
   usage_scan:
     name: Secret usage scan
-    description: Show where '!secret' keys are used. 'config' scans the Home Assistant config, 'all' also reads the
-      configs of other add-ons (read-only). Only key names and file positions are stored, never values.
+    description: Show where '!secret' keys are used. 'config' scans the Home Assistant config, 'all' also reads
+      the configs of other add-ons (read-only). Only key names and file positions are stored, never values.
   bitwarden:
     name: Bitwarden
     description: Settings of the Bitwarden provider.
@@ -52,9 +57,30 @@ configuration:
     name: SOPS
     description: Settings of the SOPS provider.
     fields:
+      source:
+        name: Source
+        description: 'Where the encrypted file comes from: ''file'' (local path) or ''git'' (repository).'
       file:
         name: SOPS file
         description: Path of the SOPS-encrypted YAML file. The age key must be at /addon_config/age.key (mode 600).
       flatten_separator:
         name: Flatten separator
         description: Joins nested keys, e.g. 'db' + 'password' becomes db_password.
+      git_url:
+        name: Git URL
+        description: Repository URL, ssh (git@host:org/repo.git, ssh://...) or https://. No credentials inside the
+          URL. Used when source is git.
+      git_branch:
+        name: Git branch
+        description: Branch to read.
+      git_path:
+        name: Path in repository
+        description: Path of the SOPS-encrypted file inside the repository.
+      git_username:
+        name: Git username (https)
+        description: User name for https token login, e.g. x-access-token (GitHub) or oauth2 (GitLab). Not used
+          for ssh.
+      git_token:
+        name: Git token (https)
+        description: Access token with read access (e.g. fine-grained PAT with contents:read). Passed via environment
+          only. Leave empty for public repositories or ssh.

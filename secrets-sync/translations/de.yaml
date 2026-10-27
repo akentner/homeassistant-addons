@@ -6,6 +6,11 @@ configuration:
   interval:
     name: Intervall (Sekunden)
     description: Zeit zwischen Sync-Zyklen (60 bis 86400).
+  check_interval:
+    name: Änderungsprüfung (Sekunden)
+    description: Wie oft eine günstige Prüfung (git ls-remote) das SOPS-Git-Repository auf Änderungen abfragt. Eine
+      Änderung löst sofort einen Sync aus, das normale Intervall bleibt als Rückfall. 0 schaltet die Prüfung ab;
+      1 bis 29 wird auf 30 angehoben.
   collision_policy:
     name: Kollisions-Policy
     description: '''error'' schreibt nichts, wenn ein Schlüssel in zwei Quellen vorkommt; ''priority'' lässt den
@@ -55,6 +60,9 @@ configuration:
     name: SOPS
     description: Einstellungen des SOPS-Providers.
     fields:
+      source:
+        name: Quelle
+        description: 'Woher die verschlüsselte Datei kommt: ''file'' (lokaler Pfad) oder ''git'' (Repository).'
       file:
         name: SOPS-Datei
         description: Pfad der SOPS-verschlüsselten YAML-Datei. Der age-Schlüssel muss unter /addon_config/age.key
@@ -62,3 +70,21 @@ configuration:
       flatten_separator:
         name: Trennzeichen
         description: Verbindet verschachtelte Schlüssel, z. B. 'db' + 'password' ergibt db_password.
+      git_url:
+        name: Git-URL
+        description: Repository-URL, ssh (git@host:org/repo.git, ssh://...) oder https://. Keine Zugangsdaten in
+          der URL. Wird bei Quelle git verwendet.
+      git_branch:
+        name: Git-Branch
+        description: Zu lesender Branch.
+      git_path:
+        name: Pfad im Repository
+        description: Pfad der SOPS-verschlüsselten Datei im Repository.
+      git_username:
+        name: Git-Benutzer (https)
+        description: Benutzername für den https-Token-Login, z. B. x-access-token (GitHub) oder oauth2 (GitLab).
+          Nicht für ssh.
+      git_token:
+        name: Git-Token (https)
+        description: Zugriffstoken mit Leserecht (z. B. Fine-grained PAT mit contents:read). Nur per Umgebungsvariable
+          übergeben. Leer lassen bei öffentlichen Repositories oder ssh.

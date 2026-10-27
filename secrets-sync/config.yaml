@@ -26,6 +26,7 @@ options:
   providers:
     - "bitwarden"
   interval: 300
+  check_interval: 60
   collision_policy: "error"
   shrink_guard_percent: 30
   log_level: "info"
@@ -40,12 +41,19 @@ options:
     key_style: "legacy"
     notes_dir: "bitwarden"
   sops:
+    source: "file"
     file: "/config/secrets.sops.yaml"
     flatten_separator: "_"
+    git_url: ""
+    git_branch: "main"
+    git_path: "secrets.sops.yaml"
+    git_username: "x-access-token"
+    git_token: ""
 schema:
   providers:
     - "list(bitwarden|sops)"
   interval: "int(60,86400)"
+  check_interval: "int(0,3600)"
   collision_policy: "list(error|priority)"
   shrink_guard_percent: "int(1,100)"
   log_level: "list(debug|info|warning|error)"
