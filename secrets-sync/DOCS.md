@@ -17,7 +17,7 @@ are manual. The Bitwarden CLI version is pinned in `build.yaml` (`BW_CLI_VERSION
 | `providers`                 | `[bitwarden]`               | Enabled providers, order = priority for `collision_policy: priority`     |
 | `interval`                  | `300`                       | Seconds between cycles (60 to 86400); manual sync at most every 10 s     |
 | `collision_policy`          | `error`                     | `error`: nothing is written on a duplicate key; `priority`: earlier wins |
-| `shrink_guard_percent`      | `50`                        | Refuse to write when items drop by more than this share (1 to 100)       |
+| `shrink_guard_percent`      | `30`                        | Refuse to write when items drop by more than this share (1 to 100)       |
 | `log_level`                 | `info`                      | `debug`, `info`, `warning`, `error`; values are never logged             |
 | `bitwarden.server_url`      | `https://bitwarden.com`     | Server URL (also Vaultwarden)                                            |
 | `bitwarden.client_id`       | empty                       | API key `client_id` (`user.xxxx`), passed via env                        |

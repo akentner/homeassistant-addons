@@ -32,6 +32,19 @@
         "VERSION:\\s+\"(?<currentValue>[^\"]+)\""
       ],
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "datasourceTemplate": "npm",
+      "depNameTemplate": "@bitwarden/cli",
+      "fileMatch": [
+        "^secrets-sync/build\\.yaml$",
+        "^secrets-sync/Dockerfile$"
+      ],
+      "matchStrings": [
+        "BW_CLI_VERSION[:=]\\s*\"?(?<currentValue>\\d+\\.\\d+\\.\\d+)\"?"
+      ],
+      "versioningTemplate": "semver"
     }
   ],
   "extends": [
@@ -73,6 +86,17 @@
       ],
       "matchManagers": [
         "dockerfile"
+      ]
+    },
+    {
+      "additionalBranchPrefix": "secrets-sync-",
+      "description": "bw CLI bump needs a config.yaml subpatch bump (make update-version) before merge",
+      "groupName": "secrets-sync bw cli",
+      "matchDepNames": [
+        "@bitwarden/cli"
+      ],
+      "matchManagers": [
+        "custom.regex"
       ]
     }
   ],

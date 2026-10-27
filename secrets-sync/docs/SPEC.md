@@ -69,7 +69,7 @@ options:
   providers: ["bitwarden"] # list(bitwarden|sops), order = priority when collision_policy: priority
   interval: 300 # int(60,86400)
   collision_policy: "error" # list(error|priority)
-  shrink_guard_percent: 50 # int(1,100); refuse write if items drop by more than this vs. last write
+  shrink_guard_percent: 30 # int(1,100); refuse write if items drop by more than this vs. last write
   log_level: "info" # list(debug|info|warning|error), never changes value logging
   bitwarden:
     server_url: "https://bitwarden.com" # url

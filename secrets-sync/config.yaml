@@ -26,7 +26,7 @@ options:
     - "bitwarden"
   interval: 300
   collision_policy: "error"
-  shrink_guard_percent: 50
+  shrink_guard_percent: 30
   log_level: "info"
   bitwarden:
     server_url: "https://bitwarden.com"

@@ -63,7 +63,7 @@ def test_config_defaults_and_paths(tmp_path):
     cfg = load_config(_env(tmp_path, {"providers": ["bitwarden", "sops", "bitwarden"], "interval": 120,
                                       "bitwarden": {"server_url": "https://x"}}))
     assert cfg.providers == ("bitwarden", "sops")
-    assert cfg.interval == 120 and cfg.collision_policy == "error" and cfg.shrink_guard_percent == 50
+    assert cfg.interval == 120 and cfg.collision_policy == "error" and cfg.shrink_guard_percent == 30
     assert cfg.provider_cfg["bitwarden"]["server_url"] == "https://x"
     assert cfg.provider_cfg["sops"] == {}
     assert cfg.problems == ()

@@ -101,7 +101,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         interval=_int(options.get("interval"), 300, MIN_INTERVAL, 86400, "interval", problems),
         collision_policy=_choice(options.get("collision_policy"), "error", COLLISION_POLICIES,
                                  "collision_policy", problems),
-        shrink_guard_percent=_int(options.get("shrink_guard_percent"), 50, 1, 100, "shrink_guard_percent", problems),
+        shrink_guard_percent=_int(options.get("shrink_guard_percent"), 30, 1, 100, "shrink_guard_percent", problems),
         log_level=_choice(options.get("log_level"), "info", LOG_LEVELS, "log_level", problems),
         provider_cfg=provider_cfg,
         secrets_file=Path(env.get("SS_SECRETS_FILE", "/config/secrets.yaml")),
