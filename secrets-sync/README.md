@@ -15,6 +15,8 @@ via the `bw` CLI) and `sops` (age-encrypted YAML). It is our own code, not an up
 - Bitwarden items become keys in the legacy naming scheme (`<name>_username`, `<name>_password`, ...), secure notes
   become files
 - SOPS YAML files are decrypted in memory and flattened into keys
+- SOPS file from a local path or a git repository (ssh deploy key or https token), with a cheap change check
+  (`git ls-remote`) that starts a sync as soon as the repository changes
 - Several providers at once, with a collision policy (`error` or `priority`)
 - Ingress status page: provider status, key names with added/removed/changed, events, "Sync now", "Preview"
 - `/api/health` and `/api/status.json` for Gatus and other monitors (also on the optional port 8099/tcp)
@@ -34,6 +36,9 @@ via the `bw` CLI) and `sops` (age-encrypted YAML). It is our own code, not an up
   sources is an error and nothing is written for that cycle.
 - The usage scan reads YAML files of `/config` and, with `usage_scan: all`, read-only the other add-ons' configs. It
   stores only key names and file/line positions, never file contents or values.
+- The SOPS git source uses a read-only deploy key (`/addon_config/deploy_key`, mode 600) or an https token. The token is
+  passed through environment and an askpass helper, never in the URL or argv; credentials inside a URL are rejected. Git
+  calls run without hooks, terminal prompts, system/global config and only with the protocols ssh and https.
 - Triggering sync from the UI (POST) is only possible through Ingress.
 - The add-on holds your vault master password. Restrict access to the add-on configuration and its backups accordingly,
   and prefer a dedicated Bitwarden account or collection with read-only access.

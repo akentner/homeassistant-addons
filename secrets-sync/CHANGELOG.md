@@ -3,6 +3,15 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [Unreleased] (0.3.0)
+
+- Feature: SOPS git source. New `sops.source: git` with `git_url`, `git_branch`, `git_path`, `git_username`,
+  `git_token`; SSH deploy key (`/addon_config/deploy_key`, read-only) or https token, selected by the URL. The image now
+  contains `git` and `openssh-client`.
+- Feature: change check. New option `check_interval` (default 60 s, 0 = off): a cheap `git ls-remote` starts a sync as
+  soon as the repository changed; the regular `interval` stays as fallback. Result shown in the web page and in `check`
+  of `state.json`.
+
 ## [0.2.0-0] - 2026-10-27
 
 - Feature: secret usage. The add-on scans YAML files for `!secret <key>` and shows keys that are referenced but missing,
