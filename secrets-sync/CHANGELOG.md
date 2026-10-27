@@ -3,7 +3,7 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
-## [Unreleased] (0.3.0)
+## [0.3.0-0] - 2026-10-27
 
 - Feature: SOPS git source. New `sops.source: git` with `git_url`, `git_branch`, `git_path`, `git_username`,
   `git_token`; SSH deploy key (`/addon_config/deploy_key`, read-only) or https token, selected by the URL. The image now
