@@ -1,0 +1,245 @@
+{
+  "$defs": {
+    "provider": {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "items": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_success_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "problems": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "severity": {
+                "enum": [
+                  "error",
+                  "warning"
+                ]
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "severity"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "degraded",
+            "error",
+            "disabled"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "last_success_at",
+        "items",
+        "error_code",
+        "problems"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "age_seconds": {
+      "description": "now - last_success_at, null before first success",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "error_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "events": {
+      "description": "newest first",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "info",
+              "warning",
+              "error"
+            ]
+          },
+          "message": {
+            "description": "never contains secret values",
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "level",
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "maxItems": 50,
+      "type": "array"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "interval": {
+      "description": "seconds between syncs",
+      "minimum": 60,
+      "type": "integer"
+    },
+    "items": {
+      "description": "number of keys in secrets.yaml",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "keys": {
+      "additionalProperties": false,
+      "description": "NAMES only, never values. added/removed/changed are relative to the previous successful write.",
+      "properties": {
+        "added": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "changed": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "names": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "removed": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "names",
+        "added",
+        "removed",
+        "changed"
+      ],
+      "type": "object"
+    },
+    "last_attempt_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_success_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "next_sync_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "providers": {
+      "additionalProperties": {
+        "$ref": "#/$defs/provider"
+      },
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "stale": {
+      "description": "age_seconds > 2 * interval, or never succeeded after 2 * interval",
+      "type": "boolean"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "degraded",
+        "error",
+        "starting"
+      ]
+    },
+    "versions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "tool versions, e.g. {\"addon\": \"0.1.0\", \"bw\": \"2025.x\", \"sops\": \"3.x\"}",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "generated_at",
+    "interval",
+    "last_attempt_at",
+    "last_success_at",
+    "age_seconds",
+    "stale",
+    "items",
+    "error_code",
+    "next_sync_at",
+    "versions",
+    "providers",
+    "keys",
+    "events"
+  ],
+  "title": "secrets-sync state.json",
+  "type": "object"
+}
