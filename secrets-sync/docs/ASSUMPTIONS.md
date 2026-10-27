@@ -4,7 +4,8 @@ One line each. Items marked DECIDED were confirmed by the user in the interview.
 
 1. `bashio::config` needs the Supervisor API, so `run.sh` reads secrets from `options.json` with python3 - revisit.
 2. `SS_ADDON_VERSION` comes from `bashio::app.version`, falling back to `addon.version`, then `unknown` - revisit.
-3. Optional provider blocks use `bitwarden?:` / `sops?:` in the schema (HA syntax), not `{...}?` - revisit tonight.
+3. FIXED (0.1.0-1): HA has no optional dict keys (`bitwarden?:` was read as a required key named `bitwarden?`). Both
+   blocks are always present with defaults; missing values surface as validate() problems in the UI.
 4. `init: false` and `with-contenv bashio` as in haos-monitor/meridian - revisit tonight.
 5. Only `BW_*` vars are exported when the option is non-empty; empty credentials are left unset - revisit tonight.
 6. DECIDED: No `LOCAL_BUILD_ADDONS`, base-image-config or renovate entries (haos-monitor has none, CI discovers
