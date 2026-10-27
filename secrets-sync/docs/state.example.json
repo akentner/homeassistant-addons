@@ -47,6 +47,45 @@
   "schema_version": 1,
   "stale": false,
   "status": "ok",
+  "usage": {
+    "enabled": true,
+    "files_scanned": 454,
+    "missing": {
+      "old_api_key": {
+        "count": 1,
+        "refs": [
+          {
+            "file": "configuration.yaml",
+            "line": 41
+          }
+        ]
+      }
+    },
+    "roots": [
+      "config",
+      "addon_configs"
+    ],
+    "scanned_at": "2026-10-27T10:15:02Z",
+    "truncated": false,
+    "unused": [
+      "mqtt_username"
+    ],
+    "used": {
+      "mqtt_password": {
+        "count": 2,
+        "refs": [
+          {
+            "file": "packages/mqtt.yaml",
+            "line": 12
+          },
+          {
+            "file": "esphome/node1.yaml",
+            "line": 8
+          }
+        ]
+      }
+    }
+  },
   "versions": {
     "addon": "0.1.0",
     "bw": "2025.10.0",

@@ -66,6 +66,41 @@
         "problems"
       ],
       "type": "object"
+    },
+    "usage_key": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "refs": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "line": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "file",
+              "line"
+            ],
+            "type": "object"
+          },
+          "maxItems": 20,
+          "type": "array"
+        }
+      },
+      "required": [
+        "count",
+        "refs"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -214,6 +249,59 @@
         "error",
         "starting"
       ]
+    },
+    "usage": {
+      "additionalProperties": false,
+      "description": "Where `!secret <key>` is referenced in YAML files. Key names and file/line positions only, never values. Optional: absent in older state files.",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "files_scanned": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "missing": {
+          "additionalProperties": {
+            "$ref": "#/$defs/usage_key"
+          },
+          "description": "keys referenced but not in secrets.yaml",
+          "type": "object"
+        },
+        "roots": {
+          "description": "scanned roots, e.g. config, addon_configs",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "scanned_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "truncated": {
+          "description": "scan stopped at a limit (file count or time budget)",
+          "type": "boolean"
+        },
+        "unused": {
+          "description": "keys in secrets.yaml that nothing references",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "used": {
+          "additionalProperties": {
+            "$ref": "#/$defs/usage_key"
+          },
+          "description": "keys present in secrets.yaml and referenced",
+          "type": "object"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "type": "object"
     },
     "versions": {
       "additionalProperties": {

@@ -17,6 +17,11 @@ configuration:
   log_level:
     name: Log-Level
     description: Ausführlichkeit des Add-on-Logs. Secret-Werte werden auf keiner Stufe geloggt.
+  usage_scan:
+    name: Secret-Verwendungs-Scan
+    description: Zeigt, wo '!secret'-Schlüssel verwendet werden. 'config' durchsucht die Home-Assistant-Konfiguration,
+      'all' liest zusätzlich die Konfigurationen anderer Add-ons (nur lesend). Gespeichert werden nur Schlüsselnamen
+      und Dateipositionen, nie Werte.
   bitwarden:
     name: Bitwarden
     description: Einstellungen des Bitwarden-Providers.

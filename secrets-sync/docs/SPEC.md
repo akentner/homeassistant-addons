@@ -166,3 +166,14 @@ staged by path, no `Co-Authored-By`, no hand-edited versions.
 - Files present in `SS_FILES_DIR` but not in the manifest are never overwritten (`file_unmanaged`, degraded).
 - `run.sh` exports `SS_ADDON_VERSION`. First run replaces an existing `secrets.yaml` (previous one kept as `.bak`).
 - Child processes of the sops provider do not inherit `BW_*` variables.
+
+## Secret usage (0.2)
+
+- `app/engine/usage.py` scans `*.yaml|*.yml` below `/config` (and, for `usage_scan: all`, `/addon_configs`) for
+  `!secret <key>`. Scope follows HA: nearest `secrets.yaml` in the folder or a parent; references that resolve to a
+  nested secrets.yaml do not count. Skips hidden dirs, `custom_components`, `deps`, `node_modules`, `backups`,
+  `__pycache__`, `secrets_files`, symlinks, files > 1 MiB; limits 20000 files / 20 s (`truncated`).
+- `state.json` `usage` (optional): `enabled`, `roots`, `scanned_at`, `files_scanned`, `truncated`, `used`/`missing` (key
+  -> `count`, up to 20 `refs` of `file`+`line`), `unused` (key names). Names and positions only.
+- Runs at the end of each cycle, at most every 60 s; never raises; event `secret_missing` (warning) while keys are
+  missing.

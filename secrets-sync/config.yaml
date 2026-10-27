@@ -1,6 +1,6 @@
 name: "Secrets Sync"
 description: "Syncs secrets from Bitwarden or SOPS into /config/secrets.yaml and optional files"
-version: "0.1.2-0"
+version: "0.2.0-0"
 slug: "secrets_sync"
 init: false
 arch:
@@ -21,6 +21,7 @@ ports_description:
 map:
   - config:rw
   - addon_config:rw
+  - all_addon_configs:ro
 options:
   providers:
     - "bitwarden"
@@ -28,6 +29,7 @@ options:
   collision_policy: "error"
   shrink_guard_percent: 30
   log_level: "info"
+  usage_scan: "all"
   bitwarden:
     server_url: "https://bitwarden.com"
     client_id: ""
@@ -47,6 +49,7 @@ schema:
   collision_policy: "list(error|priority)"
   shrink_guard_percent: "int(1,100)"
   log_level: "list(debug|info|warning|error)"
+  usage_scan: "list(off|config|all)"
   bitwarden:
     server_url: "url"
     client_id: "password"

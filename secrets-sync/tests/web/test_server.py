@@ -251,3 +251,20 @@ def test_controller_exception_is_not_leaked(state_file: Path) -> None:
 def test_unknown_routes_and_methods(srv: Srv) -> None:
     assert srv.req("GET", "/api/nope")[0] == 404
     assert srv.req("POST", "/api/health", INGRESS)[0] == 404
+
+
+def test_page_shows_usage_and_escapes(srv: Srv, state_file: Path) -> None:
+    data = json.loads(state_file.read_text())
+    data["usage"]["missing"]["<script>x</script>"] = {"count": 1, "refs": [{"file": "a<b>.yaml", "line": 3}]}
+    state_file.write_text(json.dumps(data))
+    status, page = srv.req("GET", "/", INGRESS)
+    assert status == 200 and "Secret usage" in page and "mqtt_password" in page and "old_api_key" in page
+    assert "<script>x</script>" not in page and "&lt;script&gt;x&lt;/script&gt;" in page
+
+
+def test_page_without_usage_block_still_renders(srv: Srv, state_file: Path) -> None:
+    data = json.loads(state_file.read_text())
+    data.pop("usage")
+    state_file.write_text(json.dumps(data))
+    status, page = srv.req("GET", "/", INGRESS)
+    assert status == 200 and "scan is off" in page

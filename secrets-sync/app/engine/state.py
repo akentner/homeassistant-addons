@@ -47,6 +47,7 @@ class StateStore:
         self.keys: dict[str, list[str]] = {"names": [], "added": [], "removed": [], "changed": []}
         self.providers: dict[str, dict[str, Any]] = {}
         self.events: list[dict[str, str]] = []
+        self.usage: dict[str, Any] = {"enabled": False}
 
     def load_previous(self) -> None:
         """Pick up history from a previous run (events, last success, key names)."""
@@ -95,6 +96,7 @@ class StateStore:
             "providers": self.providers,
             "keys": self.keys,
             "events": self.events,
+            "usage": self.usage,
         }
 
     def save(self) -> None:

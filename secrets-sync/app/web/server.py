@@ -18,6 +18,8 @@ from app.controller import Controller
 INGRESS_REMOTE = "172.30.32.2"
 MAX_EVENTS = 50
 MAX_KEYS = 500
+MAX_USAGE_ROWS = 300
+MAX_SHOWN_REFS = 3
 
 _CSS = """
 :root{color-scheme:light dark;--bg:#fafafa;--fg:#1c1c1c;--card:#fff;--bd:#d8d8d8;--mut:#666;
@@ -29,7 +31,7 @@ h1{font-size:20px;margin:0 0 12px}h2{font-size:15px;margin:0 0 8px}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;margin:0 0 12px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 .k{color:var(--mut);font-size:12px}.badge{font-weight:600}
-.ok{color:var(--ok)}.degraded,.stale,.starting,.warning{color:var(--warn)}.error{color:var(--err)}
+.bad{color:var(--err)}.ok{color:var(--ok)}.degraded,.stale,.starting,.warning{color:var(--warn)}.error{color:var(--err)}
 table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:4px 8px;border-bottom:1px solid var(--bd)}
 code{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all}
 button{background:var(--acc);color:#fff;border:0;border-radius:6px;padding:6px 14px;margin-right:8px;cursor:pointer}
@@ -102,6 +104,46 @@ def _keys_list(names: Any) -> str:
     return shown + more
 
 
+def _usage_refs(entry: Any) -> str:
+    refs = [_as_dict(r) for r in _as_list(_as_dict(entry).get("refs"))]
+    shown = ", ".join(f"<code>{_e(r.get('file'))}:{_e(r.get('line'))}</code>" for r in refs[:MAX_SHOWN_REFS])
+    total = _as_dict(entry).get("count")
+    extra = total - MAX_SHOWN_REFS if isinstance(total, int) and total > MAX_SHOWN_REFS else 0
+    return shown + (f' <span class="k">+{extra} more</span>' if extra > 0 else "")
+
+
+def _usage_rows(entries: dict[str, Any]) -> str:
+    rows = [
+        f"<tr><td><code>{_e(name)}</code></td><td>{_e(_as_dict(entry).get('count'))}</td><td>{_usage_refs(entry)}</td></tr>"
+        for name, entry in sorted(entries.items())[:MAX_USAGE_ROWS]
+    ]
+    if len(entries) > MAX_USAGE_ROWS:
+        rows.append(f'<tr><td colspan="3" class="k">+{len(entries) - MAX_USAGE_ROWS} more</td></tr>')
+    return "".join(rows)
+
+
+def _render_usage(usage: dict[str, Any]) -> str:
+    if not usage.get("enabled"):
+        return '<div class="card"><h2>Secret usage</h2><span class="k">scan is off (option usage_scan)</span></div>'
+    used = _as_dict(usage.get("used"))
+    missing = _as_dict(usage.get("missing"))
+    unused = _as_list(usage.get("unused"))
+    roots = ", ".join(_e(r) for r in _as_list(usage.get("roots"))) or "-"
+    note = " (scan stopped at a limit)" if usage.get("truncated") else ""
+    out = [
+        f'<div class="card"><h2>Secret usage</h2><div class="k">{_e(usage.get("files_scanned"))} YAML files scanned in '
+        f'{roots} at {_e(usage.get("scanned_at"))}{note}. Looks for <code>!secret key</code>; values are never read.</div>'
+    ]
+    if missing:
+        out.append(f'<h2 class="bad">Referenced but missing in secrets.yaml ({len(missing)})</h2><table>'
+                   f"<tr><th>Key</th><th>Uses</th><th>Where</th></tr>{_usage_rows(missing)}</table>")
+    out.append(f"<h2>Unused ({len(unused)})</h2><div>{_keys_list(unused)}</div>")
+    out.append(f"<h2>Used ({len(used)})</h2>")
+    out.append("<table><tr><th>Key</th><th>Uses</th><th>Where</th></tr>" + (_usage_rows(used) or
+               '<tr><td colspan="3" class="k">no references found</td></tr>') + "</table></div>")
+    return "".join(out)
+
+
 def render_page(state: dict[str, Any]) -> str:
     status = state.get("status") if isinstance(state.get("status"), str) else "starting"
     code, _ = health(state)
@@ -157,6 +199,8 @@ def render_page(state: dict[str, Any]) -> str:
         f"<tr><th>All ({len(_as_list(keys.get('names')))})</th><td>{_keys_list(keys.get('names'))}</td></tr>"
         "</table></div>"
     )
+
+    parts.append(_render_usage(_as_dict(state.get("usage"))))
 
     ev_rows = []
     for ev in _as_list(state.get("events"))[:MAX_EVENTS]:

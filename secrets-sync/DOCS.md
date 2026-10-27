@@ -12,23 +12,24 @@ are manual. The Bitwarden CLI version is pinned in `build.yaml` (`BW_CLI_VERSION
 
 ## Options
 
-| Option                      | Default                     | Description                                                              |
-| --------------------------- | --------------------------- | ------------------------------------------------------------------------ |
-| `providers`                 | `[bitwarden]`               | Enabled providers, order = priority for `collision_policy: priority`     |
-| `interval`                  | `300`                       | Seconds between cycles (60 to 86400); manual sync at most every 10 s     |
-| `collision_policy`          | `error`                     | `error`: nothing is written on a duplicate key; `priority`: earlier wins |
-| `shrink_guard_percent`      | `30`                        | Refuse to write when items drop by more than this share (1 to 100)       |
-| `log_level`                 | `info`                      | `debug`, `info`, `warning`, `error`; values are never logged             |
-| `bitwarden.server_url`      | `https://bitwarden.com`     | Server URL (also Vaultwarden)                                            |
-| `bitwarden.client_id`       | empty                       | API key `client_id` (`user.xxxx`), passed via env                        |
-| `bitwarden.client_secret`   | empty                       | API key `client_secret`, passed via env                                  |
-| `bitwarden.master_password` | empty                       | Unlocks the vault, passed via env                                        |
-| `bitwarden.organization_id` | empty                       | Optional: only items of this organization (name or UUID)                 |
-| `bitwarden.collection_id`   | empty                       | Optional: only items of this collection (name or UUID)                   |
-| `bitwarden.key_style`       | `legacy`                    | Key naming scheme (only `legacy` so far)                                 |
-| `bitwarden.notes_dir`       | `bitwarden`                 | Directory for secure-note files below `/config/secrets_files`            |
-| `sops.file`                 | `/config/secrets.sops.yaml` | SOPS-encrypted YAML file                                                 |
-| `sops.flatten_separator`    | `_`                         | Joins nested keys                                                        |
+| Option                      | Default                     | Description                                                                 |
+| --------------------------- | --------------------------- | --------------------------------------------------------------------------- |
+| `providers`                 | `[bitwarden]`               | Enabled providers, order = priority for `collision_policy: priority`        |
+| `interval`                  | `300`                       | Seconds between cycles (60 to 86400); manual sync at most every 10 s        |
+| `collision_policy`          | `error`                     | `error`: nothing is written on a duplicate key; `priority`: earlier wins    |
+| `shrink_guard_percent`      | `30`                        | Refuse to write when items drop by more than this share (1 to 100)          |
+| `log_level`                 | `info`                      | `debug`, `info`, `warning`, `error`; values are never logged                |
+| `usage_scan`                | `all`                       | `off`, `config` (HA config) or `all` (plus other add-on configs, read-only) |
+| `bitwarden.server_url`      | `https://bitwarden.com`     | Server URL (also Vaultwarden)                                               |
+| `bitwarden.client_id`       | empty                       | API key `client_id` (`user.xxxx`), passed via env                           |
+| `bitwarden.client_secret`   | empty                       | API key `client_secret`, passed via env                                     |
+| `bitwarden.master_password` | empty                       | Unlocks the vault, passed via env                                           |
+| `bitwarden.organization_id` | empty                       | Optional: only items of this organization (name or UUID)                    |
+| `bitwarden.collection_id`   | empty                       | Optional: only items of this collection (name or UUID)                      |
+| `bitwarden.key_style`       | `legacy`                    | Key naming scheme (only `legacy` so far)                                    |
+| `bitwarden.notes_dir`       | `bitwarden`                 | Directory for secure-note files below `/config/secrets_files`               |
+| `sops.file`                 | `/config/secrets.sops.yaml` | SOPS-encrypted YAML file                                                    |
+| `sops.flatten_separator`    | `_`                         | Joins nested keys                                                           |
 
 Both provider blocks are always present in the options. Missing or empty parts are reported as problems (UI and
 `state.json`) and the provider is skipped, the add-on keeps running.
@@ -108,6 +109,26 @@ Do not use your personal account. Create a separate Bitwarden/Vaultwarden user f
 
 Example: item `Mosquitto: Broker-1` with user and password becomes `mosquitto_broker_1_username` and
 `mosquitto_broker_1_password`.
+
+## Secret usage
+
+The add-on scans YAML files for `!secret <key>` and compares the result with the keys in `secrets.yaml`. The web page
+shows three lists; nothing is ever deleted automatically.
+
+- **Referenced but missing**: a file references a key that is not in `secrets.yaml` (Home Assistant would fail to load
+  it). Also reported as warning event `secret_missing`.
+- **Unused**: keys in `secrets.yaml` that no scanned file references.
+- **Used**: keys with their use count and the first locations (`file:line`).
+
+Rules: only `.yaml`/`.yml` files are read, hidden folders (`.storage`, `.git`, ...), `custom_components`, `deps`,
+`backups` and `secrets_files` are skipped, symlinks and files above 1 MiB are ignored, commented lines are ignored.
+`!secret` is resolved like Home Assistant does it: against the nearest `secrets.yaml` in the file's folder or a parent
+folder, so ESPHome files next to their own `secrets.yaml` do not count for ours. With `usage_scan: all`, the add-on also
+reads `/addon_configs` (mapped read-only via `all_addon_configs`); files there count only when no `secrets.yaml` of
+their own is found. Limits: 20000 files and 20 s per scan; the scan runs after every cycle, at most once a minute. The
+state (`state.json`, key `usage`) contains key names and file/line positions only, never values.
+
+UI-managed configuration (dashboards, integrations, `.storage`) cannot reference `!secret` and is not covered.
 
 ## SOPS provider
 
