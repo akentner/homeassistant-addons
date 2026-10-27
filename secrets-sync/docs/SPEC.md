@@ -247,3 +247,54 @@ with `-`).
   is unchanged.
 - Privacy: URL, branch, path, token and SHAs of unrelated repos are never logged at info level; log lines carry provider
   name and short revision only. Tests assert that no token / key content appears in logs, state or events.
+
+## Synthetic keys (0.4)
+
+Keys composed from other keys with a tiny sandboxed Jinja template, e.g. a database DSN from separate user/password
+keys. Runs in the engine after `merge`, before the shrink guard and the write, so it is provider independent.
+
+### Option
+
+```yaml
+options:
+  synthetic_keys: [] # list of {name, template}; HA schema: synthetic_keys: [{name: "str", template: "str"}]
+  # - name: "db_dsn"
+  #   template: "postgresql://{{ db_user | urlquote }}:{{ db_password | urlquote }}@db:5432/ha"
+```
+
+- `name`: `^[A-Za-z_][A-Za-z0-9_]{0,127}$`, unique among synthetic keys; config problem (severity error, code
+  `synthetic_invalid_name`) otherwise. A name that already exists as a real key => cycle error `synthetic_collision`
+  (key names in the message, never silently overridden; independent of `collision_policy`).
+- `template`: max 2048 chars (`synthetic_template_too_long`), non-empty.
+- Config: `Config.synthetic_keys: tuple[tuple[str, str], ...] = ()` (name, template), order as configured.
+
+### Rendering (`app/engine/synthetic.py`, `apply(secrets, defs) -> dict[str, str]`)
+
+- `jinja2.sandbox.ImmutableSandboxedEnvironment`, `StrictUndefined`, `autoescape=False`, no loader, `env.globals`
+  emptied (no `range`, `dict`, `lipsum`, `cycler`, `joiner`, `namespace`), no extensions.
+- Context: `secrets` (read-only mapping of all real merged keys) and every real key whose name is a valid identifier as
+  a direct variable. Synthetic keys do **not** see each other (no chaining, no ordering problems).
+- Allowed syntax (checked on the parsed AST before rendering, anything else => `synthetic_forbidden`): output
+  `{{ ... }}`, text, `{% if/elif/else %}`, names, constants, `secrets[...]` subscripts, filters (whitelist),
+  comparisons, boolean ops, `+` and `~`, conditional expressions, list/tuple literals. Forbidden: `for`, `set`, macros,
+  `call`, `filter` blocks, `import`/`include`/`extends`/`block`, attribute access to anything but the whitelisted
+  filters, calls other than filters, and binary `*`, `**`, `%`, `//`.
+- Filter whitelist (everything else => `synthetic_forbidden`): `lower`, `upper`, `trim`, `replace`, `default`, `length`,
+  `join`, `capitalize`, `title`, `b64encode`, `b64decode`, plus own filters `substr(start, length=None)` (Python slice
+  semantics, negative start allowed, never raises on out-of-range), `urlquote` (`urllib.parse.quote(v, safe="")`;
+  Jinja's own `urlencode` keeps `/` and is therefore NOT offered), `shquote` not offered.
+- Limits: output <= 65536 chars (`synthetic_too_large`), rendered value is converted with `str()`; template syntax error
+  => `synthetic_syntax`; undefined variable/key => `synthetic_undefined` (message: synthetic key name + referenced key
+  name only); any other exception => `synthetic_error`. **Messages are built by us from the error class and names; never
+  from Jinja's message text or any rendered/input value.**
+- Any synthetic error is a cycle error like `key_collision`: nothing is written, last good file stays, status `degraded`
+  (or `error` if never written), event with the code and the synthetic key name.
+
+### State and UI
+
+- `state.json` `keys.synthetic` (optional, sorted names) = synthetic keys in the written set; they are part of
+  `keys.names`, `items` and the shrink guard count. Added/removed/changed diffs work as for real keys.
+- Preview (`/api/preview`) includes synthetic keys. Ingress page marks them (e.g. a "synthetic" badge). Values never.
+- Usage scan unchanged (a synthetic key is a normal key in `secrets.yaml`).
+- Packaging: Alpine `py3-jinja2` (tests use `jinja2` via `uv run --with`). Docs: examples (DSN, URL with `urlquote`,
+  `substr`, `default`), the forbidden list, error codes.
