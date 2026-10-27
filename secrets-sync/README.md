@@ -30,7 +30,7 @@ via the `bw` CLI) and `sops` (age-encrypted YAML). It is our own code, not an up
   atomic rename. The previous file is kept as `secrets.yaml.bak`.
 - File paths from providers (secure notes) are confined to `/config/secrets_files`: absolute paths, `..`, backslashes
   and symlink escapes are rejected, files get mode 600.
-- A shrink guard refuses a write when the item count drops sharply (default: more than 50 %), a key that exists in two
+- A shrink guard refuses a write when the item count drops sharply (default: more than 30 %), a key that exists in two
   sources is an error and nothing is written for that cycle.
 - Triggering sync from the UI (POST) is only possible through Ingress.
 - The add-on holds your vault master password. Restrict access to the add-on configuration and its backups accordingly,
