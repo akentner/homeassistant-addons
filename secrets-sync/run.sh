@@ -11,6 +11,8 @@ export SS_STATE_FILE="${SS_STATE_FILE:-/data/state.json}"
 export SS_DATA_DIR="${SS_DATA_DIR:-/data}"
 export SS_PORT="${SS_PORT:-8099}"
 export SS_AGE_KEY_FILE="${SS_AGE_KEY_FILE:-/addon_config/age.key}"
+SS_ADDON_VERSION="$(bashio::app.version 2>/dev/null || bashio::addon.version 2>/dev/null || echo unknown)"
+export SS_ADDON_VERSION
 export BITWARDENCLI_APPDATA_DIR="${BITWARDENCLI_APPDATA_DIR:-/data/bw}"
 
 if [ ! -s "${SS_OPTIONS}" ]; then
@@ -21,13 +23,16 @@ fi
 umask 077
 mkdir -p "${BITWARDENCLI_APPDATA_DIR}"
 
-# Secrets reach the app (and bw) via env only; jq/bashio never echo them
-if bashio::config.exists 'bitwarden.client_id'; then
-    BW_CLIENTID="$(bashio::config 'bitwarden.client_id')"
-    BW_CLIENTSECRET="$(bashio::config 'bitwarden.client_secret')"
-    BW_PASSWORD="$(bashio::config 'bitwarden.master_password')"
-    export BW_CLIENTID BW_CLIENTSECRET BW_PASSWORD
-fi
+# Secrets reach the app (and bw) via env only. python reads options.json (works without the Supervisor API) and
+# prints quoted export statements; values never touch argv or the log
+eval "$(python3 -I - "${SS_OPTIONS}" <<'PY'
+import json, shlex, sys
+bw = json.load(open(sys.argv[1])).get("bitwarden") or {}
+for var, key in (("BW_CLIENTID", "client_id"), ("BW_CLIENTSECRET", "client_secret"), ("BW_PASSWORD", "master_password")):
+    if bw.get(key):
+        print(f"export {var}={shlex.quote(str(bw[key]))}")
+PY
+)"
 
 # Level is set by the app from options.json (log_level); never log option values here
 umask 022

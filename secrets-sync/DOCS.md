@@ -43,7 +43,13 @@ provider is skipped, the add-on keeps running.
 | `/addon_config/age.key`    | age private key for the SOPS provider (mode 600 or stricter)          |
 | `/data/state.json`         | State contract (no secret values)                                     |
 
-Files in the manifest that vanish from all snapshots are deleted; unknown files in `secrets_files` are never touched.
+The first successful run **replaces an existing `secrets.yaml`**; the old file is kept as `secrets.yaml.bak` (the backup
+is overwritten on every later write, so copy it away if you need the original). Files in the manifest that vanish from
+all snapshots are deleted. Files in `secrets_files` that are not in the manifest (unmanaged) are never touched and never
+overwritten.
+
+On the host, the `/addon_config` folder (age key) is `/addon_configs/<repository-hash>_secrets_sync/` (for example
+reachable through the Samba or SSH add-on). `/config` is the normal Home Assistant configuration directory.
 
 ## Bitwarden provider
 
@@ -87,11 +93,13 @@ with `flatten_separator`. Lists and other non-scalars are reported as problems (
 
 ## Web UI and API
 
-Ingress sidebar entry "Secrets Sync". Optional port `8099/tcp` serves only the read endpoints.
+Ingress sidebar entry "Secrets Sync". Optional port `8099/tcp` serves only `GET /api/health` and `GET /api/status.json`;
+the status page (`GET /`) and all POST routes work through Ingress only. A manual sync is possible when the last attempt
+is at least 10 s old (the interval itself is at least 60 s).
 
 | Route              | Method | Result                                                                                     |
 | ------------------ | ------ | ------------------------------------------------------------------------------------------ |
-| `/`                | GET    | Status page                                                                                |
+| `/`                | GET    | Status page (Ingress only)                                                                 |
 | `/api/status.json` | GET    | Full state (key names only)                                                                |
 | `/api/health`      | GET    | `{"status","age_seconds","stale","items","error_code"}`; 200 if ok and not stale, else 503 |
 | `/api/sync`        | POST   | 202 started, 429 rate limited, `?force=1` lifts the shrink guard once (Ingress only)       |

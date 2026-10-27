@@ -9,7 +9,13 @@ set -euo pipefail
 IMAGE_TAG="secrets-sync-verify:local"
 CONTAINER_NAME="secrets-sync-no-leak-verify"
 WORK_DIR="$(mktemp -d)"
-trap 'docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true; rm -rf "${WORK_DIR}"' EXIT
+cleanup() {
+    docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+    # The container writes root-owned files (bw state); remove them from inside a container first
+    docker run --rm --entrypoint sh -v "${WORK_DIR}:/w" "${IMAGE_TAG}" -c 'rm -rf /w/* /w/.[!.]*' >/dev/null 2>&1 || true
+    rm -rf "${WORK_DIR}"
+}
+trap cleanup EXIT
 
 SENTINELS=(
     "SENTINEL-CLIENTID-7f3a91"
@@ -46,7 +52,14 @@ echo "✓ /api/status.json answered"
 
 # Exercise the other read endpoints too
 HEALTH="$(docker exec "${CONTAINER_NAME}" wget -q -O - http://127.0.0.1:8099/api/health 2>&1 || true)"
-INDEX="$(docker exec "${CONTAINER_NAME}" wget -q -O - http://127.0.0.1:8099/ 2>&1 || true)"
+# GET / is ingress only (Supervisor address + X-Ingress-Path); from inside the container it must be refused.
+# The body of the refusal is still scanned; the rendered page is covered by tests/web.
+INDEX="$(docker exec "${CONTAINER_NAME}" wget -S -O - http://127.0.0.1:8099/ 2>&1 || true)"
+if printf '%s' "${INDEX}" | grep -q 'HTTP/1.[01] 200'; then
+    echo "✗ GET / answered 200 without ingress headers (must be ingress only)"
+    exit 1
+fi
+echo "✓ GET / refused without ingress"
 LOGS="$(docker logs "${CONTAINER_NAME}" 2>&1)"
 STATE_FILE="$(docker exec "${CONTAINER_NAME}" cat /data/state.json 2>/dev/null || true)"
 ENV_DUMP="$(docker exec "${CONTAINER_NAME}" sh -c 'cat /proc/1/cmdline 2>/dev/null | tr "\0" " "; ps -eo args' 2>&1 || true)"
@@ -66,7 +79,7 @@ check() { # $1 = label, $2 = haystack
 check "container logs (log_level debug)" "${LOGS}"
 check "/api/status.json" "${STATUS}"
 check "/api/health" "${HEALTH}"
-check "HTML index" "${INDEX}"
+check "GET / response" "${INDEX}"
 check "/data/state.json" "${STATE_FILE}"
 check "process arguments (argv)" "${ENV_DUMP}"
 check "secrets.yaml" "${SECRETS_YAML}"
