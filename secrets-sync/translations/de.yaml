@@ -1,0 +1,59 @@
+configuration:
+  providers:
+    name: Provider
+    description: Aktive Secret-Quellen in Prioritätsreihenfolge (bitwarden, sops). Die Reihenfolge entscheidet bei
+      Kollisionen mit Policy 'priority'.
+  interval:
+    name: Intervall (Sekunden)
+    description: Zeit zwischen Sync-Zyklen (60 bis 86400).
+  collision_policy:
+    name: Kollisions-Policy
+    description: '''error'' schreibt nichts, wenn ein Schlüssel in zwei Quellen vorkommt; ''priority'' lässt den
+      früheren Provider gewinnen.'
+  shrink_guard_percent:
+    name: Schrumpf-Schutz (%)
+    description: Nicht schreiben, wenn die Anzahl der Einträge gegenüber dem letzten Schreiben um mehr als diesen
+      Anteil sinkt.
+  log_level:
+    name: Log-Level
+    description: Ausführlichkeit des Add-on-Logs. Secret-Werte werden auf keiner Stufe geloggt.
+  bitwarden:
+    name: Bitwarden
+    description: Einstellungen des Bitwarden-Providers.
+    fields:
+      server_url:
+        name: Server-URL
+        description: URL des Bitwarden- oder Vaultwarden-Servers.
+      client_id:
+        name: API Client-ID
+        description: client_id des persönlichen API-Schlüssels (user.xxxx). Wird nur per Umgebungsvariable an bw
+          übergeben.
+      client_secret:
+        name: API Client-Secret
+        description: client_secret des persönlichen API-Schlüssels. Wird nur per Umgebungsvariable an bw übergeben.
+      master_password:
+        name: Master-Passwort
+        description: Zum Entsperren des Tresors. Wird nur per Umgebungsvariable an bw übergeben.
+      organization_id:
+        name: Organisations-ID
+        description: Optional. Sync auf Einträge dieser Organisation beschränken.
+      collection_id:
+        name: Collection-ID
+        description: Optional. Sync auf diese Collection beschränken.
+      key_style:
+        name: Schlüsselstil
+        description: Namensschema der erzeugten Secret-Schlüssel. Bisher gibt es nur 'legacy'.
+      notes_dir:
+        name: Notiz-Verzeichnis
+        description: Secure Notes werden als Dateien unter diesem Verzeichnis im Secret-Dateiverzeichnis abgelegt.
+  sops:
+    name: SOPS
+    description: Einstellungen des SOPS-Providers.
+    fields:
+      file:
+        name: SOPS-Datei
+        description: Pfad der SOPS-verschlüsselten YAML-Datei. Der age-Schlüssel muss unter /addon_config/age.key
+          liegen (Modus 600).
+      flatten_separator:
+        name: Trennzeichen
+        description: Verbindet verschachtelte Schlüssel, z. B. 'db' + 'password' ergibt db_password.

@@ -1,0 +1,61 @@
+name: "Secrets Sync"
+description: "Syncs secrets from Bitwarden or SOPS into /config/secrets.yaml and optional files"
+version: "0.1.0-0"
+slug: "secrets_sync"
+init: false
+arch:
+  - amd64
+image: "ghcr.io/akentner/homeassistant-addons/{arch}-secrets_sync"
+url: "https://github.com/akentner/homeassistant-addons"
+startup: "application"
+boot: "auto"
+ingress: true
+ingress_port: 8099
+panel_icon: "mdi:key-chain"
+panel_title: "Secrets Sync"
+panel_admin: true
+ports:
+  8099/tcp: null
+ports_description:
+  8099/tcp: "Health (/api/health) and status JSON (/api/status.json), optional"
+map:
+  - config:rw
+  - addon_config:rw
+options:
+  providers:
+    - "bitwarden"
+  interval: 300
+  collision_policy: "error"
+  shrink_guard_percent: 50
+  log_level: "info"
+  bitwarden:
+    server_url: "https://bitwarden.com"
+    client_id: ""
+    client_secret: ""
+    master_password: ""
+    organization_id: ""
+    collection_id: ""
+    key_style: "legacy"
+    notes_dir: "bitwarden"
+  sops:
+    file: "/config/secrets.sops.yaml"
+    flatten_separator: "_"
+schema:
+  providers:
+    - "list(bitwarden|sops)"
+  interval: "int(60,86400)"
+  collision_policy: "list(error|priority)"
+  shrink_guard_percent: "int(1,100)"
+  log_level: "list(debug|info|warning|error)"
+  bitwarden?:
+    server_url: "url"
+    client_id: "password"
+    client_secret: "password"
+    master_password: "password"
+    organization_id: "str?"
+    collection_id: "str?"
+    key_style: "list(legacy)"
+    notes_dir: "str"
+  sops?:
+    file: "str"
+    flatten_separator: "str"
