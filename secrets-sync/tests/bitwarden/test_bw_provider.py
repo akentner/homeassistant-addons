@@ -78,10 +78,11 @@ def test_server_change_relogs(fake_bw, bw_cfg):
 
 def test_org_and_collection_filters(fake_bw, bw_cfg):
     fake_bw.set_items([])
-    bw_cfg.update(organization_id="org1", collection_id="col1")
+    coll = "66666666-7777-8888-9999-000000000000"
+    bw_cfg.update(organization_id=ORG, collection_id=coll)
     Provider(bw_cfg).fetch()
     listed = next(c for c in fake_bw.calls if c["argv"][0] == "list")
-    assert listed["argv"] == ["list", "items", "--organizationid", "org1", "--collectionid", "col1"]
+    assert listed["argv"] == ["list", "items", "--organizationid", ORG, "--collectionid", coll]
 
 
 def test_reauth_on_expired_session(fake_bw, bw_cfg):
@@ -182,3 +183,73 @@ def test_validate(bw_cfg, monkeypatch):
     bad = dict(bw_cfg, server_url="ftp://x", notes_dir="../x", key_style="new")
     assert {p.code for p in Provider(bad).validate(bad)} == {
         "bw_invalid_server_url", "bw_invalid_notes_dir", "bw_unsupported_key_style"}
+
+
+ORG = "11111111-2222-3333-4444-555555555555"
+
+
+def test_debug_overview_logs_names_and_ids_but_no_values(fake_bw, bw_cfg, caplog):
+    import logging
+
+    caplog.set_level(logging.DEBUG, logger="secrets_sync")
+    fake_bw.set_items([{"id": "i1", "name": "Router", "type": 1, "organizationId": ORG, "collectionIds": ["c1"],
+                        "notes": "note-value-xyz", "login": {"username": "user-value-xyz", "password": "pw-value-xyz"},
+                        "fields": [{"name": "f", "value": "field-value-xyz"}]}])
+    fake_bw.set_json("organizations", [{"id": ORG, "name": "Home Assistant"}])
+    fake_bw.set_json("collections", [{"id": "c1", "name": "Secrets", "organizationId": ORG}])
+    Provider(bw_cfg).fetch()
+    assert "name='Home Assistant'" in caplog.text and f"id={ORG}" in caplog.text
+    assert "collection id=c1 name='Secrets'" in caplog.text
+    assert "item 'Router' type=login" in caplog.text and "collections=c1" in caplog.text
+    for value in ("note-value-xyz", "user-value-xyz", "pw-value-xyz", "field-value-xyz"):
+        assert value not in caplog.text
+
+
+def test_no_debug_overview_at_info_level(fake_bw, bw_cfg, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO, logger="secrets_sync")
+    fake_bw.set_items([{"id": "i1", "name": "Router", "type": 1, "login": {"password": "pw-value-xyz"}}])
+    Provider(bw_cfg).fetch()
+    assert "bitwarden debug" not in caplog.text and "Router" not in caplog.text
+    assert "1 items listed" in caplog.text
+
+
+def test_empty_filter_result_adds_notice(fake_bw, bw_cfg):
+    fake_bw.set_items([])
+    provider = Provider({**bw_cfg, "organization_id": ORG})
+    provider.fetch()
+    assert any(code == "bw_filter_empty" for _, code, _ in provider.notices)
+
+
+def test_org_and_collection_names_are_resolved_to_uuids(fake_bw, bw_cfg):
+    fake_bw.set_items([])
+    fake_bw.set_json("organizations", [{"id": ORG, "name": "Home Assistant"}, {"id": "x", "name": "Other"}])
+    fake_bw.set_json("collections", [{"id": "c1", "name": "Secrets", "organizationId": ORG},
+                                     {"id": "c2", "name": "Secrets", "organizationId": "x"}])
+    Provider({**bw_cfg, "organization_id": "home assistant", "collection_id": "Secrets"}).fetch()
+    calls = fake_bw.calls_text()
+    assert f"--organizationid {ORG}" in calls and "--collectionid c1" in calls
+
+
+def test_uuid_is_used_as_is_without_lookup(fake_bw, bw_cfg):
+    fake_bw.set_items([])
+    Provider({**bw_cfg, "organization_id": ORG}).fetch()
+    assert "list organizations" not in fake_bw.calls_text()
+
+
+def test_unknown_org_name_lists_visible_names(fake_bw, bw_cfg):
+    fake_bw.set_items([])
+    fake_bw.set_json("organizations", [{"id": ORG, "name": "Home Assistant"}])
+    with pytest.raises(ProviderError) as exc:
+        Provider({**bw_cfg, "organization_id": "Nope"}).fetch()
+    assert exc.value.code == "bw_organization_id_not_found" and "'Home Assistant'" in str(exc.value)
+
+
+def test_ambiguous_collection_name(fake_bw, bw_cfg):
+    fake_bw.set_items([])
+    fake_bw.set_json("collections", [{"id": "c1", "name": "S", "organizationId": ORG},
+                                     {"id": "c2", "name": "S", "organizationId": "x"}])
+    with pytest.raises(ProviderError) as exc:
+        Provider({**bw_cfg, "collection_id": "S"}).fetch()
+    assert exc.value.code == "bw_collection_id_ambiguous"

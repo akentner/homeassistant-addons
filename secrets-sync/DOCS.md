@@ -23,8 +23,8 @@ are manual. The Bitwarden CLI version is pinned in `build.yaml` (`BW_CLI_VERSION
 | `bitwarden.client_id`       | empty                       | API key `client_id` (`user.xxxx`), passed via env                        |
 | `bitwarden.client_secret`   | empty                       | API key `client_secret`, passed via env                                  |
 | `bitwarden.master_password` | empty                       | Unlocks the vault, passed via env                                        |
-| `bitwarden.organization_id` | empty                       | Optional: only items of this organization                                |
-| `bitwarden.collection_id`   | empty                       | Optional: only items of this collection                                  |
+| `bitwarden.organization_id` | empty                       | Optional: only items of this organization (name or UUID)                 |
+| `bitwarden.collection_id`   | empty                       | Optional: only items of this collection (name or UUID)                   |
 | `bitwarden.key_style`       | `legacy`                    | Key naming scheme (only `legacy` so far)                                 |
 | `bitwarden.notes_dir`       | `bitwarden`                 | Directory for secure-note files below `/config/secrets_files`            |
 | `sops.file`                 | `/config/secrets.sops.yaml` | SOPS-encrypted YAML file                                                 |
@@ -63,6 +63,22 @@ derives the decryption key from the master password (`bw unlock`). Without it `b
 values, organization items included. Bitwarden Secrets Manager (`bws`, access tokens) works without a master password,
 but it is a different product with a different data model and Vaultwarden does not support it.
 
+### Organization and collection names (debug log)
+
+`organization_id` and `collection_id` accept the display name or the UUID (the web vault does not show the UUID of an
+organization). Names are resolved with `bw list organizations` / `bw list collections`; an unknown name reports which
+names the service user can see, an ambiguous one asks for the UUID. A filter that matches no items yields zero items and
+the shrink guard then refuses to write (event `bw_filter_empty`). Set `log_level` to `debug` and restart the add-on to
+list what the service user can see, including the UUIDs:
+
+```text
+bitwarden debug: org id=<uuid> name='My Org'
+bitwarden debug: collection id=<uuid> name='Secrets' org=<uuid>
+bitwarden debug: item 'Router' type=login org=<uuid> collections=<uuid> selected=True
+```
+
+Only names, ids, item types and the selection result are logged; no values and no other item fields.
+
 ### Recommended: dedicated service user
 
 Do not use your personal account. Create a separate Bitwarden/Vaultwarden user for the add-on:
@@ -70,7 +86,7 @@ Do not use your personal account. Create a separate Bitwarden/Vaultwarden user f
 1. Give it its own master password and API key (a leak then never exposes your personal vault).
 2. Share only the collection with the secrets, with read-only access, and set `collection_id` (and `organization_id`) to
    that collection.
-3. Use the organization UUID for `organization_id` (not the display name).
+3. Set `organization_id` to the organization name or UUID.
 4. Rotate API key and master password if they ever appear in a log or an error message. Home Assistant prints the
    options into the error text when saving them fails.
 

@@ -188,6 +188,12 @@ class Supervisor:
                 if problem.severity == "error":
                     sigs.append(self._emit("error", problem.code, problem.message, fetched.name))
 
+        # Provider notices (e.g. an empty filter result) must show up even when the cycle then fails
+        for fetched in fetches:
+            provider = self._providers.get(fetched.name)
+            for level, code, message in getattr(provider, "notices", []) or []:
+                sigs.append(self._emit(level, code, message, fetched.name))
+
         fatal: tuple[str, str] | None = None
         merged: Merged | None = None
         collided = next((f for f in failed if f.collision), None)
@@ -228,10 +234,6 @@ class Supervisor:
             sigs.append(self._emit("info", "key_shadowed", f"'{name}' from {loser} shadowed by {winner}"))
         for rel in files_skipped:
             sigs.append(self._emit("warning", "file_unmanaged", f"existing unmanaged file '{rel}' not overwritten"))
-        for fetched in fetches:
-            provider = self._providers.get(fetched.name)
-            for level, code, message in getattr(provider, "notices", []) or []:
-                sigs.append(self._emit(level, code, message, fetched.name))
         st.last_success_at = now
         st.items = len(merged.secrets)
         st.keys["names"] = sorted(merged.secrets)
