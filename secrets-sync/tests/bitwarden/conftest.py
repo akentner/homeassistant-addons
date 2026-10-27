@@ -85,7 +85,11 @@ elif cmd == "list":
     if state["status"] != "unlocked":
         sys.stderr.write("Vault is locked.")
         sys.exit(1)
-    print(json.dumps(load("items.json", [])) if "raw" not in fail else "not json")
+    what = sys.argv[2] if len(sys.argv) > 2 else "items"
+    if what in ("organizations", "collections"):
+        print(json.dumps(load(what + ".json", [])))
+    else:
+        print(json.dumps(load("items.json", [])) if "raw" not in fail else "not json")
 else:
     sys.exit(2)
 '''
@@ -94,6 +98,9 @@ else:
 class FakeBw:
     def __init__(self, path: Path) -> None:
         self.dir = path
+
+    def set_json(self, name: str, data: list) -> None:
+        (self.dir / f"{name}.json").write_text(json.dumps(data))
 
     def set_items(self, items: list) -> None:
         (self.dir / "items.json").write_text(json.dumps(items))
@@ -121,6 +128,9 @@ class FakeBw:
 
     def cmds(self) -> list[str]:
         return [c["argv"][0] for c in self.calls]
+
+    def calls_text(self) -> str:
+        return "\n".join(" ".join(c["argv"]) for c in self.calls)
 
 
 @pytest.fixture

@@ -391,3 +391,13 @@ def test_no_values_in_logs_or_state(tmp_path, caplog):
     blob = caplog.text + sup.cfg.state_file.read_text() + sup2.cfg.state_file.read_text()
     for value in (*secret_vals.values(), "dup-unique-value"):
         assert value not in blob
+
+
+def test_provider_notice_is_emitted_when_cycle_fails(tmp_path):
+    prov = FakeProvider("bitwarden", {})
+    prov.notices = [("warning", "bw_filter_empty", "filter matched no items")]
+    sup = make(tmp_path, {"bitwarden": prov})
+    assert sup.run_once() == "error"
+    data = state(sup)
+    assert data["error_code"] == "shrink_guard"
+    assert any(e["code"] == "bw_filter_empty" for e in data["events"])

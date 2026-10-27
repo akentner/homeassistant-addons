@@ -21,6 +21,8 @@ log = logging.getLogger("secrets_sync")
 DEFAULT_SERVER = "https://bitwarden.com"
 _TR_SPACE = str.maketrans({c: " " for c in "?:&,%@-"})
 _TR_UNDERSCORE = str.maketrans({c: "_" for c in "[]{}#*!|> "})
+_UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+_ITEM_TYPES = {1: "login", 2: "note", 3: "card", 4: "identity"}
 _LOCKED_MARKERS = ("vault is locked", "not logged in")
 _CRED_ENV = (
     ("client_id", "BW_CLIENTID", "bw_missing_client_id"),
@@ -163,10 +165,12 @@ class Provider:
         if sync.rc != 0:
             raise ProviderError("bw_sync_failed", "bw sync failed")
         args = ["list", "items"]
-        if self._cfg.get("organization_id"):
-            args += ["--organizationid", str(self._cfg["organization_id"])]
-        if self._cfg.get("collection_id"):
-            args += ["--collectionid", str(self._cfg["collection_id"])]
+        org_id = self._resolve("organization_id", "organizations", None)
+        if org_id:
+            args += ["--organizationid", org_id]
+        coll_id = self._resolve("collection_id", "collections", org_id)
+        if coll_id:
+            args += ["--collectionid", coll_id]
         listed = self._run(args)
         if listed.locked:
             raise _Expired
@@ -178,7 +182,69 @@ class Provider:
             raise ProviderError("bw_invalid_json", "bw list returned invalid JSON") from None
         if not isinstance(items, list):
             raise ProviderError("bw_invalid_json", "bw list returned unexpected JSON")
+        filtered = len(args) > 2
+        log.info("bitwarden: %d items listed (organization filter %s, collection filter %s)", len(items),
+                 "set" if self._cfg.get("organization_id") else "off",
+                 "set" if self._cfg.get("collection_id") else "off")
+        if not items and filtered:
+            self.notices.append(("warning", "bw_filter_empty", "the organization/collection filter matched no "
+                                 "items: check organization_id / collection_id (log_level debug lists what is visible)"))
+        if log.isEnabledFor(logging.DEBUG):
+            self._debug_overview(items)
         return self._build(items)
+
+    # ------------------------------------------------------------ debug
+
+    def _resolve(self, option: str, what: str, org_id: str | None) -> str | None:
+        """Accept a UUID or the display name of an organization/collection and return the UUID."""
+        wanted = str(self._cfg.get(option) or "").strip()
+        if not wanted or _UUID.match(wanted):
+            return wanted or None
+        found = self._json_list(["list", what])
+        if found is None:
+            raise ProviderError("bw_list_failed", f"bw list {what} failed (needed to resolve {option})")
+        if org_id:
+            found = [f for f in found if f.get("organizationId") == org_id]
+        for match in (lambda n: n == wanted, lambda n: n.casefold() == wanted.casefold()):
+            hits = [f for f in found if isinstance(f.get("name"), str) and match(f["name"])]
+            if len(hits) == 1:
+                return str(hits[0].get("id"))
+            if len(hits) > 1:
+                raise ProviderError(f"bw_{option}_ambiguous", f"{option} '{wanted}' matches {len(hits)} {what}; "
+                                    "use the UUID (log_level debug lists the ids)")
+        names = ", ".join(repr(f.get("name")) for f in found)
+        raise ProviderError(f"bw_{option}_not_found", f"{option} '{wanted}' not found; the service user sees "
+                            f"these {what}: {names or 'none'}")
+
+    def _json_list(self, args: list[str]) -> list[dict[str, Any]] | None:
+        res = self._run(args)
+        if res.rc != 0:
+            return None
+        try:
+            data = json.loads(res.stdout)
+        except ValueError:
+            return None
+        return [d for d in data if isinstance(d, dict)] if isinstance(data, list) else None
+
+    def _debug_overview(self, selected: list[Any]) -> None:
+        """Log organizations, collections and item names with ids. Never values or any other item field."""
+        picked = {i.get("id") for i in selected if isinstance(i, dict)}
+        orgs = self._json_list(["list", "organizations"])
+        log.debug("bitwarden debug: organizations: %s", "unavailable" if orgs is None else len(orgs))
+        for org in orgs or []:
+            log.debug("bitwarden debug: org id=%s name=%r", org.get("id"), org.get("name"))
+        colls = self._json_list(["list", "collections"])
+        log.debug("bitwarden debug: collections: %s", "unavailable" if colls is None else len(colls))
+        for coll in colls or []:
+            log.debug("bitwarden debug: collection id=%s name=%r org=%s", coll.get("id"), coll.get("name"),
+                      coll.get("organizationId"))
+        everything = self._json_list(["list", "items"])
+        log.debug("bitwarden debug: vault items (unfiltered): %s", "unavailable" if everything is None
+                  else len(everything))
+        for item in everything or []:
+            log.debug("bitwarden debug: item %r type=%s org=%s collections=%s selected=%s", item.get("name"),
+                      _ITEM_TYPES.get(item.get("type"), item.get("type")), item.get("organizationId") or "-",
+                      ",".join(item.get("collectionIds") or []) or "-", item.get("id") in picked)
 
     # ------------------------------------------------------------ mapping
 
