@@ -156,3 +156,13 @@ fonts/scripts/CDN, works under any ingress prefix, light/dark.
 
 pytest green (`python3 -m pytest tests/<area>`), `make lint` clean for owned files, small commits on `feat/secrets-sync`
 staged by path, no `Co-Authored-By`, no hand-edited versions.
+
+## Decisions (control, after first agent round)
+
+- `Controller.trigger_sync(force: bool = False)`; manual sync rate limit is 10 s (the 60 s minimum applies to
+  `interval`).
+- `GET /` is ingress only (403 otherwise); the optional TCP port serves only `/api/health` and `/api/status.json`.
+- Provider `fetch()` raises `ProviderError` for unsupported values / flatten collisions (no partial snapshots).
+- Files present in `SS_FILES_DIR` but not in the manifest are never overwritten (`file_unmanaged`, degraded).
+- `run.sh` exports `SS_ADDON_VERSION`. First run replaces an existing `secrets.yaml` (previous one kept as `.bak`).
+- Child processes of the sops provider do not inherit `BW_*` variables.

@@ -10,8 +10,10 @@ from typing import Any, Protocol
 
 
 class Controller(Protocol):
-    def trigger_sync(self) -> bool:
-        """Request an immediate sync. Returns False if rate limited (min interval 60 s) or one is running."""
+    def trigger_sync(self, force: bool = False) -> bool:
+        """Request an immediate sync. Returns False if rate limited (last attempt < 10 s ago) or one is running.
+
+        force=True lifts the shrink-guard percentage check once (never the 0-items check)."""""
         ...
 
     def preview(self) -> dict[str, Any]:
