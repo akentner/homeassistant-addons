@@ -30,6 +30,12 @@ USAGE_MIN_GAP = 60  # seconds between usage scans (error backoff cycles run more
 PREVIEW_WAIT = 90
 
 
+class SyntheticFailure(Exception):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
 @dataclass
 class _Fetch:
     name: str
@@ -110,9 +116,17 @@ class Supervisor:
             except MergeError as exc:
                 out["errors"].append({"provider": None, "code": exc.code, "message": self._clean(str(exc))})
                 return out
+            try:
+                synth = self._synthetic(merged.secrets)
+            except SyntheticFailure as exc:
+                out["errors"].append({"provider": None, "code": exc.code, "message": str(exc)})
+                return out
+            merged.secrets.update(synth)
             current = read_secrets(self.cfg.secrets_file) or {}
             added, removed, changed = _diff(current, merged.secrets)
             out.update(added=added, removed=removed, changed=changed)
+            if self.cfg.synthetic_keys:
+                out["synthetic"] = sorted(synth)
             return out
         finally:
             self._cycle_lock.release()
@@ -293,6 +307,14 @@ class Supervisor:
                 fatal = (exc.code, str(exc))
         wrote = False
         files_skipped: list[str] = []
+        synth_names: list[str] = []
+        if merged is not None and fatal is None and self.cfg.synthetic_keys:
+            try:
+                synth = self._synthetic(merged.secrets)
+                merged.secrets.update(synth)
+                synth_names = sorted(synth)
+            except SyntheticFailure as exc:
+                fatal = (exc.code, str(exc))
         if merged is not None and fatal is None:
             items = len(merged.secrets)
             if check_shrink(items, self._last_items, self.cfg.shrink_guard_percent, force):
@@ -322,6 +344,10 @@ class Supervisor:
         st.last_success_at = now
         st.items = len(merged.secrets)
         st.keys["names"] = sorted(merged.secrets)
+        if self.cfg.synthetic_keys:
+            st.keys["synthetic"] = synth_names
+        else:
+            st.keys.pop("synthetic", None)
         was_ok = st.status == "ok"
         if failed or files_skipped:
             code = failed[0].code if failed else "file_unmanaged"
@@ -334,6 +360,22 @@ class Supervisor:
         elif not was_ok and st.status != "starting":
             st.add_event("info", "sync_ok", f"sync recovered ({st.items} items)")
         self._finish(now, "ok", None, sigs)
+
+    def _synthetic(self, secrets: Mapping[str, str]) -> dict[str, str]:
+        """Render synthetic keys from the merged real keys. Raises SyntheticFailure (code + names only)."""
+        if not self.cfg.synthetic_keys:
+            return {}
+        try:
+            from app.engine import synthetic
+        except ImportError:
+            raise SyntheticFailure("synthetic_unavailable", "synthetic keys need jinja2, which is not installed") \
+                from None
+        try:
+            out = synthetic.apply(secrets, self.cfg.synthetic_keys)
+        except synthetic.SyntheticError as exc:
+            raise SyntheticFailure(exc.code, str(exc)) from None
+        self.redactor.register(out.values())
+        return out
 
     def _after_write(self, merged: Merged, previous: dict[str, str], wrote: bool) -> None:
         self._last_written = dict(merged.secrets)
