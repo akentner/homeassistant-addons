@@ -85,8 +85,8 @@ options:
     flatten_separator: "_" # str
 ```
 
-Both blocks are optional in the schema (`bitwarden: {...}?`); `validate()` reports missing parts as `Problem`s (shown in
-UI/state), the add-on keeps running.
+Both blocks are always present in `options` (HA cannot mark a dict key optional; `key?:` is read literally), with empty
+defaults; `validate()` reports missing parts as `Problem`s (shown in UI/state), the add-on keeps running.
 
 ## Engine semantics
 

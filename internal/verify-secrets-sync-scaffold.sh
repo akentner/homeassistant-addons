@@ -28,6 +28,8 @@ echo "==> Manifest checks"
 [ "$(yget "${ADDON_DIR}/config.yaml" slug)" = "secrets_sync" ] || fail "slug is not secrets_sync"
 [ "$(yget "${ADDON_DIR}/config.yaml" ingress_port)" = "8099" ] || fail "ingress_port is not 8099"
 [ "$(yget "${ADDON_DIR}/config.yaml" arch)" = "1" ] || fail "arch must be amd64 only"
+# HA reads a "key?" schema key literally as a required option named "key?" (options could not be saved)
+! grep -Eq '^[[:space:]]+[A-Za-z_]+\?:' "${ADDON_DIR}/config.yaml" || fail "config.yaml schema has a key ending in '?'"
 [ ! -e "${ADDON_DIR}/.upstream.yaml" ] || fail ".upstream.yaml must not exist (own code)"
 for f in config.yaml build.yaml Dockerfile run.sh README.md DOCS.md CHANGELOG.md icon.png logo.png \
     translations/en.yaml translations/de.yaml; do
