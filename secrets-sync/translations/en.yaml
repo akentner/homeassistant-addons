@@ -16,6 +16,10 @@ configuration:
   log_level:
     name: Log level
     description: Verbosity of the add-on log. Secret values are never logged, at any level.
+  usage_scan:
+    name: Secret usage scan
+    description: Show where '!secret' keys are used. 'config' scans the Home Assistant config, 'all' also reads the
+      configs of other add-ons (read-only). Only key names and file positions are stored, never values.
   bitwarden:
     name: Bitwarden
     description: Settings of the Bitwarden provider.

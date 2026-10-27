@@ -32,6 +32,8 @@ via the `bw` CLI) and `sops` (age-encrypted YAML). It is our own code, not an up
   and symlink escapes are rejected, files get mode 600.
 - A shrink guard refuses a write when the item count drops sharply (default: more than 30 %), a key that exists in two
   sources is an error and nothing is written for that cycle.
+- The usage scan reads YAML files of `/config` and, with `usage_scan: all`, read-only the other add-ons' configs. It
+  stores only key names and file/line positions, never file contents or values.
 - Triggering sync from the UI (POST) is only possible through Ingress.
 - The add-on holds your vault master password. Restrict access to the add-on configuration and its backups accordingly,
   and prefer a dedicated Bitwarden account or collection with read-only access.
@@ -46,5 +48,5 @@ See [DOCS.md][docs] for all options, the key naming scheme and the Gatus conditi
 [docs]: DOCS.md
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
-[release-shield]: https://img.shields.io/badge/version-v0.1.2-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v0.1.2
+[release-shield]: https://img.shields.io/badge/version-v0.2.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v0.2.0

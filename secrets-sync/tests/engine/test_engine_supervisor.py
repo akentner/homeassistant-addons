@@ -83,7 +83,9 @@ def make(tmp_path, providers, clock=None, **over):
                  shrink_guard_percent=over.pop("shrink_guard_percent", 50), log_level="info",
                  provider_cfg={}, secrets_file=tmp_path / "config" / "secrets.yaml",
                  files_dir=tmp_path / "config" / "files", state_file=tmp_path / "data" / "state.json",
-                 data_dir=tmp_path / "data", port=0, version="0.1.0", problems=over.pop("problems", ()))
+                 data_dir=tmp_path / "data", port=0, version="0.1.0", problems=over.pop("problems", ()),
+                 usage_scan=over.pop("usage_scan", "off"),
+                 addon_configs_dir=over.pop("addon_configs_dir", tmp_path / "addon_configs"))
     return Supervisor(cfg, providers=providers, clock=clock or Clock(), probe_versions=False)
 
 
@@ -401,3 +403,38 @@ def test_provider_notice_is_emitted_when_cycle_fails(tmp_path):
     data = state(sup)
     assert data["error_code"] == "shrink_guard"
     assert any(e["code"] == "bw_filter_empty" for e in data["events"])
+
+
+def test_usage_scan_reports_missing_unused_and_never_values(tmp_path):
+    cfgdir = tmp_path / "config"
+    (cfgdir / "packages").mkdir(parents=True)
+    (cfgdir / "packages" / "mqtt.yaml").write_text("pw: !secret a\nother: !secret gone\n")
+    sup = make(tmp_path, {"bitwarden": FakeProvider("bitwarden", {"a": "value-aaa", "b": "value-bbb"})},
+               usage_scan="config")
+    assert sup.run_once() == "ok"
+    data = state(sup)
+    usage = data["usage"]
+    assert usage["enabled"] is True and usage["roots"] == ["config"]
+    assert usage["used"]["a"]["refs"] == [{"file": "packages/mqtt.yaml", "line": 1}]
+    assert list(usage["missing"]) == ["gone"] and usage["unused"] == ["b"]
+    assert any(e["code"] == "secret_missing" and "gone" in e["message"] for e in data["events"])
+    assert "value-aaa" not in json.dumps(data) and "value-bbb" not in json.dumps(data)
+
+
+def test_usage_scan_off_by_default_and_event_not_repeated(tmp_path):
+    clock = Clock()
+    sup = make(tmp_path, {"bitwarden": FakeProvider("bitwarden", {"a": "1"})}, clock=clock)
+    sup.run_once()
+    assert state(sup)["usage"] == {"enabled": False}
+    cfgdir = tmp_path / "config"
+    (cfgdir / "x.yaml").write_text("k: !secret gone\n")
+    sup2 = make(tmp_path / "second", {"bitwarden": FakeProvider("bitwarden", {"a": "1"})}, clock=clock,
+                usage_scan="config")
+    (tmp_path / "second" / "config").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "second" / "config" / "x.yaml").write_text("k: !secret gone\n")
+    sup2.run_once()
+    clock.now += 100
+    sup2.run_once()
+    clock.now += 100
+    sup2.run_once()
+    assert [e["code"] for e in state(sup2)["events"]].count("secret_missing") == 1

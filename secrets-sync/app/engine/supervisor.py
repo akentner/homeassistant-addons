@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
 from app.engine import config as config_mod
+from app.engine import usage as usage_mod
 from app.engine.config import Config, ProviderLoadError
 from app.engine.guard import check_shrink
 from app.engine.merge import Merged, MergeError, merge
@@ -25,6 +26,7 @@ TOOLS = {"bitwarden": "bw", "sops": "sops"}
 HEARTBEAT = 30  # seconds between state refreshes while idle (keeps age_seconds honest)
 MANUAL_MIN_GAP = 10  # a manual sync is allowed when the last attempt is older than this
 BACKOFF_START = 30
+USAGE_MIN_GAP = 60  # seconds between usage scans (error backoff cycles run more often)
 PREVIEW_WAIT = 90
 
 
@@ -60,6 +62,8 @@ class Supervisor:
         self._pinfo: dict[str, dict[str, Any]] = {}
         self._last_written: dict[str, str] | None = None
         self._active: set[str] = set()
+        self._usage_at: float | None = None
+        self._usage_sigs: list[str] = []
         versions = {"addon": config.version}
         if probe_versions:
             versions.update(_probe_versions(config.providers))
@@ -267,6 +271,7 @@ class Supervisor:
                                                               self.cfg.interval)
         self._next_at = now + delay
         st.next_sync_at = self._next_at
+        self._refresh_usage(now)
         for name in self.cfg.providers:
             st.providers[name] = self._pinfo.get(name) or {
                 "status": "error", "last_success_at": None, "items": 0, "error_code": code, "problems": [],
@@ -278,6 +283,34 @@ class Supervisor:
         st.save()
         log.log(logging.INFO if status == "ok" else logging.WARNING, "sync finished: status=%s code=%s items=%d",
                 status, code, st.items)
+
+    def _refresh_usage(self, now: float) -> None:
+        """Scan YAML files for `!secret` references (names and positions only). Throttled, never raises."""
+        if self.cfg.usage_scan == "off":
+            return
+        self._active.update(self._usage_sigs)  # keeps an unchanged condition from being re-announced
+        if self._usage_at is not None and now - self._usage_at < USAGE_MIN_GAP:
+            return
+        self._usage_at = now
+        try:
+            known = read_secrets(self.cfg.secrets_file)
+            if known is None:
+                return
+            roots = [("config", self.cfg.secrets_file.parent)]
+            if self.cfg.usage_scan == "all":
+                roots.append(("addon_configs", self.cfg.addon_configs_dir))
+            block = usage_mod.summarize(usage_mod.scan(roots), set(known))
+            block["scanned_at"] = iso(now)
+            self.state.usage = block
+            missing = sorted(block["missing"])  # type: ignore[arg-type]
+            if missing:
+                self._usage_sigs = [self._emit("warning", "secret_missing", "referenced but not in secrets.yaml: "
+                                               + ", ".join(missing[:20]) + (" ..." if len(missing) > 20 else ""))]
+            else:
+                self._usage_sigs = []
+            self._active.update(self._usage_sigs)
+        except Exception as exc:  # diagnostics must never break the sync
+            log.warning("usage scan failed (%s)", type(exc).__name__)
 
     def _emit(self, level: str, code: str, message: str, provider: str | None = None) -> str:
         """Add an event once per active condition; returns the dedupe signature."""

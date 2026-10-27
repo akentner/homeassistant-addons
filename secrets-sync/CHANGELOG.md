@@ -3,6 +3,13 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.2.0-0] - 2026-10-27
+
+- Feature: secret usage. The add-on scans YAML files for `!secret <key>` and shows keys that are referenced but missing,
+  unused keys and the use count with `file:line` locations in the web page (`usage` in `state.json`). New option
+  `usage_scan` (`off`, `config`, `all`, default `all`); `all` maps the configs of other add-ons read-only
+  (`all_addon_configs:ro`). Event `secret_missing` for referenced keys that are not in `secrets.yaml`.
+
 ## [0.1.2-0] - 2026-10-27
 
 - Debug: with `log_level: debug` the Bitwarden provider logs organizations (id, name), collections (id, name,

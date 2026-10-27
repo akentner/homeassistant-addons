@@ -17,6 +17,7 @@ PROVIDER_MODULES = {
 }
 COLLISION_POLICIES = ("error", "priority")
 LOG_LEVELS = ("debug", "info", "warning", "error")
+USAGE_SCOPES = ("off", "config", "all")
 MIN_INTERVAL = 60
 
 
@@ -35,6 +36,8 @@ class Config:
     port: int
     version: str
     problems: tuple[Problem, ...] = field(default_factory=tuple)
+    usage_scan: str = "off"  # off | config | all (load_config defaults to all)
+    addon_configs_dir: Path = Path("/addon_configs")
 
 
 class ProviderLoadError(Exception):
@@ -111,6 +114,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         port=port,
         version=env.get("SS_ADDON_VERSION", "unknown"),
         problems=tuple(problems),
+        usage_scan=_choice(options.get("usage_scan"), "all", USAGE_SCOPES, "usage_scan", problems),
+        addon_configs_dir=Path(env.get("SS_ADDON_CONFIGS_DIR", "/addon_configs")),
     )
 
 
