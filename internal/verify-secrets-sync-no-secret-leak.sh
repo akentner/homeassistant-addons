@@ -8,9 +8,10 @@ set -euo pipefail
 
 IMAGE_TAG="secrets-sync-verify:local"
 CONTAINER_NAME="secrets-sync-no-leak-verify"
+GIT_CONTAINER_NAME="secrets-sync-no-leak-verify-git"
 WORK_DIR="$(mktemp -d)"
 cleanup() {
-    docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+    docker rm -f "${CONTAINER_NAME}" "${GIT_CONTAINER_NAME}" >/dev/null 2>&1 || true
     # The container writes root-owned files (bw state); remove them from inside a container first
     docker run --rm --entrypoint sh -v "${WORK_DIR}:/w" "${IMAGE_TAG}" -c 'rm -rf /w/* /w/.[!.]*' >/dev/null 2>&1 || true
     rm -rf "${WORK_DIR}"
@@ -21,6 +22,7 @@ SENTINELS=(
     "SENTINEL-CLIENTID-7f3a91"
     "SENTINEL-CLIENTSECRET-b24c08"
     "SENTINEL-MASTERPW-e5d176"
+    "SENTINEL-GITTOKEN-91c0de"
 )
 
 mkdir -p "${WORK_DIR}/config" "${WORK_DIR}/addon_config" "${WORK_DIR}/data"
@@ -105,6 +107,97 @@ for s in "${SENTINELS[@]}"; do
     fi
 done
 echo "✓ no sentinel persisted outside options.json"
+
+# ---------------------------------------------------------------------------------------------------------------
+# Phase 2: SOPS git source (local file:// repository, no network) with a sentinel https token in the options
+# ---------------------------------------------------------------------------------------------------------------
+echo "==> Phase 2: SOPS git source + change check"
+GW="${WORK_DIR}/git"
+mkdir -p "${GW}/data" "${GW}/config" "${GW}/addon_config" "${GW}/repos"
+
+# Create an age key, a SOPS-encrypted file and a git repository inside the image (root-owned, like the app runs)
+docker run --rm --entrypoint sh -v "${GW}:/w" "${IMAGE_TAG}" -c '
+    set -e
+    age-keygen -o /w/addon_config/age.key >/dev/null 2>&1
+    chmod 600 /w/addon_config/age.key
+    PUB="$(age-keygen -y /w/addon_config/age.key)"
+    git init -q -b main /w/repos/secrets
+    cd /w/repos/secrets
+    printf "db:\n  password: first-value\nplain: hello\n" > secrets.sops.yaml
+    sops --encrypt --age "${PUB}" --in-place secrets.sops.yaml
+    git add secrets.sops.yaml
+    git -c user.name=t -c user.email=t@t commit -q -m init
+' || { echo "✗ could not create test repository"; exit 1; }
+
+# The https token is set although the repository is a local file:// URL; it must never show up anywhere
+cat > "${GW}/data/options.json" <<JSON
+{"providers":["sops"],"interval":60,"check_interval":30,"collision_policy":"error","shrink_guard_percent":50,
+ "log_level":"debug","usage_scan":"off",
+ "sops":{"source":"git","file":"/config/secrets.sops.yaml","flatten_separator":"_",
+ "git_url":"file:///repos/secrets","git_branch":"main","git_path":"secrets.sops.yaml",
+ "git_username":"x-access-token","git_token":"${SENTINELS[3]}"}}
+JSON
+
+docker run -d --name "${GIT_CONTAINER_NAME}" -e SS_GIT_ALLOW_PROTOCOL=file \
+    -v "${GW}/data:/data" -v "${GW}/config:/config" -v "${GW}/addon_config:/addon_config" \
+    -v "${GW}/repos:/repos" "${IMAGE_TAG}" >/dev/null
+
+gstatus() { docker exec "${GIT_CONTAINER_NAME}" wget -q -O - http://127.0.0.1:8099/api/status.json 2>/dev/null || true; }
+gsecrets() { docker exec "${GIT_CONTAINER_NAME}" cat /config/secrets.yaml 2>/dev/null || true; }
+
+# First sync: clone, decrypt, write
+GOT=""
+for _ in $(seq 1 60); do
+    GOT="$(gsecrets)"
+    printf '%s' "${GOT}" | grep -q 'db_password.*first-value' && break
+    sleep 1
+done
+printf '%s' "${GOT}" | grep -q 'db_password.*first-value' || {
+    echo "✗ first git sync did not write db_password"; gstatus; docker logs "${GIT_CONTAINER_NAME}" 2>&1 | tail -15; exit 1; }
+echo "✓ git source synced (clone + sops decrypt)"
+
+# New commit: the change check (30 s) must start a sync well before the 60 s interval
+docker run --rm --entrypoint sh -v "${GW}:/w" "${IMAGE_TAG}" -c '
+    set -e
+    cd /w/repos/secrets
+    PUB="$(age-keygen -y /w/addon_config/age.key)"
+    printf "db:\n  password: second-value\nplain: hello\n" > secrets.sops.yaml
+    sops --encrypt --age "${PUB}" --in-place secrets.sops.yaml
+    git -c user.name=t -c user.email=t@t commit -q -am change
+' || { echo "✗ could not commit change"; exit 1; }
+CHANGED_AT="$(date +%s)"
+GOT=""
+for _ in $(seq 1 75); do
+    GOT="$(gsecrets)"
+    printf '%s' "${GOT}" | grep -q 'db_password.*second-value' && break
+    sleep 1
+done
+printf '%s' "${GOT}" | grep -q 'db_password.*second-value' || {
+    echo "✗ change was not picked up"; gstatus; docker logs "${GIT_CONTAINER_NAME}" 2>&1 | tail -15; exit 1; }
+echo "✓ change picked up after $(( $(date +%s) - CHANGED_AT )) s"
+GSTATUS="$(gstatus)"
+printf '%s' "${GSTATUS}" | grep -q 'source_changed' && echo "✓ event source_changed recorded" ||
+    echo "! source_changed event not in status (interval fallback may have won the race)"
+
+GLOGS="$(docker logs "${GIT_CONTAINER_NAME}" 2>&1)"
+GSTATE="$(docker exec "${GIT_CONTAINER_NAME}" cat /data/state.json 2>/dev/null || true)"
+GPROCS="$(docker exec "${GIT_CONTAINER_NAME}" sh -c 'ps -eo args' 2>&1 || true)"
+check "git container logs (log_level debug)" "${GLOGS}"
+check "git /api/status.json" "${GSTATUS}"
+check "git /data/state.json" "${GSTATE}"
+check "git process arguments (argv)" "${GPROCS}"
+# The URL of the repository must not be logged at info level either
+if printf '%s' "${GLOGS}" | grep -v ' DEBUG ' | grep -qF 'file:///repos/secrets'; then
+    echo "✗ git URL logged above debug level"
+    exit 1
+fi
+echo "✓ git URL not logged above debug level"
+# Neither the repository checkout cache nor the persisted data may contain the token
+if docker exec "${GIT_CONTAINER_NAME}" grep -rqF -- "${SENTINELS[3]}" /data/git /data/known_hosts 2>/dev/null; then
+    echo "✗ token persisted in the git cache"
+    exit 1
+fi
+echo "✓ token not persisted in git cache"
 
 echo ""
 echo "All secrets-sync no-secret-leak verifications passed."
