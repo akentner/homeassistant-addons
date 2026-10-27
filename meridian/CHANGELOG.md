@@ -1,3 +1,45 @@
+## [1.86.0](https://github.com/rynfar/meridian/compare/meridian-v1.85.0...meridian-v1.86.0) (2026-10-26)
+
+### Features
+
+- add the Meridian Pi extension and meridian setup --client pi ([#1408](https://github.com/rynfar/meridian/issues/1408))
+  ([bd02173](https://github.com/rynfar/meridian/commit/bd021733deb054bbb95cacc0383fa816469e5773))
+- read x-session-id as conversation identity on /v1/chat/completions
+  ([#1426](https://github.com/rynfar/meridian/issues/1426))
+  ([a5a939b](https://github.com/rynfar/meridian/commit/a5a939be8e3bd43e73b8750963900568530e6445))
+
+### Bug Fixes
+
+- **antigravity:** compact older assistant text in active tool loops
+  ([#1437](https://github.com/rynfar/meridian/issues/1437))
+  ([075e9e4](https://github.com/rynfar/meridian/commit/075e9e4736d3457e12dda1a0108531b9b5843e96))
+- **chatgpt:** release a turn that fails before reaching the backend
+  ([#1440](https://github.com/rynfar/meridian/issues/1440))
+  ([c84af24](https://github.com/rynfar/meridian/commit/c84af243708578c0f15c92acad90fa68e364aaa9))
+- **pi:** tier in-process pi-subagents children whose prompt is appended
+  ([#1453](https://github.com/rynfar/meridian/issues/1453))
+  ([5359f63](https://github.com/rynfar/meridian/commit/5359f63404645e6f44b335c5ba4f0dc755f5f7c5))
+- require the Pi scrub in the live Pi harness and tell Pi users they need it
+  ([#1452](https://github.com/rynfar/meridian/issues/1452))
+  ([cb767de](https://github.com/rynfar/meridian/commit/cb767defa07c27e1459f7616cfa36129584a5db4))
+
+### Upgrade notes
+
+- **`x-session-id` on `/v1/chat/completions` is now conversation identity
+  ([#1426](https://github.com/rynfar/meridian/issues/1426)).** A client that already sends `x-session-id` (for example
+  for OpenRouter) now resumes one SDK session per value instead of replaying its full history each turn. Turns under one
+  value are serialized and must append to the same history; a turn that lost the race gets HTTP 400
+  `This session advanced while the request was waiting`. Send a distinct value per conversation, or omit the header.
+  `x-opencode-session` and `x-session-affinity` still take precedence. See
+  [docs/agents.md](https://github.com/rynfar/meridian/blob/meridian-v1.86.0/docs/agents.md).
+- **Pi extension.** Run `meridian setup --client pi`, then pick a model under the `meridian` provider. Older
+  `models.json` setups keep working and log one warning suggesting the extension. On a Claude subscription, Claude can
+  refuse Pi's system prompt as third-party traffic unless Meridian also loads the
+  [`@rynfar/meridian-plugin-pi-scrub`](https://github.com/rynfar/meridian/blob/meridian-v1.86.0/docs/plugins.md#official-plugins)
+  server plugin.
+- **Desktop.** No signed and notarized desktop download is attached to this release: the release workflow's Apple
+  notarization credential was rejected (HTTP 401).
+
 ## [1.85.0](https://github.com/rynfar/meridian/compare/meridian-v1.84.0...meridian-v1.85.0) (2026-10-21)
 
 ### Features
