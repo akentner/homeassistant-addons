@@ -4,6 +4,7 @@ import json
 import logging
 import stat
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -84,7 +85,7 @@ def make(tmp_path, providers, clock=None, **over):
                  provider_cfg={}, secrets_file=tmp_path / "config" / "secrets.yaml",
                  files_dir=tmp_path / "config" / "files", state_file=tmp_path / "data" / "state.json",
                  data_dir=tmp_path / "data", port=0, version="0.1.0", problems=over.pop("problems", ()),
-                 usage_scan=over.pop("usage_scan", "off"),
+                 usage_scan=over.pop("usage_scan", "off"), check_interval=over.pop("check_interval", 0),
                  addon_configs_dir=over.pop("addon_configs_dir", tmp_path / "addon_configs"))
     return Supervisor(cfg, providers=providers, clock=clock or Clock(), probe_versions=False)
 
@@ -352,6 +353,11 @@ def test_trigger_sync_forced_through_loop(tmp_path):
     sup.run_once = spy  # type: ignore[method-assign]
     thread = threading.Thread(target=sup.run_forever)
     thread.start()
+    deadline = time.time() + 10
+    while sup._last_attempt <= clock.now - 11 and time.time() < deadline:  # wait for the loop's first cycle
+        time.sleep(0.01)
+    time.sleep(0.2)
+    clock.now += 11
     assert sup.trigger_sync(force=True)
     thread.join(10)
     assert done.is_set() and secrets(sup) == {"k0": "v"}

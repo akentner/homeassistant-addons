@@ -63,12 +63,19 @@ class Supervisor:
         self._last_written: dict[str, str] | None = None
         self._active: set[str] = set()
         self._usage_at: float | None = None
+        self._tokens: dict[str, str] = {}  # check_token seen at the last successful fetch per provider
+        self._next_probe: float | None = None
+        self._check_errors: dict[str, str] = {}  # provider -> error code currently announced
+        self._announced: dict[str, str] = {}  # provider -> token whose change was announced
         self._usage_sigs: list[str] = []
         versions = {"addon": config.version}
         if probe_versions:
             versions.update(_probe_versions(config.providers))
         self.state = StateStore(config.state_file, config.interval, versions, clock)
         self.state.load_previous()
+        if config.check_interval > 0:
+            self.state.check = {"enabled": True, "interval": config.check_interval, "last_check_at": None,
+                                "result": None, "error_code": None, "triggered_syncs": 0}
         self._last_items: int | None = self.state.items if self.state.last_success_at is not None else None
         self.redactor.register(_env_secrets())
 
@@ -125,14 +132,87 @@ class Supervisor:
             self._sleep()
 
     def _sleep(self) -> None:
+        """Wait for the next due sync or change probe (whichever is earlier); wake on trigger or stop()."""
         while not self._stop.is_set():
-            remaining = self._next_at - self._clock()
-            if remaining <= 0:
+            now = self._clock()
+            if now >= self._next_at:
                 return
+            probe_at = self._next_probe if self.cfg.check_interval > 0 and self._next_probe is not None else None
+            if probe_at is not None and now >= probe_at:
+                self.run_check()
+                if self._pending:
+                    self._wake.clear()
+                    return
+                continue
+            remaining = self._next_at - now if probe_at is None else min(self._next_at, probe_at) - now
             if self._wake.wait(min(remaining, HEARTBEAT)):
                 self._wake.clear()
                 return
             self.state.save()
+
+    def run_check(self) -> None:
+        """Probe providers that implement check(); start an early cycle when a source changed. Never raises."""
+        now = self._clock()
+        self._next_probe = now + self.cfg.check_interval
+        try:
+            self._probe(now)
+        except Exception as exc:  # a probe must never break the loop
+            log.warning("change check failed (%s)", type(exc).__name__)
+        self.state.save()
+
+    def _probe(self, now: float) -> None:
+        check = self.state.check
+        if not check.get("enabled"):
+            return
+        probed = 0
+        changed: list[str] = []
+        first_error: str | None = None
+        for name in self.cfg.providers:
+            fn = getattr(self._providers.get(name), "check", None)
+            if not callable(fn):
+                continue
+            try:
+                token = fn()
+            except ProviderError as exc:
+                code, token = exc.code, None
+            except Exception as exc:
+                code, token = "check_internal_error", None
+                log.warning("change check raised %s", type(exc).__name__)
+            else:
+                code = ""
+            if code:
+                probed += 1
+                first_error = first_error or code
+                if self._check_errors.get(name) != code:
+                    self._check_errors[name] = code
+                    self.state.add_event("warning", "check_failed",
+                                         self._clean(f"change check failed for {name}: {code}"), name)
+                continue
+            if token is None:
+                continue
+            probed += 1
+            self._check_errors.pop(name, None)
+            token = str(token)
+            stored = self._tokens.get(name)
+            if not stored:
+                self._tokens[name] = token  # nothing to compare with yet: just remember
+            elif token != stored:
+                changed.append(name)
+                if self._announced.get(name) != token:
+                    self._announced[name] = token
+                    self.state.add_event("info", "source_changed",
+                                         f"{name}: source changed ({stored[:12]} -> {token[:12]})", name)
+        check["last_check_at"] = iso(now)
+        check["error_code"] = first_error
+        if not probed:
+            check["result"] = "unsupported"
+        elif first_error:
+            check["result"] = "error"
+        else:
+            check["result"] = "changed" if changed else "unchanged"
+        # An early cycle waits out backoff (the retry is already scheduled) and honours the manual gap
+        if changed and not self._fails and self.trigger_sync():
+            check["triggered_syncs"] = check.get("triggered_syncs", 0) + 1
 
     def run_once(self, force: bool = False) -> str:
         """One full cycle; returns the resulting status."""
@@ -171,6 +251,7 @@ class Supervisor:
         for fetched in fetches:
             if fetched.snapshot is not None:
                 self._last_good[fetched.name] = fetched.snapshot
+                self._tokens[fetched.name] = fetched.snapshot.check_token
                 used.append((fetched.name, fetched.snapshot))
                 self._pinfo[fetched.name] = {
                     "status": "ok", "last_success_at": iso(now), "items": len(fetched.snapshot.secrets),
@@ -271,6 +352,8 @@ class Supervisor:
                                                               self.cfg.interval)
         self._next_at = now + delay
         st.next_sync_at = self._next_at
+        if self._next_probe is None and self.cfg.check_interval > 0:
+            self._next_probe = now + self.cfg.check_interval
         self._refresh_usage(now)
         for name in self.cfg.providers:
             st.providers[name] = self._pinfo.get(name) or {
