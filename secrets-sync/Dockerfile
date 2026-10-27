@@ -3,8 +3,8 @@ FROM ${BUILD_FROM}
 
 ARG BW_CLI_VERSION=2026.10.0
 
-# nodejs/npm only for the Bitwarden CLI; sops + age for the SOPS provider; git + ssh for the SOPS git source; py3-yaml for the YAML round trip
-RUN apk add --no-cache nodejs npm python3 py3-yaml sops age git openssh-client \
+# nodejs/npm only for the Bitwarden CLI; sops + age for the SOPS provider; git + ssh for the SOPS git source; py3-yaml for the YAML round trip; py3-jinja2 for synthetic keys
+RUN apk add --no-cache nodejs npm python3 py3-yaml py3-jinja2 sops age git openssh-client \
  && npm install -g --omit=dev --no-fund --no-audit "@bitwarden/cli@${BW_CLI_VERSION}" \
  && npm cache clean --force \
  && rm -rf /root/.npm /tmp/*

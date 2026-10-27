@@ -27,6 +27,12 @@ configuration:
     description: Zeigt, wo '!secret'-Schlüssel verwendet werden. 'config' durchsucht die Home-Assistant-Konfiguration,
       'all' liest zusätzlich die Konfigurationen anderer Add-ons (nur lesend). Gespeichert werden nur Schlüsselnamen
       und Dateipositionen, nie Werte.
+  synthetic_keys:
+    name: Synthetische Schlüssel
+    description: Schlüssel, die mit einem kleinen Sandbox-Template aus anderen Schlüsseln zusammengesetzt werden,
+      z. B. eine Datenbank-URL aus getrennten User- und Passwort-Schlüsseln. Jeder Eintrag hat einen Namen und ein
+      Template wie postgresql://{{ db_user | urlquote }}:{{ db_password | urlquote }}@db:5432/ha. Erlaubte Syntax
+      siehe Dokumentation. Gerenderte Werte sind Secrets und werden nie geloggt.
   bitwarden:
     name: Bitwarden
     description: Einstellungen des Bitwarden-Providers.
