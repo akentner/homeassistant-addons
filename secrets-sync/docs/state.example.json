@@ -1,0 +1,55 @@
+{
+  "age_seconds": 2,
+  "error_code": null,
+  "events": [
+    {
+      "at": "2026-10-27T10:15:00Z",
+      "code": "sync_ok",
+      "level": "info",
+      "message": "synced 42 items (0 added, 0 removed, 1 changed)"
+    }
+  ],
+  "generated_at": "2026-10-27T10:15:02Z",
+  "interval": 300,
+  "items": 42,
+  "keys": {
+    "added": [],
+    "changed": [
+      "mqtt_password"
+    ],
+    "names": [
+      "mqtt_password",
+      "mqtt_username"
+    ],
+    "removed": []
+  },
+  "last_attempt_at": "2026-10-27T10:15:00Z",
+  "last_success_at": "2026-10-27T10:15:00Z",
+  "next_sync_at": "2026-10-27T10:20:00Z",
+  "providers": {
+    "bitwarden": {
+      "error_code": null,
+      "items": 40,
+      "last_success_at": "2026-10-27T10:15:00Z",
+      "problems": [],
+      "revision": "2026-10-27T09:58:11Z",
+      "status": "ok"
+    },
+    "sops": {
+      "error_code": null,
+      "items": 2,
+      "last_success_at": "2026-10-27T10:15:00Z",
+      "problems": [],
+      "revision": "1761560000",
+      "status": "ok"
+    }
+  },
+  "schema_version": 1,
+  "stale": false,
+  "status": "ok",
+  "versions": {
+    "addon": "0.1.0",
+    "bw": "2025.10.0",
+    "sops": "3.10.2"
+  }
+}

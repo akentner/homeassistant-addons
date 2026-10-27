@@ -1,0 +1,56 @@
+configuration:
+  providers:
+    name: Providers
+    description: Enabled secret sources in priority order (bitwarden, sops). The order decides the winner when the
+      collision policy is 'priority'.
+  interval:
+    name: Interval (seconds)
+    description: Time between sync cycles (60 to 86400).
+  collision_policy:
+    name: Collision policy
+    description: '''error'' writes nothing when a key exists in two sources; ''priority'' lets the earlier provider
+      win.'
+  shrink_guard_percent:
+    name: Shrink guard (%)
+    description: Refuse to write when the number of items drops by more than this share compared with the last write.
+  log_level:
+    name: Log level
+    description: Verbosity of the add-on log. Secret values are never logged, at any level.
+  bitwarden:
+    name: Bitwarden
+    description: Settings of the Bitwarden provider.
+    fields:
+      server_url:
+        name: Server URL
+        description: Bitwarden or Vaultwarden server URL.
+      client_id:
+        name: API client ID
+        description: Personal API key client_id (user.xxxx). Passed to bw via environment only.
+      client_secret:
+        name: API client secret
+        description: Personal API key client_secret. Passed to bw via environment only.
+      master_password:
+        name: Master password
+        description: Needed to unlock the vault. Passed to bw via environment only.
+      organization_id:
+        name: Organization ID
+        description: Optional. Restrict the sync to items of this organization.
+      collection_id:
+        name: Collection ID
+        description: Optional. Restrict the sync to this collection.
+      key_style:
+        name: Key style
+        description: Naming scheme of the generated secret keys. 'legacy' is the only style so far.
+      notes_dir:
+        name: Notes directory
+        description: Secure notes are written as files below this directory inside the secrets files directory.
+  sops:
+    name: SOPS
+    description: Settings of the SOPS provider.
+    fields:
+      file:
+        name: SOPS file
+        description: Path of the SOPS-encrypted YAML file. The age key must be at /addon_config/age.key (mode 600).
+      flatten_separator:
+        name: Flatten separator
+        description: Joins nested keys, e.g. 'db' + 'password' becomes db_password.

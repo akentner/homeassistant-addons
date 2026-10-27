@@ -170,6 +170,21 @@ Own code, no upstream project. Keeps an SSH session to each observed host, logs 
 - `problem` sensor with the reasons as attributes (stale data, I/O pressure, in-flight I/O, D-state tasks)
 - Remote side uses shell builtins only, so it keeps working while the data disk is stalled
 
+### [Secrets Sync](./secrets-sync)
+
+![Supports amd64 Architecture][amd64-shield]
+
+_Keeps `/config/secrets.yaml` in sync with Bitwarden and SOPS._
+
+Own code, no upstream project. Pulls secrets from pluggable providers (Bitwarden via the `bw` CLI, SOPS/age) and writes
+`secrets.yaml` plus optional files atomically, with a status page and a health endpoint for Gatus.
+
+**Features:**
+
+- Bitwarden items mapped to legacy-style keys, secure notes as files
+- Collision policy, shrink guard and verified atomic writes; the last good file is always kept
+- No secret values in logs, state or API; credentials only via environment
+
 ### [Authentik](./authentik)
 
 ![Supports amd64 Architecture][amd64-shield]
