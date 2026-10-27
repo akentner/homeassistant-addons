@@ -9,6 +9,7 @@ from __future__ import annotations
 import html
 import json
 import urllib.parse
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -31,7 +32,8 @@ h1{font-size:20px;margin:0 0 12px}h2{font-size:15px;margin:0 0 8px}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;margin:0 0 12px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 .k{color:var(--mut);font-size:12px}.badge{font-weight:600}
-.bad{color:var(--err)}.ok{color:var(--ok)}.degraded,.stale,.starting,.warning{color:var(--warn)}.error{color:var(--err)}
+.bad{color:var(--err)}.ok,.unchanged,.changed{color:var(--ok)}
+.changed{font-weight:600}.degraded,.stale,.starting,.warning,.unsupported{color:var(--warn)}.error{color:var(--err)}
 table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:4px 8px;border-bottom:1px solid var(--bd)}
 code{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all}
 button{background:var(--acc);color:#fff;border:0;border-radius:6px;padding:6px 14px;margin-right:8px;cursor:pointer}
@@ -144,7 +146,46 @@ def _render_usage(usage: dict[str, Any]) -> str:
     return "".join(out)
 
 
-def render_page(state: dict[str, Any]) -> str:
+def _ago(value: Any, now: datetime) -> str:
+    """Relative time ("12 s ago") for an ISO timestamp; "-" if missing or unparsable."""
+    if not isinstance(value, str):
+        return "-"
+    try:
+        then = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return "-"
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=timezone.utc)
+    secs = int((now - then).total_seconds())
+    if secs < 0:
+        return "just now"
+    for unit, size in (("d", 86400), ("h", 3600), ("min", 60)):
+        if secs >= size:
+            return f"{secs // size} {unit} ago"
+    return f"{secs} s ago"
+
+
+def _check_card(check: Any, now: datetime) -> str:
+    """Change-check block from state["check"]; empty when absent (older state files)."""
+    if not isinstance(check, dict):
+        return ""
+    enabled = check.get("enabled") is True
+    interval = check.get("interval")
+    state_txt = f"enabled, every {_e(interval)} s" if enabled else "disabled"
+    result = check.get("result") if isinstance(check.get("result"), str) else None
+    when = check.get("last_check_at")
+    cells = [
+        f'<div><div class="k">Change check</div><div>{state_txt}</div></div>',
+        f'<div><div class="k">Last check</div><div title="{_e(when)}">{_e(_ago(when, now))}</div></div>',
+        f'<div><div class="k">Result</div><div class="badge {_e(result or "")}">{_e(result or "-")}</div></div>',
+        f'<div><div class="k">Error</div><div>{_e(check.get("error_code")) or "-"}</div></div>',
+        f'<div><div class="k">Triggered syncs</div><div>{_e(check.get("triggered_syncs", 0))}</div></div>',
+    ]
+    return f'<div class="card"><div class="grid">{"".join(cells)}</div></div>'
+
+
+def render_page(state: dict[str, Any], now: datetime | None = None) -> str:
+    now = now or datetime.now(timezone.utc)
     status = state.get("status") if isinstance(state.get("status"), str) else "starting"
     code, _ = health(state)
     shown_status = "stale" if status == "ok" and code == 503 else status
@@ -170,6 +211,7 @@ def render_page(state: dict[str, Any]) -> str:
         '<div class="card"><button type="button" onclick="act(\'api/sync\',\'Sync\')">Sync now</button>'
         '<button type="button" onclick="act(\'api/preview\',\'Preview\')">Preview</button>'
         '<pre id="result"></pre></div>',
+        _check_card(state.get("check"), now),
     ]
 
     rows = []
@@ -183,11 +225,12 @@ def render_page(state: dict[str, Any]) -> str:
         )
         rows.append(
             f"<tr><td>{_e(name)}</td><td class=\"{_e(pstatus)}\">{_e(pstatus)}</td><td>{_e(prov.get('items'))}</td>"
+            f"<td><code>{_e(prov.get('revision'))}</code></td>"
             f"<td>{_e(prov.get('last_success_at'))}</td><td>{_e(prov.get('error_code'))}</td><td>{problems}</td></tr>"
         )
-    body = "".join(rows) or '<tr><td colspan="6" class="k">no providers reported yet</td></tr>'
+    body = "".join(rows) or '<tr><td colspan="7" class="k">no providers reported yet</td></tr>'
     parts.append(
-        '<div class="card"><h2>Providers</h2><table><tr><th>Provider</th><th>Status</th><th>Items</th>'
+        '<div class="card"><h2>Providers</h2><table><tr><th>Provider</th><th>Status</th><th>Items</th><th>Revision</th>'
         f"<th>Last success</th><th>Error</th><th>Problems</th></tr>{body}</table></div>"
     )
 

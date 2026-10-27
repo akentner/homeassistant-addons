@@ -19,6 +19,7 @@ COLLISION_POLICIES = ("error", "priority")
 LOG_LEVELS = ("debug", "info", "warning", "error")
 USAGE_SCOPES = ("off", "config", "all")
 MIN_INTERVAL = 60
+MIN_CHECK_INTERVAL = 30  # 1..29 are raised to this
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class Config:
     problems: tuple[Problem, ...] = field(default_factory=tuple)
     usage_scan: str = "off"  # off | config | all (load_config defaults to all)
     addon_configs_dir: Path = Path("/addon_configs")
+    check_interval: int = 0  # seconds between change checks, 0 = off (load_config defaults to 60)
 
 
 class ProviderLoadError(Exception):
@@ -53,6 +55,11 @@ def _int(raw: Any, default: int, lo: int, hi: int, name: str, problems: list[Pro
         problems.append(Problem("config_invalid", f"option '{name}' must be an integer in {lo}..{hi}"))
         return default
     return raw
+
+
+def _check_interval(raw: Any, problems: list[Problem]) -> int:
+    value = _int(raw, 60, 0, 3600, "check_interval", problems)
+    return MIN_CHECK_INTERVAL if 0 < value < MIN_CHECK_INTERVAL else value
 
 
 def _choice(raw: Any, default: str, choices: tuple[str, ...], name: str, problems: list[Problem]) -> str:
@@ -99,6 +106,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     port_raw = env.get("SS_PORT", "8099")
     port = int(port_raw) if port_raw.isdigit() else 8099
 
+    usage_scan = _choice(options.get("usage_scan"), "all", USAGE_SCOPES, "usage_scan", problems)
+    check_interval = _check_interval(options.get("check_interval"), problems)
     return Config(
         providers=tuple(providers),
         interval=_int(options.get("interval"), 300, MIN_INTERVAL, 86400, "interval", problems),
@@ -113,9 +122,10 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         data_dir=Path(env.get("SS_DATA_DIR", "/data")),
         port=port,
         version=env.get("SS_ADDON_VERSION", "unknown"),
-        problems=tuple(problems),
-        usage_scan=_choice(options.get("usage_scan"), "all", USAGE_SCOPES, "usage_scan", problems),
+        usage_scan=usage_scan,
         addon_configs_dir=Path(env.get("SS_ADDON_CONFIGS_DIR", "/addon_configs")),
+        check_interval=check_interval,
+        problems=tuple(problems),  # keep last: it must be evaluated after every validation above
     )
 
 

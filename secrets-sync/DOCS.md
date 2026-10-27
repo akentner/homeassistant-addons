@@ -12,24 +12,31 @@ are manual. The Bitwarden CLI version is pinned in `build.yaml` (`BW_CLI_VERSION
 
 ## Options
 
-| Option                      | Default                     | Description                                                                 |
-| --------------------------- | --------------------------- | --------------------------------------------------------------------------- |
-| `providers`                 | `[bitwarden]`               | Enabled providers, order = priority for `collision_policy: priority`        |
-| `interval`                  | `300`                       | Seconds between cycles (60 to 86400); manual sync at most every 10 s        |
-| `collision_policy`          | `error`                     | `error`: nothing is written on a duplicate key; `priority`: earlier wins    |
-| `shrink_guard_percent`      | `30`                        | Refuse to write when items drop by more than this share (1 to 100)          |
-| `log_level`                 | `info`                      | `debug`, `info`, `warning`, `error`; values are never logged                |
-| `usage_scan`                | `all`                       | `off`, `config` (HA config) or `all` (plus other add-on configs, read-only) |
-| `bitwarden.server_url`      | `https://bitwarden.com`     | Server URL (also Vaultwarden)                                               |
-| `bitwarden.client_id`       | empty                       | API key `client_id` (`user.xxxx`), passed via env                           |
-| `bitwarden.client_secret`   | empty                       | API key `client_secret`, passed via env                                     |
-| `bitwarden.master_password` | empty                       | Unlocks the vault, passed via env                                           |
-| `bitwarden.organization_id` | empty                       | Optional: only items of this organization (name or UUID)                    |
-| `bitwarden.collection_id`   | empty                       | Optional: only items of this collection (name or UUID)                      |
-| `bitwarden.key_style`       | `legacy`                    | Key naming scheme (only `legacy` so far)                                    |
-| `bitwarden.notes_dir`       | `bitwarden`                 | Directory for secure-note files below `/config/secrets_files`               |
-| `sops.file`                 | `/config/secrets.sops.yaml` | SOPS-encrypted YAML file                                                    |
-| `sops.flatten_separator`    | `_`                         | Joins nested keys                                                           |
+| Option                      | Default                     | Description                                                                                  |
+| --------------------------- | --------------------------- | -------------------------------------------------------------------------------------------- |
+| `providers`                 | `[bitwarden]`               | Enabled providers, order = priority for `collision_policy: priority`                         |
+| `interval`                  | `300`                       | Seconds between cycles (60 to 86400); manual sync at most every 10 s                         |
+| `check_interval`            | `60`                        | Seconds between cheap change checks of the SOPS git source (0 = off, 1 to 29 become 30)      |
+| `collision_policy`          | `error`                     | `error`: nothing is written on a duplicate key; `priority`: earlier wins                     |
+| `shrink_guard_percent`      | `30`                        | Refuse to write when items drop by more than this share (1 to 100)                           |
+| `log_level`                 | `info`                      | `debug`, `info`, `warning`, `error`; values are never logged                                 |
+| `usage_scan`                | `all`                       | `off`, `config` (HA config) or `all` (plus other add-on configs, read-only)                  |
+| `bitwarden.server_url`      | `https://bitwarden.com`     | Server URL (also Vaultwarden)                                                                |
+| `bitwarden.client_id`       | empty                       | API key `client_id` (`user.xxxx`), passed via env                                            |
+| `bitwarden.client_secret`   | empty                       | API key `client_secret`, passed via env                                                      |
+| `bitwarden.master_password` | empty                       | Unlocks the vault, passed via env                                                            |
+| `bitwarden.organization_id` | empty                       | Optional: only items of this organization (name or UUID)                                     |
+| `bitwarden.collection_id`   | empty                       | Optional: only items of this collection (name or UUID)                                       |
+| `bitwarden.key_style`       | `legacy`                    | Key naming scheme (only `legacy` so far)                                                     |
+| `bitwarden.notes_dir`       | `bitwarden`                 | Directory for secure-note files below `/config/secrets_files`                                |
+| `sops.source`               | `file`                      | `file` (local path) or `git` (repository)                                                    |
+| `sops.file`                 | `/config/secrets.sops.yaml` | SOPS-encrypted YAML file                                                                     |
+| `sops.flatten_separator`    | `_`                         | Joins nested keys                                                                            |
+| `sops.git_url`              | empty                       | Repository URL: `git@host:org/repo.git`, `ssh://...` or `https://...`, no credentials inside |
+| `sops.git_branch`           | `main`                      | Branch to read                                                                               |
+| `sops.git_path`             | `secrets.sops.yaml`         | Path of the encrypted file in the repository                                                 |
+| `sops.git_username`         | `x-access-token`            | User name for https token login                                                              |
+| `sops.git_token`            | empty                       | https access token, passed via env only                                                      |
 
 Both provider blocks are always present in the options. Missing or empty parts are reported as problems (UI and
 `state.json`) and the provider is skipped, the add-on keeps running.
@@ -136,6 +143,66 @@ Decrypts `sops.file` with `sops -d` (output only in memory, no temp file). The a
 `/addon_config/age.key` as a regular file with mode `0600` or stricter. The file must contain a top-level `sops`
 mapping, otherwise it is treated as not encrypted and rejected. Top-level scalars map 1:1, nested mappings are flattened
 with `flatten_separator`. Lists and other non-scalars are reported as problems (key name only).
+
+### Git source
+
+With `sops.source: git` the encrypted file is read from a git repository instead of `sops.file`. The repository holds
+the same SOPS-encrypted YAML file as before (any path, set `git_path`); it must contain the top-level `sops` mapping.
+The **age key is still required** at `/addon_config/age.key` (mode 600): git only transports the encrypted file, it is
+decrypted in memory as before. The add-on keeps a shallow clone (`--depth 1`, single branch) in `/data/git`.
+
+The URL decides the authentication:
+
+| URL                                  | Authentication                                          |
+| ------------------------------------ | ------------------------------------------------------- |
+| `git@host:org/repo.git`, `ssh://...` | SSH deploy key `/addon_config/deploy_key`               |
+| `https://...`                        | token (`git_username` + `git_token`), or none if public |
+
+#### SSH deploy key (read-only)
+
+1. Create a dedicated key without passphrase: `ssh-keygen -t ed25519 -N "" -C secrets-sync -f deploy_key`
+2. Add `deploy_key.pub` to the repository as a **read-only** deploy key (GitHub: Settings, Deploy keys, leave "Allow
+   write access" off; GitLab: Settings, Repository, Deploy keys).
+3. Copy the private key `deploy_key` to `/addon_config/deploy_key` (host:
+   `/addon_configs/<repository-hash>_secrets_sync/`) and set mode 600. Any other mode is rejected with
+   `git_key_permissions`.
+4. Optional: put your `known_hosts` lines at `/addon_config/known_hosts`. Then the host key is verified strictly.
+   Without that file the first seen host key is trusted and persisted in `/data/known_hosts` (trust on first use).
+
+#### https token
+
+Create a fine-grained personal access token with read-only access to that one repository (GitHub: repository permission
+Contents = Read-only). Set `git_url` to the `https://` URL (without credentials) and `git_token`. `git_username` is
+`x-access-token` for GitHub and `oauth2` for GitLab. The token is handed to git through an askpass helper from the
+environment; it is never part of the URL, argv, logs or `state.json`. Public repositories need no token.
+
+#### Change check
+
+Every `check_interval` seconds (default 60) the add-on runs a cheap `git ls-remote` for the branch. When the commit
+changed since the last successful sync, a full sync starts right away (event `source_changed`). The regular `interval`
+stays as a fallback and always fetches. `check_interval: 0` turns the check off; values 1 to 29 are raised to 30. A
+failing check never changes the status and never triggers a backoff; it is shown in the status page and in `check` of
+`state.json` (`result`: `unchanged`, `changed`, `error`, `unsupported`) and raises the event `check_failed` once per
+distinct code. The file source and Bitwarden are not probed.
+
+#### Git error codes
+
+| Code                  | Meaning                                                                     |
+| --------------------- | --------------------------------------------------------------------------- |
+| `git_binary_missing`  | `git` or `ssh` not found in the image                                       |
+| `git_timeout`         | a git call ran into its timeout (60 s, `ls-remote` 20 s)                    |
+| `git_auth_failed`     | permission denied / 401 / 403: wrong key, deploy key not added, bad token   |
+| `git_clone_failed`    | clone failed (URL, network)                                                 |
+| `git_fetch_failed`    | fetch failed; the cache is re-cloned once per cycle                         |
+| `git_ref_not_found`   | branch does not exist                                                       |
+| `git_exec_failed`     | git could not be started                                                    |
+| `git_key_missing`     | ssh URL but no `/addon_config/deploy_key`                                   |
+| `git_key_permissions` | deploy key is not a regular file with mode 600 or stricter                  |
+| `git_path_invalid`    | `git_path` empty, absolute, contains `..`, a backslash, or leaves the clone |
+| `git_file_missing`    | `git_path` is not a regular file in the checked-out branch                  |
+
+Configuration problems reported by validation: `sops_git_missing_url`, `sops_git_url_credentials` (credentials inside
+the URL), `sops_git_url_scheme` (only ssh and https), `sops_git_path_invalid`, `sops_git_branch_invalid`.
 
 ## Collisions and guards
 

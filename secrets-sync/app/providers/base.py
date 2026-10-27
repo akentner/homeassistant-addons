@@ -25,6 +25,7 @@ class Snapshot:
     secrets: dict[str, str] = field(default_factory=dict)  # final keys for secrets.yaml
     files: dict[str, bytes] = field(default_factory=dict)  # relative path (below the files dir) -> content
     revision: str = ""  # source version, display only (e.g. bw revisionDate, sops file mtime)
+    check_token: str = ""  # token that Provider.check() would return for exactly this content ("" = none)
 
 
 class ProviderError(Exception):
@@ -47,4 +48,10 @@ class Provider(Protocol):
 
     def fetch(self) -> Snapshot:
         """Fetch + decrypt. Raise ProviderError on failure. Every external call needs a timeout."""
+        ...
+
+    def check(self) -> str | None:
+        """Optional cheap change probe (e.g. `git ls-remote`). Returns an opaque token that changes whenever the
+        source changed, or None when the provider has no cheap probe. Providers without this method are never probed.
+        Raise ProviderError on failure (the engine only records it). No decryption, no clone, no secrets read."""
         ...

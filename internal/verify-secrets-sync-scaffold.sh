@@ -39,11 +39,21 @@ echo "✓ manifest and files"
 
 # Every option key must be translated in en and de
 for lang in en de; do
-    for key in providers interval collision_policy shrink_guard_percent log_level bitwarden sops; do
+    for key in providers interval check_interval collision_policy shrink_guard_percent log_level bitwarden sops; do
         [ "$(yget "${ADDON_DIR}/translations/${lang}.yaml" "configuration.${key}.name")" != "null" ] \
             || fail "translations/${lang}.yaml: no name for ${key}"
     done
 done
+for lang in en de; do
+    for key in source git_url git_branch git_path git_username git_token; do
+        [ "$(yget "${ADDON_DIR}/translations/${lang}.yaml" "configuration.sops.fields.${key}.name")" != "null" ] \
+            || fail "translations/${lang}.yaml: no name for sops.${key}"
+    done
+done
+# Schema keys must never end with "?" (HA marks optional values, the key must always exist in options)
+if grep -E '^\s+[a-z_]+\?:' "${ADDON_DIR}/config.yaml" | grep -vE '^\s+(bitwarden|sops)\?:' | grep -q .; then
+    fail "schema key ending with ? (only the bitwarden/sops blocks may be optional)"
+fi
 echo "✓ translations (en, de)"
 
 echo "==> docker build"
@@ -59,9 +69,12 @@ docker run --rm --entrypoint sh "${IMAGE_TAG}" -c '
     sops --version 2>&1 | head -1
     age --version
     python3 -c "import yaml; print(\"PyYAML\", yaml.__version__)"
+    git --version
+    command -v ssh >/dev/null
+    [ -x /opt/secrets-sync/app/bin/git-askpass ]
     [ -d /opt/secrets-sync/app ]
 ' || fail "tool check failed"
-echo "✓ bw, sops, age, PyYAML, app/ present"
+echo "✓ bw, sops, age, git, ssh, git-askpass (executable), PyYAML, app/ present"
 
 docker run --rm --entrypoint sh "${IMAGE_TAG}" -c 'bw --version 2>/dev/null | tail -1' |
     grep -qx "${BW_CLI_VERSION}" || fail "bw version differs from BW_CLI_VERSION=${BW_CLI_VERSION}"

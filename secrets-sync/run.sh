@@ -13,6 +13,7 @@ export SS_PORT="${SS_PORT:-8099}"
 export SS_AGE_KEY_FILE="${SS_AGE_KEY_FILE:-/addon_config/age.key}"
 SS_ADDON_VERSION="$(bashio::app.version 2>/dev/null || bashio::addon.version 2>/dev/null || echo unknown)"
 export SS_ADDON_VERSION
+export SS_GIT_DEPLOY_KEY="${SS_GIT_DEPLOY_KEY:-/addon_config/deploy_key}"
 export BITWARDENCLI_APPDATA_DIR="${BITWARDENCLI_APPDATA_DIR:-/data/bw}"
 
 if [ ! -s "${SS_OPTIONS}" ]; then
@@ -27,10 +28,17 @@ mkdir -p "${BITWARDENCLI_APPDATA_DIR}"
 # prints quoted export statements; values never touch argv or the log
 eval "$(python3 -I - "${SS_OPTIONS}" <<'PY'
 import json, shlex, sys
-bw = json.load(open(sys.argv[1])).get("bitwarden") or {}
-for var, key in (("BW_CLIENTID", "client_id"), ("BW_CLIENTSECRET", "client_secret"), ("BW_PASSWORD", "master_password")):
-    if bw.get(key):
-        print(f"export {var}={shlex.quote(str(bw[key]))}")
+opts = json.load(open(sys.argv[1]))
+bw, sops = opts.get("bitwarden") or {}, opts.get("sops") or {}
+for var, src, key in (
+    ("BW_CLIENTID", bw, "client_id"),
+    ("BW_CLIENTSECRET", bw, "client_secret"),
+    ("BW_PASSWORD", bw, "master_password"),
+    ("SS_GIT_USERNAME", sops, "git_username"),
+    ("SS_GIT_TOKEN", sops, "git_token"),
+):
+    if src.get(key):
+        print(f"export {var}={shlex.quote(str(src[key]))}")
 PY
 )"
 

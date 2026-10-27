@@ -113,6 +113,55 @@
         "null"
       ]
     },
+    "check": {
+      "additionalProperties": false,
+      "description": "Cheap change check (Provider.check) between full syncs. Optional: absent in older state files. No URLs or credentials.",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "error_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "interval": {
+          "description": "seconds, 0 = off",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_check_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "result": {
+          "description": "outcome of the last check",
+          "enum": [
+            "unchanged",
+            "changed",
+            "error",
+            "unsupported",
+            null
+          ]
+        },
+        "triggered_syncs": {
+          "description": "syncs started by a detected change since start",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "enabled",
+        "interval",
+        "last_check_at",
+        "result"
+      ],
+      "type": "object"
+    },
     "error_code": {
       "type": [
         "string",
