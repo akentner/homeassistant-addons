@@ -21,6 +21,7 @@ are manual. The Bitwarden CLI version is pinned in `build.yaml` (`BW_CLI_VERSION
 | `shrink_guard_percent`      | `30`                        | Refuse to write when items drop by more than this share (1 to 100)                           |
 | `log_level`                 | `info`                      | `debug`, `info`, `warning`, `error`; values are never logged                                 |
 | `usage_scan`                | `all`                       | `off`, `config` (HA config) or `all` (plus other add-on configs, read-only)                  |
+| `synthetic_keys`            | `[]`                        | List of `name` + `template`; keys composed from other keys (see "Synthetic keys")            |
 | `bitwarden.server_url`      | `https://bitwarden.com`     | Server URL (also Vaultwarden)                                                                |
 | `bitwarden.client_id`       | empty                       | API key `client_id` (`user.xxxx`), passed via env                                            |
 | `bitwarden.client_secret`   | empty                       | API key `client_secret`, passed via env                                                      |
@@ -117,6 +118,100 @@ Do not use your personal account. Create a separate Bitwarden/Vaultwarden user f
 
 Example: item `Mosquitto: Broker-1` with user and password becomes `mosquitto_broker_1_username` and
 `mosquitto_broker_1_password`.
+
+## Synthetic keys
+
+Synthetic keys are composed from other keys with a small, sandboxed Jinja template, for example a database URL from
+separate user and password keys. They are rendered after all providers were merged and before the shrink guard and the
+write, so they work with every provider. Result: a normal key in `secrets.yaml`.
+
+```yaml
+synthetic_keys:
+  - name: db_dsn
+    template: "postgresql://{{ db_user | urlquote }}:{{ db_password | urlquote }}@db:5432/ha"
+```
+
+- `name` must match `^[A-Za-z_][A-Za-z0-9_]{0,127}$` and be unique among synthetic keys (`synthetic_invalid_name`).
+- `template` must not be empty and may have at most 2048 characters (`synthetic_template_too_long`).
+- A name that already exists as a real key is an error (`synthetic_collision`); a synthetic key never overrides a real
+  one, independent of `collision_policy`.
+- **Synthetic keys cannot reference each other.** Every template only sees the real, merged keys, so there is no
+  chaining and no ordering problem.
+
+### Context
+
+- `secrets`: read-only mapping of all real keys, e.g. `{{ secrets['db-password'] }}`. Use it for key names that are not
+  valid identifiers.
+- Every real key whose name is a valid identifier is also a direct variable: `{{ db_user }}`.
+- A reference to a key that does not exist is an error (`synthetic_undefined`), not an empty string. Use `default` to
+  allow a fallback.
+
+### Filters
+
+Only these filters are available; any other filter is rejected with `synthetic_forbidden`.
+
+| Filter                       | Result                                                                           |
+| ---------------------------- | -------------------------------------------------------------------------------- |
+| `lower`, `upper`, `trim`     | case conversion, strip whitespace                                                |
+| `capitalize`, `title`        | capitalisation                                                                   |
+| `replace(old, new)`          | replace text                                                                     |
+| `default(value)`             | fallback for an undefined or empty value                                         |
+| `length`                     | number of characters                                                             |
+| `join(sep)`                  | join a list                                                                      |
+| `b64encode`, `b64decode`     | Base64                                                                           |
+| `substr(start, length=None)` | Python slice semantics, negative start allowed, never fails when out of range    |
+| `urlquote`                   | percent-encodes everything including `/` and `@` (`urllib.parse.quote(safe="")`) |
+
+Jinja's own `urlencode` is deliberately not offered because it keeps `/`.
+
+### Allowed and forbidden constructs
+
+Allowed: `{{ ... }}` output, plain text, `{% if %}` / `{% elif %}` / `{% else %}`, names, constants, `secrets[...]`,
+filters from the table, comparisons, `and` / `or` / `not`, `+` and `~` (concatenation), conditional expressions
+(`a if x else b`) and list/tuple literals.
+
+Forbidden (error `synthetic_forbidden`): `for`, `set`, macros, `call`, filter blocks, `import`, `include`, `extends`,
+`block`, attribute access, calls other than filters (no `range`, `dict`, `lipsum`, ...) and the operators `*`, `**`,
+`%`, `//`. The templates run in Jinja's immutable sandbox without loader, extensions or globals.
+
+### Examples
+
+```yaml
+synthetic_keys:
+  # PostgreSQL DSN: special characters in the password must be percent-encoded
+  - name: db_dsn
+    template: "postgresql://{{ db_user | urlquote }}:{{ db_password | urlquote }}@db:5432/ha"
+  # MQTT URL with a key whose name is not an identifier
+  - name: mqtt_url
+    template: "mqtt://{{ secrets['mqtt-user'] }}:{{ secrets['mqtt-password'] | urlquote }}@broker:1883"
+  # First 8 characters, for example a short token identifier
+  - name: api_token_short
+    template: "{{ api_token | substr(0, 8) }}"
+  # Optional part with a fallback
+  - name: db_host_port
+    template: "{{ db_host }}:{{ db_port | default('5432') }}"
+```
+
+### Errors
+
+A synthetic error is a cycle error like a key collision: nothing is written, the last good `secrets.yaml` stays and the
+status becomes `degraded` (or `error` if nothing was ever written). The event names the code and the synthetic key.
+
+| Code                          | Meaning                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| `synthetic_invalid_name`      | name does not match the pattern, or is used twice (config problem)         |
+| `synthetic_template_too_long` | template longer than 2048 characters                                       |
+| `synthetic_collision`         | name already exists as a real key                                          |
+| `synthetic_syntax`            | template has a syntax error                                                |
+| `synthetic_forbidden`         | forbidden construct or filter                                              |
+| `synthetic_undefined`         | referenced key does not exist (message: synthetic name and referenced key) |
+| `synthetic_too_large`         | rendered value longer than 65536 characters                                |
+| `synthetic_error`             | any other error while rendering                                            |
+
+**Rendered values are secrets** (a DSN contains the password). They are never logged and never appear in `state.json`,
+events, error messages, the web page or the preview. Messages are built from the error class and key names only, never
+from Jinja's own message text. `keys.synthetic` in `state.json` lists the names of synthetic keys in the written set;
+they count in `items` and in the shrink guard like real keys.
 
 ## Secret usage
 
