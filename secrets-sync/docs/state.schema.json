@@ -247,6 +247,13 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "synthetic": {
+          "description": "names of keys that were composed from templates (subset of names); optional",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "required": [

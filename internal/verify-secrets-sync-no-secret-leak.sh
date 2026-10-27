@@ -23,6 +23,9 @@ SENTINELS=(
     "SENTINEL-CLIENTSECRET-b24c08"
     "SENTINEL-MASTERPW-e5d176"
     "SENTINEL-GITTOKEN-91c0de"
+    # Values from the test repository: they legitimately end up in secrets.yaml, never in logs/state/API
+    "first-value"
+    "second-value"
 )
 
 mkdir -p "${WORK_DIR}/config" "${WORK_DIR}/addon_config" "${WORK_DIR}/data"
@@ -135,7 +138,8 @@ cat > "${GW}/data/options.json" <<JSON
  "log_level":"debug","usage_scan":"off",
  "sops":{"source":"git","file":"/config/secrets.sops.yaml","flatten_separator":"_",
  "git_url":"file:///repos/secrets","git_branch":"main","git_path":"secrets.sops.yaml",
- "git_username":"x-access-token","git_token":"${SENTINELS[3]}"}}
+ "git_username":"x-access-token","git_token":"${SENTINELS[3]}"},
+ "synthetic_keys":[{"name":"db_dsn","template":"postgresql://app:{{ db_password | urlquote }}@db:5432/ha"}]}
 JSON
 
 docker run -d --name "${GIT_CONTAINER_NAME}" -e SS_GIT_ALLOW_PROTOCOL=file \
@@ -179,6 +183,14 @@ GSTATUS="$(gstatus)"
 printf '%s' "${GSTATUS}" | grep -q 'source_changed' && echo "✓ event source_changed recorded" ||
     echo "! source_changed event not in status (interval fallback may have won the race)"
 
+# Synthetic key: composed from the repository value, listed in state, rendered value only in secrets.yaml
+printf '%s' "$(gsecrets)" | grep -q 'db_dsn.*postgresql://app:second-value@db:5432/ha' || {
+    echo "✗ synthetic key db_dsn missing or wrong in secrets.yaml"; gsecrets | sed 's/:.*/: <value>/'; exit 1; }
+echo "✓ synthetic key db_dsn rendered"
+printf '%s' "${GSTATUS}" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if "db_dsn" in d["keys"].get("synthetic", []) else 1)' ||
+    { echo "✗ keys.synthetic does not list db_dsn"; exit 1; }
+echo "✓ keys.synthetic lists db_dsn"
+
 GLOGS="$(docker logs "${GIT_CONTAINER_NAME}" 2>&1)"
 GSTATE="$(docker exec "${GIT_CONTAINER_NAME}" cat /data/state.json 2>/dev/null || true)"
 GPROCS="$(docker exec "${GIT_CONTAINER_NAME}" sh -c 'ps -eo args' 2>&1 || true)"
@@ -198,6 +210,38 @@ if docker exec "${GIT_CONTAINER_NAME}" grep -rqF -- "${SENTINELS[3]}" /data/git 
     exit 1
 fi
 echo "✓ token not persisted in git cache"
+
+# ---------------------------------------------------------------------------------------------------------------
+# Phase 3: a failing synthetic template must degrade the cycle, keep the last good file and leak nothing
+# ---------------------------------------------------------------------------------------------------------------
+echo "==> Phase 3: failing synthetic template"
+BEFORE="$(gsecrets)"
+docker stop "${GIT_CONTAINER_NAME}" >/dev/null
+python3 -I - "${GW}/data/options.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+o = json.load(open(p))
+o["synthetic_keys"].append({"name": "broken", "template": "{{ db_password }}{{ no_such_key }}"})
+o["synthetic_keys"].append({"name": "forbidden", "template": "{% for x in [db_password] %}{{ x }}{% endfor %}"})
+json.dump(o, open(p, "w"))
+PY
+docker start "${GIT_CONTAINER_NAME}" >/dev/null
+GSTATUS=""
+for _ in $(seq 1 45); do
+    GSTATUS="$(gstatus)"
+    printf '%s' "${GSTATUS}" | grep -q 'synthetic_' && break
+    sleep 1
+done
+printf '%s' "${GSTATUS}" | grep -q 'synthetic_' || {
+    echo "✗ no synthetic_* error code reported"; printf '%s\n' "${GSTATUS}" | cut -c1-400; exit 1; }
+echo "✓ synthetic error reported"
+[ "$(gsecrets)" = "${BEFORE}" ] || { echo "✗ secrets.yaml changed during a failing synthetic cycle"; exit 1; }
+echo "✓ last good secrets.yaml kept"
+GLOGS="$(docker logs "${GIT_CONTAINER_NAME}" 2>&1)"
+GSTATE="$(docker exec "${GIT_CONTAINER_NAME}" cat /data/state.json 2>/dev/null || true)"
+check "failing-template container logs" "${GLOGS}"
+check "failing-template /api/status.json" "${GSTATUS}"
+check "failing-template /data/state.json" "${GSTATE}"
 
 echo ""
 echo "All secrets-sync no-secret-leak verifications passed."

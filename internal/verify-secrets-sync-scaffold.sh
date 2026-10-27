@@ -39,7 +39,7 @@ echo "✓ manifest and files"
 
 # Every option key must be translated in en and de
 for lang in en de; do
-    for key in providers interval check_interval collision_policy shrink_guard_percent log_level bitwarden sops; do
+    for key in providers interval check_interval synthetic_keys collision_policy shrink_guard_percent log_level bitwarden sops; do
         [ "$(yget "${ADDON_DIR}/translations/${lang}.yaml" "configuration.${key}.name")" != "null" ] \
             || fail "translations/${lang}.yaml: no name for ${key}"
     done
@@ -69,12 +69,13 @@ docker run --rm --entrypoint sh "${IMAGE_TAG}" -c '
     sops --version 2>&1 | head -1
     age --version
     python3 -c "import yaml; print(\"PyYAML\", yaml.__version__)"
+    python3 -c "import jinja2.sandbox; print(\"Jinja2\", jinja2.__version__)"
     git --version
     command -v ssh >/dev/null
     [ -x /opt/secrets-sync/app/bin/git-askpass ]
     [ -d /opt/secrets-sync/app ]
 ' || fail "tool check failed"
-echo "✓ bw, sops, age, git, ssh, git-askpass (executable), PyYAML, app/ present"
+echo "✓ bw, sops, age, git, ssh, git-askpass (executable), PyYAML, Jinja2, app/ present"
 
 docker run --rm --entrypoint sh "${IMAGE_TAG}" -c 'bw --version 2>/dev/null | tail -1' |
     grep -qx "${BW_CLI_VERSION}" || fail "bw version differs from BW_CLI_VERSION=${BW_CLI_VERSION}"

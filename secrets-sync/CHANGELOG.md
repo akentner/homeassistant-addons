@@ -3,6 +3,12 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.4.0-0] - 2026-10-27
+
+- Feature: synthetic keys. New option `synthetic_keys` (list of `name` + `template`) composes keys from other keys with
+  a sandboxed Jinja template, e.g. a database URL from user and password (`urlquote`, `substr`, `default`, ...).
+  Rendered values are never logged. The image now contains `py3-jinja2`.
+
 ## [0.3.1-0] - 2026-10-27
 
 - Fix: archived and trashed Bitwarden items are no longer imported (`archivedDate`/`deletedDate`); only active items

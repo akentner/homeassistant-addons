@@ -25,6 +25,12 @@ configuration:
     name: Secret usage scan
     description: Show where '!secret' keys are used. 'config' scans the Home Assistant config, 'all' also reads
       the configs of other add-ons (read-only). Only key names and file positions are stored, never values.
+  synthetic_keys:
+    name: Synthetic keys
+    description: Keys composed from other keys with a small sandboxed template, e.g. a database URL from separate
+      user and password keys. Each entry has a name and a template such as postgresql://{{ db_user | urlquote }}:{{
+      db_password | urlquote }}@db:5432/ha. See the documentation for the allowed syntax. Rendered values are secrets
+      and never logged.
   bitwarden:
     name: Bitwarden
     description: Settings of the Bitwarden provider.
