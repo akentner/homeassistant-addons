@@ -164,8 +164,9 @@ def test_bw_env_not_passed_to_sops(encrypt, age_key, monkeypatch):
     monkeypatch.setenv("BW_CLIENTSECRET", "s3cr3t-bw")
     monkeypatch.setenv("BW_PASSWORD", "s3cr3t-bw2")
     monkeypatch.setenv("KEEP_ME", "1")
+    path = encrypt(PLAIN)  # encrypt before patching, the fixture also uses subprocess.run
     monkeypatch.setattr(subprocess, "run", spy)
-    assert make(encrypt(PLAIN), age_key[0]).fetch().secrets
+    assert make(path, age_key[0]).fetch().secrets
     assert not [k for k in seen if k.startswith("BW_")]
     assert seen["KEEP_ME"] == "1"
     assert seen["SOPS_AGE_KEY_FILE"] == str(age_key[0])
