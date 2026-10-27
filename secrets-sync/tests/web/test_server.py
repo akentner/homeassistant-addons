@@ -24,19 +24,13 @@ class FakeController:
         self.allow = True
         self.calls: list[str] = []
 
-    def trigger_sync(self) -> bool:
-        self.calls.append("sync")
+    def trigger_sync(self, force: bool = False) -> bool:
+        self.calls.append("force" if force else "sync")
         return self.allow
 
     def preview(self) -> dict[str, Any]:
         self.calls.append("preview")
         return {"added": ["a"], "removed": [], "changed": ["b"], "errors": []}
-
-
-class ForceController(FakeController):
-    def trigger_sync(self, force: bool = False) -> bool:  # type: ignore[override]
-        self.calls.append("force" if force else "sync")
-        return True
 
 
 class Srv:
@@ -225,8 +219,8 @@ def test_sync_202_and_429(srv: Srv, ctrl: FakeController) -> None:
     assert srv.req("POST", "/api/sync", INGRESS)[0] == 429
 
 
-def test_sync_force_passed_when_supported(state_file: Path) -> None:
-    c = ForceController()
+def test_sync_force_passed(state_file: Path) -> None:
+    c = FakeController()
     s = Srv(c, state_file)
     try:
         assert s.req("POST", "/api/sync?force=1", INGRESS)[0] == 202

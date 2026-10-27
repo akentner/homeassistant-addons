@@ -7,7 +7,6 @@ protocol. Pages use relative links only (Home Assistant ingress prefix) and no e
 from __future__ import annotations
 
 import html
-import inspect
 import json
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -240,7 +239,7 @@ def make_handler(
                     self._json(200, controller.preview())
                     return
                 force = urllib.parse.parse_qs(parts.query).get("force") == ["1"]
-                started = _trigger(controller, force)
+                started = bool(controller.trigger_sync(force=force))
             except Exception:  # noqa: BLE001 - never leak exception text, it may carry provider output
                 self._json(500, {"error": "internal_error"})
                 return
@@ -250,18 +249,6 @@ def make_handler(
                 self._json(429, {"started": False, "error": "rate_limited"})
 
     return Handler
-
-
-def _trigger(controller: Controller, force: bool) -> bool:
-    """Call trigger_sync, passing force=True only if the controller accepts it."""
-    if force:
-        try:
-            params = inspect.signature(controller.trigger_sync).parameters
-        except (TypeError, ValueError):
-            params = {}
-        if "force" in params:
-            return bool(controller.trigger_sync(force=True))  # type: ignore[call-arg]
-    return bool(controller.trigger_sync())
 
 
 def make_server(
