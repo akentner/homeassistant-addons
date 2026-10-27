@@ -35,6 +35,8 @@ h1{font-size:20px;margin:0 0 12px}h2{font-size:15px;margin:0 0 8px}
 .bad{color:var(--err)}.ok,.unchanged,.changed{color:var(--ok)}
 .changed{font-weight:600}.degraded,.stale,.starting,.warning,.unsupported{color:var(--warn)}.error{color:var(--err)}
 table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:4px 8px;border-bottom:1px solid var(--bd)}
+
+.tag{font-size:11px;color:var(--acc);border:1px solid var(--acc);border-radius:4px;padding:0 4px}
 code{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all}
 button{background:var(--acc);color:#fff;border:0;border-radius:6px;padding:6px 14px;margin-right:8px;cursor:pointer}
 button:disabled{opacity:.5}pre{white-space:pre-wrap;word-break:break-all;margin:8px 0 0}
@@ -97,11 +99,14 @@ def health(state: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     return (200 if status == "ok" and not stale else 503), body
 
 
-def _keys_list(names: Any) -> str:
+def _keys_list(names: Any, synthetic: frozenset[str] = frozenset()) -> str:
     items = [str(n) for n in _as_list(names)]
     if not items:
         return '<span class="k">-</span>'
-    shown = "".join(f"<code>{_e(n)}</code> " for n in items[:MAX_KEYS])
+    shown = "".join(
+        f"<code>{_e(n)}</code>{' <span class=\"tag\">synthetic</span>' if n in synthetic else ''} "
+        for n in items[:MAX_KEYS]
+    )
     more = f' <span class="k">+{len(items) - MAX_KEYS} more</span>' if len(items) > MAX_KEYS else ""
     return shown + more
 
@@ -191,6 +196,7 @@ def render_page(state: dict[str, Any], now: datetime | None = None) -> str:
     shown_status = "stale" if status == "ok" and code == 503 else status
     versions = _as_dict(state.get("versions"))
     keys = _as_dict(state.get("keys"))
+    synth = frozenset(str(n) for n in _as_list(keys.get("synthetic")))
 
     def stat(label: str, value: Any) -> str:
         return f'<div><div class="k">{_e(label)}</div><div>{_e(value) if value not in (None, "") else "-"}</div></div>'
@@ -236,10 +242,10 @@ def render_page(state: dict[str, Any], now: datetime | None = None) -> str:
 
     parts.append(
         '<div class="card"><h2>Keys</h2><table>'
-        f"<tr><th>Added</th><td>{_keys_list(keys.get('added'))}</td></tr>"
-        f"<tr><th>Removed</th><td>{_keys_list(keys.get('removed'))}</td></tr>"
-        f"<tr><th>Changed</th><td>{_keys_list(keys.get('changed'))}</td></tr>"
-        f"<tr><th>All ({len(_as_list(keys.get('names')))})</th><td>{_keys_list(keys.get('names'))}</td></tr>"
+        f"<tr><th>Added</th><td>{_keys_list(keys.get('added'), synth)}</td></tr>"
+        f"<tr><th>Removed</th><td>{_keys_list(keys.get('removed'), synth)}</td></tr>"
+        f"<tr><th>Changed</th><td>{_keys_list(keys.get('changed'), synth)}</td></tr>"
+        f"<tr><th>All ({len(_as_list(keys.get('names')))})</th><td>{_keys_list(keys.get('names'), synth)}</td></tr>"
         "</table></div>"
     )
 

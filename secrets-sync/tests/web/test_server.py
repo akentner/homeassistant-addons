@@ -334,3 +334,27 @@ def test_ago() -> None:
     assert _ago("2026-10-27T16:01:20Z", now) == "10 s ago"
     assert _ago("2026-10-27T19:01:30Z", now) == "just now"
     assert _ago(None, now) == "-" and _ago("junk", now) == "-"
+
+
+def test_synthetic_keys_badged(ctrl: FakeController, tmp_path: Path) -> None:
+    st = copy.deepcopy(EXAMPLE)
+    st["keys"]["names"] = ["db_dsn", "mqtt_password", "<x>"]
+    st["keys"]["added"] = ["db_dsn"]
+    st["keys"]["synthetic"] = ["db_dsn", "<x>"]
+    body = _page(ctrl, tmp_path, st)
+    assert "<code>db_dsn</code> <span" in body and body.count('class="tag">synthetic<') == 3
+    assert "<code>mqtt_password</code> <span" not in body
+    assert "<x>" not in body and "&lt;x&gt;" in body
+
+
+def test_old_state_without_synthetic_renders_as_before(srv: Srv) -> None:
+    _, body = srv.req("GET", "/", INGRESS)
+    assert 'class="tag">synthetic<' not in body and "<code>mqtt_password</code>" in body
+
+
+def test_synthetic_garbage_tolerated(ctrl: FakeController, tmp_path: Path) -> None:
+    st = copy.deepcopy(EXAMPLE)
+    st["keys"]["synthetic"] = "nope"
+    assert _page(ctrl, tmp_path, st)
+    st["keys"]["synthetic"] = [None, 3]
+    assert _page(ctrl, tmp_path, st)
