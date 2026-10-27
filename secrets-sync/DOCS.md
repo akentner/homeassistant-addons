@@ -30,8 +30,8 @@ are manual. The Bitwarden CLI version is pinned in `build.yaml` (`BW_CLI_VERSION
 | `sops.file`                 | `/config/secrets.sops.yaml` | SOPS-encrypted YAML file                                                 |
 | `sops.flatten_separator`    | `_`                         | Joins nested keys                                                        |
 
-Both provider blocks are optional in the schema. Missing parts are reported as problems (UI and `state.json`) and the
-provider is skipped, the add-on keeps running.
+Both provider blocks are always present in the options. Missing or empty parts are reported as problems (UI and
+`state.json`) and the provider is skipped, the add-on keeps running.
 
 ## Paths
 
@@ -55,6 +55,24 @@ reachable through the Samba or SSH add-on). `/config` is the normal Home Assista
 
 Needs a personal API key (Bitwarden web vault: Account settings, Security, Keys, "View API key") plus the master
 password. The vault is read with `bw sync` and `bw list items`, restricted by organization/collection when configured.
+
+### Why the master password is needed
+
+The API key only authenticates against the server; the vault stays locked. Bitwarden encrypts end to end, so the client
+derives the decryption key from the master password (`bw unlock`). Without it `bw list items` cannot read names or
+values, organization items included. Bitwarden Secrets Manager (`bws`, access tokens) works without a master password,
+but it is a different product with a different data model and Vaultwarden does not support it.
+
+### Recommended: dedicated service user
+
+Do not use your personal account. Create a separate Bitwarden/Vaultwarden user for the add-on:
+
+1. Give it its own master password and API key (a leak then never exposes your personal vault).
+2. Share only the collection with the secrets, with read-only access, and set `collection_id` (and `organization_id`) to
+   that collection.
+3. Use the organization UUID for `organization_id` (not the display name).
+4. Rotate API key and master password if they ever appear in a log or an error message. Home Assistant prints the
+   options into the error text when saving them fails.
 
 ### Legacy key naming
 
