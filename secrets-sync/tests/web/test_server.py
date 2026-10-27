@@ -268,3 +268,69 @@ def test_page_without_usage_block_still_renders(srv: Srv, state_file: Path) -> N
     state_file.write_text(json.dumps(data))
     status, page = srv.req("GET", "/", INGRESS)
     assert status == 200 and "scan is off" in page
+
+
+def _page(ctrl: FakeController, tmp_path: Path, state: dict[str, Any]) -> str:
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps(state))
+    s = Srv(ctrl, p)
+    try:
+        code, body = s.req("GET", "/", INGRESS)
+        assert code == 200
+        return body
+    finally:
+        s.close()
+
+
+def test_check_block_rendered_from_example(srv: Srv) -> None:
+    _, body = srv.req("GET", "/", INGRESS)
+    assert "Change check" in body and "enabled, every 60 s" in body
+    assert "unchanged" in body and "Triggered syncs" in body
+
+
+def test_old_state_without_check_renders_nothing(ctrl: FakeController, tmp_path: Path) -> None:
+    st = copy.deepcopy(EXAMPLE)
+    st.pop("check")
+    body = _page(ctrl, tmp_path, st)
+    assert "Change check" not in body and "Triggered syncs" not in body
+
+
+def test_check_error_and_changed(ctrl: FakeController, tmp_path: Path) -> None:
+    st = copy.deepcopy(EXAMPLE)
+    st["check"].update(result="error", error_code="git_auth_failed", triggered_syncs=3)
+    body = _page(ctrl, tmp_path, st)
+    assert 'class="badge error">error<' in body and "git_auth_failed" in body
+    st["check"].update(result="changed", error_code=None)
+    assert 'class="badge changed">changed<' in _page(ctrl, tmp_path, st)
+
+
+def test_check_disabled(ctrl: FakeController, tmp_path: Path) -> None:
+    st = copy.deepcopy(EXAMPLE)
+    st["check"] = {"enabled": False, "interval": 0, "last_check_at": None, "result": None}
+    body = _page(ctrl, tmp_path, st)
+    assert "Change check" in body and "disabled" in body and "every" not in body.split("Change check")[1][:200]
+
+
+def test_check_garbage_and_escaping(ctrl: FakeController, tmp_path: Path) -> None:
+    st = copy.deepcopy(EXAMPLE)
+    st["check"] = {"enabled": True, "interval": "<b>", "last_check_at": "nope", "result": "<i>", "error_code": "<u>"}
+    body = _page(ctrl, tmp_path, st)
+    assert "<b>" not in body and "<i>" not in body and "<u>" not in body
+    assert _page(ctrl, tmp_path, {**EXAMPLE, "check": "x"})  # non-dict tolerated
+
+
+def test_provider_revision_shown(srv: Srv) -> None:
+    _, body = srv.req("GET", "/", INGRESS)
+    assert "Revision" in body and "<code>1761560000</code>" in body
+
+
+def test_ago() -> None:
+    from datetime import datetime, timezone
+
+    from app.web.server import _ago
+
+    now = datetime(2026, 10, 27, 16, 1, 30, tzinfo=timezone.utc)
+    assert _ago("2026-10-27T16:00:30Z", now) == "1 min ago"
+    assert _ago("2026-10-27T16:01:20Z", now) == "10 s ago"
+    assert _ago("2026-10-27T19:01:30Z", now) == "just now"
+    assert _ago(None, now) == "-" and _ago("junk", now) == "-"
