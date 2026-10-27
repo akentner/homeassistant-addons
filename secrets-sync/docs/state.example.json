@@ -1,5 +1,13 @@
 {
   "age_seconds": 2,
+  "check": {
+    "enabled": true,
+    "error_code": null,
+    "interval": 60,
+    "last_check_at": "2026-10-27T16:00:30Z",
+    "result": "unchanged",
+    "triggered_syncs": 0
+  },
   "error_code": null,
   "events": [
     {

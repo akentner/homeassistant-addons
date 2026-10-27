@@ -177,3 +177,73 @@ staged by path, no `Co-Authored-By`, no hand-edited versions.
   -> `count`, up to 20 `refs` of `file`+`line`), `unused` (key names). Names and positions only.
 - Runs at the end of each cycle, at most every 60 s; never raises; event `secret_missing` (warning) while keys are
   missing.
+
+## SOPS git source and change check (0.3)
+
+### Options (flat additions, defaults keep today's behaviour)
+
+```yaml
+options:
+  check_interval: 60 # int(0,3600); seconds between cheap change checks, 0 = off, 1..29 are raised to 30
+  sops:
+    source: "file" # list(file|git)
+    file: "/config/secrets.sops.yaml" # used when source: file
+    flatten_separator: "_"
+    git_url: "" # str?  ssh (git@host:org/repo.git, ssh://...) or https://...; no credentials inside the URL
+    git_branch: "main" # str
+    git_path: "secrets.sops.yaml" # str   path of the encrypted file inside the repo
+    git_username: "x-access-token" # str   https only
+    git_token: "" # password  https only; run.sh exports it as SS_GIT_TOKEN, never argv/URL
+```
+
+`source: git` ignores `file`. `validate()` reports `sops_git_missing_url`, `sops_git_url_credentials` (userinfo in URL),
+`sops_git_url_scheme` (only `ssh`, `git@host:path`, `https` allowed), `sops_git_path_invalid` (empty, absolute, `..`,
+backslash, NUL), `sops_git_missing_token` is NOT an error (public repos), `sops_git_branch_invalid` (empty or starts
+with `-`).
+
+### Git access (`app/providers/gitsource.py`, owned by ss-sops; used by `sops.py` and its `check()`)
+
+- Binaries `git` + `ssh` (Alpine `git`, `openssh-client`). All calls: argv list, timeout 60 s (`ls-remote` 20 s), stderr
+  dropped, URL/branch after `--`. Env: `GIT_TERMINAL_PROMPT=0`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`,
+  `GIT_ALLOW_PROTOCOL=ssh:https` (overridable by env `SS_GIT_ALLOW_PROTOCOL`, used by tests with `file`), `HOME` = data
+  dir, no `BW_*`. Hooks off (`-c core.hooksPath=/dev/null`), `-c protocol.ext.allow=never`.
+- **SSH** (URL is ssh): key `SS_GIT_DEPLOY_KEY` (default `/addon_config/deploy_key`, regular file, mode 0600 else
+  `git_key_permissions`; missing => `git_key_missing`). `GIT_SSH_COMMAND` =
+  `ssh -i <key> -o IdentitiesOnly=yes -o BatchMode=yes -o UserKnownHostsFile=<kh> -o StrictHostKeyChecking=<mode>`: if
+  `/addon_config/known_hosts` exists it is used with `yes`, otherwise `<data>/known_hosts` with `accept-new` (trust on
+  first use, persisted).
+- **HTTPS**: if `SS_GIT_TOKEN` is set, `GIT_ASKPASS=<app>/bin/git-askpass` (prints `git_username` for the username
+  prompt, else the token, read from env `SS_GIT_USERNAME` / `SS_GIT_TOKEN`). The token never appears in argv, URL, logs
+  or state.
+- Cache: shallow clone `--depth 1 --single-branch --branch <b>` into `<data>/git/<sha1(url+branch)[:12]>`; later cycles
+  `git fetch --depth 1 origin <b>` + `git reset --hard FETCH_HEAD` + `git clean -fdx`. A broken cache (any fetch/reset
+  failure) is deleted and re-cloned once per cycle.
+- File resolution: `git_path` joined to the clone, `Path.resolve()` must stay inside the clone, no symlink components,
+  must be a regular file (else `git_path_invalid` / `git_file_missing`). The file is then handled exactly like
+  `source: file` (`sops -d` of that path, same pre-checks and flattening). Decrypted data never touches disk.
+- `revision` = first 12 chars of the checked-out commit SHA.
+- Error codes (stable, no stderr): `git_binary_missing`, `git_timeout`, `git_auth_failed` (permission denied / 401 / 403
+  pattern in the dropped stderr is only used to pick the code), `git_clone_failed`, `git_fetch_failed`,
+  `git_ref_not_found` (branch missing), `git_exec_failed`, plus the key codes above.
+
+### Change check (engine + `Provider.check()`)
+
+- `Provider.check() -> str | None` (see `providers/base.py`): cheap probe returning an opaque token. SOPS+git:
+  `git ls-remote -- <url> refs/heads/<branch>` => the commit SHA (`git_ref_not_found` if empty). SOPS+file and
+  Bitwarden: not implemented (never probed).
+- Engine: the supervisor remembers per provider the token seen at its last successful `fetch` (for git: the SHA that was
+  checked out; the provider exposes it as `Snapshot.revision`'s full form via `check`-compatible token field
+  `Snapshot.check_token`, new optional field, default `""`). Every `check_interval` seconds (only if
+  `check_interval > 0` and at least one enabled provider implements `check`) the supervisor calls `check()` for those
+  providers; when a token differs from the stored one it starts a normal cycle early (same path as `trigger_sync`,
+  honours the 10 s manual gap and backoff). The regular `interval` sync stays as a fallback and always fetches.
+- A failing check never changes `status`, never counts as a failure for the backoff and never writes anything; it is
+  recorded in `state.check` (`result: error`, `error_code`) and, once per distinct code, as event `check_failed`
+  (warning, no URL). A detected change emits event `source_changed` (info, provider name + short revisions only).
+- `state.json` `check`: see `state.schema.json` (`enabled`, `interval`, `last_check_at`, `result`
+  `unchanged|changed|error|unsupported`, `error_code`, `triggered_syncs`). When disabled:
+  `{"enabled": false, "interval": 0, "last_check_at": null, "result": null}`.
+- Web: ingress page shows "Change check" (interval, last check, result) and the git revision per provider; `/api/health`
+  is unchanged.
+- Privacy: URL, branch, path, token and SHAs of unrelated repos are never logged at info level; log lines carry provider
+  name and short revision only. Tests assert that no token / key content appears in logs, state or events.
