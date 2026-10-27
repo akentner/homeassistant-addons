@@ -105,6 +105,16 @@ def test_error_codes_and_stderr_not_forwarded(fake_bw, bw_cfg, cmd, code):
     assert "csecret-value" not in str(exc.value) and "master-pw-value" not in str(exc.value)
 
 
+def test_login_failure_names_server_but_no_secrets(fake_bw, bw_cfg):
+    fake_bw.set_items([])
+    fake_bw.fail("login", code=1, stderr="client_id or client_secret is incorrect csecret-value")
+    with pytest.raises(ProviderError) as exc:
+        Provider(bw_cfg).fetch()
+    assert exc.value.code == "bw_auth_failed"
+    assert str(bw_cfg["server_url"]) in str(exc.value) and "server_url" in str(exc.value)
+    assert "csecret-value" not in str(exc.value)
+
+
 def test_wrong_credentials(fake_bw, bw_cfg, monkeypatch):
     monkeypatch.setenv("BW_PASSWORD", "nope")
     with pytest.raises(ProviderError) as exc:

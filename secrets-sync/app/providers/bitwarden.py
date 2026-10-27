@@ -144,7 +144,7 @@ class Provider:
             state = "unauthenticated"
         if state == "unauthenticated":
             if self._run(["login", "--apikey"]).rc != 0:
-                raise ProviderError("bw_auth_failed", "bw login failed")
+                raise ProviderError("bw_auth_failed", f"bw login failed on server {want}: check server_url, client_id, client_secret")
             self._session = None
             state = "locked"
         if self._session is None or state != "unlocked":

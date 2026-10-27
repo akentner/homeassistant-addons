@@ -3,6 +3,11 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.1.1-0] - 2026-10-27
+
+- Diagnostics: a failed provider now reports its reason in the events (for a rejected Bitwarden login: which server was
+  used and which options to check). No secret values are included.
+
 ## [0.1.0-1] - 2026-10-27
 
 - Fix: options could not be saved ("Missing option 'bitwarden?'"). The `bitwarden` and `sops` blocks are now always
