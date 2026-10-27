@@ -253,3 +253,18 @@ def test_ambiguous_collection_name(fake_bw, bw_cfg):
     with pytest.raises(ProviderError) as exc:
         Provider({**bw_cfg, "collection_id": "S"}).fetch()
     assert exc.value.code == "bw_collection_id_ambiguous"
+
+
+def test_archived_and_trashed_items_are_ignored(fake_bw, bw_cfg):
+    live = {"type": 1, "name": "live", "login": {"username": "u", "password": "p"}}
+    fake_bw.set_items([
+        live,
+        {"type": 1, "name": "old", "archivedDate": "2026-09-01T00:00:00Z", "login": {"password": "x"}},
+        {"type": 1, "name": "gone", "deletedDate": "2026-09-02T00:00:00Z", "login": {"password": "y"}},
+        {"type": 2, "name": "old note", "archivedDate": "2026-09-01T00:00:00Z", "notes": "n"},
+    ])
+    provider = Provider(bw_cfg)
+    snap = provider.fetch()
+    assert snap.secrets == {"live_username": "u", "live_password": "p"}
+    assert snap.files == {}
+    assert ("info", "item_inactive", "3 archived/trashed items ignored") in provider.notices

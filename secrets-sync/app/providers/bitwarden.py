@@ -183,10 +183,17 @@ class Provider:
         if not isinstance(items, list):
             raise ProviderError("bw_invalid_json", "bw list returned unexpected JSON")
         filtered = len(args) > 2
+        # Only active items: archived and trashed ones must never become secrets
+        active = [i for i in items if not (isinstance(i, dict) and (i.get("archivedDate") or i.get("deletedDate")))]
+        inactive = len(items) - len(active)
+        items = active
         log.info("bitwarden: %d items listed (organization filter %s, collection filter %s)", len(items),
                  "set" if self._cfg.get("organization_id") else "off",
                  "set" if self._cfg.get("collection_id") else "off")
-        if not items and filtered:
+        if inactive:
+            log.info("bitwarden: %d archived/trashed items ignored", inactive)
+            self.notices.append(("info", "item_inactive", f"{inactive} archived/trashed items ignored"))
+        if not items and filtered and not inactive:
             self.notices.append(("warning", "bw_filter_empty", "the organization/collection filter matched no "
                                  "items: check organization_id / collection_id (log_level debug lists what is visible)"))
         if log.isEnabledFor(logging.DEBUG):
