@@ -3,6 +3,35 @@
 ```bash
 cosign verify \
   --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub \
+  ghcr.io/berriai/litellm:v1.106.5
+```
+
+Same command for `litellm-database`, `litellm-non_root` and the `docker.io/litellm/*` images
+
+## What's new in 1.106.5
+
+1 PR. 1 changed. No action needed to upgrade
+
+### Changes
+
+- **Logging and observability:** Changed failure logs for rejected requests to keep only core request fields, `tags` and
+  guardrail details (#48599) <sup>Also in [1.103.10](https://github.com/BerriAI/litellm/releases/tag/v1.103.10),
+  [1.104.8](https://github.com/BerriAI/litellm/releases/tag/v1.104.8),
+  [1.105.6](https://github.com/BerriAI/litellm/releases/tag/v1.105.6)</sup>
+- **Logging and observability:** Changed the GCS logger to use the bucket and credentials configured on the proxy
+  (#48599) <sup>Also in [1.103.10](https://github.com/BerriAI/litellm/releases/tag/v1.103.10),
+  [1.104.8](https://github.com/BerriAI/litellm/releases/tag/v1.104.8),
+  [1.105.6](https://github.com/BerriAI/litellm/releases/tag/v1.105.6)</sup>
+
+---
+
+Backport #48605 · [Full changelog](https://github.com/BerriAI/litellm/compare/v1.106.4...v1.106.5)
+
+## Verify this release
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub \
   ghcr.io/berriai/litellm:v1.106.4
 ```
 
