@@ -1,3 +1,63 @@
+## [1.87.0](https://github.com/rynfar/meridian/compare/meridian-v1.86.0...meridian-v1.87.0) (2026-10-27)
+
+### Features
+
+- check loaded plugins for updates alongside Meridian ([#1445](https://github.com/rynfar/meridian/issues/1445))
+  ([a70a992](https://github.com/rynfar/meridian/commit/a70a992557ca72974af4b879a7ea2e556d091bce))
+- list and redeem Claude banked resets ([#1429](https://github.com/rynfar/meridian/issues/1429))
+  ([19b0f76](https://github.com/rynfar/meridian/commit/19b0f76230f97be833ffca83fa98fd75b2ff9be0))
+- optional prompt-cache keepalive for idle sessions ([#1193](https://github.com/rynfar/meridian/issues/1193))
+  ([1b643b1](https://github.com/rynfar/meridian/commit/1b643b1a59efa4a9f49616437d66ce683d8bf95a))
+- **profiles:** flag profiles signed in to one account, show a card updating after sign-in, refresh pages in place
+  ([#1446](https://github.com/rynfar/meridian/issues/1446))
+  ([72da174](https://github.com/rynfar/meridian/commit/72da1744b93e94e48c2bde1ad64af179ca3175a5))
+
+### Bug Fixes
+
+- **antigravity:** expand a leading ~ in PI_CODING_AGENT_DIR for Pi setup
+  ([#1456](https://github.com/rynfar/meridian/issues/1456))
+  ([df3839e](https://github.com/rynfar/meridian/commit/df3839e3e7312606967c0a726b75b8a7618cb74b))
+- **chatgpt:** list a seat as it was while its renewal is out ([#1463](https://github.com/rynfar/meridian/issues/1463))
+  ([2534575](https://github.com/rynfar/meridian/commit/253457540f08b57ddbb376d6885949cada1d0184))
+- delete old Claude Code transcripts again ([#1261](https://github.com/rynfar/meridian/issues/1261))
+  ([3548ff2](https://github.com/rynfar/meridian/commit/3548ff28b3256e57691eb65cc2380f1d0b3f49ef))
+- **opencode:** keep V2 compaction on the conversation's model tier
+  ([#1458](https://github.com/rynfar/meridian/issues/1458))
+  ([c433b20](https://github.com/rynfar/meridian/commit/c433b205de7d7f722368082c2c5b1633e8f684c4))
+- **passthrough:** share built tool definitions between sessions
+  ([#1410](https://github.com/rynfar/meridian/issues/1410))
+  ([9d971d5](https://github.com/rynfar/meridian/commit/9d971d504d9f05ada8d9ff7a71670a3b447772ea))
+- **settings:** put each control on its label's line and name the env var that overrides a setting
+  ([#1443](https://github.com/rynfar/meridian/issues/1443))
+  ([662fd4c](https://github.com/rynfar/meridian/commit/662fd4c15f52448882a3b52d546baa7e7007b2cd))
+
+### Performance
+
+- **passthrough:** share per-session tool lists between sessions
+  ([#1444](https://github.com/rynfar/meridian/issues/1444))
+  ([cb37785](https://github.com/rynfar/meridian/commit/cb3778580e0d578fe0e9f76e8e04df9bdab800f3))
+
+### Upgrade notes
+
+- **Transcript retention is opt-in and off by default (#1261).** Nothing is deleted unless you set
+  `MERIDIAN_TRANSCRIPT_RETENTION_DAYS` or **Settings → Transcripts**. When it's on, Claude Code's own cleanup deletes
+  _all_ of its files older than the period in each profile directory: transcripts (including conversations Meridian
+  still maps, which then replay from client history), file history, plans, tasks, uploads, shell snapshots, debug logs
+  and backups. The first cleanup after you turn it on can wait up to a day. See
+  [transcript retention](https://github.com/rynfar/meridian/blob/main/docs/configuration.md).
+- **Prompt-cache keepalive is opt-in and off by default (#1193).** Set `MERIDIAN_CACHE_KEEPALIVE=1` (or
+  `cacheKeepalive: true`) to keep an idle subscription session's one-hour prompt cache warm with at most three small
+  requests about 55 minutes apart. It only applies to main conversations on `claude-max` profiles and never to API-key
+  or Extra Usage traffic. In a live A/B the next turn after a 65-minute pause was about 89% cheaper.
+- **"Check for updates" now also covers loaded plugins (#1445).** With the check on, the npm package names of loaded
+  plugins are sent to the registry, using the same toggle as Meridian's own check. If you route Meridian's check to a
+  mirror with `MERIDIAN_UPDATE_CHECK_URL`, plugins are only checked once you also set `MERIDIAN_UPDATE_CHECK_REGISTRY`.
+- **Banked resets (#1429)** appear in `GET /v1/usage/quota/all`, and `POST /v1/usage/quota/reset` redeems one only when
+  you explicitly name the profile, grant and request ID. Inferred token profiles now report `not_oauth` on quota routes.
+- **No macOS desktop download for this release.** The `desktop / mac` job failed at Apple notarization (HTTP 401), the
+  same rejected credential as 1.85.0 and 1.86.0. npm, Docker (`ghcr.io/rynfar/meridian:1.87.0` and `:1.87`, linux/amd64
+  and linux/arm64) and Nix are unaffected.
+
 ## [1.86.0](https://github.com/rynfar/meridian/compare/meridian-v1.85.0...meridian-v1.86.0) (2026-10-26)
 
 ### Features
