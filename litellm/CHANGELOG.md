@@ -1,3 +1,48 @@
+## Verify Docker Image Signature
+
+All LiteLLM Docker images are signed with [cosign](https://docs.sigstore.dev/cosign/overview/). This release is signed
+with the key introduced in
+[commit `e82a3c6`](https://github.com/BerriAI/litellm/commit/e82a3c646908ba0a6ee0beddc4310d7a6cac4065).
+
+**Verify using the pinned commit hash (recommended):**
+
+A commit hash is cryptographically immutable, so this is the strongest way to ensure you are using the published signing
+key:
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub \
+  ghcr.io/berriai/litellm:v1.106.6
+```
+
+**Verify using the release tag (convenience):**
+
+Tags are protected in this repository and resolve to the same key. This option is easier to read but relies on tag
+protection rules:
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/v1.106.6/cosign.pub \
+  ghcr.io/berriai/litellm:v1.106.6
+```
+
+Expected output:
+
+```
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - The signatures were verified against the specified public key
+```
+
+---
+
+## What's Changed
+
+- fix(proxy): backport #46712 gzip scoping and off-loop compression to stable/1.106.x for v1.106.6 by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/48680
+
+**Full Changelog**: https://github.com/BerriAI/litellm/compare/v1.106.5...v1.106.6
+
 ## Verify this release
 
 ```bash
