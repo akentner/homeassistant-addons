@@ -1,5 +1,37 @@
 ## What's Changed
 
+- feat(alerting): add Resend alerting provider by @geffersonFerraz in https://github.com/TwiN/gatus/pull/1830
+- fix(maintenance): validate maintenance windows for external, DNS and SSH endpoints by @anandghegde in
+  https://github.com/TwiN/gatus/pull/1804
+- fix(alerting): Redact telegram token from errors on send failure by @hippi345 in
+  https://github.com/TwiN/gatus/pull/1843
+- fix(websocket): apply the client timeout to reads and writes by @somaz94 in https://github.com/TwiN/gatus/pull/1845
+- fix(ssh): support keyboard-interactive authentication for endpoints and tunnels by @peckto in
+  https://github.com/TwiN/gatus/pull/1863
+- fix(security): add comprehensive logging and diagnostics for OIDC (#1802) by @tech00exploere in
+  https://github.com/TwiN/gatus/pull/1862
+- fix(jsonpath): support object keys containing dots via quoted accessors by @leotemtem in
+  https://github.com/TwiN/gatus/pull/1864
+- fix: Honor minimum-reminder-interval for external endpoints by @yzxcj797 in https://github.com/TwiN/gatus/pull/1773
+- chore(alerting): restyle matrix alerts with errors, safe links and escaping by @mazzz1y in
+  https://github.com/TwiN/gatus/pull/1875
+
+## New Contributors
+
+- @anandghegde made their first contribution in https://github.com/TwiN/gatus/pull/1804
+- @yzxcj797 made their first contribution in https://github.com/TwiN/gatus/pull/1773
+- @hippi345 made their first contribution in https://github.com/TwiN/gatus/pull/1843
+- @geffersonFerraz made their first contribution in https://github.com/TwiN/gatus/pull/1830
+- @somaz94 made their first contribution in https://github.com/TwiN/gatus/pull/1845
+- @peckto made their first contribution in https://github.com/TwiN/gatus/pull/1863
+- @tech00exploere made their first contribution in https://github.com/TwiN/gatus/pull/1862
+- @leotemtem made their first contribution in https://github.com/TwiN/gatus/pull/1864
+- @mazzz1y made their first contribution in https://github.com/TwiN/gatus/pull/1875
+
+**Full Changelog**: https://github.com/TwiN/gatus/compare/v5.37.0...v5.38.0
+
+## What's Changed
+
 - feat(alerting): allow configuring the topic for Zulip alerts by @ChrisJr404 in https://github.com/TwiN/gatus/pull/1764
 - feat(client): Allow configuration of client cookie storage by @AaronLionsheep in
   https://github.com/TwiN/gatus/pull/1716
