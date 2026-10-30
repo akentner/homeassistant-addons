@@ -3,6 +3,12 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.4.3-0] - 2026-10-31
+
+- Feature: the overview page has a "Synthetic keys" card with every configured key, its template, the key names it uses
+  and its status (`ok`, parsed but not rendered yet, or the error code such as `synthetic_syntax`,
+  `synthetic_forbidden`, `synthetic_undefined`). New `synthetic` block in `state.json`.
+
 ## [0.4.2-0] - 2026-10-30
 
 - Fix: after a master password change `bw unlock` failed forever with `bw_unlock_failed` because the locally cached key

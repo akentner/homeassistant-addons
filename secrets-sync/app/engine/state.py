@@ -48,6 +48,7 @@ class StateStore:
         self.providers: dict[str, dict[str, Any]] = {}
         self.events: list[dict[str, str]] = []
         self.usage: dict[str, Any] = {"enabled": False}
+        self.synthetic: list[dict[str, Any]] = []
         self.check: dict[str, Any] = {"enabled": False, "interval": 0, "last_check_at": None, "result": None}
 
     def load_previous(self) -> None:
@@ -98,6 +99,7 @@ class StateStore:
             "keys": self.keys,
             "events": self.events,
             "usage": self.usage,
+            "synthetic": self.synthetic,
             "check": self.check,
         }
 

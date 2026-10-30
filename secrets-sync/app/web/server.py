@@ -170,6 +170,26 @@ def _ago(value: Any, now: datetime) -> str:
     return f"{secs} s ago"
 
 
+def _synthetic_card(items: Any) -> str:
+    rows = []
+    for item in _as_list(items):
+        item = _as_dict(item)
+        status = item.get("status") if item.get("status") in ("ok", "pending", "error") else "pending"
+        label = {"ok": "ok", "pending": "parsed (not rendered yet)", "error": "error"}[status]
+        refs = " ".join(f"<code>{_e(r)}</code>" for r in _as_list(item.get("refs"))) or "-"
+        code = f" <code>{_e(item.get('error_code'))}</code>" if item.get("error_code") else ""
+        rows.append(
+            f"<tr><td><code>{_e(item.get('name'))}</code></td><td><code>{_e(item.get('template'))}</code></td>"
+            f"<td>{refs}</td><td class=\"{'bad' if status == 'error' else status}\">{_e(label)}{code}</td></tr>"
+        )
+    if not rows:
+        return ""
+    return (
+        '<div class="card"><h2>Synthetic keys</h2><table><tr><th>Key</th><th>Template</th><th>Uses</th><th>Status</th>'
+        f"</tr>{''.join(rows)}</table></div>"
+    )
+
+
 def _check_card(check: Any, now: datetime) -> str:
     """Change-check block from state["check"]; empty when absent (older state files)."""
     if not isinstance(check, dict):
@@ -249,6 +269,7 @@ def render_page(state: dict[str, Any], now: datetime | None = None) -> str:
         "</table></div>"
     )
 
+    parts.append(_synthetic_card(state.get("synthetic")))
     parts.append(_render_usage(_as_dict(state.get("usage"))))
 
     ev_rows = []

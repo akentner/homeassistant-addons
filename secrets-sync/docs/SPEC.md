@@ -300,3 +300,13 @@ options:
 - Usage scan unchanged (a synthetic key is a normal key in `secrets.yaml`).
 - Packaging: Alpine `py3-jinja2` (tests use `jinja2` via `uv run --with`). Docs: examples (DSN, URL with `urlquote`,
   `substr`, `default`), the forbidden list, error codes.
+
+### Synthetic keys in the UI (0.4.3)
+
+- `state.json` `synthetic` (list, see schema): per configured key `name`, `template` (configuration text, never a
+  value), `refs` (key names the template mentions), `status` `ok|pending|error` and `error_code`. Parse problems
+  (`synthetic_syntax`, `synthetic_forbidden`, `synthetic_unavailable`) are reported from `synthetic.inspect()` at the
+  start of every cycle, independent of provider results; render problems (`synthetic_undefined`, `synthetic_too_large`,
+  ...) are attached to the failing key. `pending` = parsed, but the cycle ended before rendering.
+- The ingress page renders the card; it is omitted when the list is empty or absent. Templates are therefore also in
+  `/api/status.json`: never put a literal secret into a template.

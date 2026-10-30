@@ -55,6 +55,18 @@
   "schema_version": 1,
   "stale": false,
   "status": "ok",
+  "synthetic": [
+    {
+      "error_code": null,
+      "name": "db_dsn",
+      "refs": [
+        "db_password",
+        "db_user"
+      ],
+      "status": "ok",
+      "template": "postgresql://{{ db_user | urlquote }}:{{ db_password | urlquote }}@db:5432/ha"
+    }
+  ],
   "usage": {
     "enabled": true,
     "files_scanned": 454,

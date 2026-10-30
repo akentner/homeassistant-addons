@@ -315,3 +315,42 @@ def test_leak_sentinel_never_surfaces(tmp_path, caplog):
         apply(real, [("t", "{{ db_password | substr('x') }}")])
     assert sentinel not in str(exc.value) and sentinel not in repr(exc.value.args)
     assert exc.value.__cause__ is None and exc.value.__suppress_context__
+
+
+# ---------------------------------------------------------------- UI report
+
+
+def test_report_lists_config_refs_and_ok_status(tmp_path):
+    sup, _ = sup_with(tmp_path, [DSN])
+    sup.run_once()
+    data = state(sup)
+    check(data, SCHEMA)
+    assert data["synthetic"] == [{"name": "dsn", "template": DSN[1], "refs": ["db_password", "db_user", "host"],
+                                  "status": "ok", "error_code": None}]
+
+
+def test_report_parse_errors_per_key_even_if_others_are_fine(tmp_path):
+    sup, _ = sup_with(tmp_path, [DSN, ("bad", "{{ host "), ("evil", "{{ ''.__class__ }}"),
+                                 ("loop", "{% for x in host %}{{ x }}{% endfor %}")])
+    assert sup.run_once() == "error"  # nothing written: errors are fatal like collisions
+    rep = {e["name"]: e for e in state(sup)["synthetic"]}
+    check(state(sup), SCHEMA)
+    assert rep["dsn"]["status"] == "pending" and rep["dsn"]["error_code"] is None
+    assert (rep["bad"]["status"], rep["bad"]["error_code"]) == ("error", "synthetic_syntax")
+    assert rep["evil"]["error_code"] == "synthetic_forbidden" and rep["loop"]["error_code"] == "synthetic_forbidden"
+
+
+def test_report_marks_undefined_key_at_render_time(tmp_path):
+    sup, _ = sup_with(tmp_path, [("x", "{{ nope }}")])
+    sup.run_once()
+    entry = state(sup)["synthetic"][0]
+    assert (entry["status"], entry["error_code"], entry["refs"]) == ("error", "synthetic_undefined", ["nope"])
+
+
+def test_report_empty_without_defs_and_never_contains_values(tmp_path):
+    sup, _ = sup_with(tmp_path, [])
+    sup.run_once()
+    assert state(sup)["synthetic"] == []
+    sup, _ = sup_with(tmp_path, [DSN])
+    sup.run_once()
+    assert "p@ss" not in json.dumps(state(sup)["synthetic"])
