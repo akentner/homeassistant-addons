@@ -9,8 +9,8 @@ Findings (documented by the tests below):
    `<item>_notes` / `<item>_<field>`, byte-identical (newlines and trailing newline included), and stored escaped
    on a single physical YAML line.
 2. A Secure Note (type 2) is exported as a file below `notes_dir`, never as a secret.
-3. SSH-key items (type 5) export `<item>_private_key` and `<item>_public_key`; a custom field `secrets_sync` =
-   `public` limits the export to the public key.
+3. SSH-key items (type 5) export `<item>_public_key`; `<item>_private_key` only with the custom field
+   `secrets_sync_export_private` = `true`.
 """
 
 from __future__ import annotations
@@ -111,32 +111,32 @@ def _ssh_item(**extra):
             "sshKey": {"privateKey": KEY, "publicKey": PUB, "keyFingerprint": "SHA256:fake"}, **extra}
 
 
-def test_ssh_key_item_type5_exports_private_and_public_key(fake_bw, bw_cfg):
+def test_ssh_key_item_type5_exports_only_public_key_by_default(fake_bw, bw_cfg):
     fake_bw.set_items([{"type": 1, "name": "Deploy Host", "login": {"username": "git"}}, _ssh_item()])
     provider = Provider(bw_cfg)
     snap = provider.fetch()
-    assert snap.secrets == {"deploy_host_username": "git", "deploy_ssh_private_key": KEY,
-                            "deploy_ssh_public_key": PUB}
+    assert snap.secrets == {"deploy_host_username": "git", "deploy_ssh_public_key": PUB}
+    assert KEY not in snap.secrets.values()
     assert snap.files == {}
-    assert provider.notices == []  # no fingerprint key, nothing skipped
+    assert provider.notices == []
 
 
-def test_ssh_key_item_marked_public_exports_only_public_key(fake_bw, bw_cfg):
-    marker = {"fields": [{"name": "Secrets_Sync", "value": " Public ", "type": 0}]}
+def test_ssh_key_item_with_export_private_flag_exports_both_keys(fake_bw, bw_cfg):
+    marker = {"fields": [{"name": "Secrets_Sync_Export_Private", "value": " True ", "type": 2}]}
     fake_bw.set_items([_ssh_item(**marker)])
     snap = Provider(bw_cfg).fetch()
-    assert snap.secrets == {"deploy_ssh_public_key": PUB}
-    assert KEY not in snap.secrets.values()
+    assert snap.secrets == {"deploy_ssh_public_key": PUB, "deploy_ssh_private_key": KEY}
 
 
-def test_other_marker_value_keeps_private_key(fake_bw, bw_cfg):
-    fake_bw.set_items([_ssh_item(fields=[{"name": "secrets_sync", "value": "all", "type": 0}])])
-    assert "deploy_ssh_private_key" in Provider(bw_cfg).fetch().secrets
+def test_export_private_flag_other_values_keep_private_key_out(fake_bw, bw_cfg):
+    for value in ("false", "", "yes"):
+        fake_bw.set_items([_ssh_item(fields=[{"name": "secrets_sync_export_private", "value": value, "type": 0}])])
+        assert set(Provider(bw_cfg).fetch().secrets) == {"deploy_ssh_public_key"}
 
 
 def test_card_and_identity_are_still_skipped_with_notice(fake_bw, bw_cfg):
     fake_bw.set_items([{"type": 3, "name": "card"}, {"type": 4, "name": "id"}, _ssh_item()])
     provider = Provider(bw_cfg)
     snap = provider.fetch()
-    assert set(snap.secrets) == {"deploy_ssh_private_key", "deploy_ssh_public_key"}
+    assert set(snap.secrets) == {"deploy_ssh_public_key"}
     assert provider.notices == [("info", "item_skipped", "2 card/identity items skipped")]

@@ -31,11 +31,11 @@ _CRED_ENV = (
 )
 
 
-def _public_only(item: dict[str, Any]) -> bool:
-    """An SSH-key item marked with the custom field `secrets_sync` = `public` exports only its public key."""
+def _export_private(item: dict[str, Any]) -> bool:
+    """An SSH-key item exports its private key only with the custom field `secrets_sync_export_private` = true."""
     for fld in item.get("fields") or []:
-        if (isinstance(fld, dict) and str(fld.get("name", "")).strip().lower() == "secrets_sync"
-                and str(fld.get("value", "")).strip().lower() == "public"):
+        if (isinstance(fld, dict) and str(fld.get("name", "")).strip().lower() == "secrets_sync_export_private"
+                and str(fld.get("value", "")).strip().lower() == "true"):
             return True
     return False
 
@@ -314,9 +314,9 @@ class Provider:
                     snap.files[path] = str(note).encode("utf-8")
             elif kind == 5:
                 ssh = item.get("sshKey") or {}
-                if not _public_only(item):
-                    put(f"{base}_private_key", ssh.get("privateKey"), item_name)
                 put(f"{base}_public_key", ssh.get("publicKey"), item_name)
+                if _export_private(item):
+                    put(f"{base}_private_key", ssh.get("privateKey"), item_name)
             else:
                 skipped += 1
         if skipped:
