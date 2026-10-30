@@ -1,6 +1,6 @@
 name: "Secrets Sync"
 description: "Syncs secrets from Bitwarden or SOPS into /config/secrets.yaml and optional files"
-version: "0.4.2-0"
+version: "0.4.3-0"
 slug: "secrets_sync"
 init: false
 arch:

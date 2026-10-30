@@ -306,6 +306,50 @@
         "starting"
       ]
     },
+    "synthetic": {
+      "description": "Configured synthetic keys with their parse/render status. Optional (absent in older state files; empty when none are configured). Template text is configuration, never a value.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "refs": {
+            "description": "key names the template mentions",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "description": "ok = parsed and rendered in the last cycle; pending = parsed, not rendered yet (cycle ended earlier); error = see error_code",
+            "enum": [
+              "ok",
+              "pending",
+              "error"
+            ]
+          },
+          "template": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "template",
+          "refs",
+          "status",
+          "error_code"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
     "usage": {
       "additionalProperties": false,
       "description": "Where `!secret <key>` is referenced in YAML files. Key names and file/line positions only, never values. Optional: absent in older state files.",

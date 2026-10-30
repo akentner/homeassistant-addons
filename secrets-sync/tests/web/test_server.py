@@ -358,3 +358,25 @@ def test_synthetic_garbage_tolerated(ctrl: FakeController, tmp_path: Path) -> No
     assert _page(ctrl, tmp_path, st)
     st["keys"]["synthetic"] = [None, 3]
     assert _page(ctrl, tmp_path, st)
+
+
+def test_synthetic_card_shows_config_refs_and_status(ctrl: FakeController, tmp_path: Path) -> None:
+    st = copy.deepcopy(EXAMPLE)
+    st["synthetic"] = [
+        {"name": "db_dsn", "template": "pg://{{ db_user }}@h", "refs": ["db_user"], "status": "ok", "error_code": None},
+        {"name": "<bad>", "template": "{{ x ", "refs": [], "status": "error", "error_code": "synthetic_syntax"},
+        {"name": "wait", "template": "{{ y }}", "refs": ["y"], "status": "pending", "error_code": None},
+    ]
+    body = _page(ctrl, tmp_path, st)
+    assert "<h2>Synthetic keys</h2>" in body
+    assert "pg://{{ db_user }}@h" in body and "<code>db_user</code>" in body
+    assert "synthetic_syntax" in body and "parsed (not rendered yet)" in body
+    assert "<bad>" not in body and "&lt;bad&gt;" in body
+
+
+def test_no_synthetic_card_when_absent_or_empty(ctrl: FakeController, tmp_path: Path) -> None:
+    st = copy.deepcopy(EXAMPLE)
+    st.pop("synthetic", None)
+    assert "<h2>Synthetic keys</h2>" not in _page(ctrl, tmp_path, st)
+    st["synthetic"] = []
+    assert "<h2>Synthetic keys</h2>" not in _page(ctrl, tmp_path, st)

@@ -214,6 +214,13 @@ events, error messages, the web page or the preview. Messages are built from the
 from Jinja's own message text. `keys.synthetic` in `state.json` lists the names of synthetic keys in the written set;
 they count in `items` and in the shrink guard like real keys.
 
+### Overview page
+
+The overview page has a "Synthetic keys" card: key name, the configured template, the key names it uses and the status
+(`ok`, parsed but not rendered yet when the cycle ended earlier, or the error code). Syntax errors and forbidden
+constructs show up immediately, even while a provider is failing. Templates are configuration, not values, and are part
+of `/api/status.json`: never write a literal secret into a template, always reference keys.
+
 ## Secret usage
 
 The add-on scans YAML files for `!secret <key>` and compares the result with the keys in `secrets.yaml`. The web page

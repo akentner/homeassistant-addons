@@ -31,9 +31,10 @@ PREVIEW_WAIT = 90
 
 
 class SyntheticFailure(Exception):
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, name: str = "") -> None:
         super().__init__(message)
         self.code = code
+        self.name = name
 
 
 @dataclass
@@ -258,6 +259,7 @@ class Supervisor:
             self._finish(now, "error", errors[0].code, sigs)
             return
 
+        self._synthetic_report()
         fetches = [self._fetch_provider(name) for name in self.cfg.providers]
         used: list[tuple[str, Snapshot]] = []
         failed: list[_Fetch] = []
@@ -313,8 +315,10 @@ class Supervisor:
                 synth = self._synthetic(merged.secrets)
                 merged.secrets.update(synth)
                 synth_names = sorted(synth)
+                self._synthetic_report(rendered=True)
             except SyntheticFailure as exc:
                 fatal = (exc.code, str(exc))
+                self._synthetic_report(failure=exc)
         if merged is not None and fatal is None:
             items = len(merged.secrets)
             if check_shrink(items, self._last_items, self.cfg.shrink_guard_percent, force):
@@ -361,6 +365,28 @@ class Supervisor:
             st.add_event("info", "sync_ok", f"sync recovered ({st.items} items)")
         self._finish(now, "ok", None, sigs)
 
+    def _synthetic_report(self, rendered: bool = False, failure: SyntheticFailure | None = None) -> None:
+        """Per-key status for the UI: names, templates (config, no values), referenced key names, parse/render result."""
+        defs = self.cfg.synthetic_keys
+        if not defs:
+            self.state.synthetic = []
+            return
+        try:
+            from app.engine import synthetic
+            entries = synthetic.inspect(defs)
+        except ImportError:
+            entries = [{"name": n, "template": tpl, "refs": [], "error_code": "synthetic_unavailable"}
+                       for n, tpl in defs]
+        report = []
+        for entry in entries:
+            code = entry.pop("error_code")
+            if code is None and failure is not None and failure.name == entry["name"]:
+                code = failure.code
+            entry["status"] = "error" if code else ("ok" if rendered else "pending")
+            entry["error_code"] = code
+            report.append(entry)
+        self.state.synthetic = report
+
     def _synthetic(self, secrets: Mapping[str, str]) -> dict[str, str]:
         """Render synthetic keys from the merged real keys. Raises SyntheticFailure (code + names only)."""
         if not self.cfg.synthetic_keys:
@@ -373,7 +399,7 @@ class Supervisor:
         try:
             out = synthetic.apply(secrets, self.cfg.synthetic_keys)
         except synthetic.SyntheticError as exc:
-            raise SyntheticFailure(exc.code, str(exc)) from None
+            raise SyntheticFailure(exc.code, str(exc), exc.name) from None
         self.redactor.register(out.values())
         return out
 

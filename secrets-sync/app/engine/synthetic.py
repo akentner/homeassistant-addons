@@ -212,3 +212,28 @@ def apply(secrets: Mapping[str, str], defs: Sequence[tuple[str, str]]) -> dict[s
             raise SyntheticError("synthetic_too_large", name)
         out[name] = value
     return out
+
+
+def inspect(defs: Sequence[tuple[str, str]]) -> list[dict[str, Any]]:
+    """Parse-only report per synthetic key (no values needed): `error_code` is None when the template parses and
+    uses only allowed constructs. `refs` lists the key names the template mentions literally."""
+    env = _environment()
+    allowed = set(env.filters)
+    out: list[dict[str, Any]] = []
+    for name, template in defs:
+        entry: dict[str, Any] = {"name": name, "template": template, "refs": [], "error_code": None}
+        try:
+            tree = env.parse(template)
+        except TemplateSyntaxError:
+            entry["error_code"] = "synthetic_syntax"
+        except Exception:
+            entry["error_code"] = "synthetic_error"
+        else:
+            try:
+                _check(tree, allowed)
+            except _Forbidden:
+                entry["error_code"] = "synthetic_forbidden"
+            else:
+                entry["refs"] = sorted(_referenced_names(tree) - set(RESERVED_NAMES))
+        out.append(entry)
+    return out
