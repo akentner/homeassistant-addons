@@ -3,6 +3,12 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.4.1-0] - 2026-10-30
+
+- Feature: Bitwarden SSH-key items (type 5) are exported as `<name>_public_key`. The private key (`<name>_private_key`)
+  is exported only if the item has a custom field `secrets_sync_export_private_key` with value `true`. The
+  `item_skipped` notice now counts only cards and identities.
+
 ## [0.4.0-0] - 2026-10-27
 
 - Feature: synthetic keys. New option `synthetic_keys` (list of `name` + `template`) composes keys from other keys with
