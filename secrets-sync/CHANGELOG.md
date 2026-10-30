@@ -3,6 +3,12 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.4.2-0] - 2026-10-30
+
+- Fix: after a master password change `bw unlock` failed forever with `bw_unlock_failed` because the locally cached key
+  no longer matched the new password. The provider now logs in again once and retries the unlock; the error then says to
+  check `master_password`.
+
 ## [0.4.1-0] - 2026-10-30
 
 - Feature: Bitwarden SSH-key items (type 5) are exported as `<name>_public_key`. The private key (`<name>_private_key`)

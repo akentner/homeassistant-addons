@@ -68,9 +68,11 @@ elif cmd == "login":
         sys.exit(1)
     state["status"] = "locked"
     save("state.json", state)
+    if os.path.exists(os.path.join(d, "stale_key")):
+        os.remove(os.path.join(d, "stale_key"))
 elif cmd == "unlock":
     name = args[args.index("--passwordenv") + 1]
-    if os.environ.get(name) != "master-pw-value":
+    if os.path.exists(os.path.join(d, "stale_key")) or os.environ.get(name) != "master-pw-value":
         sys.stderr.write("Invalid master password.")
         sys.exit(1)
     state["status"] = "unlocked"
@@ -112,6 +114,10 @@ class FakeBw:
 
     def clear_fail(self) -> None:
         (self.dir / "fail.json").unlink(missing_ok=True)
+
+    def stale_key(self) -> None:
+        """unlock fails until the next login (cached key from before a master password change)."""
+        (self.dir / "stale_key").write_text("1")
 
     def expire_once(self) -> None:
         (self.dir / "expire_once").write_text("1")
