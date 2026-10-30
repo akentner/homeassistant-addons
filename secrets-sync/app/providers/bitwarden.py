@@ -163,8 +163,25 @@ class Provider:
             res = self._run(["unlock", "--passwordenv", "BW_PASSWORD", "--raw"])
             token = res.stdout.strip()
             if res.rc != 0 or not token:
-                raise ProviderError("bw_unlock_failed", "bw unlock failed")
+                # After a master password change the locally cached key no longer matches. A fresh login
+                # re-downloads it; if unlock still fails the configured master_password is really wrong.
+                token = self._relogin_unlock(want)
             self._session = token
+
+    def _relogin_unlock(self, server: str) -> str:
+        self._session = None
+        self._run(["logout"])
+        if self._run(["config", "server", server]).rc != 0:
+            raise ProviderError("bw_auth_failed", "bw config server failed")
+        if self._run(["login", "--apikey"]).rc != 0:
+            raise ProviderError("bw_auth_failed", f"bw login failed on server {server}: check server_url, client_id, "
+                                                  "client_secret")
+        res = self._run(["unlock", "--passwordenv", "BW_PASSWORD", "--raw"])
+        token = res.stdout.strip()
+        if res.rc != 0 or not token:
+            raise ProviderError("bw_unlock_failed", "bw unlock failed after a fresh login: check master_password")
+        log.info("bitwarden: unlock succeeded after a fresh login (cached key was stale)")
+        return token
 
     def _fetch_once(self) -> Snapshot:
         self._ensure_session()

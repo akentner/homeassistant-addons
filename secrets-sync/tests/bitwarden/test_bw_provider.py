@@ -268,3 +268,26 @@ def test_archived_and_trashed_items_are_ignored(fake_bw, bw_cfg):
     assert snap.secrets == {"live_username": "u", "live_password": "p"}
     assert snap.files == {}
     assert ("info", "item_inactive", "3 archived/trashed items ignored") in provider.notices
+
+
+def test_unlock_recovers_with_fresh_login_when_cached_key_is_stale(fake_bw, bw_cfg, caplog):
+    fake_bw.set_items([{"type": 1, "name": "live", "login": {"password": "p"}}])
+    provider = Provider(bw_cfg)
+    provider.fetch()  # logged in and unlocked
+    provider._session = None  # simulate a restart: locked with a cached key that no longer fits
+    fake_bw.set_json("state", {"status": "locked", "serverUrl": "https://bitwarden.com"})
+    fake_bw.stale_key()
+    snap = Provider(bw_cfg).fetch()
+    assert snap.secrets == {"live_password": "p"}
+    assert fake_bw.cmds().count("logout") >= 1
+
+
+def test_unlock_still_failing_after_fresh_login_reports_master_password(fake_bw, bw_cfg, monkeypatch):
+    fake_bw.set_items([])
+    monkeypatch.setenv("BW_PASSWORD", "wrong-pw")
+    cfg = dict(bw_cfg)
+    with pytest.raises(ProviderError) as exc:
+        Provider(cfg).fetch()
+    assert exc.value.code == "bw_unlock_failed"
+    assert "master_password" in str(exc.value)
+    assert "wrong-pw" not in str(exc.value)
