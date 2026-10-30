@@ -10,7 +10,7 @@ Findings (documented by the tests below):
    on a single physical YAML line.
 2. A Secure Note (type 2) is exported as a file below `notes_dir`, never as a secret.
 3. SSH-key items (type 5) export `<item>_public_key`; `<item>_private_key` only with the custom field
-   `secrets_sync_export_private` = `true`.
+   `secrets_sync_export_private_key` = `true`.
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def test_ssh_key_item_type5_exports_only_public_key_by_default(fake_bw, bw_cfg):
 
 
 def test_ssh_key_item_with_export_private_flag_exports_both_keys(fake_bw, bw_cfg):
-    marker = {"fields": [{"name": "Secrets_Sync_Export_Private", "value": " True ", "type": 2}]}
+    marker = {"fields": [{"name": "Secrets_Sync_Export_Private_Key", "value": " True ", "type": 2}]}
     fake_bw.set_items([_ssh_item(**marker)])
     snap = Provider(bw_cfg).fetch()
     assert snap.secrets == {"deploy_ssh_public_key": PUB, "deploy_ssh_private_key": KEY}
@@ -130,7 +130,7 @@ def test_ssh_key_item_with_export_private_flag_exports_both_keys(fake_bw, bw_cfg
 
 def test_export_private_flag_other_values_keep_private_key_out(fake_bw, bw_cfg):
     for value in ("false", "", "yes"):
-        fake_bw.set_items([_ssh_item(fields=[{"name": "secrets_sync_export_private", "value": value, "type": 0}])])
+        fake_bw.set_items([_ssh_item(fields=[{"name": "secrets_sync_export_private_key", "value": value, "type": 0}])])
         assert set(Provider(bw_cfg).fetch().secrets) == {"deploy_ssh_public_key"}
 
 

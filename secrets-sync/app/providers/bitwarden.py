@@ -32,9 +32,9 @@ _CRED_ENV = (
 
 
 def _export_private(item: dict[str, Any]) -> bool:
-    """An SSH-key item exports its private key only with the custom field `secrets_sync_export_private` = true."""
+    """An SSH-key item exports its private key only with the custom field `secrets_sync_export_private_key` = true."""
     for fld in item.get("fields") or []:
-        if (isinstance(fld, dict) and str(fld.get("name", "")).strip().lower() == "secrets_sync_export_private"
+        if (isinstance(fld, dict) and str(fld.get("name", "")).strip().lower() == "secrets_sync_export_private_key"
                 and str(fld.get("value", "")).strip().lower() == "true"):
             return True
     return False

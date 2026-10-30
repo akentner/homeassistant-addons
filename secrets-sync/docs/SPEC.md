@@ -121,7 +121,7 @@ defaults; `validate()` reports missing parts as `Problem`s (shown in UI/state), 
   (1-based), custom fields `<name>_<sanitised field name>`. Secure notes (type 2) with a non-empty note become files:
   relative path = sanitised name (+ `.txt` if no extension) below `notes_dir`; they do not become secrets. SSH-key items
   (type 5): `<name>_public_key` always (no fingerprint); `<name>_private_key` only when the item has a custom field
-  `secrets_sync_export_private` = `true` (case-insensitive). Cards/identities are ignored (event `item_skipped` with
+  `secrets_sync_export_private_key` = `true` (case-insensitive). Cards/identities are ignored (event `item_skipped` with
   count only).
 - `fetch()` returns a Snapshot; any non-zero `bw` exit maps to a `ProviderError` code (`bw_auth_failed`,
   `bw_unlock_failed`, `bw_sync_failed`, `bw_list_failed`, `bw_timeout`, `bw_invalid_json`).
