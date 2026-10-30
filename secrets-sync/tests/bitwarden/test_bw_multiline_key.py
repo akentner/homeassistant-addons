@@ -9,8 +9,8 @@ Findings (documented by the tests below):
    `<item>_notes` / `<item>_<field>`, byte-identical (newlines and trailing newline included), and stored escaped
    on a single physical YAML line.
 2. A Secure Note (type 2) is exported as a file below `notes_dir`, never as a secret.
-3. SSH-key items (type 5) are not exported at all, and the `item_skipped` notice counts them under the wording
-   "card/identity items skipped".
+3. SSH-key items (type 5) export `<item>_private_key` and `<item>_public_key`; a custom field `secrets_sync` =
+   `public` limits the export to the public key.
 """
 
 from __future__ import annotations
@@ -103,20 +103,40 @@ def test_secure_note_key_becomes_file_not_secret(fake_bw, bw_cfg):
     assert provider.notices == []
 
 
-# `_build` handles item types 1 and 2 only, so type 5 (sshKey) falls into the generic skipped counter and the
-# notice therefore counts an SSH-key item as a "card/identity" item. The wording is production behaviour that is
-# deliberately left unchanged here (test-only task); update this assertion on purpose when the wording is fixed.
-def test_ssh_key_item_type5_is_skipped_and_counted_as_card_identity(fake_bw, bw_cfg):
-    fake_bw.set_items([
-        {"type": 1, "name": "Deploy Host", "login": {"username": "git"}},
-        {"type": 5, "name": "Deploy SSH",
-         "sshKey": {"privateKey": KEY, "publicKey": "ssh-ed25519 AAAAfakepublickey", "keyFingerprint": "SHA256:fake"}},
-    ])
+PUB = "ssh-ed25519 AAAAfakepublickey"
+
+
+def _ssh_item(**extra):
+    return {"type": 5, "name": "Deploy SSH",
+            "sshKey": {"privateKey": KEY, "publicKey": PUB, "keyFingerprint": "SHA256:fake"}, **extra}
+
+
+def test_ssh_key_item_type5_exports_private_and_public_key(fake_bw, bw_cfg):
+    fake_bw.set_items([{"type": 1, "name": "Deploy Host", "login": {"username": "git"}}, _ssh_item()])
     provider = Provider(bw_cfg)
     snap = provider.fetch()
-    assert snap.secrets == {"deploy_host_username": "git"}
+    assert snap.secrets == {"deploy_host_username": "git", "deploy_ssh_private_key": KEY,
+                            "deploy_ssh_public_key": PUB}
     assert snap.files == {}
+    assert provider.notices == []  # no fingerprint key, nothing skipped
+
+
+def test_ssh_key_item_marked_public_exports_only_public_key(fake_bw, bw_cfg):
+    marker = {"fields": [{"name": "Secrets_Sync", "value": " Public ", "type": 0}]}
+    fake_bw.set_items([_ssh_item(**marker)])
+    snap = Provider(bw_cfg).fetch()
+    assert snap.secrets == {"deploy_ssh_public_key": PUB}
     assert KEY not in snap.secrets.values()
-    assert not any(name.startswith("deploy_ssh") for name in (*snap.secrets, *snap.files))
-    assert provider.notices == [("info", "item_skipped", "1 card/identity items skipped")]
-    assert KEY.split("\n")[1] not in repr(provider.notices)
+
+
+def test_other_marker_value_keeps_private_key(fake_bw, bw_cfg):
+    fake_bw.set_items([_ssh_item(fields=[{"name": "secrets_sync", "value": "all", "type": 0}])])
+    assert "deploy_ssh_private_key" in Provider(bw_cfg).fetch().secrets
+
+
+def test_card_and_identity_are_still_skipped_with_notice(fake_bw, bw_cfg):
+    fake_bw.set_items([{"type": 3, "name": "card"}, {"type": 4, "name": "id"}, _ssh_item()])
+    provider = Provider(bw_cfg)
+    snap = provider.fetch()
+    assert set(snap.secrets) == {"deploy_ssh_private_key", "deploy_ssh_public_key"}
+    assert provider.notices == [("info", "item_skipped", "2 card/identity items skipped")]

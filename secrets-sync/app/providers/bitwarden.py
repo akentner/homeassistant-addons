@@ -31,6 +31,15 @@ _CRED_ENV = (
 )
 
 
+def _public_only(item: dict[str, Any]) -> bool:
+    """An SSH-key item marked with the custom field `secrets_sync` = `public` exports only its public key."""
+    for fld in item.get("fields") or []:
+        if (isinstance(fld, dict) and str(fld.get("name", "")).strip().lower() == "secrets_sync"
+                and str(fld.get("value", "")).strip().lower() == "public"):
+            return True
+    return False
+
+
 def sanitise(name: str) -> str:
     """Legacy key naming: tr '?:&,%@-' ' ' | tr '[]{}#*!|> ' '_' | tr -s '_' | lowercase."""
     return re.sub(r"_+", "_", name.translate(_TR_SPACE).translate(_TR_UNDERSCORE)).lower()
@@ -303,6 +312,11 @@ class Provider:
                                                              f"{file_owners[path]}' and '{item_name}'")
                     file_owners[path] = item_name
                     snap.files[path] = str(note).encode("utf-8")
+            elif kind == 5:
+                ssh = item.get("sshKey") or {}
+                if not _public_only(item):
+                    put(f"{base}_private_key", ssh.get("privateKey"), item_name)
+                put(f"{base}_public_key", ssh.get("publicKey"), item_name)
             else:
                 skipped += 1
         if skipped:

@@ -119,8 +119,10 @@ defaults; `validate()` reports missing parts as `Problem`s (shown in UI/state), 
 - Key naming (`key_style: legacy`): `name` = item name sanitised: `tr '?:&,%@-' ' '`, then `tr '[]{}#*!|> ' '_'`,
   squeeze `_`, lowercase. Login items: `<name>_username`, `<name>_password`, `<name>_notes` (if notes), `<name>_uri_<N>`
   (1-based), custom fields `<name>_<sanitised field name>`. Secure notes (type 2) with a non-empty note become files:
-  relative path = sanitised name (+ `.txt` if no extension) below `notes_dir`; they do not become secrets.
-  Cards/identities are ignored (event `item_skipped` with count only).
+  relative path = sanitised name (+ `.txt` if no extension) below `notes_dir`; they do not become secrets. SSH-key items
+  (type 5): `<name>_private_key`, `<name>_public_key` (no fingerprint); a custom field `secrets_sync` = `public`
+  (case-insensitive) limits the export to the public key. Cards/identities are ignored (event `item_skipped` with count
+  only).
 - `fetch()` returns a Snapshot; any non-zero `bw` exit maps to a `ProviderError` code (`bw_auth_failed`,
   `bw_unlock_failed`, `bw_sync_failed`, `bw_list_failed`, `bw_timeout`, `bw_invalid_json`).
 - Tests use a fake `bw` script on `PATH` (no network).

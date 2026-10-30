@@ -107,14 +107,15 @@ Do not use your personal account. Create a separate Bitwarden/Vaultwarden user f
 2. Replace each of `[ ] { } # * ! | >` and spaces with `_`
 3. Squeeze repeated `_`, lowercase
 
-| Item type        | Resulting keys                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------ |
-| Login            | `<name>_username`, `<name>_password`, `<name>_notes` (only if set)                   |
-| Login URIs       | `<name>_uri_1`, `<name>_uri_2`, ... (1-based)                                        |
-| Custom fields    | `<name>_<sanitised field name>`                                                      |
-| Secure note      | File `<notes_dir>/<sanitised name>` (`.txt` appended if no extension), no secret key |
-| Card, identity   | Ignored (event `item_skipped`, count only)                                           |
-| Archived/trashed | Ignored (event `item_inactive`, count only); only active items are imported          |
+| Item type        | Resulting keys                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Login            | `<name>_username`, `<name>_password`, `<name>_notes` (only if set)                                                       |
+| Login URIs       | `<name>_uri_1`, `<name>_uri_2`, ... (1-based)                                                                            |
+| Custom fields    | `<name>_<sanitised field name>`                                                                                          |
+| Secure note      | File `<notes_dir>/<sanitised name>` (`.txt` appended if no extension), no secret key                                     |
+| SSH key (type 5) | Secrets `<name>_private_key` and `<name>_public_key`; custom field `secrets_sync` = `public` exports only the public key |
+| Card, identity   | Ignored (event `item_skipped`, count only)                                                                               |
+| Archived/trashed | Ignored (event `item_inactive`, count only); only active items are imported                                              |
 
 Example: item `Mosquitto: Broker-1` with user and password becomes `mosquitto_broker_1_username` and
 `mosquitto_broker_1_password`.
