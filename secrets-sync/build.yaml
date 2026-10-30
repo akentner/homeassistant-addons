@@ -3,4 +3,4 @@ build_from:
 
 args:
   VERSION: "0.4.3"
-  BW_CLI_VERSION: "2026.10.0"
+  BW_CLI_VERSION: "2026.10.1"
