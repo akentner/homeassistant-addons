@@ -1,0 +1,79 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f4f5f7; --fg: #1c1e21; --card: #fff; --bd: #dcdfe4; --mut: #6b7280;
+  --ok: #1a7f37; --warn: #9a6700; --err: #cf222e; --acc: #0969da; --chip: #eef0f3; --bar: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111315; --fg: #e6e8eb; --card: #1b1e21; --bd: #32363b; --mut: #9aa1aa;
+    --ok: #3fb950; --warn: #d29922; --err: #f85149; --acc: #58a6ff; --chip: #272b30; --bar: #1b1e21;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, sans-serif; }
+.topbar {
+  position: sticky; top: 0; z-index: 10; height: 56px; width: 100%; display: flex; align-items: center; gap: 12px;
+  padding: 0 16px; background: var(--bar); border-bottom: 1px solid var(--bd);
+}
+.brand { display: flex; align-items: center; gap: 8px; flex: none; color: var(--acc); }
+.brand h1 { margin: 0; font-size: 18px; font-weight: 600; color: var(--fg); white-space: nowrap; }
+.badges { flex: 1 1 auto; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.badges::-webkit-scrollbar { display: none; }
+.badge {
+  flex: none; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--bd); background: var(--chip);
+  font-size: 12px; white-space: nowrap;
+}
+.badge.ok { color: var(--ok); border-color: var(--ok); }
+.badge.degraded, .badge.stale, .badge.starting { color: var(--warn); border-color: var(--warn); }
+.badge.error { color: var(--err); border-color: var(--err); }
+.actions { flex: none; display: flex; align-items: center; gap: 6px; }
+.updated { font-size: 11px; color: var(--mut); white-space: nowrap; }
+button {
+  font: inherit; background: var(--acc); color: #fff; border: 1px solid var(--acc); border-radius: 6px;
+  padding: 4px 12px; cursor: pointer;
+}
+button.secondary { background: transparent; color: var(--acc); }
+button.danger { background: var(--err); border-color: var(--err); }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+.card { background: var(--card); border: 1px solid var(--bd); border-radius: 8px; padding: 12px 16px; margin: 0 0 12px; }
+.card.guard { border-color: var(--err); }
+h2 { font-size: 14px; margin: 0 0 8px; }
+h3 { font-size: 13px; margin: 12px 0 4px; }
+h3.bad, .bad { color: var(--err); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 16px; }
+.k { color: var(--mut); font-size: 12px; }
+.ok { color: var(--ok); } .degraded, .stale, .starting, .warning, .pending, .unsupported { color: var(--warn); }
+.error { color: var(--err); } .unchanged, .changed { color: var(--ok); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--bd); vertical-align: top; }
+th { font-size: 12px; color: var(--mut); font-weight: 500; }
+code, .key { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; word-break: break-all; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.key { background: var(--chip); border-radius: 4px; padding: 1px 6px; }
+.key.bad { color: var(--err); }
+.tag { margin-left: 4px; font: 11px system-ui, sans-serif; color: var(--acc); border: 1px solid var(--acc);
+  border-radius: 4px; padding: 0 4px; }
+.tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--bd); margin: 0 0 12px; }
+.tabs button {
+  background: transparent; color: var(--mut); border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  padding: 8px 12px; white-space: nowrap;
+}
+.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--acc); }
+.count { color: var(--mut); font-size: 12px; }
+input[type="search"] {
+  width: 100%; max-width: 360px; font: inherit; padding: 6px 10px; margin: 0 0 8px; color: var(--fg);
+  background: var(--bg); border: 1px solid var(--bd); border-radius: 6px;
+}
+details { margin: 2px 0; } summary { cursor: pointer; }
+.notice { padding: 8px 12px; margin: 0 0 12px; border: 1px solid var(--warn); border-radius: 8px; color: var(--warn); }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+[hidden] { display: none !important; }
+@media (max-width: 640px) {
+  .topbar { padding: 0 8px; gap: 8px; }
+  .brand h1, .updated { display: none; }
+  button { padding: 4px 8px; font-size: 12px; }
+  main { padding: 8px; }
+}
