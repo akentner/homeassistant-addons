@@ -310,3 +310,10 @@ options:
   ...) are attached to the failing key. `pending` = parsed, but the cycle ended before rendering.
 - The ingress page renders the card; it is omitted when the list is empty or absent. Templates are therefore also in
   `/api/status.json`: never put a literal secret into a template.
+
+### Shrink guard override in the UI (0.4.4)
+
+- On `shrink_guard` the supervisor stores `state.guard` = `{new_items, last_items, removed, added, changed}` (key names,
+  diff against the last written set or the current `secrets.yaml`); reset to `null` at the start of every cycle.
+- The ingress page shows the card only while `error_code == "shrink_guard"` and `guard` is an object: removed keys in
+  red, an "Apply anyway" button (confirm dialog with the count) that POSTs `api/sync?force=1`.

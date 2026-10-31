@@ -315,7 +315,9 @@ the URL), `sops_git_url_scheme` (only ssh and https), `sops_git_path_invalid`, `
 - If a provider fails after a restart, the cycle is `degraded` and nothing is written, so a partial merge never drops
   keys.
 - The shrink guard (`shrink_guard_percent`) blocks writes with zero items or a sharp drop. It clears itself when a later
-  cycle passes. A deliberate large removal needs one forced sync from the UI (`POST /api/sync?force=1`, Ingress only).
+  cycle passes. When it blocks a write, the overview page lists the key names that would be removed, added or changed
+  and offers an "Apply anyway" button (forced sync after a confirmation; `POST /api/sync?force=1`, Ingress only). Zero
+  items are never forced.
 
 ## Web UI and API
 

@@ -170,6 +170,26 @@ def _ago(value: Any, now: datetime) -> str:
     return f"{secs} s ago"
 
 
+def _guard_card(guard: Any, error_code: Any) -> str:
+    guard = _as_dict(guard)
+    if error_code != "shrink_guard" or not guard:
+        return ""
+    removed = _as_list(guard.get("removed"))
+    count = len(removed) if isinstance(removed, list) else 0
+    return (
+        '<div class="card"><h2 class="bad">Write blocked by the shrink guard</h2>'
+        f"<p>The new set has <b>{_e(guard.get('new_items'))}</b> keys, the last write had "
+        f"<b>{_e(guard.get('last_items'))}</b>. Nothing was written; <code>secrets.yaml</code> is unchanged. "
+        "Applying removes the keys below from <code>secrets.yaml</code> (the previous file is kept as "
+        "<code>.bak</code>).</p><table>"
+        f"<tr><th>Would be removed ({count})</th><td class=\"bad\">{_keys_list(guard.get('removed'))}</td></tr>"
+        f"<tr><th>Would be added</th><td>{_keys_list(guard.get('added'))}</td></tr>"
+        f"<tr><th>Would change</th><td>{_keys_list(guard.get('changed'))}</td></tr></table>"
+        f"<button type=\"button\" onclick=\"if (confirm('Remove {count} keys from secrets.yaml?')) "
+        "act('api/sync?force=1','Apply anyway')\">Apply anyway</button></div>"
+    )
+
+
 def _synthetic_card(items: Any) -> str:
     rows = []
     for item in _as_list(items):
@@ -237,6 +257,7 @@ def render_page(state: dict[str, Any], now: datetime | None = None) -> str:
         '<div class="card"><button type="button" onclick="act(\'api/sync\',\'Sync\')">Sync now</button>'
         '<button type="button" onclick="act(\'api/preview\',\'Preview\')">Preview</button>'
         '<pre id="result"></pre></div>',
+        _guard_card(state.get("guard"), state.get("error_code")),
         _check_card(state.get("check"), now),
     ]
 

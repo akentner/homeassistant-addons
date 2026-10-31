@@ -210,6 +210,52 @@
       "format": "date-time",
       "type": "string"
     },
+    "guard": {
+      "additionalProperties": false,
+      "description": "Set while the shrink guard refuses a write: key NAMES a forced write would remove/add/change. Optional/null otherwise.",
+      "properties": {
+        "added": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "changed": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "last_items": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "new_items": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "removed": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "new_items",
+        "last_items",
+        "removed",
+        "added",
+        "changed"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
     "interval": {
       "description": "seconds between syncs",
       "minimum": 60,

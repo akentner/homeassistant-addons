@@ -354,3 +354,35 @@ def test_report_empty_without_defs_and_never_contains_values(tmp_path):
     sup, _ = sup_with(tmp_path, [DSN])
     sup.run_once()
     assert "p@ss" not in json.dumps(state(sup)["synthetic"])
+
+
+# ---------------------------------------------------------------- shrink guard report
+
+
+def test_guard_report_lists_names_only_and_clears_after_force(tmp_path):
+    base = {f"k{i}": f"secret-value-{i}" for i in range(10)}
+    sup, prov = sup_with(tmp_path, [], secrets_=dict(base))
+    assert sup.run_once() == "ok" and state(sup)["guard"] is None
+    prov.secrets = {k: v for k, v in base.items() if k in ("k0", "k1", "k2")} | {"k9": "changed-value"}
+    assert sup.run_once() == "degraded"
+    data = state(sup)
+    check(data, SCHEMA)
+    assert data["error_code"] == "shrink_guard"
+    assert data["guard"] == {"new_items": 4, "last_items": 10, "removed": ["k3", "k4", "k5", "k6", "k7", "k8"],
+                             "added": [], "changed": ["k9"]}
+    assert "secret-value" not in json.dumps(data) and "changed-value" not in json.dumps(data)
+    assert sup.run_once(force=True) == "ok"
+    data = state(sup)
+    assert data["guard"] is None and data["items"] == 4
+    assert "k4" not in secrets(sup)
+
+
+def test_guard_report_cleared_when_next_cycle_passes(tmp_path):
+    base = {f"k{i}": "v" for i in range(10)}
+    sup, prov = sup_with(tmp_path, [], secrets_=dict(base))
+    sup.run_once()
+    prov.secrets = {"k0": "v"}
+    sup.run_once()
+    assert state(sup)["guard"] is not None
+    prov.secrets = dict(base)
+    assert sup.run_once() == "ok" and state(sup)["guard"] is None

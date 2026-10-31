@@ -3,6 +3,12 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.4.4-0] - 2026-10-31
+
+- Feature: when the shrink guard blocks a write, the overview page lists the key names that would be removed, added or
+  changed and offers an "Apply anyway" button (forced sync, asks for confirmation). New `guard` block in `state.json`;
+  names only, never values.
+
 ## [0.4.3-0] - 2026-10-31
 
 - Feature: the overview page has a "Synthetic keys" card with every configured key, its template, the key names it uses

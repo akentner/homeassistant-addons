@@ -380,3 +380,32 @@ def test_no_synthetic_card_when_absent_or_empty(ctrl: FakeController, tmp_path: 
     assert "<h2>Synthetic keys</h2>" not in _page(ctrl, tmp_path, st)
     st["synthetic"] = []
     assert "<h2>Synthetic keys</h2>" not in _page(ctrl, tmp_path, st)
+
+
+def _guard_state(removed: list[str]) -> dict:
+    st = copy.deepcopy(EXAMPLE)
+    st["status"] = "degraded"
+    st["error_code"] = "shrink_guard"
+    st["guard"] = {"new_items": 102, "last_items": 155, "removed": removed, "added": ["new_key"], "changed": []}
+    return st
+
+
+def test_guard_card_lists_removed_keys_and_offers_force(ctrl: FakeController, tmp_path: Path) -> None:
+    body = _page(ctrl, tmp_path, _guard_state(["17track_password", "<x>"]))
+    assert "Write blocked by the shrink guard" in body
+    assert "Would be removed (2)" in body and "<code>17track_password</code>" in body
+    assert "<x>" not in body and "&lt;x&gt;" in body
+    assert "<code>new_key</code>" in body
+    assert "act('api/sync?force=1','Apply anyway')" in body and "Remove 2 keys from secrets.yaml?" in body
+
+
+def test_guard_card_hidden_without_guard_or_other_error(ctrl: FakeController, tmp_path: Path) -> None:
+    st = _guard_state(["a"])
+    st["error_code"] = "bw_unlock_failed"
+    assert "shrink guard" not in _page(ctrl, tmp_path, st)
+    st = copy.deepcopy(EXAMPLE)
+    st["guard"] = None
+    assert "shrink guard" not in _page(ctrl, tmp_path, st)
+    st["error_code"] = "shrink_guard"
+    st["guard"] = "garbage"
+    assert "shrink guard" not in _page(ctrl, tmp_path, st)
