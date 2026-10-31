@@ -1,15 +1,14 @@
 """Web UI and JSON API of Secrets Sync (see docs/SPEC.md, "Web <-> engine").
 
-Reads the state file on every request and talks to the supervisor only through the Controller
-protocol. Pages use relative links only (Home Assistant ingress prefix) and no external assets.
+Serves a static HTML shell plus JS/CSS (ingress only) and the JSON API. The page renders itself from
+api/status.json in the browser; the server never interpolates state into HTML. Reads the state file on every
+request and talks to the supervisor only through the Controller protocol.
 """
 
 from __future__ import annotations
 
-import html
 import json
 import urllib.parse
-from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -17,47 +16,13 @@ from typing import Any
 from app.controller import Controller
 
 INGRESS_REMOTE = "172.30.32.2"
-MAX_EVENTS = 50
-MAX_KEYS = 500
-MAX_USAGE_ROWS = 300
-MAX_SHOWN_REFS = 3
-
-_CSS = """
-:root{color-scheme:light dark;--bg:#fafafa;--fg:#1c1c1c;--card:#fff;--bd:#d8d8d8;--mut:#666;
---ok:#1a7f37;--warn:#9a6700;--err:#cf222e;--acc:#0969da}
-@media(prefers-color-scheme:dark){:root{--bg:#161616;--fg:#e6e6e6;--card:#212121;--bd:#3a3a3a;--mut:#9a9a9a;
---ok:#3fb950;--warn:#d29922;--err:#f85149;--acc:#58a6ff}}
-body{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif}
-h1{font-size:20px;margin:0 0 12px}h2{font-size:15px;margin:0 0 8px}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;margin:0 0 12px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
-.k{color:var(--mut);font-size:12px}.badge{font-weight:600}
-.bad{color:var(--err)}.ok,.unchanged,.changed{color:var(--ok)}
-.changed{font-weight:600}.degraded,.stale,.starting,.warning,.unsupported{color:var(--warn)}.error{color:var(--err)}
-table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:4px 8px;border-bottom:1px solid var(--bd)}
-
-.tag{font-size:11px;color:var(--acc);border:1px solid var(--acc);border-radius:4px;padding:0 4px}
-code{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all}
-button{background:var(--acc);color:#fff;border:0;border-radius:6px;padding:6px 14px;margin-right:8px;cursor:pointer}
-button:disabled{opacity:.5}pre{white-space:pre-wrap;word-break:break-all;margin:8px 0 0}
-"""
-
-_JS = """
-async function act(url, label) {
-  const out = document.getElementById('result');
-  out.textContent = label + ' ...';
-  try {
-    const r = await fetch(url, {method: 'POST'});
-    const t = await r.text();
-    out.textContent = r.status + ' ' + t;
-    if (url.startsWith('api/sync') && r.ok) { setTimeout(() => location.reload(), 3000); }
-  } catch (e) { out.textContent = 'request failed'; }
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+# Whitelist of served files: URL path -> (file below STATIC_DIR, content type)
+ASSETS = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/static/app.css": ("app.css", "text/css; charset=utf-8"),
+    "/static/app.js": ("app.js", "text/javascript; charset=utf-8"),
 }
-"""
-
-
-def _e(value: Any) -> str:
-    return html.escape("" if value is None else str(value), quote=True)
 
 
 def read_state(path: Path) -> dict[str, Any]:
@@ -67,14 +32,6 @@ def read_state(path: Path) -> dict[str, Any]:
     except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
 
 
 def _is_stale(state: dict[str, Any]) -> bool:
@@ -99,201 +56,6 @@ def health(state: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     return (200 if status == "ok" and not stale else 503), body
 
 
-def _keys_list(names: Any, synthetic: frozenset[str] = frozenset()) -> str:
-    items = [str(n) for n in _as_list(names)]
-    if not items:
-        return '<span class="k">-</span>'
-    shown = "".join(
-        f"<code>{_e(n)}</code>{' <span class=\"tag\">synthetic</span>' if n in synthetic else ''} "
-        for n in items[:MAX_KEYS]
-    )
-    more = f' <span class="k">+{len(items) - MAX_KEYS} more</span>' if len(items) > MAX_KEYS else ""
-    return shown + more
-
-
-def _usage_refs(entry: Any) -> str:
-    refs = [_as_dict(r) for r in _as_list(_as_dict(entry).get("refs"))]
-    shown = ", ".join(f"<code>{_e(r.get('file'))}:{_e(r.get('line'))}</code>" for r in refs[:MAX_SHOWN_REFS])
-    total = _as_dict(entry).get("count")
-    extra = total - MAX_SHOWN_REFS if isinstance(total, int) and total > MAX_SHOWN_REFS else 0
-    return shown + (f' <span class="k">+{extra} more</span>' if extra > 0 else "")
-
-
-def _usage_rows(entries: dict[str, Any]) -> str:
-    rows = [
-        f"<tr><td><code>{_e(name)}</code></td><td>{_e(_as_dict(entry).get('count'))}</td><td>{_usage_refs(entry)}</td></tr>"
-        for name, entry in sorted(entries.items())[:MAX_USAGE_ROWS]
-    ]
-    if len(entries) > MAX_USAGE_ROWS:
-        rows.append(f'<tr><td colspan="3" class="k">+{len(entries) - MAX_USAGE_ROWS} more</td></tr>')
-    return "".join(rows)
-
-
-def _render_usage(usage: dict[str, Any]) -> str:
-    if not usage.get("enabled"):
-        return '<div class="card"><h2>Secret usage</h2><span class="k">scan is off (option usage_scan)</span></div>'
-    used = _as_dict(usage.get("used"))
-    missing = _as_dict(usage.get("missing"))
-    unused = _as_list(usage.get("unused"))
-    roots = ", ".join(_e(r) for r in _as_list(usage.get("roots"))) or "-"
-    note = " (scan stopped at a limit)" if usage.get("truncated") else ""
-    out = [
-        f'<div class="card"><h2>Secret usage</h2><div class="k">{_e(usage.get("files_scanned"))} YAML files scanned in '
-        f'{roots} at {_e(usage.get("scanned_at"))}{note}. Looks for <code>!secret key</code>; values are never read.</div>'
-    ]
-    if missing:
-        out.append(f'<h2 class="bad">Referenced but missing in secrets.yaml ({len(missing)})</h2><table>'
-                   f"<tr><th>Key</th><th>Uses</th><th>Where</th></tr>{_usage_rows(missing)}</table>")
-    out.append(f"<h2>Unused ({len(unused)})</h2><div>{_keys_list(unused)}</div>")
-    out.append(f"<h2>Used ({len(used)})</h2>")
-    out.append("<table><tr><th>Key</th><th>Uses</th><th>Where</th></tr>" + (_usage_rows(used) or
-               '<tr><td colspan="3" class="k">no references found</td></tr>') + "</table></div>")
-    return "".join(out)
-
-
-def _ago(value: Any, now: datetime) -> str:
-    """Relative time ("12 s ago") for an ISO timestamp; "-" if missing or unparsable."""
-    if not isinstance(value, str):
-        return "-"
-    try:
-        then = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return "-"
-    if then.tzinfo is None:
-        then = then.replace(tzinfo=timezone.utc)
-    secs = int((now - then).total_seconds())
-    if secs < 0:
-        return "just now"
-    for unit, size in (("d", 86400), ("h", 3600), ("min", 60)):
-        if secs >= size:
-            return f"{secs // size} {unit} ago"
-    return f"{secs} s ago"
-
-
-def _synthetic_card(items: Any) -> str:
-    rows = []
-    for item in _as_list(items):
-        item = _as_dict(item)
-        status = item.get("status") if item.get("status") in ("ok", "pending", "error") else "pending"
-        label = {"ok": "ok", "pending": "parsed (not rendered yet)", "error": "error"}[status]
-        refs = " ".join(f"<code>{_e(r)}</code>" for r in _as_list(item.get("refs"))) or "-"
-        code = f" <code>{_e(item.get('error_code'))}</code>" if item.get("error_code") else ""
-        rows.append(
-            f"<tr><td><code>{_e(item.get('name'))}</code></td><td><code>{_e(item.get('template'))}</code></td>"
-            f"<td>{refs}</td><td class=\"{'bad' if status == 'error' else status}\">{_e(label)}{code}</td></tr>"
-        )
-    if not rows:
-        return ""
-    return (
-        '<div class="card"><h2>Synthetic keys</h2><table><tr><th>Key</th><th>Template</th><th>Uses</th><th>Status</th>'
-        f"</tr>{''.join(rows)}</table></div>"
-    )
-
-
-def _check_card(check: Any, now: datetime) -> str:
-    """Change-check block from state["check"]; empty when absent (older state files)."""
-    if not isinstance(check, dict):
-        return ""
-    enabled = check.get("enabled") is True
-    interval = check.get("interval")
-    state_txt = f"enabled, every {_e(interval)} s" if enabled else "disabled"
-    result = check.get("result") if isinstance(check.get("result"), str) else None
-    when = check.get("last_check_at")
-    cells = [
-        f'<div><div class="k">Change check</div><div>{state_txt}</div></div>',
-        f'<div><div class="k">Last check</div><div title="{_e(when)}">{_e(_ago(when, now))}</div></div>',
-        f'<div><div class="k">Result</div><div class="badge {_e(result or "")}">{_e(result or "-")}</div></div>',
-        f'<div><div class="k">Error</div><div>{_e(check.get("error_code")) or "-"}</div></div>',
-        f'<div><div class="k">Triggered syncs</div><div>{_e(check.get("triggered_syncs", 0))}</div></div>',
-    ]
-    return f'<div class="card"><div class="grid">{"".join(cells)}</div></div>'
-
-
-def render_page(state: dict[str, Any], now: datetime | None = None) -> str:
-    now = now or datetime.now(timezone.utc)
-    status = state.get("status") if isinstance(state.get("status"), str) else "starting"
-    code, _ = health(state)
-    shown_status = "stale" if status == "ok" and code == 503 else status
-    versions = _as_dict(state.get("versions"))
-    keys = _as_dict(state.get("keys"))
-    synth = frozenset(str(n) for n in _as_list(keys.get("synthetic")))
-
-    def stat(label: str, value: Any) -> str:
-        return f'<div><div class="k">{_e(label)}</div><div>{_e(value) if value not in (None, "") else "-"}</div></div>'
-
-    parts = [
-        "<h1>Secrets Sync</h1>",
-        '<div class="card"><div class="grid">',
-        f'<div><div class="k">Status</div><div class="badge {_e(shown_status)}">{_e(shown_status)}</div></div>',
-        stat("Last sync", state.get("last_success_at")),
-        stat("Last attempt", state.get("last_attempt_at")),
-        stat("Next sync", state.get("next_sync_at")),
-        stat("Items", state.get("items")),
-        stat("Error", state.get("error_code")),
-        stat("Version", versions.get("addon")),
-        stat("bw", versions.get("bw")),
-        stat("sops", versions.get("sops")),
-        "</div></div>",
-        '<div class="card"><button type="button" onclick="act(\'api/sync\',\'Sync\')">Sync now</button>'
-        '<button type="button" onclick="act(\'api/preview\',\'Preview\')">Preview</button>'
-        '<pre id="result"></pre></div>',
-        _check_card(state.get("check"), now),
-    ]
-
-    rows = []
-    for name, prov in sorted(_as_dict(state.get("providers")).items()):
-        prov = _as_dict(prov)
-        pstatus = prov.get("status") if isinstance(prov.get("status"), str) else "unknown"
-        problems = "<br>".join(
-            f"{_e(_as_dict(p).get('severity'))}: <code>{_e(_as_dict(p).get('code'))}</code> "
-            f"{_e(_as_dict(p).get('message'))}"
-            for p in _as_list(prov.get("problems"))
-        )
-        rows.append(
-            f"<tr><td>{_e(name)}</td><td class=\"{_e(pstatus)}\">{_e(pstatus)}</td><td>{_e(prov.get('items'))}</td>"
-            f"<td><code>{_e(prov.get('revision'))}</code></td>"
-            f"<td>{_e(prov.get('last_success_at'))}</td><td>{_e(prov.get('error_code'))}</td><td>{problems}</td></tr>"
-        )
-    body = "".join(rows) or '<tr><td colspan="7" class="k">no providers reported yet</td></tr>'
-    parts.append(
-        '<div class="card"><h2>Providers</h2><table><tr><th>Provider</th><th>Status</th><th>Items</th><th>Revision</th>'
-        f"<th>Last success</th><th>Error</th><th>Problems</th></tr>{body}</table></div>"
-    )
-
-    parts.append(
-        '<div class="card"><h2>Keys</h2><table>'
-        f"<tr><th>Added</th><td>{_keys_list(keys.get('added'), synth)}</td></tr>"
-        f"<tr><th>Removed</th><td>{_keys_list(keys.get('removed'), synth)}</td></tr>"
-        f"<tr><th>Changed</th><td>{_keys_list(keys.get('changed'), synth)}</td></tr>"
-        f"<tr><th>All ({len(_as_list(keys.get('names')))})</th><td>{_keys_list(keys.get('names'), synth)}</td></tr>"
-        "</table></div>"
-    )
-
-    parts.append(_synthetic_card(state.get("synthetic")))
-    parts.append(_render_usage(_as_dict(state.get("usage"))))
-
-    ev_rows = []
-    for ev in _as_list(state.get("events"))[:MAX_EVENTS]:
-        ev = _as_dict(ev)
-        level = ev.get("level") if isinstance(ev.get("level"), str) else ""
-        ev_rows.append(
-            f"<tr><td>{_e(ev.get('at'))}</td><td class=\"{_e(level)}\">{_e(level)}</td>"
-            f"<td><code>{_e(ev.get('code'))}</code></td><td>{_e(ev.get('message'))}</td></tr>"
-        )
-    ev_body = "".join(ev_rows) or '<tr><td colspan="4" class="k">no events</td></tr>'
-    parts.append(
-        '<div class="card"><h2>Events</h2><table><tr><th>Time</th><th>Level</th><th>Code</th><th>Message</th></tr>'
-        f"{ev_body}</table></div>"
-    )
-
-    return (
-        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        f"<title>Secrets Sync</title><style>{_CSS}</style></head><body>{''.join(parts)}"
-        f"<script>{_JS}</script></body></html>"
-    )
-
-
 def make_handler(
     controller: Controller, state_path: Path, ingress_only: bool = True, ingress_remote: str = INGRESS_REMOTE
 ) -> type[BaseHTTPRequestHandler]:
@@ -304,11 +66,11 @@ def make_handler(
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - quiet, no query strings logged
             return
 
-        def _send(self, code: int, body: bytes, ctype: str) -> None:
+        def _send(self, code: int, body: bytes, ctype: str, cache: str = "no-store") -> None:
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
+            self.send_header("Cache-Control", cache)
             self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             self.wfile.write(body)
@@ -328,12 +90,18 @@ def make_handler(
                 self._json(code, body)
             elif path == "/api/status.json":
                 self._json(200, read_state(state_path))
-            elif path == "/":
+            elif path in ASSETS:
                 if ingress_only and not self._is_ingress():
-                    # Page is meant for ingress; the optional TCP port exposes only the JSON endpoints.
+                    # Page and assets are meant for ingress; the optional TCP port exposes only the JSON endpoints.
                     self._json(403, {"error": "ingress_only"})
                     return
-                self._send(200, render_page(read_state(state_path)).encode(), "text/html; charset=utf-8")
+                name, ctype = ASSETS[path]
+                try:
+                    body = (STATIC_DIR / name).read_bytes()
+                except OSError:
+                    self._json(404, {"error": "not_found"})
+                    return
+                self._send(200, body, ctype, cache="no-cache")
             else:
                 self._json(404, {"error": "not_found"})
 

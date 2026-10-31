@@ -18,6 +18,7 @@
     }
   ],
   "generated_at": "2026-10-27T10:15:02Z",
+  "guard": null,
   "interval": 300,
   "items": 42,
   "keys": {

@@ -315,7 +315,9 @@ the URL), `sops_git_url_scheme` (only ssh and https), `sops_git_path_invalid`, `
 - If a provider fails after a restart, the cycle is `degraded` and nothing is written, so a partial merge never drops
   keys.
 - The shrink guard (`shrink_guard_percent`) blocks writes with zero items or a sharp drop. It clears itself when a later
-  cycle passes. A deliberate large removal needs one forced sync from the UI (`POST /api/sync?force=1`, Ingress only).
+  cycle passes. When it blocks a write, the overview page lists the key names that would be removed, added or changed
+  and offers an "Apply anyway" button (forced sync after a confirmation; `POST /api/sync?force=1`, Ingress only). Zero
+  items are never forced.
 
 ## Web UI and API
 
@@ -323,9 +325,14 @@ Ingress sidebar entry "Secrets Sync". Optional port `8099/tcp` serves only `GET 
 the status page (`GET /`) and all POST routes work through Ingress only. A manual sync is possible when the last attempt
 is at least 10 s old (the interval itself is at least 60 s).
 
+The page has a fixed top bar (status, items, last sync, version, buttons) and tabs for keys, synthetic keys, key usage
+and events. It loads `api/status.json` and refreshes every 15 s, or when you press Refresh. The tab selection is kept
+(URL hash `#keys`, `#synthetic`, `#usage`, `#events`). When the shrink guard blocks a write, a card under the top bar
+lists the key names that would be removed, added or changed and offers "Apply anyway".
+
 | Route              | Method | Result                                                                                     |
 | ------------------ | ------ | ------------------------------------------------------------------------------------------ |
-| `/`                | GET    | Status page (Ingress only)                                                                 |
+| `/`                | GET    | Status page shell and `static/app.js`, `static/app.css` (Ingress only)                     |
 | `/api/status.json` | GET    | Full state (key names only)                                                                |
 | `/api/health`      | GET    | `{"status","age_seconds","stale","items","error_code"}`; 200 if ok and not stale, else 503 |
 | `/api/sync`        | POST   | 202 started, 429 rate limited, `?force=1` lifts the shrink guard once (Ingress only)       |

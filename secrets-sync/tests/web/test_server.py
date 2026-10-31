@@ -72,19 +72,6 @@ def srv(ctrl: FakeController, state_file: Path) -> Iterator[Srv]:
     s.close()
 
 
-def test_page_renders_state(srv: Srv) -> None:
-    code, body = srv.req("GET", "/", INGRESS)
-    assert code == 200
-    for needle in ("mqtt_password", "bitwarden", "sops", "sync_ok", "Sync now", "Preview", "0.1.0"):
-        assert needle in body
-    assert "http://" not in body and "https://" not in body
-    assert "fetch(url" in body and "'api/sync'" in body and "'api/preview'" in body
-
-
-def test_page_requires_ingress(srv: Srv) -> None:
-    assert srv.req("GET", "/")[0] == 403
-
-
 def test_status_json_is_state(srv: Srv) -> None:
     code, body = srv.req("GET", "/api/status.json")
     assert code == 200 and json.loads(body) == EXAMPLE
@@ -131,8 +118,7 @@ def test_missing_or_partial_state_tolerated(ctrl: FakeController, tmp_path: Path
         p.write_text(content)
     s = Srv(ctrl, p)
     try:
-        code, body = s.req("GET", "/", INGRESS)
-        assert code == 200 and "starting" in body
+        assert s.req("GET", "/", INGRESS)[0] == 200
         assert s.req("GET", "/api/status.json")[0] == 200
         assert s.req("GET", "/api/health")[0] == 503
     finally:
@@ -149,24 +135,6 @@ def test_schema_invalid_state_does_not_crash(ctrl: FakeController, tmp_path: Pat
     try:
         assert s.req("GET", "/", INGRESS)[0] == 200
         assert s.req("GET", "/api/health")[0] == 503
-    finally:
-        s.close()
-
-
-def test_events_and_fields_are_escaped(ctrl: FakeController, tmp_path: Path) -> None:
-    st = copy.deepcopy(EXAMPLE)
-    evil = f"<script>alert('{SECRET}')</script>"
-    st["events"][0]["message"] = evil
-    st["keys"]["names"] = ["<img src=x onerror=1>"]
-    st["providers"]["bitwarden"]["problems"] = [{"severity": "error", "code": "<b>", "message": evil}]
-    p = tmp_path / "s.json"
-    p.write_text(json.dumps(st))
-    s = Srv(ctrl, p)
-    try:
-        _, body = s.req("GET", "/", INGRESS)
-        assert "<script>alert(" not in body
-        assert "<img src=x" not in body and "<b>" not in body
-        assert "&lt;script&gt;alert(&#x27;" in body
     finally:
         s.close()
 
@@ -253,130 +221,95 @@ def test_unknown_routes_and_methods(srv: Srv) -> None:
     assert srv.req("POST", "/api/health", INGRESS)[0] == 404
 
 
-def test_page_shows_usage_and_escapes(srv: Srv, state_file: Path) -> None:
-    data = json.loads(state_file.read_text())
-    data["usage"]["missing"]["<script>x</script>"] = {"count": 1, "refs": [{"file": "a<b>.yaml", "line": 3}]}
-    state_file.write_text(json.dumps(data))
-    status, page = srv.req("GET", "/", INGRESS)
-    assert status == 200 and "Secret usage" in page and "mqtt_password" in page and "old_api_key" in page
-    assert "<script>x</script>" not in page and "&lt;script&gt;x&lt;/script&gt;" in page
+def test_shell_is_static_and_relative(srv: Srv, state_file: Path) -> None:
+    code, body = srv.req("GET", "/", INGRESS)
+    assert code == 200
+    assert 'href="static/app.css"' in body and 'src="static/app.js"' in body
+    for needle in ("mqtt_password", "bitwarden", "sync_ok"):
+        assert needle not in body  # no state data in the shell
+    assert "http://" not in body.replace("http://www.w3.org/2000/svg", "")
+    assert "https://" not in body
+    assert 'href="/' not in body and 'src="/' not in body and "innerHTML" not in body
 
 
-def test_page_without_usage_block_still_renders(srv: Srv, state_file: Path) -> None:
-    data = json.loads(state_file.read_text())
-    data.pop("usage")
-    state_file.write_text(json.dumps(data))
-    status, page = srv.req("GET", "/", INGRESS)
-    assert status == 200 and "scan is off" in page
+def test_shell_identical_for_any_state(ctrl: FakeController, tmp_path: Path) -> None:
+    bodies = []
+    for content in ("{}", json.dumps(EXAMPLE), "garbage"):
+        p = tmp_path / "s.json"
+        p.write_text(content)
+        s = Srv(ctrl, p)
+        try:
+            bodies.append(s.req("GET", "/", INGRESS)[1])
+        finally:
+            s.close()
+    assert len(set(bodies)) == 1
 
 
-def _page(ctrl: FakeController, tmp_path: Path, state: dict[str, Any]) -> str:
+@pytest.mark.parametrize(
+    ("path", "ctype"),
+    [("/static/app.css", "text/css"), ("/static/app.js", "text/javascript"), ("/", "text/html")],
+)
+def test_assets_served_with_headers(srv: Srv, path: str, ctype: str) -> None:
+    conn = http.client.HTTPConnection("127.0.0.1", srv.port, timeout=5)
+    conn.request("GET", path, headers=INGRESS)
+    resp = conn.getresponse()
+    body = resp.read()
+    conn.close()
+    assert resp.status == 200 and body
+    assert resp.getheader("Content-Type", "").startswith(ctype)
+    assert resp.getheader("Cache-Control") == "no-cache"
+    assert resp.getheader("X-Content-Type-Options") == "nosniff"
+
+
+@pytest.mark.parametrize("path", ["/static/app.css", "/static/app.js", "/"])
+def test_assets_ingress_only(srv: Srv, path: str) -> None:
+    assert srv.req("GET", path)[0] == 403
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/static/", "/static", "/static/index.html", "/static/../app/web/server.py", "/static/%2e%2e/server.py",
+        "/static/..%2fserver.py", "/static/app.js/", "/static/app.js/../server.py", "/index.html", "/app.js",
+        "//etc/passwd", "/static/nope.js", "/%2e%2e/%2e%2e/etc/passwd",
+    ],
+)
+def test_asset_whitelist_and_traversal(srv: Srv, path: str) -> None:
+    code, body = srv.req("GET", path, INGRESS)
+    assert code == 404
+    assert "def " not in body and "root:" not in body
+
+
+def test_asset_query_string_ignored(srv: Srv) -> None:
+    assert srv.req("GET", "/static/app.js?v=1", INGRESS)[0] == 200
+
+
+def test_assets_use_no_inner_html_or_external_urls() -> None:
+    static = Path(__file__).resolve().parents[2] / "app" / "web" / "static"
+    js = (static / "app.js").read_text()
+    assert "innerHTML" not in js and "outerHTML" not in js and "insertAdjacentHTML" not in js
+    assert "document.write" not in js and "eval(" not in js
+    for f in static.iterdir():
+        text = f.read_text()
+        assert "http://" not in text.replace("http://www.w3.org/2000/svg", "") and "https://" not in text
+        assert "@import" not in text and "url(" not in text
+
+
+def test_obsolete_server_side_rendering_removed() -> None:
+    import app.web.server as server
+
+    assert not hasattr(server, "render_page")
+    assert not [n for n in dir(server) if n.startswith("_render")]
+
+
+def test_status_json_with_guard_variant(ctrl: FakeController, tmp_path: Path) -> None:
+    st = copy.deepcopy(EXAMPLE)
+    st["error_code"] = "shrink_guard"
+    st["guard"] = {"new_items": 1, "last_items": 9, "removed": ["a"], "added": [], "changed": []}
     p = tmp_path / "s.json"
-    p.write_text(json.dumps(state))
+    p.write_text(json.dumps(st))
     s = Srv(ctrl, p)
     try:
-        code, body = s.req("GET", "/", INGRESS)
-        assert code == 200
-        return body
+        assert json.loads(s.req("GET", "/api/status.json")[1]) == st
     finally:
         s.close()
-
-
-def test_check_block_rendered_from_example(srv: Srv) -> None:
-    _, body = srv.req("GET", "/", INGRESS)
-    assert "Change check" in body and "enabled, every 60 s" in body
-    assert "unchanged" in body and "Triggered syncs" in body
-
-
-def test_old_state_without_check_renders_nothing(ctrl: FakeController, tmp_path: Path) -> None:
-    st = copy.deepcopy(EXAMPLE)
-    st.pop("check")
-    body = _page(ctrl, tmp_path, st)
-    assert "Change check" not in body and "Triggered syncs" not in body
-
-
-def test_check_error_and_changed(ctrl: FakeController, tmp_path: Path) -> None:
-    st = copy.deepcopy(EXAMPLE)
-    st["check"].update(result="error", error_code="git_auth_failed", triggered_syncs=3)
-    body = _page(ctrl, tmp_path, st)
-    assert 'class="badge error">error<' in body and "git_auth_failed" in body
-    st["check"].update(result="changed", error_code=None)
-    assert 'class="badge changed">changed<' in _page(ctrl, tmp_path, st)
-
-
-def test_check_disabled(ctrl: FakeController, tmp_path: Path) -> None:
-    st = copy.deepcopy(EXAMPLE)
-    st["check"] = {"enabled": False, "interval": 0, "last_check_at": None, "result": None}
-    body = _page(ctrl, tmp_path, st)
-    assert "Change check" in body and "disabled" in body and "every" not in body.split("Change check")[1][:200]
-
-
-def test_check_garbage_and_escaping(ctrl: FakeController, tmp_path: Path) -> None:
-    st = copy.deepcopy(EXAMPLE)
-    st["check"] = {"enabled": True, "interval": "<b>", "last_check_at": "nope", "result": "<i>", "error_code": "<u>"}
-    body = _page(ctrl, tmp_path, st)
-    assert "<b>" not in body and "<i>" not in body and "<u>" not in body
-    assert _page(ctrl, tmp_path, {**EXAMPLE, "check": "x"})  # non-dict tolerated
-
-
-def test_provider_revision_shown(srv: Srv) -> None:
-    _, body = srv.req("GET", "/", INGRESS)
-    assert "Revision" in body and "<code>1761560000</code>" in body
-
-
-def test_ago() -> None:
-    from datetime import datetime, timezone
-
-    from app.web.server import _ago
-
-    now = datetime(2026, 10, 27, 16, 1, 30, tzinfo=timezone.utc)
-    assert _ago("2026-10-27T16:00:30Z", now) == "1 min ago"
-    assert _ago("2026-10-27T16:01:20Z", now) == "10 s ago"
-    assert _ago("2026-10-27T19:01:30Z", now) == "just now"
-    assert _ago(None, now) == "-" and _ago("junk", now) == "-"
-
-
-def test_synthetic_keys_badged(ctrl: FakeController, tmp_path: Path) -> None:
-    st = copy.deepcopy(EXAMPLE)
-    st["keys"]["names"] = ["db_dsn", "mqtt_password", "<x>"]
-    st["keys"]["added"] = ["db_dsn"]
-    st["keys"]["synthetic"] = ["db_dsn", "<x>"]
-    body = _page(ctrl, tmp_path, st)
-    assert "<code>db_dsn</code> <span" in body and body.count('class="tag">synthetic<') == 3
-    assert "<code>mqtt_password</code> <span" not in body
-    assert "<x>" not in body and "&lt;x&gt;" in body
-
-
-def test_old_state_without_synthetic_renders_as_before(srv: Srv) -> None:
-    _, body = srv.req("GET", "/", INGRESS)
-    assert 'class="tag">synthetic<' not in body and "<code>mqtt_password</code>" in body
-
-
-def test_synthetic_garbage_tolerated(ctrl: FakeController, tmp_path: Path) -> None:
-    st = copy.deepcopy(EXAMPLE)
-    st["keys"]["synthetic"] = "nope"
-    assert _page(ctrl, tmp_path, st)
-    st["keys"]["synthetic"] = [None, 3]
-    assert _page(ctrl, tmp_path, st)
-
-
-def test_synthetic_card_shows_config_refs_and_status(ctrl: FakeController, tmp_path: Path) -> None:
-    st = copy.deepcopy(EXAMPLE)
-    st["synthetic"] = [
-        {"name": "db_dsn", "template": "pg://{{ db_user }}@h", "refs": ["db_user"], "status": "ok", "error_code": None},
-        {"name": "<bad>", "template": "{{ x ", "refs": [], "status": "error", "error_code": "synthetic_syntax"},
-        {"name": "wait", "template": "{{ y }}", "refs": ["y"], "status": "pending", "error_code": None},
-    ]
-    body = _page(ctrl, tmp_path, st)
-    assert "<h2>Synthetic keys</h2>" in body
-    assert "pg://{{ db_user }}@h" in body and "<code>db_user</code>" in body
-    assert "synthetic_syntax" in body and "parsed (not rendered yet)" in body
-    assert "<bad>" not in body and "&lt;bad&gt;" in body
-
-
-def test_no_synthetic_card_when_absent_or_empty(ctrl: FakeController, tmp_path: Path) -> None:
-    st = copy.deepcopy(EXAMPLE)
-    st.pop("synthetic", None)
-    assert "<h2>Synthetic keys</h2>" not in _page(ctrl, tmp_path, st)
-    st["synthetic"] = []
-    assert "<h2>Synthetic keys</h2>" not in _page(ctrl, tmp_path, st)

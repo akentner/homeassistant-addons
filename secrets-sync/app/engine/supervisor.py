@@ -259,6 +259,7 @@ class Supervisor:
             self._finish(now, "error", errors[0].code, sigs)
             return
 
+        st.guard = None
         self._synthetic_report()
         fetches = [self._fetch_provider(name) for name in self.cfg.providers]
         used: list[tuple[str, Snapshot]] = []
@@ -323,6 +324,7 @@ class Supervisor:
             items = len(merged.secrets)
             if check_shrink(items, self._last_items, self.cfg.shrink_guard_percent, force):
                 fatal = ("shrink_guard", f"refusing to write {items} items (last write: {self._last_items})")
+                self._guard_report(merged.secrets)
             else:
                 try:
                     fres = write_files(self.cfg.files_dir, self.cfg.data_dir / "files.manifest.json", merged.files)
@@ -364,6 +366,15 @@ class Supervisor:
         elif not was_ok and st.status != "starting":
             st.add_event("info", "sync_ok", f"sync recovered ({st.items} items)")
         self._finish(now, "ok", None, sigs)
+
+    def _guard_report(self, secrets: Mapping[str, str]) -> None:
+        """Names (never values) of what a forced write would change, shown next to the "Apply anyway" button."""
+        previous = self._last_written
+        if previous is None:
+            previous = read_secrets(self.cfg.secrets_file) or {}
+        added, removed, changed = _diff(previous, secrets)
+        self.state.guard = {"new_items": len(secrets), "last_items": self._last_items,
+                            "removed": removed, "added": added, "changed": changed}
 
     def _synthetic_report(self, rendered: bool = False, failure: SyntheticFailure | None = None) -> None:
         """Per-key status for the UI: names, templates (config, no values), referenced key names, parse/render result."""

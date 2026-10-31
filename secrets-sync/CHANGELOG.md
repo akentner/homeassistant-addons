@@ -3,6 +3,17 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.5.0-0] - 2026-10-31
+
+- Feature: redesigned web UI. A sticky 56 px top bar with icon, title, badges (status, items, last sync, version) and
+  the buttons Sync now, Preview and Refresh; below it general information, providers and the tabs Keys (with search),
+  Synthetic keys, Key usage (with search) and Events. The page is a static shell rendered by JavaScript from
+  `api/status.json`; it refreshes every 15 s (paused while the tab is hidden) or on demand. Everything is rendered as
+  text, never as markup.
+- Feature: when the shrink guard blocks a write, the overview page lists the key names that would be removed, added or
+  changed and offers an "Apply anyway" button (forced sync, asks for confirmation). New `guard` block in `state.json`;
+  names only, never values.
+
 ## [0.4.3-0] - 2026-10-31
 
 - Feature: the overview page has a "Synthetic keys" card with every configured key, its template, the key names it uses

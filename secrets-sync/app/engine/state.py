@@ -49,6 +49,7 @@ class StateStore:
         self.events: list[dict[str, str]] = []
         self.usage: dict[str, Any] = {"enabled": False}
         self.synthetic: list[dict[str, Any]] = []
+        self.guard: dict[str, Any] | None = None
         self.check: dict[str, Any] = {"enabled": False, "interval": 0, "last_check_at": None, "result": None}
 
     def load_previous(self) -> None:
@@ -100,6 +101,7 @@ class StateStore:
             "events": self.events,
             "usage": self.usage,
             "synthetic": self.synthetic,
+            "guard": self.guard,
             "check": self.check,
         }
 
