@@ -229,7 +229,11 @@ def test_shell_is_static_and_relative(srv: Srv, state_file: Path) -> None:
         assert needle not in body  # no state data in the shell
     assert "http://" not in body.replace("http://www.w3.org/2000/svg", "")
     assert "https://" not in body
-    assert 'href="/' not in body and 'src="/' not in body and "innerHTML" not in body
+    # The only root-relative URL is the add-on icon served by the Supervisor (same origin as the HA frontend)
+    icon = 'src="/api/hassio/addons/72a005f5_secrets_sync/icon"'
+    assert icon in body
+    cleaned = body.replace(icon, "")
+    assert 'href="/' not in cleaned and 'src="/' not in cleaned and "innerHTML" not in body
 
 
 def test_shell_identical_for_any_state(ctrl: FakeController, tmp_path: Path) -> None:

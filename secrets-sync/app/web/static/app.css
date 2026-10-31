@@ -78,3 +78,5 @@ details { margin: 2px 0; } summary { cursor: pointer; }
   button { padding: 4px 8px; font-size: 12px; }
   main { padding: 8px; }
 }
+
+.brand-icon { width: 28px; height: 28px; border-radius: 6px; object-fit: contain; }

@@ -203,3 +203,12 @@ test('copyText falls back to execCommand when the clipboard API is missing or re
   assert.equal(await ui.copyText(m.win, 'x'), false);
   assert.equal(await ui.copyText({ navigator: {}, document: { createElement() { throw new Error('no dom'); } } }, 'x'), false);
 });
+
+test('synthetic key name is a copyable key span', () => {
+  const s = clone(example);
+  s.synthetic = [{ name: 'db_dsn', template: 'x', refs: [], status: 'ok', error_code: null }];
+  const keys = all(ui.buildSyntheticPanel(doc, s)).flatMap((x) =>
+    x.find((c) => c.tag === 'span' && c.className === 'key' && c.textContent === 'db_dsn'));
+  assert.equal(keys.length, 1);
+  assert.equal(keys[0].attrs.title, 'Double-click to copy');
+});

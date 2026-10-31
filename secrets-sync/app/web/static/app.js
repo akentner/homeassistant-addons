@@ -258,7 +258,7 @@
       var label = { ok: 'ok', pending: 'parsed (not rendered yet)', error: 'error' }[st];
       if (it.error_code) label += ' ' + str(it.error_code);
       return h(doc, 'tr', {}, [
-        h(doc, 'td', {}, [h(doc, 'code', { text: str(it.name) })]),
+        h(doc, 'td', {}, [h(doc, 'span', { cls: 'key', text: str(it.name), attrs: { title: COPY_HINT } })]),
         h(doc, 'td', {}, [h(doc, 'code', { text: str(it.template) })]),
         h(doc, 'td', {}, [chips(doc, it.refs, null)]),
         h(doc, 'td', { cls: st === 'error' ? 'error' : st, text: label })
@@ -490,6 +490,13 @@
     $('btn-sync').addEventListener('click', function () { post('api/sync', 'Sync').then(refreshSoon); });
     $('btn-preview').addEventListener('click', preview);
     $('btn-refresh').addEventListener('click', refresh);
+
+    // The add-on icon from the Supervisor (same origin as the HA frontend); the inline SVG stays when it cannot load
+    var icon = $('brand-icon');
+    if (icon) {
+      icon.addEventListener('load', function () { icon.hidden = false; $('brand-svg').hidden = true; });
+      if (icon.complete && icon.naturalWidth > 0) { icon.hidden = false; $('brand-svg').hidden = true; }
+    }
 
     // Double-click on a key name copies the whole name (keys are one unit: select-all in CSS)
     doc.addEventListener('dblclick', function (ev) {
