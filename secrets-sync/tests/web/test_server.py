@@ -229,11 +229,8 @@ def test_shell_is_static_and_relative(srv: Srv, state_file: Path) -> None:
         assert needle not in body  # no state data in the shell
     assert "http://" not in body.replace("http://www.w3.org/2000/svg", "")
     assert "https://" not in body
-    # The only root-relative URL is the add-on icon served by the Supervisor (same origin as the HA frontend)
-    icon = 'src="/api/hassio/addons/72a005f5_secrets_sync/icon"'
-    assert icon in body
-    cleaned = body.replace(icon, "")
-    assert 'href="/' not in cleaned and 'src="/' not in cleaned and "innerHTML" not in body
+    assert 'src="./icon"' in body
+    assert 'href="/' not in body and 'src="/' not in body and "innerHTML" not in body
 
 
 def test_shell_identical_for_any_state(ctrl: FakeController, tmp_path: Path) -> None:
@@ -294,6 +291,8 @@ def test_assets_use_no_inner_html_or_external_urls() -> None:
     assert "innerHTML" not in js and "outerHTML" not in js and "insertAdjacentHTML" not in js
     assert "document.write" not in js and "eval(" not in js
     for f in static.iterdir():
+        if f.suffix == ".png":
+            continue
         text = f.read_text()
         assert "http://" not in text.replace("http://www.w3.org/2000/svg", "") and "https://" not in text
         assert "@import" not in text and "url(" not in text
@@ -317,3 +316,21 @@ def test_status_json_with_guard_variant(ctrl: FakeController, tmp_path: Path) ->
         assert json.loads(s.req("GET", "/api/status.json")[1]) == st
     finally:
         s.close()
+
+
+def test_icon_asset_is_served_and_matches_the_store_icon(srv: Srv) -> None:
+    import http.client
+
+    def raw(headers: dict[str, str]) -> tuple[int, str, bytes]:
+        conn = http.client.HTTPConnection("127.0.0.1", srv.port, timeout=5)
+        conn.request("GET", "/icon", headers=headers)
+        resp = conn.getresponse()
+        data = resp.read()
+        conn.close()
+        return resp.status, resp.getheader("Content-Type") or "", data
+
+    code, ctype, data = raw(INGRESS)
+    assert code == 200 and ctype == "image/png" and data.startswith(b"\x89PNG")
+    assert raw({})[0] == 403  # ingress only like the other assets
+    store = Path(__file__).resolve().parents[2] / "icon.png"
+    assert data == store.read_bytes()  # the copy must stay in sync with the add-on store icon

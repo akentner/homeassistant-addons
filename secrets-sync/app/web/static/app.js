@@ -491,7 +491,7 @@
     $('btn-preview').addEventListener('click', preview);
     $('btn-refresh').addEventListener('click', refresh);
 
-    // The add-on icon from the Supervisor (same origin as the HA frontend); the inline SVG stays when it cannot load
+    // The add-on icon (./icon); the inline SVG stays when it cannot load
     var icon = $('brand-icon');
     if (icon) {
       icon.addEventListener('load', function () { icon.hidden = false; $('brand-svg').hidden = true; });
