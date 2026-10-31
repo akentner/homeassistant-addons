@@ -42,6 +42,26 @@ real stall still shows up through the other tasks, `io_full10`, `sda_inflight` o
 
 A host with a missing or malformed key, or a duplicate slug, is skipped; the others keep running.
 
+## SSH key fingerprint
+
+At start the add-on derives the public key from each configured private key (the same file the monitor logs in with) and
+shows its SHA256 fingerprint plus the key type, for example `ED25519 SHA256:xsND1Padt7j…`. It is a **public-key**
+fingerprint in the same format as `ssh-keygen -lf <key>.pub` and `ssh-keygen -lf authorized_keys` on the host, so
+compare the two to see which key is really deployed. It is not sensitive. The private key and the key comment are never
+shown or logged.
+
+It appears in these places:
+
+- the "SSH key" line of each host card on the status page,
+- the status JSON fields `key_fp` and `key_type`,
+- the attributes `key_fingerprint` and `key_type` of the `problem` binary sensor,
+- a startup log line per host (`ssh key <type> <fingerprint>`).
+
+`invalid` means `ssh-keygen` cannot read the key: a damaged or truncated paste, or a passphrase-protected key (the
+monitor connects non-interactively and cannot use a passphrase). The host stays monitored and will go `stale` because
+the SSH login fails. An empty `key_fp` means no value is known. The value is computed at add-on start, so restart after
+changing the key.
+
 ## Evidence in the log
 
 `/share/haos-monitor/<slug>.log` (UTC) holds, besides the raw lines, markers meant for `grep` after an incident:
@@ -64,8 +84,8 @@ kernel log flood cannot push the samples out of its window.
 ## Web UI (Ingress)
 
 The add-on adds a sidebar entry "HAOS Monitor" (admin only) and the "Open Web UI" button. The page shows one card per
-host: verdict and reasons, all values (violated thresholds highlighted), port reachability, blocked tasks, the last
-kernel error and the last 10 `INCIDENT` log lines. It refreshes every 10 seconds.
+host: verdict and reasons, all values (violated thresholds highlighted), port reachability, the SSH key fingerprint,
+blocked tasks, the last kernel error and the last 10 `INCIDENT` log lines. It refreshes every 10 seconds.
 
 ## Status endpoint
 
@@ -73,8 +93,8 @@ The add-on hostname is `<repository-id>-haos-monitor`; for this repository it is
 the add-on's Info page). A locally built copy (`/addons/haos-monitor`) would be `local-haos-monitor` instead.
 
 `http://72a005f5-haos-monitor:8099/api/status.json[?host=<slug>]` returns flat JSON (for Gatus): numbers plus the
-strings `reasons`, `dstate_tasks` and `kmsg_last`. Without `host` the first configured host is returned; an unknown host
-gives HTTP 404 `{"error":"unknown host"}`.
+strings `reasons`, `dstate_tasks`, `kmsg_last`, `key_fp` and `key_type`. Without `host` the first configured host is
+returned; an unknown host gives HTTP 404 `{"error":"unknown host"}`.
 
 The same endpoints are available under `/cgi-bin/status` and `/cgi-bin/metrics` (kept for existing Gatus and Prometheus
 configs). `/api/hosts.json` lists the hosts and `/api/incidents.json?host=<slug>` the recent incidents.
@@ -123,7 +143,8 @@ endpoints have no authentication, so open it only in a trusted network.
 - Discovery: `<prefix>/sensor|binary_sensor/haos_monitor_<slug>/<field>/config`, one device `HAOS Monitor <name>`.
 - `binary_sensor.…_problem` carries attributes explaining the cause: `reasons` (comma list of `stale`, `io_full10`,
   `sda_inflight`, `dstate`, `kmsg`, or `none`), one boolean per component, the offending `dstate_tasks`
-  (`pid (comm):wchan`) `kmsg_last` (the newest kernel error line) and the values behind them. The same fields are in the
-  status JSON (`reasons`, `r_age`, `r_io`, `r_sda`, `r_dstate`, `r_kmsg`, `kmsg_errors`, `kmsg_last`).
+  (`pid (comm):wchan`) `kmsg_last` (the newest kernel error line), the SSH key `key_fingerprint` and `key_type`, and the
+  values behind them. The same fields are in the status JSON (`reasons`, `r_age`, `r_io`, `r_sda`, `r_dstate`, `r_kmsg`,
+  `kmsg_errors`, `kmsg_last`, `key_fp`, `key_type`).
 - Remove entities: set `mqtt_clear_discovery: true` and restart (publishes empty retained payloads), or
   `mosquitto_pub -r -n -t '<topic>'` per topic. Set it back to `false` afterwards.

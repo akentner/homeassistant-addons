@@ -52,8 +52,9 @@ config_json() {
     + (if $sc != "" then {state_class: $sc} else {} end)'
 }
 
-# Attributes of the problem sensor: which component fired, plus the values behind it
-PROBLEM_ATTRS="{{ {'reasons': value_json.reasons, 'stale': value_json.r_age == 1, 'io_full': value_json.r_io == 1, 'sda_inflight_high': value_json.r_sda == 1, 'dstate_tasks_found': value_json.r_dstate == 1, 'kmsg_found': value_json.r_kmsg == 1, 'kmsg_errors': value_json.kmsg_errors, 'kmsg_last': value_json.kmsg_last, 'dstate_tasks': value_json.dstate_tasks, 'age': value_json.age, 'io_full10': value_json.io_full10, 'sda_inflight': value_json.sda_inflight, 'dstate': value_json.dstate} | tojson }}"
+# Attributes of the problem sensor: which component fired, plus the values behind it.
+# The SSH key fingerprint and type are included because the key is the first suspect when 'stale' fires (SSH login fails).
+PROBLEM_ATTRS="{{ {'reasons': value_json.reasons, 'stale': value_json.r_age == 1, 'io_full': value_json.r_io == 1, 'sda_inflight_high': value_json.r_sda == 1, 'dstate_tasks_found': value_json.r_dstate == 1, 'kmsg_found': value_json.r_kmsg == 1, 'kmsg_errors': value_json.kmsg_errors, 'kmsg_last': value_json.kmsg_last, 'dstate_tasks': value_json.dstate_tasks, 'age': value_json.age, 'io_full10': value_json.io_full10, 'sda_inflight': value_json.sda_inflight, 'dstate': value_json.dstate, 'key_fingerprint': value_json.key_fp, 'key_type': value_json.key_type} | tojson }}"
 
 topic() { echo "$MQTT_PREFIX/$1/$DEV/$2/config"; }
 
