@@ -2,5 +2,5 @@ build_from:
   amd64: "ghcr.io/home-assistant/amd64-base:3.24"
 
 args:
-  VERSION: "0.5.0"
+  VERSION: "0.5.1"
   BW_CLI_VERSION: "2026.10.0"

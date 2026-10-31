@@ -3,6 +3,12 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.5.1-0] - 2026-11-01
+
+- Feature: key names in the web UI are one unit (a click selects the whole name) and a double-click copies the name to
+  the clipboard, with a visual flash and a short notice. Falls back to a hidden textarea when the browser blocks the
+  Clipboard API inside the ingress frame.
+
 ## [0.5.0-0] - 2026-10-31
 
 - Feature: redesigned web UI. A sticky 56 px top bar with icon, title, badges (status, items, last sync, version) and
