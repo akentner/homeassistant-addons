@@ -317,3 +317,59 @@ options:
   diff against the last written set or the current `secrets.yaml`); reset to `null` at the start of every cycle.
 - The ingress page shows the card only while `error_code == "shrink_guard"` and `guard` is an object: removed keys in
   red, an "Apply anyway" button (confirm dialog with the count) that POSTs `api/sync?force=1`.
+
+## Web UI redesign (0.5)
+
+Static shell + JavaScript, data only from JSON. Owner: ss-web (`app/web/*`, `tests/web`). No engine changes.
+
+### Delivery
+
+- `GET /` (ingress only) returns a **static** HTML shell without any state data (no `render_page(state)` interpolation).
+  Assets, also ingress only, always **relative** URLs (ingress prefix!): `static/app.css`, `static/app.js` served with
+  correct `Content-Type`, `Cache-Control: no-cache`, path whitelist (no traversal, no directory listing, 404 otherwise).
+  Optional TCP port keeps serving only `/api/health` and `/api/status.json`.
+- JS fetches `api/status.json` (relative) on load, every **15 s** and on demand ("Refresh" button, after `Sync now` /
+  `Apply anyway` / `Preview`: re-fetch after 3 s and again after 10 s). Pause polling while the tab is hidden
+  (`visibilitychange`), refresh immediately when it becomes visible again. A failed fetch shows a small "offline / last
+  update TIME" hint and keeps the old data. Missing blocks (older state files) never throw.
+- Rendering uses `createElement`/`textContent` only (never `innerHTML` with data). The existing escaping guarantees
+  stay: key names, templates, messages are data, never markup. No external fonts/scripts/CDN. Works under any ingress
+  prefix, light/dark (`prefers-color-scheme`), phone width.
+- `POST api/sync`, `api/sync?force=1`, `api/preview` unchanged (preview result shown in a closable panel, key names
+  only).
+- Small persistence in `localStorage` (selected tab) wrapped in try/catch; the URL hash (`#keys`, `#synthetic`,
+  `#usage`, `#events`) selects a tab as well.
+
+### Layout
+
+1. **Topbar**, `position: sticky; top: 0; height: 56px` (same height as the HA drawer header), full width: the key-chain
+   icon (inline SVG, the mdi `key-chain` path used for `panel_icon`) + title "Secrets Sync"; badges: status (colour by
+   status, `stale` when ok but stale), items, last sync (relative, full timestamp in `title`), version; right side
+   buttons: Sync now, Preview, Refresh (+ small "updated hh:mm:ss" / spinner). On narrow screens badges wrap into a
+   horizontal scroll, never overflow the page.
+2. **General** card: last attempt, next sync, error code, bw/sops versions, change check (enabled/interval/last/result,
+   triggered syncs). The **shrink guard card** (removed/added/changed key names, "Apply anyway" with confirm) appears
+   directly under the topbar only while `error_code == shrink_guard` and `guard` is an object.
+3. **Providers** table (status, items, revision, last success, error, problems).
+4. **Tabs** (`role=tablist`, keyboard accessible, counts in the labels where cheap):
+   - **Keys**: search box (substring, case-insensitive, instant), sections Added / Removed / Changed (only when
+     non-empty) and "All keys (n)"; synthetic keys carry the "synthetic" badge; cap rendered rows (500) with "+N more".
+   - **Synthetic keys**: name, template (monospace), keys it uses, status (`ok`, parsed not rendered yet, error code).
+     Empty state text when none configured.
+   - **Key usage**: search box; summary line (files scanned, truncated, scanned at); lists Missing (red), Unused, Used
+     (count + `file:line` refs, collapsed by default per key); disabled state text when `usage.enabled` is false.
+   - **Events**: newest first with time, level colour, code, message (cap 100).
+5. Keep behaviour of the old page: all texts remain English; guard confirm text "Remove N keys from secrets.yaml?".
+
+### Tests
+
+- Python (pytest): shell has no state data and references only relative assets; asset route whitelist/content types/404
+  for traversal; ingress-only for `/` and assets; `/api/status.json` unchanged; XSS payloads in the JSON must not be
+  rendered as markup (JS tests below); old `render_page`/`_render_*` code removed with their tests replaced.
+- JS: keep rendering logic in `static/app.js` as small pure functions (`filterKeys`, `relTime`, `statusBadge`,
+  `buildGuardCard`... returning DOM nodes via an injected `document`) so they can be unit tested with `node --test`
+  (`tests/web/js/*.test.mjs`); the pytest suite runs them via `subprocess` and skips when `node` is missing. Node is in
+  the add-on image anyway. Include tests: XSS strings in key names/templates/messages end up as text, missing blocks,
+  search filtering, tab selection from hash, guard card only for shrink_guard.
+- Manual check by the agent: run the server against `docs/state.example.json` plus a guard variant and report that the
+  page renders (a headless screenshot is welcome if a browser is available; do not install system packages).
