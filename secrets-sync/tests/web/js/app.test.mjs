@@ -170,3 +170,45 @@ test('providers table shows revision', () => {
   assert.match(text([ui.buildProviders(doc, example)]), /1761560000/);
   assert.match(text([ui.buildProviders(doc, {})]), /no providers reported yet/);
 });
+
+test('key names are one unit with a copy hint', () => {
+  const keys = all(ui.buildKeysPanel(doc, clone(example), '')).flatMap((x) =>
+    x.find((c) => c.className.split(' ').includes('key')));
+  assert.ok(keys.length > 0);
+  for (const k of keys) assert.equal(k.attrs.title, 'Double-click to copy');
+});
+
+test('copyText uses the clipboard API', async () => {
+  let got = null;
+  const win = { navigator: { clipboard: { writeText: async (t) => { got = t; } } } };
+  assert.equal(await ui.copyText(win, 'mqtt_password'), true);
+  assert.equal(got, 'mqtt_password');
+});
+
+test('copyText falls back to execCommand when the clipboard API is missing or rejects', async () => {
+  const mk = (clipboard, ok) => {
+    const calls = [];
+    const ta = { style: {}, setAttribute() {}, select() { calls.push('select'); }, value: '' };
+    const body = { appendChild() { calls.push('add'); }, removeChild() { calls.push('rm'); } };
+    const win = { navigator: { clipboard }, document: { createElement: () => ta, body, execCommand: (c) => { calls.push(c); return ok; } } };
+    return { win, ta, calls };
+  };
+  let m = mk(undefined, true);
+  assert.equal(await ui.copyText(m.win, 'a_b'), true);
+  assert.equal(m.ta.value, 'a_b');
+  assert.deepEqual(m.calls, ['add', 'select', 'copy', 'rm']);
+  m = mk({ writeText: async () => { throw new Error('denied'); } }, true);
+  assert.equal(await ui.copyText(m.win, 'x'), true);
+  m = mk(undefined, false);
+  assert.equal(await ui.copyText(m.win, 'x'), false);
+  assert.equal(await ui.copyText({ navigator: {}, document: { createElement() { throw new Error('no dom'); } } }, 'x'), false);
+});
+
+test('synthetic key name is a copyable key span', () => {
+  const s = clone(example);
+  s.synthetic = [{ name: 'db_dsn', template: 'x', refs: [], status: 'ok', error_code: null }];
+  const keys = all(ui.buildSyntheticPanel(doc, s)).flatMap((x) =>
+    x.find((c) => c.tag === 'span' && c.className === 'key' && c.textContent === 'db_dsn'));
+  assert.equal(keys.length, 1);
+  assert.equal(keys[0].attrs.title, 'Double-click to copy');
+});

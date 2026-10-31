@@ -328,7 +328,8 @@ is at least 10 s old (the interval itself is at least 60 s).
 The page has a fixed top bar (status, items, last sync, version, buttons) and tabs for keys, synthetic keys, key usage
 and events. It loads `api/status.json` and refreshes every 15 s, or when you press Refresh. The tab selection is kept
 (URL hash `#keys`, `#synthetic`, `#usage`, `#events`). When the shrink guard blocks a write, a card under the top bar
-lists the key names that would be removed, added or changed and offers "Apply anyway".
+lists the key names that would be removed, added or changed and offers "Apply anyway". A double-click on any key name
+copies it to the clipboard.
 
 | Route              | Method | Result                                                                                     |
 | ------------------ | ------ | ------------------------------------------------------------------------------------------ |

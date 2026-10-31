@@ -10,6 +10,7 @@
   var MAX_REFS = 20;
   var TABS = ['keys', 'synthetic', 'usage', 'events'];
   var POLL_MS = 15000;
+  var COPY_HINT = 'Double-click to copy';
 
   function isObj(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
   function asObj(v) { return isObj(v) ? v : {}; }
@@ -127,10 +128,38 @@
     return out;
   }
 
+  /* Copy text to the clipboard: async Clipboard API when available, else a hidden textarea + execCommand (the
+   * ingress iframe may lack clipboard permission). Resolves to true/false, never rejects. */
+  function copyText(win, text) {
+    function fallback() {
+      try {
+        var d = win.document;
+        var ta = d.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        d.body.appendChild(ta);
+        ta.select();
+        var ok = !!d.execCommand('copy');
+        d.body.removeChild(ta);
+        return ok;
+      } catch (e) { return false; }
+    }
+    var nav = win.navigator;
+    if (nav && nav.clipboard && typeof nav.clipboard.writeText === 'function') {
+      try {
+        return Promise.resolve(nav.clipboard.writeText(text)).then(function () { return true; },
+          function () { return fallback(); });
+      } catch (e) { return Promise.resolve(fallback()); }
+    }
+    return Promise.resolve(fallback());
+  }
+
   function chips(doc, names, synthetic, cls) {
     var list = asArr(names).map(str);
     var kids = list.slice(0, MAX_KEYS).map(function (n) {
-      var kid = [h(doc, 'span', { cls: 'key' + (cls ? ' ' + cls : ''), text: n })];
+      var kid = [h(doc, 'span', { cls: 'key' + (cls ? ' ' + cls : ''), text: n, attrs: { title: COPY_HINT } })];
       if (synthetic && synthetic[n]) kid.push(h(doc, 'span', { cls: 'tag', text: 'synthetic' }));
       return h(doc, 'span', {}, kid);
     });
@@ -229,7 +258,7 @@
       var label = { ok: 'ok', pending: 'parsed (not rendered yet)', error: 'error' }[st];
       if (it.error_code) label += ' ' + str(it.error_code);
       return h(doc, 'tr', {}, [
-        h(doc, 'td', {}, [h(doc, 'code', { text: str(it.name) })]),
+        h(doc, 'td', {}, [h(doc, 'span', { cls: 'key', text: str(it.name), attrs: { title: COPY_HINT } })]),
         h(doc, 'td', {}, [h(doc, 'code', { text: str(it.template) })]),
         h(doc, 'td', {}, [chips(doc, it.refs, null)]),
         h(doc, 'td', { cls: st === 'error' ? 'error' : st, text: label })
@@ -250,7 +279,7 @@
       if (total > refs.length) refs.push(h(doc, 'div', { cls: 'k', text: '+' + (total - refs.length) + ' more' }));
       return h(doc, 'details', {}, [
         h(doc, 'summary', {}, [
-          h(doc, 'span', { cls: 'key' + (bad ? ' bad' : ''), text: name }),
+          h(doc, 'span', { cls: 'key' + (bad ? ' bad' : ''), text: name, attrs: { title: COPY_HINT } }),
           h(doc, 'span', { cls: 'k', text: ' ' + total + (total === 1 ? ' use' : ' uses') })
         ])
       ].concat(refs));
@@ -462,6 +491,29 @@
     $('btn-preview').addEventListener('click', preview);
     $('btn-refresh').addEventListener('click', refresh);
 
+    // The add-on icon (./icon); the inline SVG stays when it cannot load
+    var icon = $('brand-icon');
+    if (icon) {
+      icon.addEventListener('load', function () { icon.hidden = false; $('brand-svg').hidden = true; });
+      if (icon.complete && icon.naturalWidth > 0) { icon.hidden = false; $('brand-svg').hidden = true; }
+    }
+
+    // Double-click on a key name copies the whole name (keys are one unit: select-all in CSS)
+    doc.addEventListener('dblclick', function (ev) {
+      var el = ev.target && ev.target.closest ? ev.target.closest('.key') : null;
+      if (!el) return;
+      ev.preventDefault();
+      var name = el.textContent;
+      copyText(win, name).then(function (ok) {
+        if (ok) {
+          el.classList.add('copied');
+          win.setTimeout(function () { el.classList.remove('copied'); }, 900);
+        }
+        notice(ok ? 'Copied "' + name + '" to the clipboard.' : 'Copy failed: clipboard not available.');
+        win.setTimeout(function () { notice(''); }, 2500);
+      });
+    });
+
     var poll = null;
     function startPoll() { if (!poll) poll = win.setInterval(refresh, POLL_MS); }
     function stopPoll() { if (poll) { win.clearInterval(poll); poll = null; } }
@@ -477,7 +529,7 @@
   }
 
   var api = {
-    h: h, relTime: relTime, statusInfo: statusInfo, filterKeys: filterKeys, pickTab: pickTab, isStale: isStale,
+    h: h, copyText: copyText, relTime: relTime, statusInfo: statusInfo, filterKeys: filterKeys, pickTab: pickTab, isStale: isStale,
     buildBadges: buildBadges, buildGeneral: buildGeneral, buildGuardCard: buildGuardCard,
     buildProviders: buildProviders, buildKeysPanel: buildKeysPanel, buildSyntheticPanel: buildSyntheticPanel,
     buildUsagePanel: buildUsagePanel, buildEvents: buildEvents, buildPreview: buildPreview, init: init
