@@ -137,10 +137,16 @@ flags=$(awk -v age="$age" -v io="${io_full10:--1}" -v sda="${sda_inflight:--1}" 
 set -- $flags
 r_age=$1 r_io=$2 r_sda=$3 r_dstate=$4 r_kmsg=$5 problem=$6 reasons=$7
 
+# Public-key fingerprint and type of this host's key (hosts file columns 5 and 6, written by run.sh).
+# The tr filter keeps only characters a fingerprint or type can contain, so the JSON strings stay safe.
+key_fp=$(awk -F'\t' -v s="$SLUG" '$1 == s {print $5; exit}' "${HOSTS_FILE:-/etc/haos-monitor.hosts}" 2>/dev/null | tr -cd 'A-Za-z0-9+/:=_-')
+key_type=$(awk -F'\t' -v s="$SLUG" '$1 == s {print $6; exit}' "${HOSTS_FILE:-/etc/haos-monitor.hosts}" 2>/dev/null | tr -cd 'A-Za-z0-9_-')
+
 printf '{"age":%s,"up":%s,"load1":%s,"io_some10":%s,"io_full10":%s,"mem_full10":%s,' \
   "$age" "${up:--1}" "${load1:--1}" "${io_some10:--1}" "${io_full10:--1}" "${mem_full10:--1}"
 printf '"sda_inflight":%s,"mmc_inflight":%s,"dstate":%s,"probe_age":%s,"ping":%s,"p22222":%s,"p1883":%s,"p8123":%s,"p4357":%s,"problem":%s,' \
   "${sda_inflight:--1}" "${mmc_inflight:--1}" "${dstate:--1}" "$probe_age" "${ping:--1}" \
   "${p22222:--1}" "${p1883:--1}" "${p8123:--1}" "${p4357:--1}" "$problem"
-printf '"r_age":%s,"r_io":%s,"r_sda":%s,"r_dstate":%s,"r_kmsg":%s,"reasons":"%s","dstate_tasks":"%s","kmsg_errors":%s,"kmsg_last":"%s"}\n' \
-  "$r_age" "$r_io" "$r_sda" "$r_dstate" "$r_kmsg" "$reasons" "$dstate_tasks" "${kmsg_errors:--1}" "$kmsg_last"
+printf '"r_age":%s,"r_io":%s,"r_sda":%s,"r_dstate":%s,"r_kmsg":%s,"reasons":"%s","dstate_tasks":"%s","kmsg_errors":%s,"kmsg_last":"%s","key_fp":"%s","key_type":"%s"}\n' \
+  "$r_age" "$r_io" "$r_sda" "$r_dstate" "$r_kmsg" "$reasons" "$dstate_tasks" "${kmsg_errors:--1}" "$kmsg_last" \
+  "$key_fp" "$key_type"

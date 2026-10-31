@@ -26,6 +26,21 @@ write_key() { # $1 = raw key, $2 = target file
   umask 022
 }
 
+# Fingerprint of a written key file; never lets the key or its comment leave this function
+key_fingerprint() { # $1 = key file; sets KEY_FP and KEY_TYPE
+  KEY_FP=invalid
+  KEY_TYPE=
+  # -P '' and stdin from /dev/null: a passphrase-protected key fails fast instead of prompting
+  KFL=$(ssh-keygen -y -P '' -f "$1" 2>/dev/null </dev/null | ssh-keygen -l -E sha256 -f - 2>/dev/null) || KFL=
+  KFP=$(printf '%s' "$KFL" | awk '{print $2; exit}')
+  if printf '%s' "$KFP" | grep -Eq '^SHA256:[A-Za-z0-9+/]+$'; then
+    KEY_FP=$KFP
+    KFT=$(printf '%s' "$KFL" | sed -n 's/.*(\([^()]*\))$/\1/p')
+    if printf '%s' "$KFT" | grep -Eq '^[A-Za-z0-9_-]+$'; then KEY_TYPE=$KFT; fi
+  fi
+  return 0
+}
+
 export LOGDIR=/share/haos-monitor
 mkdir -p "$LOGDIR"
 : > "$HOSTS"
@@ -47,7 +62,14 @@ while [ "$i" -lt "$COUNT" ]; do
     echo "[run] host '$NAME': ssh_private_key missing or malformed, skipped" >&2
     continue
   fi
-  printf '%s\t%s\t%s\t%s\n' "$SLUG" "$NAME" "$HOST" "$PORT" >> "$HOSTS"
+  key_fingerprint "$KEY_FILE"
+  if [ "$KEY_FP" = invalid ]; then
+    echo "[run] host '$NAME': ssh key invalid (ssh-keygen cannot read it: damaged, truncated or passphrase-protected)" >&2
+  else
+    echo "[run] host '$NAME': ssh key $KEY_TYPE $KEY_FP" >&2
+  fi
+  # Hosts file columns: slug, name, host, port, key fingerprint, key type
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$SLUG" "$NAME" "$HOST" "$PORT" "$KEY_FP" "$KEY_TYPE" >> "$HOSTS"
 
   # Supervised, isolated per-host monitor; a crash only restarts that host
   (

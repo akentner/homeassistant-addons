@@ -26,6 +26,8 @@
   tr.bad { background: var(--warn-bg); color: var(--bad); font-weight: 600; }
   .chips span { display: inline-block; margin: 0 6px 4px 0; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--line); }
   .chips .up { color: var(--ok); } .chips .down { color: var(--bad); border-color: var(--bad); }
+  .key { margin: 8px 0 0; font-size: 12px; word-break: break-all; }
+  .key.bad { color: var(--bad); font-weight: 600; }
   pre { margin: 6px 0; white-space: pre-wrap; word-break: break-word; font-size: 12px; }
   h3 { font-size: 13px; margin: 12px 0 2px; color: var(--dim); font-weight: 600; }
 </style>
@@ -54,6 +56,12 @@ function el(tag, cls, text) {
 }
 function num(v) { return v < 0 ? "–" : String(v); }
 function pad(n) { return (n < 10 ? "0" : "") + n; }
+// SSH key line: "ED25519 SHA256:..." (type only when known), "invalid" for an unreadable key, "–" when unknown
+function keyText(s) {
+  if (!s.key_fp) return "–";
+  if (s.key_fp === "invalid") return "invalid";
+  return (s.key_type ? s.key_type + " " : "") + s.key_fp;
+}
 // Boot time (local, sample time minus uptime) plus the relative uptime like "5d 1h ago"
 function uptime(v, s) {
   if (v < 0) return "–";
@@ -94,6 +102,11 @@ function render(h, s, inc) {
     chips.appendChild(el("span", s[p[0]] === 1 ? "up" : "down", p[1] + (s[p[0]] === 1 ? " ✓" : " ✗")));
   });
   c.appendChild(chips);
+
+  var key = el("div", s.key_fp === "invalid" ? "key bad" : "key");
+  key.appendChild(el("span", "dim", "SSH key "));
+  key.appendChild(el("span", "", keyText(s)));
+  c.appendChild(key);
 
   if (s.dstate_tasks) { c.appendChild(el("h3", "", "Blocked tasks")); c.appendChild(el("pre", "", s.dstate_tasks)); }
   if (s.kmsg_last) { c.appendChild(el("h3", "", "Last kernel error")); c.appendChild(el("pre", "", s.kmsg_last)); }

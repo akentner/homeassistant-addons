@@ -3,6 +3,13 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.6.1-1] - 2026-10-31
+
+- Show the SHA256 fingerprint and type of each host's SSH key on the status page, in `/api/status.json` (`key_fp`,
+  `key_type`) and as `problem` sensor attributes (`key_fingerprint`, `key_type`), so you can compare it with the
+  authorized key on the host. It is computed from the configured private key at start; an unreadable key shows
+  `invalid`. A startup log line prints it too.
+
 ## [0.6.1] - 2026-10-26
 
 - `dstate` no longer counts the ext4 journal thread (`jbd2/…`) waiting on `__wait_on_buffer` and idle kernel workers
