@@ -255,37 +255,53 @@ Plans:
 
 ### Phase 24: ntfy add-on + admin GUI
 
-**Goal:** New `ntfy/` add-on based on upstream ntfy (binwiederhier/ntfy) that exposes ntfy's auth/ACL configuration and
-ships an ingress-only admin GUI. Live ACLs, users and tokens live in ntfy's `auth.db` under `/data` (persisted, in
-backups); add-on options carry only the declarative baseline. Rejected: writing live ACLs back to the add-on options
-via the Supervisor API (edit conflicts, secrets in options/backups, duplicate of `auth.db`, declarative `auth-access`
-deletes entries on restart).
+**Goal:** New `ntfy/` add-on based on upstream ntfy (binwiederhier/ntfy) that exposes ntfy's server and auth
+configuration as add-on options and ships an ingress-only admin GUI. Live ACLs, users and tokens live in ntfy's
+`auth.db` under `/data` (persisted, in backups); add-on options carry only a baseline that is applied additively.
+Rejected: writing live ACLs back to the add-on options via the Supervisor API (edit conflicts, secrets in
+options/backups, duplicate of `auth.db`) and ntfy's declarative `auth-users`/`auth-access` (deletes entries on
+restart).
 **Requirements**: TBD
 **Depends on:** None (independent new add-on)
-**Plans:** 0 plans
+**Plans:** 11 plans
 
 Success criteria:
 
 1. Add-on follows the repo pattern (`config.yaml`, `build.yaml`, `Dockerfile`, `run.sh`, `README.md`, `DOCS.md`,
-   `.upstream.yaml`, `image:` key), HA base image, 3-file version sync, local `docker build` verified, upstream
-   auto-update works.
-2. Options pass through `base-url`, `auth-default-access` and a declarative baseline (`auth-users`, `auth-access`,
-   `auth-tokens`); secrets use `password` fields.
-3. Admin GUI via HA Ingress only; backend drives `ntfy user/access/token` (CLI) or the DB, never the undocumented
+   `.upstream.yaml`, `image:` key), HA base image, bridge network (container port 8000 unpublished, hostname
+   `72a005f5-ntfy`), 3-file version sync, local `docker build` verified, upstream auto-update works, registered in the
+   root README and `internal/base-image-config.yaml`.
+2. Options pass through `base_url`, `enable_web_ui`, `behind_proxy`, `auth_default_access`, cache and attachment
+   settings; `admin_user`/`admin_password` bootstrap the first admin; `baseline_users[]` (same fields as the old
+   add-on's `users[]`) is applied additively via the CLI, never deleting; passwords of existing baseline users are only
+   reset when `baseline_overwrite_passwords` is true (default false); secrets use `password` fields.
+3. Admin GUI via HA Ingress only (gate on every route, relative URLs, vendored htm/Preact); backend drives
+   `ntfy user/access/token` (CLI) for writes and short-lived read-only SQLite for reads, never the undocumented
    `/v1/users` API, so no ntfy admin password travels over the network.
 4. GUI features: user list (role, tier, tokens); ACL CRUD per topic/user incl. `everyone` and wildcards; topic x user
-   matrix; token create/label/expire/revoke; effective-rights lookup; random 16-char topic generator with default ACL
-   (`homeassistant` rw, `akentner` ro); reset with confirmation and automatic `auth.db` backup; health (status, DB
-   size, test publish).
-5. Every rule carries an origin marker (`gui` | `iac`); entries provisioned via declarative options are shown
-   read-only.
-6. Export button writes a desired-state YAML/JSON (initial config for IaC); the format is the contract for Phase 25.
+   matrix; token create/label/expire/revoke (values revealable per click); effective-rights lookup; random 16-char
+   topic generator with default ACL (`homeassistant` rw, `akentner` ro); separate resets (ACLs / message cache /
+   everything) with typed confirmation and automatic `auth.db` backup; backups rotated by `backup_keep`; health
+   (status, DB size, test publish); guardrails for the last admin and the options admin.
+5. Every user/ACL/token carries an origin marker (`gui` | `options` | `iac`) kept in a sidecar file; baseline entries
+   show origin `options` and stay editable.
+6. Export button writes a versioned desired-state YAML/JSON (`schema: 1`; no secrets by default, optional password
+   hashes, never token values); the format is the contract for Phase 25.
 
-Research items (verify before planning): ntfy declarative config keys and CLI behaviour against a live DB (SQLite
-concurrency); ingress path handling for the GUI; whether the ntfy web app works behind ingress.
+Research: done via three spikes (`.planning/phases/24-ntfy-add-on-admin-gui/spikes/`); decisions in `24-CONTEXT.md`.
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 24 to break down)
+- [ ] 24-01-PLAN.md — Wave 1: tracer, add-on skeleton and shared contract C1-C13
+- [ ] 24-02-PLAN.md — Wave 2: NtfyCli and AuthDb, fake ntfy for tests
+- [ ] 24-03-PLAN.md — Wave 2: origin sidecar, backups, export schema 1
+- [ ] 24-04-PLAN.md — Wave 2: vendored htm/Preact, frontend lib, CSS, JS tests
+- [ ] 24-05-PLAN.md — Wave 2: registration, icons, translations, docs incl. migration
+- [ ] 24-06-PLAN.md — Wave 3: accounts backend (users/ACLs, guardrails, role-change snapshot)
+- [ ] 24-07-PLAN.md — Wave 3: effective rights, tokens, topic generator
+- [ ] 24-08-PLAN.md — Wave 3: resets, cache clearing, test publish, health, export/backup API
+- [ ] 24-09-PLAN.md — Wave 3: baseline application at start
+- [ ] 24-10-PLAN.md — Wave 3: GUI shell and 7 views
+- [ ] 24-11-PLAN.md — Wave 4: registry/parity tests, Docker E2E against real ntfy, docs reconciliation
 
 ### Phase 25: ntfy IaC API
 

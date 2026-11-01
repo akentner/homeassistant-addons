@@ -50,6 +50,12 @@ desired-state file (the contract for Phase 25). The IaC API itself is Phase 25 a
   one-way — the schema is the contract for Phase 25 (`GET /v1/state`, `PUT /v1/desired-state`) and for IaC repos
   that consume it.
 
+- **D-18:** Option `baseline_overwrite_passwords` (bool, default `false`). When false, passwords of baseline users that
+  already exist are never touched at start (rotation happens in the GUI). When true, the baseline password is set
+  again at every start (the old add-on's behaviour). Decided 2026-11-02. Related answers the same day:
+  `attachments_enabled` defaults to `true` (limits 1G / 15M / 12h, like the old add-on); `enable_web_ui: true` serves
+  `/` and `/app`, `false` disables the web UI.
+
 ### Reachability and network
 - **D-10:** Bridge network (`host_network: false`), changed on 2026-11-02 from the earlier "host_network like the old
   add-on" decision (host_network was never technically required). ntfy listens on the fixed container port 8000
