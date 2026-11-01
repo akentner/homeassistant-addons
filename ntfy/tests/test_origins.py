@@ -47,7 +47,8 @@ def test_file_mode_0600(tmp_path):
     path = tmp_path / "o.json"
     OriginStore(path).set_user("a", "gui")
     assert path.stat().st_mode & 0o777 == 0o600
-    assert [p.name for p in tmp_path.iterdir()] == ["o.json"]
+    # only the sidecar and its flock file remain (no temp files)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["o.json", "o.json.lock"]
 
 
 def test_drop_user_cascades(tmp_path):
@@ -151,3 +152,19 @@ def test_threads_lose_no_update(tmp_path):
     for t in threads:
         t.join()
     assert len(OriginStore(path).snapshot()["users"]) == 80
+
+
+def test_two_stores_on_one_file_see_and_keep_each_others_records(tmp_path: Path) -> None:
+    # bootstrap and GUI are separate processes sharing origins.json: a long-lived store must not stay stale
+    # nor overwrite the records another store wrote after it was opened
+    path = tmp_path / "o.json"
+    gui = OriginStore(path)
+    bootstrap = OriginStore(path)
+    bootstrap.set_user("admin", "options")
+    bootstrap.set_acl("admin", "t", "options")
+    assert gui.get_user("admin") == "options"
+    assert gui.get_acl("admin", "t") == "options"
+    gui.set_user("bob", "gui")
+    bootstrap.set_user("ha", "options")
+    reloaded = OriginStore(path)
+    assert (reloaded.get_user("admin"), reloaded.get_user("bob"), reloaded.get_user("ha")) == ("options", "gui", "options")
