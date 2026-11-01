@@ -1,4 +1,4 @@
-"""Start-time bootstrap (D-04): create the admin from the options when it is missing. 24-09 extends apply_options."""
+"""Start-time bootstrap: admin (D-04), options baseline (D-05), daily backup (D-14); never blocks ntfy."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 
+from app import baseline
 from app.context import Context, build_context
 from app.contract import ApiError
 from app.ntfycli import NtfyCliError
@@ -13,9 +14,11 @@ from app.ntfycli import NtfyCliError
 
 @dataclass
 class BootstrapReport:
-    admin_created: bool = False
-    admin_existed: bool = False
-    notes: list[str] = field(default_factory=list)
+    actions: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    def summary(self) -> str:
+        return f"{len(self.actions)} action(s), {len(self.warnings)} warning(s)"
 
 
 def wait_for_auth_db(ctx: Context, timeout: float = 60.0, interval: float = 0.5) -> bool:
@@ -29,45 +32,73 @@ def wait_for_auth_db(ctx: Context, timeout: float = 60.0, interval: float = 0.5)
         time.sleep(interval)
 
 
-def ensure_admin(ctx: Context) -> BootstrapReport:
+def ensure_admin(ctx: Context) -> list[str]:
     """Create admin_user with admin_password unless it exists; an existing user's password is never touched."""
-    report = BootstrapReport()
     options = ctx.options
     if not options.admin_password:
         print("[bootstrap] admin_password is empty: admin user not created", flush=True)
-        report.notes.append("admin_password empty")
-        return report
+        return []
     try:
         existing = {user["name"] for user in ctx.db.list_users()}
     except ApiError:
         existing = set()  # missing or unreadable auth.db counts as no users
     if options.admin_user in existing:
-        report.admin_existed = True
-        return report
+        return []
     try:
         ctx.cli.user_add(options.admin_user, options.admin_password, role="admin")
     except NtfyCliError as exc:
         if exc.code == "exists":
-            report.admin_existed = True
-            return report
+            return []
         raise
-    report.admin_created = True
+    ctx.origins.set_user(options.admin_user, "options")
     print(f"[bootstrap] admin user {options.admin_user} created", flush=True)
-    return report
+    return [f"admin user {options.admin_user} created"]
+
+
+def _describe(report: baseline.BaselineReport) -> list[str]:
+    actions = [f"user {name} created" for name in report.users_created]
+    actions += [f"rule {user} {topic} {perm} set" for user, topic, perm in report.rules_set]
+    actions += [f"password of {name} reset" for name in report.passwords_reset]
+    actions += [f"{item} now owned by gui" for item in report.orphaned]
+    return actions
 
 
 def apply_options(ctx: Context) -> BootstrapReport:
-    """Apply the options baseline; this plan only ensures the admin."""
-    return ensure_admin(ctx)
+    """Admin first, then the baseline; a failure in one step is a warning and the other still runs."""
+    report = BootstrapReport()
+    try:
+        report.actions += ensure_admin(ctx)
+    except Exception as exc:  # noqa: BLE001 - type and message only, never option values
+        report.warnings.append(f"admin: {type(exc).__name__}: {exc}")
+    try:
+        result = baseline.apply_baseline(ctx)
+        report.actions += _describe(result)
+        report.warnings += result.warnings
+    except Exception as exc:  # noqa: BLE001
+        report.warnings.append(f"baseline: {type(exc).__name__}: {exc}")
+    return report
 
 
 def main() -> int:
     try:
         ctx = build_context()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[bootstrap] cannot build context: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        return 1
+    try:
         if not wait_for_auth_db(ctx):
             print("[bootstrap] auth.db not ready after 60 s, skipping bootstrap", file=sys.stderr, flush=True)
             return 0
-        apply_options(ctx)
+        try:
+            backup = ctx.backups.create_daily()
+            if backup:
+                print(f"[bootstrap] daily backup {backup['name']} created", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[bootstrap] warning: daily backup failed: {type(exc).__name__}: {exc}", flush=True)
+        report = apply_options(ctx)
+        print(f"[bootstrap] done: {report.summary()}", flush=True)
+        for warning in report.warnings:
+            print(f"[bootstrap] warning: {warning}", flush=True)
     except Exception as exc:  # noqa: BLE001 - delivery must not depend on bootstrap; log type and message only
         print(f"[bootstrap] failed: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
     return 0
