@@ -128,3 +128,22 @@ beyond those listed, CSS details, test layout.
 ## Deferred Ideas
 
 GUI import of a desired-state file; Node SPA migration; IaC API (Phase 25).
+
+---
+
+## Follow-up 2026-11-02: network mode (revises D-10)
+
+Triggered by the ntfy-ingress spike: `host_network: true` + ingress has no precedent in the repo, the ingress peer
+address is unverified and port 8099 would be reachable from the LAN.
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Keep host_network + listen_port 8000 | Routing unchanged, needs a live-HA verification wave | |
+| Bridge network, port 8000 not published | Cloudflared/Traefik reach `72a005f5-ntfy:8000` internally; `listen_port` dropped | ✓ |
+| Bridge network, port 8000 published | LAN clients keep working, ntfy directly reachable in the LAN | |
+
+**User's choice:** Bridge network; the user asked why host_network was needed at all and noted that Cloudflared can
+target ports. Port stays unpublished by default (recommended option).
+**Notes:** The earlier host_network choice was inherited from the old add-on, not a technical requirement. Open item
+for DOCS/planning: check which clients still use `http://<HA-IP>:8000` directly and the current Cloudflared/Traefik
+target before cut-over.

@@ -51,10 +51,17 @@ desired-state file (the contract for Phase 25). The IaC API itself is Phase 25 a
   that consume it.
 
 ### Reachability and network
-- **D-10:** `host_network: true` and `listen_port` (default 8000) stay as in the old add-on, so Cloudflare/Traefik
-  routing and clients are unchanged. The GUI listens separately on the ingress port 8099. `base_url` and
-  `enable_web_ui` stay options (current values: `https://ntfy.akentner.de`, web UI on). — **Reversibility:**
-  costly — changing the network mode later breaks routing and healthchecks.
+- **D-10:** Bridge network (`host_network: false`), changed on 2026-11-02 from the earlier "host_network like the old
+  add-on" decision (host_network was never technically required). ntfy listens on the fixed container port 8000
+  (`ports: 8000/tcp: null`, not published on the host by default; the user may map a host port in the HA UI). The
+  `listen_port` option is dropped. Cloudflared/Traefik reach it by add-on hostname and container port
+  (`72a005f5-ntfy:8000`, same pattern as `coding-assistants`); that hostname replaces the old
+  `f6c6b703-ntfy-server` as the one routing change during migration. The GUI listens separately on the ingress port
+  8099 and is not reachable from the LAN. `base_url` and `enable_web_ui` stay options (current values:
+  `https://ntfy.akentner.de`, web UI on). The ingress gate (`172.30.32.2` + `X-Ingress-Path`) is proven for bridge
+  add-ons by `secrets-sync`, so no live-HA verification wave is needed for it. Old and new add-on can run side by
+  side during migration (different hostnames, no host port clash). — **Reversibility:** costly — hostname and
+  routing targets in Cloudflared/Traefik depend on it.
 
 ### GUI scope and dangerous actions
 - **D-11:** Reset replaces the old `reset_data` option and is split into separate GUI actions: "reset ACLs",
@@ -133,10 +140,11 @@ desired-state file (the contract for Phase 25). The IaC API itself is Phase 25 a
 - Upstream binaries are downloaded at build time, never bundled; `.upstream.yaml` drives the daily auto-update
 
 ### Integration Points
-- Old add-on `f6c6b703_ntfy_server` (host_network, listen_port 8000, options `admin_user`, `admin_password`,
+- Old add-on `f6c6b703_ntfy_server` (host_network, listen_port 8000, hostname `f6c6b703-ntfy-server`, options `admin_user`, `admin_password`,
   `auth_default_access`, `base_url`, `enable_web_ui`, `listen_port`, `reset_data`, `users[]`) is the migration source
 - Consumers: Home Assistant (`homeassistant` rw), the notebook client (`akentner` ro), Gatus (`gatus` user),
-  Cloudflare/Traefik routing to `ntfy.akentner.de`
+  Cloudflare/Traefik routing to `ntfy.akentner.de` (target must change to the new add-on hostname; current target not
+  checked, see Specific Ideas)
 - Phase 25 consumes the export schema defined here
 
 </code_context>
@@ -146,6 +154,10 @@ desired-state file (the contract for Phase 25). The IaC API itself is Phase 25 a
 
 - Topics follow the existing convention: random 16-character alphanumeric strings (A-Z, a-z, 0-9), default ACL
   `homeassistant` rw, `akentner` ro; topic `public` with everyone ro is a known pattern.
+- Migration note for DOCS: the old `listen_port` option has no counterpart (fixed container port 8000); someone must
+  repoint the Cloudflared/Traefik target for `ntfy.akentner.de` from the old to the new add-on hostname, and check
+  whether any client still uses `http://<HA-IP>:8000` directly (HA ntfy integration, Gatus) before relying on an
+  unpublished port.
 - Known gaps for research: ntfy CLI behaviour against a live DB (SQLite concurrency while the server runs), ingress
   path handling for the GUI, whether the ntfy web app and `/app` work with the chosen `base_url`.
 
