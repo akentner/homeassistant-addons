@@ -1,0 +1,57 @@
+name: "ntfy"
+description: "Self-hosted push notification server (ntfy) with an ingress admin GUI for users, ACLs and tokens"
+version: "2.36.0-0"
+slug: "ntfy"
+init: false
+arch:
+  - amd64
+image: "ghcr.io/akentner/homeassistant-addons/{arch}-ntfy"
+url: "https://github.com/akentner/homeassistant-addons"
+startup: "application"
+boot: "auto"
+host_network: false
+ingress: true
+ingress_port: 8099
+panel_icon: "mdi:bell-ring"
+panel_title: "ntfy"
+panel_admin: true
+ports:
+  8000/tcp: null
+ports_description:
+  8000/tcp: "ntfy server (reachable inside the HA network as 72a005f5-ntfy:8000; map a host port only if needed)"
+options:
+  base_url: "https://ntfy.example.com"
+  enable_web_ui: true
+  behind_proxy: true
+  auth_default_access: "deny-all"
+  admin_user: "admin"
+  admin_password: ""
+  baseline_users: []
+  baseline_overwrite_passwords: false
+  backup_keep: 10
+  cache_duration: "12h"
+  attachments_enabled: true
+  attachment_total_size_limit: "1G"
+  attachment_file_size_limit: "15M"
+  attachment_expiry_duration: "12h"
+  log_level: "info"
+schema:
+  base_url: "url"
+  enable_web_ui: "bool"
+  behind_proxy: "bool"
+  auth_default_access: "list(deny-all|read-only|write-only|read-write)"
+  admin_user: "match(^[a-zA-Z0-9_][-_.+@a-zA-Z0-9]{0,63}$)"
+  admin_password: "password"
+  baseline_users:
+    - username: "match(^[a-zA-Z0-9_][-_.+@a-zA-Z0-9]{0,63}$)"
+      password: "password"
+      topic: "match(^[-_a-zA-Z0-9*]{0,64}$)"
+      write_access: "bool"
+  baseline_overwrite_passwords: "bool"
+  backup_keep: "int(1,100)"
+  cache_duration: "match(^[0-9]+[smhd]$)"
+  attachments_enabled: "bool"
+  attachment_total_size_limit: "match(^[0-9]+[KMGkmg]?$)?"
+  attachment_file_size_limit: "match(^[0-9]+[KMGkmg]?$)?"
+  attachment_expiry_duration: "match(^[0-9]+[smhd]$)?"
+  log_level: "list(trace|debug|info|warn|error)"
