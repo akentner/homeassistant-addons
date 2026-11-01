@@ -22,7 +22,7 @@ completed: 2026-11-02
 
 - `676fc0c` feat(ntfy): add effective-rights evaluator and GET api/effective
 - `57bba20` feat(ntfy): add token services and routes with on-demand reveal
-- topic suggestion commit (`feat(ntfy): add random topic suggestion with default ACL`)
+- `69fab6a` feat(ntfy): add random topic suggestion with default ACL
 
 ## Verification
 
