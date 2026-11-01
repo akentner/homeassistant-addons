@@ -6,15 +6,15 @@ current_phase: 23
 current_phase_name: "coding-assistants: Claude Code + herdr (replaces tmux)"
 current_plan: 9
 status: Phase 22 gap-closure 22-04 executed (CR-01) — awaiting re-verification
-stopped_at: Completed 23-09-PLAN.md
-last_updated: "2026-10-12T00:55:25.985Z"
-state_head: 84739b01d4b7925cc4ce366fc16760345d9a808c
+stopped_at: Phase 24 context gathered
+last_updated: "2026-11-01T21:43:18.417Z"
+state_head: 525d73e4de5ffa0147dcc95b2689704af4ef9ab8
 progress:
-  total_phases: 11
+  total_phases: 13
   completed_phases: 12
   total_plans: 43
   completed_plans: 42
-  percent: 98
+  percent: 92
 ---
 
 # Project State
@@ -433,11 +433,11 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 
 ## Session Continuity
 
-**Resume file:** None
+**Resume file:** .planning/phases/24-ntfy-add-on-admin-gui/24-CONTEXT.md
 
-**Stopped at:** Completed 23-09-PLAN.md
+**Stopped at:** Phase 24 context gathered
 
-Last session: 2026-10-12T00:55:25.729Z
+Last session: 2026-11-01T21:43:18.207Z
 
 ---
 
