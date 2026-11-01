@@ -7,8 +7,8 @@ current_phase_name: "coding-assistants: Claude Code + herdr (replaces tmux)"
 current_plan: 9
 status: Phase 22 gap-closure 22-04 executed (CR-01) — awaiting re-verification
 stopped_at: Completed 23-09-PLAN.md
-last_updated: "2026-10-12T00:55:25.985Z"
-state_head: 84739b01d4b7925cc4ce366fc16760345d9a808c
+last_updated: "2026-11-01T20:47:24.862Z"
+state_head: b092dfbb321fc7dcdbd6986b99f545177a0da494
 progress:
   total_phases: 11
   completed_phases: 12
@@ -428,6 +428,8 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 | 260927-wzn | internal/update-version.py: defer git tagging until version-bump files are committed (fixes 260927-r2j/260927-vbk mis-tag class); RED-before-GREEN regression test wired into make check-all | 2026-09-27 | ee0e859 | [260927-wzn-fix-internal-update-version-py-tag-timin](./quick/260927-wzn-fix-internal-update-version-py-tag-timin/) |
 | 260-wr09 | cups: WR-09 malformed Location header no longer makes upload_document() raise (retry-forever loop); probe row added, bump to 0.1.0-20 | 2026-10-08 | dba7553 | — |
 | 261025-lpy | litellm: revert builder to python 3.13 (3.15 bump broke the 1.106.4 build, image never published); Renovate pin to 3.13 | 2026-10-25 | e53adb5 | [quick/261025-lpy-litellm-builder-python-3-13-revert](./quick/261025-lpy-litellm-builder-python-3-13-revert/) |
+| 261030-v65 | secrets-sync: test multi-line key round-trip (Bitwarden login notes + custom field -> secrets.yaml) | 2026-11-01 | 568a35a | [261030-v65-secrets-sync-test-multi-line-key-round-t](./quick/261030-v65-secrets-sync-test-multi-line-key-round-t/) |
+| 261031-srb | haos-monitor: show SSH key fingerprint per host in status page, status.json and MQTT attributes | 2026-11-01 | 98d5067 | [261031-srb-haos-monitor-show-ssh-key-fingerprint-pe](./quick/261031-srb-haos-monitor-show-ssh-key-fingerprint-pe/) |
 
 ## Session Continuity
 
