@@ -185,6 +185,23 @@ Own code, no upstream project. Pulls secrets from pluggable providers (Bitwarden
 - Collision policy, shrink guard and verified atomic writes; the last good file is always kept
 - No secret values in logs, state or API; credentials only via environment
 
+### [ntfy](./ntfy)
+
+![Supports amd64 Architecture][amd64-shield]
+
+_Self-hosted push notifications with an ingress admin GUI for users, ACLs and tokens._
+
+Wraps the upstream [ntfy][ntfy-upstream] server and ships an ingress-only admin GUI in the Home Assistant sidebar. Live
+users, ACLs and tokens stay in ntfy's `auth.db`; the add-on options only carry an additive baseline.
+
+**Features:**
+
+- Users, ACL rules (incl. `everyone` and wildcards), topic x user matrix and tokens managed in the GUI
+- Baseline users from the options, compatible with the old "ntfy Server" add-on; origin markers show where an entry came
+  from
+- Backups of `auth.db`, guarded reset actions and a versioned state export (schema 1)
+- Bridge network: reachable inside the HA network as `72a005f5-ntfy:8000`, GUI only through ingress
+
 ### [Authentik](./authentik)
 
 ![Supports amd64 Architecture][amd64-shield]
@@ -297,6 +314,7 @@ This repository uses automated linting enforced by pre-commit hooks and GitHub A
 [ha-rest-integration]: https://www.home-assistant.io/integrations/rest/
 [ha-addons-docs]: https://developers.home-assistant.io/docs/add-ons
 [gatus-upstream]: https://github.com/TwiN/gatus
+[ntfy-upstream]: https://github.com/binwiederhier/ntfy
 [litellm-upstream]: https://github.com/BerriAI/litellm
 [markdownlint-cli2]: https://github.com/DavidAnson/markdownlint-cli2
 [actionlint]: https://github.com/rhysd/actionlint
