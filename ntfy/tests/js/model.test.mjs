@@ -73,3 +73,18 @@ test("constants mirror the contract", () => {
   assert.deepEqual(m.RESET_PHRASES, { acls: "reset acls", cache: "clear cache", everything: "reset everything" });
   assert.deepEqual(m.PERMISSIONS, ["rw", "ro", "wo", "deny"]);
 });
+
+test("expiryState", () => {
+  const now = 2_000_000_000_000;
+  assert.equal(m.expiryState(0, now), "never");
+  assert.equal(m.expiryState(1, now), "expired");
+  assert.equal(m.expiryState(now / 1000 + 100, now), "active");
+});
+
+test("describeEffective", () => {
+  const rule = { user: "bob", topic: "t*", permission: "ro" };
+  assert.match(m.describeEffective({ source: { kind: "admin", rule: null } }), /admin role: full access/);
+  assert.match(m.describeEffective({ source: { kind: "user-rule", rule } }), /bob on t\* \(ro\)/);
+  assert.match(m.describeEffective({ source: { kind: "everyone-rule", rule } }), /everyone rule/);
+  assert.match(m.describeEffective({ source: { kind: "default", rule: null } }), /default access applies/);
+});

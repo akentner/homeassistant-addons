@@ -105,3 +105,23 @@ export function protectionLabel(reason) {
 }
 
 export const confirmMatches = (typed, expected) => typeof typed === "string" && typed === expected;
+
+export function expiryState(ts, nowMs = Date.now()) {
+  if (!ts) return "never";
+  return ts * 1000 <= nowMs ? "expired" : "active";
+}
+
+export function describeEffective(eff) {
+  const src = eff && eff.source ? eff.source : {};
+  const rule = src.rule ? `${src.rule.user} on ${src.rule.topic} (${src.rule.permission})` : "";
+  switch (src.kind) {
+    case "admin":
+      return "admin role: full access";
+    case "user-rule":
+      return `decided by the user rule ${rule}`;
+    case "everyone-rule":
+      return `decided by the everyone rule ${rule}`;
+    default:
+      return "no rule matches, default access applies";
+  }
+}
