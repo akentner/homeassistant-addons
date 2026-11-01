@@ -135,7 +135,10 @@ def publish_test(ctx: Any, topic: str, message: str | None = None, *, http: Http
                 "Title": "ntfy admin GUI",
                 "Content-Type": "text/plain; charset=utf-8",
             }
-            status, data = send(f"http://127.0.0.1:{NTFY_PORT}/{topic}", headers, text.encode("utf-8"))
+            try:
+                status, data = send(f"http://127.0.0.1:{NTFY_PORT}/{topic}", headers, text.encode("utf-8"))
+            except OSError:  # URLError, timeout, connection refused: report as a failed publish, not a 500
+                status, data = 0, b""
         finally:
             try:
                 ctx.cli.token_remove(admin, token)

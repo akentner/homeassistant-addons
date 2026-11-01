@@ -246,9 +246,9 @@ def test_publish_test_rate_limited(ctx: Any) -> None:
     assert ctx.db.counts()["tokens"] == 0
 
 
-def test_publish_test_removes_token_when_http_raises(ctx: Any) -> None:
-    with pytest.raises(OSError):
-        maintenance.publish_test(ctx, "alerts", http=FakeHttp(ctx, boom=True))
+def test_publish_test_network_error_is_ok_false_and_token_removed(ctx: Any) -> None:
+    result = maintenance.publish_test(ctx, "alerts", http=FakeHttp(ctx, boom=True))
+    assert result == {"ok": False, "status": 0, "id": None}
     assert ctx.db.counts()["tokens"] == 0
 
 
