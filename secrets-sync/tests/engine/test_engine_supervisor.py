@@ -87,7 +87,8 @@ def make(tmp_path, providers, clock=None, **over):
                  data_dir=tmp_path / "data", port=0, version="0.1.0", problems=over.pop("problems", ()),
                  usage_scan=over.pop("usage_scan", "off"), check_interval=over.pop("check_interval", 0),
                  addon_configs_dir=over.pop("addon_configs_dir", tmp_path / "addon_configs"))
-    return Supervisor(cfg, providers=providers, clock=clock or Clock(), probe_versions=False)
+    return Supervisor(cfg, providers=providers, clock=clock or Clock(), probe_versions=False,
+                      reloader=over.pop("reloader", lambda: "skipped"))
 
 
 def state(sup):
@@ -444,3 +445,48 @@ def test_usage_scan_off_by_default_and_event_not_repeated(tmp_path):
     clock.now += 100
     sup2.run_once()
     assert [e["code"] for e in state(sup2)["events"]].count("secret_missing") == 1
+
+
+class Reloader:
+    def __init__(self, result=None):
+        self.calls = 0
+        self.result = result
+
+    def __call__(self):
+        self.calls += 1
+        return self.result
+
+
+def test_supervisor_reload_only_when_key_names_change(tmp_path):
+    prov = FakeProvider("bitwarden", {"a": "1"})
+    rl = Reloader()
+    sup = make(tmp_path, {"bitwarden": prov}, reloader=rl)
+    sup.run_once()
+    assert rl.calls == 1  # first write adds keys
+    assert any(e["code"] == "supervisor_reload" for e in state(sup)["events"])
+    prov.secrets = {"a": "changed"}
+    sup.run_once()
+    assert rl.calls == 1  # value change only: no reload
+    prov.secrets = {"a": "changed", "b": "2"}
+    sup.run_once()
+    assert rl.calls == 2
+
+
+def test_supervisor_reload_retried_once_after_throttle_window(tmp_path):
+    clock = Clock()
+    rl = Reloader()
+    sup = make(tmp_path, {"bitwarden": FakeProvider("bitwarden", {"a": "1"})}, clock=clock, reloader=rl)
+    sup.run_once()
+    sup._retry_reload(clock.now + 10)
+    assert rl.calls == 1
+    sup._retry_reload(clock.now + 70)
+    assert rl.calls == 2
+    sup._retry_reload(clock.now + 200)
+    assert rl.calls == 2
+
+
+def test_supervisor_reload_failure_is_only_a_warning(tmp_path):
+    sup = make(tmp_path, {"bitwarden": FakeProvider("bitwarden", {"a": "1"})}, reloader=Reloader("http_403"))
+    assert sup.run_once() == "ok"
+    events = state(sup)["events"]
+    assert any(e["code"] == "supervisor_reload_failed" and e["level"] == "warning" for e in events)
