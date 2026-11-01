@@ -1,57 +1,125 @@
-// Tracer shell: health badge plus users table. Relative URLs only (the page lives below an ingress token path).
+// Shell: hash router, tabs, lazy view loader, health poll. Relative URLs only (page lives below an ingress path).
+import { html, render, useState, useEffect, Toasts, ErrorNote, Loading, Badge, usePoll } from "./lib/ui.mjs";
+import { get } from "./lib/api.mjs";
+import { useErrorBoundary } from "./vendor/preact-htm.mjs";
 
-function el(tag, text, className) {
-  const node = document.createElement(tag);
-  if (text !== undefined && text !== null) node.textContent = String(text);
-  if (className) node.className = className;
-  return node;
-}
+export const VIEWS = [
+  { id: "users", title: "Users" },
+  { id: "acl", title: "ACL rules" },
+  { id: "matrix", title: "Matrix" },
+  { id: "tokens", title: "Tokens" },
+  { id: "tools", title: "Tools" },
+  { id: "health", title: "Health" },
+  { id: "data", title: "Export & backups" },
+];
 
-async function getJson(url) {
-  const resp = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!resp.ok) throw new Error(`${url}: HTTP ${resp.status}`);
-  return resp.json();
-}
-
-function renderUsers(root, users) {
-  const card = el("section", null, "card");
-  card.append(el("h2", "Users"));
-  const table = el("table");
-  const head = el("tr");
-  for (const title of ["Name", "Role", "Tier"]) head.append(el("th", title));
-  table.append(head);
-  for (const user of users) {
-    const row = el("tr");
-    row.append(el("td", user.name), el("td", user.role), el("td", user.tier || "-"));
-    table.append(row);
+export function parseHash(hash) {
+  const raw = String(hash || "").replace(/^#\/?/, "");
+  const [path, query = ""] = raw.split("?");
+  const id = VIEWS.some((v) => v.id === path) ? path : "users";
+  const params = {};
+  for (const part of query.split("&")) {
+    if (!part) continue;
+    const [k, v = ""] = part.split("=");
+    try {
+      params[decodeURIComponent(k)] = decodeURIComponent(v.replace(/\+/g, " "));
+    } catch {
+      // ignore malformed escapes
+    }
   }
-  card.append(table);
-  root.append(card);
+  return { id, params };
 }
 
-async function main() {
+const cache = new Map();
+const loadView = (id) => {
+  if (!cache.has(id)) {
+    // Literal-prefixed relative path keeps the import analyzable and below the ingress path.
+    cache.set(
+      id,
+      import(`./views/${id}.mjs`).catch((err) => {
+        cache.delete(id);
+        throw err;
+      }),
+    );
+  }
+  return cache.get(id);
+};
+
+// Error boundary as a hook-free wrapper around a view component.
+function Guarded({ id, params }) {
+  const [state, setState] = useState({ view: null, error: null });
+  useEffect(() => {
+    let live = true;
+    setState({ view: null, error: null });
+    loadView(id).then(
+      (mod) => live && setState({ view: mod.default, error: null }),
+      (error) => live && setState({ view: null, error }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [id]);
+  if (state.error)
+    return html`<${ErrorNote} error=${{ code: "view_failed", message: String(state.error.message || state.error) }} />`;
+  if (!state.view) return html`<${Loading} />`;
+  return html`<${Boundary} key=${id}><${state.view} params=${params} /><//>`;
+}
+
+function Boundary({ children }) {
+  const [error] = useErrorBoundary();
+  if (error) return html`<${ErrorNote} error=${{ code: "render_failed", message: String(error.message || error) }} />`;
+  return children;
+}
+
+export function App() {
+  const [route, setRoute] = useState(() => parseHash(globalThis.location ? location.hash : ""));
+  const [health, setHealth] = useState(null);
+  const [healthError, setHealthError] = useState(null);
+  const [iconOk, setIconOk] = useState(true);
+  const load = () =>
+    get("health").then(
+      (h) => {
+        setHealth(h);
+        setHealthError(null);
+      },
+      (e) => setHealthError(e),
+    );
+  useEffect(() => {
+    const onHash = () => setRoute(parseHash(location.hash));
+    window.addEventListener("hashchange", onHash);
+    load();
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  usePoll(load, 15000);
+  const status = healthError ? "error" : health ? health.status : "loading";
+  return html`<div>
+    <header class="topbar">
+      ${iconOk &&
+      html`<img class="brand-icon" alt="" width="28" height="28" src="./icon" onError=${() => setIconOk(false)} />`}
+      <h1>ntfy</h1>
+      <${Badge} kind=${status === "ok" ? "ok" : status === "loading" ? "muted" : status}>${status}<//>
+      ${health && html`<span class="muted">add-on ${health.addon_version}</span>`}
+    </header>
+    <nav class="tabs">
+      ${VIEWS.map(
+        (v) =>
+          html`<a key=${v.id} class=${`tab${route.id === v.id ? " active" : ""}`} href=${`#/${v.id}`}>${v.title}</a>`,
+      )}
+    </nav>
+    <main>
+      ${health &&
+      health.status === "degraded" &&
+      html`<div class="notice error">Degraded: ${(health.db && health.db.error) || "auth database unusable"}</div>`}
+      <${Guarded} id=${route.id} params=${route.params} />
+    </main>
+    <${Toasts} />
+  </div>`;
+}
+
+if (typeof document !== "undefined" && document.getElementById("app")) {
+  // The static header of index.html is replaced by the one rendered here.
   const root = document.getElementById("app");
-  const badge = document.getElementById("badge");
-  try {
-    const health = await getJson("api/health");
-    badge.textContent = health.status;
-    badge.className = `badge ${health.status}`;
-    const info = el("section", null, "card");
-    info.append(el("h2", "Health"));
-    info.append(el("div", `ntfy ${health.ntfy.healthy ? "healthy" : "not healthy"}, add-on ${health.addon_version}`));
-    info.append(el("div", `auth.db schema ${health.db.schema_version} (${health.db.supported ? "supported" : "unsupported"})`));
-    root.append(info);
-  } catch (err) {
-    badge.textContent = "error";
-    badge.className = "badge error";
-    root.append(el("p", `Health unavailable: ${err.message}`, "notice"));
-  }
-  try {
-    const data = await getJson("api/users");
-    renderUsers(root, data.users);
-  } catch (err) {
-    root.append(el("p", `Users unavailable: ${err.message}`, "notice"));
-  }
+  const stale = document.querySelector("body > header.topbar");
+  if (stale) stale.remove();
+  render(html`<${App} />`, root);
 }
-
-main();

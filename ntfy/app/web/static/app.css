@@ -121,3 +121,11 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .tab:focus-visibl
   main { padding: 8px; }
   .copy-field input { min-width: 0; width: 100%; }
 }
+
+/* danger zone and view helpers */
+.danger-zone { border-color: var(--err); }
+.danger-zone h2 { color: var(--err); }
+.danger-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--bd); }
+.matrix td.cell { cursor: pointer; }
+.matrix td.cell:hover { background: var(--hover); }
+.toolbar label { display: inline-flex; align-items: center; gap: 4px; }
