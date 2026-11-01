@@ -7,8 +7,11 @@ import os
 import urllib.request
 from typing import Any
 
-from app.contract import NTFY_PORT
+from app import maintenance
+from app.contract import NTFY_PORT, ApiError
 from app.web.server import Request, Router
+
+_publish = maintenance.publish_test  # module-level indirection so tests can patch the network
 
 
 def ntfy_health(timeout: float = 2.0) -> dict[str, Any]:
@@ -35,6 +38,12 @@ def register(router: Router, ctx: Any) -> None:
             status = "degraded"
         else:
             status = "ok"
+        counts = None
+        if schema["supported"]:
+            try:
+                counts = ctx.db.counts()
+            except ApiError:
+                counts = None
         return {
             "status": status,
             "addon_version": os.environ.get("NTFY_ADDON_VERSION", "unknown"),
@@ -46,7 +55,17 @@ def register(router: Router, ctx: Any) -> None:
                 "cache_size_bytes": cache_size,
                 "error": schema["error"],
             },
-            "counts": None,
+            "counts": counts,
         }
 
+    def publish(req: Request) -> dict[str, Any]:
+        body = req.body()
+        topic, message = body.get("topic"), body.get("message")
+        if not isinstance(topic, str):
+            raise ApiError("bad_request", "topic must be a string")
+        if message is not None and not isinstance(message, str):
+            raise ApiError("bad_request", "message must be a string")
+        return _publish(ctx, topic, message)
+
     router.add("GET", "/api/health", health)
+    router.add("POST", "/api/health/publish", publish)
