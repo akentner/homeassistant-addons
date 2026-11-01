@@ -319,6 +319,18 @@ the URL), `sops_git_url_scheme` (only ssh and https), `sops_git_path_invalid`, `
   and offers an "Apply anyway" button (forced sync after a confirmation; `POST /api/sync?force=1`, Ingress only). Zero
   items are never forced.
 
+## Supervisor secrets reload
+
+The Supervisor keeps its own copy of `secrets.yaml` to resolve `!secret` in add-on options, and it refuses to save the
+options of an add-on that references a key it does not know yet. So after a sync adds or removes key names, the add-on
+asks the Supervisor to re-read the file (event `supervisor_reload`). Changed values alone do not trigger it.
+
+- It uses `GET /addons/self/options/config`, which every add-on may call: no extra permission (`hassio_api`) and no
+  write. The response (resolved options) is never read.
+- The Supervisor throttles the reload to once per 60 s, so the call is repeated once after 65 s.
+- A failed call is only a warning (`supervisor_reload_failed`); the sync itself stays `ok`. Manual fallback:
+  `ha supervisor reload`.
+
 ## Web UI and API
 
 Ingress sidebar entry "Secrets Sync". Optional port `8099/tcp` serves only `GET /api/health` and `GET /api/status.json`;

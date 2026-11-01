@@ -373,3 +373,17 @@ Static shell + JavaScript, data only from JSON. Owner: ss-web (`app/web/*`, `tes
   search filtering, tab selection from hash, guard card only for shrink_guard.
 - Manual check by the agent: run the server against `docs/state.example.json` plus a guard variant and report that the
   page renders (a headless screenshot is welcome if a browser is available; do not install system packages).
+
+## Supervisor secrets reload (0.6)
+
+The Supervisor caches `secrets.yaml` (reloaded on add-on start, on options save and `supervisor reload`, throttled to 60
+s) and rejects options with `!secret` keys missing from that cache. After a write that changed key **names** (`added` or
+`removed` non-empty; value changes alone do not count), `Supervisor._after_write` calls
+`app/engine/reload.py:supervisor_reload()`: `GET http://supervisor/addons/self/options/config` with `SUPERVISOR_TOKEN`
+(allowed for every add-on, reloads the cache as a side effect; the body holds resolved options and is never read).
+
+- Without `SUPERVISOR_TOKEN` it returns `skipped` and nothing happens (tests, local runs).
+- Success: event `supervisor_reload` (info). One retry after `RETRY_AFTER` = 65 s from the `_sleep` loop, because the
+  Supervisor skips a reload within 60 s of the previous one.
+- Failure: event `supervisor_reload_failed` (warning), cycle status unaffected, no retry.
+- Tests inject `reloader` into `Supervisor`.

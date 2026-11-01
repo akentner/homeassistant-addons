@@ -491,11 +491,11 @@
     $('btn-preview').addEventListener('click', preview);
     $('btn-refresh').addEventListener('click', refresh);
 
-    // The add-on icon (./icon); the inline SVG stays when it cannot load
+    // The add-on icon (./icon) stays hidden until it has loaded, so a missing icon never shows a broken image
     var icon = $('brand-icon');
     if (icon) {
-      icon.addEventListener('load', function () { icon.hidden = false; $('brand-svg').hidden = true; });
-      if (icon.complete && icon.naturalWidth > 0) { icon.hidden = false; $('brand-svg').hidden = true; }
+      icon.addEventListener('load', function () { icon.hidden = false; });
+      if (icon.complete && icon.naturalWidth > 0) icon.hidden = false;
     }
 
     // Double-click on a key name copies the whole name (keys are one unit: select-all in CSS)

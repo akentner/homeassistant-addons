@@ -3,6 +3,15 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.6.0-0] - 2026-11-01
+
+- Feature: after a sync that adds or removes key names, the add-on makes the Supervisor re-read `secrets.yaml`, so
+  `!secret` references to new keys can be saved in add-on options right away (until now `ha supervisor reload` was
+  needed). Value-only changes do not trigger it. It needs no extra permission, is repeated once after 65 s because the
+  Supervisor throttles reloads, and a failure is only a warning event (`supervisor_reload_failed`).
+- Change: the top bar uses the served add-on icon only; the inline SVG fallback is gone (the icon stays hidden until it
+  has loaded).
+
 ## [0.5.1-0] - 2026-11-01
 
 - Feature: key names in the web UI are one unit (a click selects the whole name) and a double-click copies the name to

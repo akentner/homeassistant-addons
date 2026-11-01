@@ -16,6 +16,7 @@ from app.engine.config import Config, ProviderLoadError
 from app.engine.guard import check_shrink
 from app.engine.merge import Merged, MergeError, merge
 from app.engine.redact import Redactor
+from app.engine.reload import RETRY_AFTER, SKIPPED, supervisor_reload
 from app.engine.state import StateStore, iso
 from app.engine.writer import WriteError, read_secrets, write_files, write_secrets
 from app.providers.base import Problem, Provider, ProviderError, Snapshot
@@ -50,9 +51,11 @@ class _Fetch:
 class Supervisor:
     def __init__(self, config: Config, providers: Mapping[str, Provider] | None = None,
                  clock: Callable[[], float] = time.time, redactor: Redactor | None = None,
-                 probe_versions: bool = True) -> None:
+                 probe_versions: bool = True, reloader: Callable[[], str | None] = supervisor_reload) -> None:
         self.cfg = config
         self._clock = clock
+        self._reloader = reloader
+        self._reload_retry_at: float | None = None
         self.redactor = redactor or Redactor()
         self._providers: dict[str, Provider] = dict(providers or {})
         self._cycle_lock = threading.RLock()
@@ -150,6 +153,7 @@ class Supervisor:
         """Wait for the next due sync or change probe (whichever is earlier); wake on trigger or stop()."""
         while not self._stop.is_set():
             now = self._clock()
+            self._retry_reload(now)
             if now >= self._next_at:
                 return
             probe_at = self._next_probe if self.cfg.check_interval > 0 and self._next_probe is not None else None
@@ -160,6 +164,8 @@ class Supervisor:
                     return
                 continue
             remaining = self._next_at - now if probe_at is None else min(self._next_at, probe_at) - now
+            if self._reload_retry_at is not None:
+                remaining = min(remaining, max(self._reload_retry_at - now, 1))
             if self._wake.wait(min(remaining, HEARTBEAT)):
                 self._wake.clear()
                 return
@@ -420,6 +426,27 @@ class Supervisor:
         if wrote:
             added, removed, changed = _diff(previous, merged.secrets)
             self.state.keys.update(added=added, removed=removed, changed=changed)
+            if added or removed:
+                self._reload_supervisor(len(added), len(removed))
+
+    def _reload_supervisor(self, added: int, removed: int) -> None:
+        """Key names changed: make the Supervisor re-read secrets.yaml so it accepts `!secret` for new keys."""
+        error = self._reloader()
+        if error == SKIPPED:
+            return
+        if error is None:
+            self._reload_retry_at = self._clock() + RETRY_AFTER  # one more call, in case the first was throttled
+            self.state.add_event("info", "supervisor_reload",
+                                 f"asked the Supervisor to re-read secrets.yaml ({added} added, {removed} removed)")
+        else:
+            self._reload_retry_at = None
+            self.state.add_event("warning", "supervisor_reload_failed", f"Supervisor secrets reload failed ({error})")
+            log.warning("supervisor secrets reload failed (%s)", error)
+
+    def _retry_reload(self, now: float) -> None:
+        if self._reload_retry_at is not None and now >= self._reload_retry_at:
+            self._reload_retry_at = None
+            self._reloader()
 
     def _finish(self, now: float, status: str, code: str | None, sigs: list[str]) -> None:
         st = self.state
