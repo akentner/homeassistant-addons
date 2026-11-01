@@ -1,0 +1,60 @@
+configuration:
+  base_url:
+    name: Basis-URL
+    description: Öffentliche URL des ntfy-Servers (zum Beispiel https://ntfy.example.com). Wird für Links, Anhänge und
+      die Web-App verwendet. Hinter einem Reverse Proxy ist das die Adresse des Proxys, nicht die des Add-ons.
+  enable_web_ui:
+    name: Web-Oberfläche aktivieren
+    description: Liefert die ntfy-Web-App unter / und /app aus. Ist die Option aus, ist die Web-Oberfläche
+      abgeschaltet; die API zum Senden und Abonnieren funktioniert weiter.
+  behind_proxy:
+    name: Hinter Proxy
+    description: Dem Header X-Forwarded-For des Reverse Proxys (Cloudflared, Traefik) für Client-IPs und Rate-Limits
+      vertrauen. Ausschalten, wenn Clients das Add-on direkt erreichen.
+  auth_default_access:
+    name: Standardzugriff
+    description: Zugriff von Benutzern und anonymen Clients auf Topics ohne passende ACL-Regel (deny-all, read-only,
+      write-only oder read-write). deny-all ist der sichere Standard.
+  admin_user:
+    name: Admin-Benutzer
+    description: Name des Admin-Kontos. Es wird beim Start nur angelegt, wenn es noch nicht existiert, und kann in der
+      Oberfläche weder gelöscht noch herabgestuft werden.
+  admin_password:
+    name: Admin-Passwort
+    description: Passwort für das Admin-Konto. Wird nur zum Anlegen des Admins verwendet, wenn er nicht existiert; ein
+      in der Oberfläche geändertes Passwort wird nie überschrieben. Ist es leer, wird kein Admin angelegt und das Log
+      weist darauf hin.
+  baseline_users:
+    name: Basis-Benutzer
+    description: Benutzer mit optionaler ACL auf ein Topic, mit denselben Feldern wie die users-Liste des alten ntfy
+      Server Add-ons (username, password, topic, write_access). Sie werden bei jedem Start additiv angewendet und nie
+      gelöscht. Mit Topic gilt die Regel rw (write_access true) oder ro; ein leeres Topic legt nur den Benutzer an. Die
+      Oberfläche markiert sie mit Herkunft options.
+  baseline_overwrite_passwords:
+    name: Basis-Passwörter überschreiben
+    description: Standardmäßig aus, ein vorhandener Basis-Benutzer behält sein Passwort (Rotation in der Oberfläche).
+      Eingeschaltet wird das Basis-Passwort bei jedem Start erneut gesetzt, wie beim alten Add-on.
+  backup_keep:
+    name: Anzahl Backups
+    description: Anzahl der auth.db-Backups in /data/backups. Die ältesten werden rotiert (1 bis 100). Ein Backup
+      entsteht täglich beim Start und vor zerstörerischen Aktionen.
+  cache_duration:
+    name: Dauer des Nachrichten-Caches
+    description: Wie lange ntfy Nachrichten für spät verbundene Clients vorhält, zum Beispiel 12h oder 3d. Der Cache
+      liegt in /data.
+  attachments_enabled:
+    name: Anhänge aktivieren
+    description: Erlaubt Dateianhänge bis zu den folgenden Grenzen. Standardmäßig an, wie beim alten Add-on.
+  attachment_total_size_limit:
+    name: Gesamtgrenze für Anhänge
+    description: Gesamter Speicher für alle Anhänge, zum Beispiel 1G. Wird nur bei aktivierten Anhängen verwendet.
+  attachment_file_size_limit:
+    name: Grenze pro Anhang
+    description: Maximale Größe eines Anhangs, zum Beispiel 15M. Wird nur bei aktivierten Anhängen verwendet.
+  attachment_expiry_duration:
+    name: Aufbewahrung von Anhängen
+    description: Wie lange Anhänge aufbewahrt werden, zum Beispiel 12h. Wird nur bei aktivierten Anhängen verwendet.
+  log_level:
+    name: Log-Level
+    description: Ausführlichkeit des ntfy-Logs (trace, debug, info, warn, error). Geheimnisse werden auf keiner Stufe
+      geloggt.
