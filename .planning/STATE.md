@@ -186,6 +186,8 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
   printer configured and `f1c878cb_cups` is already removed)
 - Phase 22 added: cups: paperless-ngx PDF document upload
 - Phase 23 added: coding-assistants: Claude Code + herdr (replaces tmux)
+- Phase 24 added: ntfy add-on + admin GUI (live ACLs in `auth.db`, GUI via ingress, export of desired state)
+- Phase 25 added: ntfy IaC API (own bearer token, `desired-state` with dry-run/additive/prune; starts after Phase 24)
 
 ### Key Decisions (v1.3)
 

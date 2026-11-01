@@ -253,6 +253,61 @@ Plans:
 - [ ] TBD (run /gsd-plan-phase 23 to break down; suggested: 1 Claude install + auth, 2 Claude MCP registration,
       3 herdr replaces tmux, 4 plugins + web-service/nginx, 5 docs/version bump/verify)
 
+### Phase 24: ntfy add-on + admin GUI
+
+**Goal:** New `ntfy/` add-on based on upstream ntfy (binwiederhier/ntfy) that exposes ntfy's auth/ACL configuration and
+ships an ingress-only admin GUI. Live ACLs, users and tokens live in ntfy's `auth.db` under `/data` (persisted, in
+backups); add-on options carry only the declarative baseline. Rejected: writing live ACLs back to the add-on options
+via the Supervisor API (edit conflicts, secrets in options/backups, duplicate of `auth.db`, declarative `auth-access`
+deletes entries on restart).
+**Requirements**: TBD
+**Depends on:** None (independent new add-on)
+**Plans:** 0 plans
+
+Success criteria:
+
+1. Add-on follows the repo pattern (`config.yaml`, `build.yaml`, `Dockerfile`, `run.sh`, `README.md`, `DOCS.md`,
+   `.upstream.yaml`, `image:` key), HA base image, 3-file version sync, local `docker build` verified, upstream
+   auto-update works.
+2. Options pass through `base-url`, `auth-default-access` and a declarative baseline (`auth-users`, `auth-access`,
+   `auth-tokens`); secrets use `password` fields.
+3. Admin GUI via HA Ingress only; backend drives `ntfy user/access/token` (CLI) or the DB, never the undocumented
+   `/v1/users` API, so no ntfy admin password travels over the network.
+4. GUI features: user list (role, tier, tokens); ACL CRUD per topic/user incl. `everyone` and wildcards; topic x user
+   matrix; token create/label/expire/revoke; effective-rights lookup; random 16-char topic generator with default ACL
+   (`homeassistant` rw, `akentner` ro); reset with confirmation and automatic `auth.db` backup; health (status, DB
+   size, test publish).
+5. Every rule carries an origin marker (`gui` | `iac`); entries provisioned via declarative options are shown
+   read-only.
+6. Export button writes a desired-state YAML/JSON (initial config for IaC); the format is the contract for Phase 25.
+
+Research items (verify before planning): ntfy declarative config keys and CLI behaviour against a live DB (SQLite
+concurrency); ingress path handling for the GUI; whether the ntfy web app works behind ingress.
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 24 to break down)
+
+### Phase 25: ntfy IaC API
+
+**Goal:** Separate IaC API in the `ntfy/` add-on so Ansible/OpenTofu can manage users, ACLs and tokens without the ntfy
+admin credential. Starts only after the Phase 24 GUI is usable.
+**Requirements**: TBD
+**Depends on:** Phase 24
+**Plans:** 0 plans
+
+Success criteria:
+
+1. Own bearer token (`password` option), independent of the ntfy admin; it can only manage users/ACLs/tokens and
+   cannot read messages.
+2. `GET /v1/state` returns the same format as the GUI export; `PUT /v1/desired-state` is idempotent with `dry_run` and
+   a diff response.
+3. Modes: `additive` (default, like `ntfy_apply.sh`) and `prune`, which removes only entries with origin `iac`.
+4. Separate port, not published by default and never routed via Cloudflare; optional bind to LAN/Tailscale.
+5. `DOCS.md` documents Ansible/OpenTofu usage; a threat-model note covers token handling and exposure.
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 25 to break down)
+
 ### 📋 v1.4 iac-runner (Phases 16-19) — PLANNING
 
 **Milestone Goal:** Ship a Home Assistant Supervisor add-on (`iac-runner/`) that clones a Git repo (e.g.
