@@ -162,6 +162,13 @@ test("Topbar: shows ./icon by default, decorative, and hides it on error; null t
   assert.equal(tag(await mount(html`<${Topbar} title="T" iconSrc="" />`), "img").length, 0);
 });
 
+test("Topbar: slot children sit in a .topbar-extra wrapper that small screens can hide; none without children", async () => {
+  const root = await mount(html`<${Topbar} title="T"><span class="slot">extra</span><//>`);
+  const [extra] = byClass(root, "topbar-extra");
+  assert.equal(byClass(extra, "slot").length, 1);
+  assert.equal(byClass(await mount(html`<${Topbar} title="T" />`), "topbar-extra").length, 0);
+});
+
 test("Topbar: hostile title and status stay text nodes", async () => {
   const root = await mount(html`<${Topbar} title="<b>x</b>" status=${{ kind: "error", text: "<script>1</script>" }} />`);
   assert.equal(findAll(root, (n) => ["b", "script"].includes(n.localName)).length, 0);
@@ -340,10 +347,9 @@ test("needsBurger: only collapses on known, positive and insufficient sizes", ()
   assert.equal(needsBurger(500, 300), true);
   assert.equal(needsBurger(300, 300), false);
   assert.equal(needsBurger(200, 300), false);
-  for (const bad of [undefined, null, NaN, 0]) {
-    assert.equal(needsBurger(bad, 300), false);
-    assert.equal(needsBurger(500, bad), false);
-  }
+  assert.equal(needsBurger(500, 0), true); // a squeezed-out slot must fold, not hide the links
+  for (const bad of [undefined, null, NaN, 0]) assert.equal(needsBurger(bad, 300), false);
+  for (const bad of [undefined, null, NaN]) assert.equal(needsBurger(500, bad), false);
 });
 
 // ResizeObserver double: the test sets the measured sizes and triggers the callback by hand.
