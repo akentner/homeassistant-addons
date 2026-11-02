@@ -1,12 +1,12 @@
 # Phase 26: admin-ui blueprint - Verification
 
-**Verified:** 2026-11-02 on branch `feat/admin-ui-blueprint` @ fa69315 (worker exec-26-verify)
+**Verified:** 2026-11-02 (G-1 and G-3 fixed 2026-11-02) on branch `feat/admin-ui-blueprint` @ fa69315 (worker exec-26-verify)
 **Method:** goal-backward; every check below was run in this worktree, not taken from the SUMMARYs.
 **Status: `human_needed`**
 
 The deliverables of the phase exist, are consistent and all automated gates are green. What is missing cannot be closed
 by code: the live spike (D-14) was only partly done, so R-11 and R-13 stay `unverified`, and the first CI run on GitHub
-has not happened. One documentation inconsistency (S9 status) is a small, fixable gap (G-1).
+has not happened. The S9 status inconsistency (G-1) and a stale follow-up line (G-3) were fixed afterwards.
 
 ## Phase goal
 
@@ -95,14 +95,14 @@ and automatic spike versions, add-on info link. Lib is at 0.3.0, add-on at 0.1.0
 
 | ID  | Gap                                                                                                                                                                                                                                                                 | Severity | Fix                                                                                       |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------- |
-| G-1 | DOCS.md spike table marks S9 `verified` although its own step 6 says "verified only with a confirmed header", and the result cell says the header was not confirmed. S2, S4, S5, S6, S11, S15 are `verified` with stated limits (partial runs). Same in `spikes/ha-iframe-theme.md`. Risk: a reader takes S9 as proof of the CSP, while R-11 correctly says `unverified`. | low      | Set S9 to `not-applicable` (or a `partial` status) until the header is seen in the network tab; keep limits visible for the others. `test_docs.py` may need the status set widened. |
+| G-1 | **Fixed.** S9 is now `not-applicable` in DOCS.md, the spike log and the 26-13 summary. Spike count: verified S1, S2, S4, S5, S6, S11, S15 (7, all limited); not-applicable S3, S7, S8, S9, S10, S12, S13, S14 (8). R-11 stays `unverified`. | fixed | docs commits after 90e1888 |
 | G-2 | Plan 26-13 truth "matrix run on all contexts" and the claim `no item silently stays pending` are only met by relabeling to `not-applicable` with follow-ups. Accepted as documented, but it is not a pass of D-14.                                                    | medium   | Live runs B..H (human).                                                                   |
-| G-3 | DOCS.md Follow-up still lists "Icon and logo images for the add-on", but `icon.png` and `logo.png` shipped with quick task part 1.                                                                                                                                      | trivial  | Delete the line.                                                                          |
+| G-3 | **Fixed.** The icon and logo follow-up line was removed from DOCS.md. | fixed | docs commits after 90e1888 |
 | G-4 | ROADMAP.md Phase 26 entry is stale in this worktree (0 plans, TBD, no success criteria).                                                                                                                                                                            | info     | Manager updates it in the main checkout (outside this task).                              |
 
 ## Known honest gaps (not hidden)
 
-- **D-14 live spike partial** (run A only). Not applicable: S3, S7, S8, S10, S12, S13, S14. S9 only with reservation: no
+- **D-14 live spike partial** (run A only). Not applicable: S3, S7, S8, S10, S12, S13, S14. S9 is `not-applicable` too: `violations_0`, but no
   confirmed CSP header, and the counter counts only while `#/spike` is open.
 - **R-11 and R-13 `unverified`**, R-07 and R-12 `review` (R-07 follow-up: numeric interpolation and a scanner rule for
   `toLocale*`/`toFixed`/`Intl.*`).
@@ -120,8 +120,8 @@ and automatic spike versions, add-on info link. Lib is at 0.3.0, add-on at 0.1.0
 
 1. Human runs B..H of the spike (narrow/hidden sidebar/kiosk, phone and Companion app, direct tab, dashboard card,
    non-admin, live theme and language switch, storage blocked); fill the S table; then decide R-11 and R-13.
-2. See the CSP header in the network tab (DOCS.md guide), then set S9.
-3. Fix G-1 and G-3 (docs only).
+2. See the CSP header in the network tab (DOCS.md guide), then set S9 (currently `not-applicable`).
+3. ~~Fix G-1 and G-3~~ done.
 4. Push once and read the first `admin-ui` CI run.
 5. R-07 follow-up (numeric interpolation, scanner rule).
 6. Check `bd` / `--divider-color`; add a frontend-version field fix to the result block.
