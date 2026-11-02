@@ -21,23 +21,23 @@ Each rule names the test or review that enforces it. The status says how far tha
 means an automated check fails on a violation, `review` means only part of it is automated and the rest is a review
 item, `unverified` means the claim depends on live Home Assistant behaviour that the spike has not recorded yet.
 
-| ID   | Rule                                                                                                                                                                                 | Enforced by                                                                              | Status     |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ---------- |
-| R-01 | Every request passes the ingress gate: peer 172.30.32.2 plus a non-empty `X-Ingress-Path`, otherwise 403 `ingress_only`, for every method and path. The GUI port is never published. | skeleton gate tests in `test_skeleton_server.py`, `internal/verify-admin-ui-scaffold.sh` | enforced   |
-| R-02 | URLs are relative (no leading slash, no scheme). Download links use `apiHref`, and requests go only through the lib client.                                                          | scanner rule `urls`, `api.test.mjs`                                                      | enforced   |
-| R-03 | State never goes into markup: text nodes only, no raw-markup APIs, no `eval`, no string timers.                                                                                      | scanner rule `markup`, component tests with hostile text                                 | enforced   |
-| R-04 | Destructive actions need type-to-confirm: `ConfirmDialog` with `expected`, and the server answers `confirmation_required` when the phrase is missing.                                | ui tests, `test_demo_api.py`                                                             | enforced   |
-| R-05 | The runtime is vendored and pinned by SHA-256: no CDN, no npm, no build step.                                                                                                        | scanner rule `vendor`, `test_static_rules.py`                                            | enforced   |
-| R-06 | Every user-visible string goes through `t()` or `tp()`. German and English have identical keys and placeholders, and keys are never built dynamically.                               | `i18n.test.mjs`                                                                          | enforced   |
-| R-07 | Dates, times, numbers, bytes and relative times use `Intl` through `format.mjs`.                                                                                                     | `format.test.mjs` for the lib, review for add-on code                                    | review     |
-| R-08 | Colours come only from tokens and work in both themes. Text contrast is at least 4.5:1, and `prefers-color-scheme` is the default.                                                   | `test_css.py` (tokens, contrast, hex hygiene)                                            | enforced   |
-| R-09 | Accessibility minimum: dialog role with focus move, trap and return, `aria-live` toasts, `role=alert` errors, labelled controls, `th scope`, visible focus, reduced motion.          | `a11y.test.mjs`, `ui.test.mjs`, `test_css.py`                                            | enforced   |
-| R-10 | Storage keys are namespaced (`admin-ui:lang`, `<slug>:<key>`) and every access sits in try/catch.                                                                                    | scanner rule `storage`, `i18n.test.mjs`                                                  | enforced   |
-| R-11 | No third-party scripts and no inline script, handler or style attribute, so the page stays CSP compatible. The CSP header is a default and promised only after spike item S9.        | scanner rule `csp`; live behaviour by spike item S9                                      | unverified |
-| R-12 | Test duty: every GUI ships node tests for its views plus i18n parity and runs them in CI.                                                                                            | CI job for admin-ui (plan 26-09); existing add-ons follow in their migration phases      | review     |
-| R-13 | HA theme and layout are progressive enhancement: own tokens and the fixed layout always work, theme sync and bridge only enhance, and any failure means the own theme.               | `theme_sync.test.mjs`, `ha_bridge.test.mjs`; live behaviour by the spike                 | unverified |
-| R-14 | The backend returns stable error codes. The UI maps `errors.<code>`, unknown codes show a generic text plus `[code]`, and the backend `message` is never the primary text.           | `i18n.test.mjs` (`tError`), `test_demo_api.py`                                           | enforced   |
-| R-15 | Lib and skeleton sources change only in `admin-ui/`. Consumer copies are never hand-edited, and the drift check fails on a mismatch.                                                 | `make check-admin-ui-sync`, `test_sync.py`                                               | enforced   |
+| ID   | Rule                                                                                                                                                                                                                                                                                                                                       | Enforced by                                                                              | Status     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ---------- |
+| R-01 | Every request passes the ingress gate: peer 172.30.32.2 plus a non-empty `X-Ingress-Path`, otherwise 403 `ingress_only`, for every method and path. The GUI port is never published. Only a route registered with `public=True` (exact method and literal path) can be reached without ingress, never static files, the index or the icon. | skeleton gate tests in `test_skeleton_server.py`, `internal/verify-admin-ui-scaffold.sh` | enforced   |
+| R-02 | URLs are relative (no leading slash, no scheme). Download links use `apiHref`, and requests go only through the lib client.                                                                                                                                                                                                                | scanner rule `urls`, `api.test.mjs`                                                      | enforced   |
+| R-03 | State never goes into markup: text nodes only, no raw-markup APIs, no `eval`, no string timers.                                                                                                                                                                                                                                            | scanner rule `markup`, component tests with hostile text                                 | enforced   |
+| R-04 | Destructive actions need type-to-confirm: `ConfirmDialog` with `expected`, and the server answers `confirmation_required` when the phrase is missing.                                                                                                                                                                                      | ui tests, `test_demo_api.py`                                                             | enforced   |
+| R-05 | The runtime is vendored and pinned by SHA-256: no CDN, no npm, no build step.                                                                                                                                                                                                                                                              | scanner rule `vendor`, `test_static_rules.py`                                            | enforced   |
+| R-06 | Every user-visible string goes through `t()` or `tp()`. German and English have identical keys and placeholders, and keys are never built dynamically.                                                                                                                                                                                     | `i18n.test.mjs`                                                                          | enforced   |
+| R-07 | Dates, times, numbers, bytes and relative times use `Intl` through `format.mjs`.                                                                                                                                                                                                                                                           | `format.test.mjs` for the lib, review for add-on code                                    | review     |
+| R-08 | Colours come only from tokens and work in both themes. Text contrast is at least 4.5:1, and `prefers-color-scheme` is the default.                                                                                                                                                                                                         | `test_css.py` (tokens, contrast, hex hygiene)                                            | enforced   |
+| R-09 | Accessibility minimum: dialog role with focus move, trap and return, `aria-live` toasts, `role=alert` errors, labelled controls, `th scope`, visible focus, reduced motion.                                                                                                                                                                | `a11y.test.mjs`, `ui.test.mjs`, `test_css.py`                                            | enforced   |
+| R-10 | Storage keys are namespaced (`admin-ui:lang`, `<slug>:<key>`) and every access sits in try/catch.                                                                                                                                                                                                                                          | scanner rule `storage`, `i18n.test.mjs`                                                  | enforced   |
+| R-11 | No third-party scripts and no inline script, handler or style attribute, so the page stays CSP compatible. The CSP header is a default and promised only after spike item S9.                                                                                                                                                              | scanner rule `csp`; live behaviour by spike item S9                                      | unverified |
+| R-12 | Test duty: every GUI ships node tests for its views plus i18n parity and runs them in CI.                                                                                                                                                                                                                                                  | CI job for admin-ui (plan 26-09); existing add-ons follow in their migration phases      | review     |
+| R-13 | HA theme and layout are progressive enhancement: own tokens and the fixed layout always work, theme sync and bridge only enhance, and any failure means the own theme.                                                                                                                                                                     | `theme_sync.test.mjs`, `ha_bridge.test.mjs`; live behaviour by the spike                 | unverified |
+| R-14 | The backend returns stable error codes. The UI maps `errors.<code>`, unknown codes show a generic text plus `[code]`, and the backend `message` is never the primary text.                                                                                                                                                                 | `i18n.test.mjs` (`tError`), `test_demo_api.py`                                           | enforced   |
+| R-15 | Lib and skeleton sources change only in `admin-ui/`. Consumer copies are never hand-edited, and the drift check fails on a mismatch.                                                                                                                                                                                                       | `make check-admin-ui-sync`, `test_sync.py`                                               | enforced   |
 
 Contrast became test-enforced in this phase: the original decision D-16 kept contrast a manual review item, and the
 blueprint deliberately extends it (PD-03). The lib fixes the token pairs while extracting them from the ntfy GUI, and
@@ -54,14 +54,24 @@ mismatch between this page and the code is a bug and turns a test red.
 Package `app.web.skeleton` in this add-on, delivered to consumers as `app.web.admin_ui`. Standard library only, relative
 imports only.
 
-| Module       | Public names                                                                                                       |
-| ------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `errors.py`  | `ERROR_STATUS` (error code to HTTP status), `ApiError(code, message, status)`, `register_error_code(code, status)` |
-| `router.py`  | `Request` (`arg`, `body`), `Router` (`add`, `routes`, `match`), `Download(filename, content_type, data)`           |
-| `static.py`  | `StaticFiles(root)` with `resolve(path)`, `SEGMENT_RE`, `CONTENT_TYPES`; extension whitelist and containment check |
-| `ingress.py` | `INGRESS_REMOTE`, `is_ingress(peer, headers, remote)`, `ingress_user(headers)`                                     |
-| `headers.py` | `DEFAULT_CSP`, `security_headers(kind, csp)`                                                                       |
-| `server.py`  | `MAX_BODY`, `make_handler(router, static, ...)`, `make_server(router, static, port, ...)`, `serve(server)`         |
+| Module       | Public names                                                                                                                             |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `errors.py`  | `ERROR_STATUS` (error code to HTTP status), `ApiError(code, message, status)`, `register_error_code(code, status)`                       |
+| `router.py`  | `Request` (`arg`, `body`), `Router` (`add(..., public=False)`, `is_public`, `routes`, `match`), `Download(filename, content_type, data)` |
+| `static.py`  | `StaticFiles(root)` with `resolve(path)`, `SEGMENT_RE`, `CONTENT_TYPES`; extension whitelist and containment check                       |
+| `ingress.py` | `INGRESS_REMOTE`, `is_ingress(peer, headers, remote)`, `ingress_user(headers)`                                                           |
+| `headers.py` | `DEFAULT_CSP`, `security_headers(kind, csp)`                                                                                             |
+| `server.py`  | `MAX_BODY`, `make_handler(router, static, ...)`, `make_server(router, static, port, ...)`, `serve(server)`                               |
+
+A route registered with `Router.add(method, pattern, handler, public=True)` is the one exception to the gate: exactly
+that method and that literal path (for example a health check on an optionally published port) is served without
+ingress. The path is compared as sent, with no normalisation, decoding, prefix match or case folding, so `/api/health/`,
+`//api/health`, `/api/./health`, `/api/%68ealth` and `/API/health` stay 403. `add` raises `ValueError` for a public
+route with a `{param}`, dot segments, a trailing slash or a path at `/`, `/icon` or below `/static`. Other methods on
+the same path, `HEAD` and `OPTIONS` included, stay 403 unless registered themselves. A public handler gets
+`Request.public` set to true and a header view without `X-Ingress-*` and `X-Remote-User-*`, so `ingress_user` is `None`:
+never decide anything on identity there, and return no secret values. Responses carry the usual API headers; the CSP
+setting does not matter. The default is `public=False`, so existing consumers see no change.
 
 Handler results are a dict (200 JSON), a `(status, dict)` pair, `None` (204) or a `Download`. The gate runs first for
 every method and path. API responses carry `Cache-Control: no-store`, static files `no-cache`, all responses `nosniff`,
@@ -130,7 +140,8 @@ For a new or migrating add-on:
 4. Add `static/strings.de.mjs` and `static/strings.en.mjs` and register them with `registerStrings`. Keep the key sets
    identical.
 5. Wire the server with `app.web.admin_ui`: build a `Router`, `StaticFiles` and call `make_server`. Never publish the
-   GUI port in the manifest.
+   GUI port in the manifest. Only if a health check must work on an optionally published port, register that one route
+   with `public=True`.
 6. Run the rules scanner (`make check-admin-ui-rules`) and your node and pytest tests, and add them to CI.
 
 ## Distribution
@@ -362,9 +373,12 @@ which is noted as follow-up only.
   Therefore storage keys are namespaced and no third-party scripts are loaded.
 - `X-Ingress-Path` is set by Home Assistant Core, not by the Supervisor.
 - The `X-Remote-User-*` headers are informational only and never an authorisation decision.
+- Public routes are an explicit, exact opt-out of the gate (see the library reference). Keep them read-only status
+  endpoints without secret values: anyone who can reach the published port can call them.
 
 ## Follow-up
 
+- First consumer of `public=True`: the secrets-sync manager (health and status on the optional published port).
 - ntfy switch-over to the lib.
 - secrets-sync rewrite on Preact/htm.
 - haos-monitor rebuild on the blueprint stack.

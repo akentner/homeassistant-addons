@@ -4,6 +4,14 @@ All notable changes to the **Admin UI Blueprint** add-on are documented in this 
 [Keep a Changelog](https://keepachangelog.com/). This is our own code without an upstream project: the version is bumped
 manually with `make update-version`.
 
+## [0.1.0-7] - 2026-11-02
+
+### Added
+
+- Skeleton: `Router.add(..., public=True)` and `Router.is_public` let exactly one registered method and literal path
+  through the ingress gate (for a health check on an optionally published port). Static files, the index and the icon
+  are never public, and the default stays private (lib 0.5.0)
+
 ## [0.1.0-6] - 2026-11-02
 
 ### Changed
