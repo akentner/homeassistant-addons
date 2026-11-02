@@ -28,6 +28,7 @@ export const VIEWS = [
   { id: "language", titleKey: "demo.nav.language" },
   { id: "crud", titleKey: "demo.nav.crud" },
   { id: "rules", titleKey: "demo.nav.rules" },
+  { id: "spike", titleKey: "demo.nav.spike" },
 ];
 const IDS = VIEWS.map((v) => v.id);
 const DEFAULT_VIEW = "gallery";
