@@ -73,3 +73,23 @@ tested.
   burger menu at 320/414 px: the info entry sits inside the viewport, Escape returns focus to the burger; at 1280 px
   the icon is in the bar with the expected href. Not tested: a live HA (whether `target="_top"` is allowed by the
   panel iframe, and the bridge navigate itself: that is S7).
+
+## Part 5: info path and embedding contexts (lib 0.4.0, add-on 0.1.0-5)
+
+- Path: `/config/app/<slug>/info`. Checked in the HA frontend (`ha-panel-config.ts` has the `app` and `apps` routes and no
+  `hassio`/`addon` route or redirect; `ha-config-app-dashboard.ts` builds the tabs under `/config/app/<slug>/`); the
+  2026.2 release notes announce "add-ons are now called apps" but say nothing about URL changes. So the cut is assumed
+  at 2026.2; I did not verify behaviour of older versions and added no version switch (documented as unsupported).
+- Lib `ingress.mjs` (additive exports): `detectEmbedContext(win, {bridgeOk})` (kind panel/card/tab/unknown, relevant
+  sandbox tokens, topNavigation allowed/blocked/unknown, popups) and `infoLinkPlan(ctx)` (bridge/same/top/blank/hidden).
+  Export contract test and DOCS table adjusted deliberately. `Topbar` follows the plan: sandbox without top navigation
+  gives `target="_blank"` (`noopener noreferrer`) when popups are allowed and no link otherwise; direct tab `_self`.
+  New path token `new_tab`.
+- Spike: S7 text "sent, not confirmed by the host" (de+en), context lines, result block `embed` with short sandbox tokens
+  (`top`, `top_user`, `popups`, `popups_escape`; the long names would be removed by the redaction).
+- Docs: DOCS.md (S7/S13 rows, info section, "Embedding contexts"), spike log section 6. Statuses by evidence: S7 verified
+  (panel button), S13 stays not-applicable (partial: blocked navigation, host protocol ignored, theme sync unchecked).
+  Info link path re-test is open. No hostnames, tokens or URLs from the user report are recorded.
+- Tests: 295 node (new `embed_context.test.mjs`, context cases in shell/spike/views tests), 266 pytest, sync and rules
+  green. Overflow (Brave, 32 cases, 320-600 px, both nav layouts, with the info icon): no overflow, 56 px in the topbar
+  layout. Not tested live: the real card sandbox (only the browser error message from the user report).

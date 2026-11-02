@@ -15,7 +15,7 @@ with sync_playwright() as p:
                 for w in (320, 375, 414, 600):
                     ctx = b.new_context(viewport={"width": w, "height": 700})
                     pg = ctx.new_page()
-                    pg.route("**/api/health", lambda r: r.fulfill(json={"status": "ok", "addon_version": "0.1.0-4", "lib_version": "0.3.0", "addon_slug": "local_admin_ui"}))
+                    pg.route("**/api/health", lambda r: r.fulfill(json={"status": "ok", "addon_version": "0.1.0-5", "lib_version": "0.4.0", "addon_slug": "local_admin_ui"}))
                     pg.add_init_script(f"localStorage.setItem('admin-ui:demo-nav','{mode}');localStorage.setItem('admin-ui:lang','{lang}');")
                     pg.goto(url.replace("index.html","host.html") if kiosk else url); fr = pg.frame_locator("#f") if kiosk else pg; fr.locator("header.topbar").wait_for(); pg.wait_for_timeout(400)
                     if kiosk:

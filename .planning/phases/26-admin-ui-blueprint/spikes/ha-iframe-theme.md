@@ -106,3 +106,17 @@ add-on from `api/health`, browser from client hints or the user agent. The block
 is not detectable (HA frontend: build-time constant `__VERSION__`, shown by `ha-config-info.ts`, no runtime property),
 so it stays a typed field. Fields are labelled core, frontend and add-on separately, which prevents the run A mistake
 (add-on version in the frontend field).
+
+## 6. Manual findings 2026-11-02 (HA core 2026.10.4, Chromium)
+
+- **S7 panel [V]:** the S7 button (navigate to the config page) works in the app panel. The topbar info link used
+  `/hassio/addon/<slug>/info` and opened the wrong page: that route is not part of the current frontend (add-ons became
+  apps in 2026.2, route `/config/app/<slug>/info`). Fixed in add-on 0.1.0-5, re-test by the user is open.
+- **S13 dashboard card [V, partly]:** with the third-party `custom:addon-iframe-card` the page loads, but the navigate
+  protocol is not answered (only HA's own app panel implements `subscribe-properties` and `navigate`), so the S7 result
+  "message sent: yes" only meant that a message was posted. Top navigation from the card's frame is blocked by its
+  sandbox (browser error: top-level navigation by a sandboxed frame without `allow-top-navigation`).
+  Verdict "blocked for navigation, host protocol unsupported". Theme sync in the card was not checked.
+- **Consequences (0.1.0-5):** the info link adapts to the embedding (panel: bridge; sandboxed without top navigation:
+  new tab if `allow-popups`, else hidden; tab: same window). The spike view reports the context and words S7 as
+  "sent, not confirmed by the host".
