@@ -52,7 +52,7 @@ estimate:
 
 must_haves:
   truths:
-    - "The GUI is a Preact page on the synced admin-ui lib, served by a Python server (skeleton) on internal port 8100 behind the ingress gate: without peer 172.30.32.2 plus a non-empty X-Ingress-Path every method and path answers 403 ingress_only; port 8100 appears nowhere in config.yaml `ports`"
+    - "The GUI is a Preact page on the synced admin-ui lib, served by a Python server (skeleton) on internal port 8100 behind the ingress gate: without peer 172.30.32.2 plus a non-empty X-Ingress-Path every method and path answers 403 ingress_only (no route is registered `public=True`); port 8100 appears nowhere in config.yaml `ports`"
     - "config.yaml `ingress_port` is 8100; `ports` still holds only `8099/tcp: null` with the unchanged `ports_description`"
     - "On 8099 (busybox httpd + CGI) /api/status.json, /cgi-bin/status, /api/metrics.txt, /cgi-bin/metrics, /api/hosts.json and /api/incidents.json answer as before without any header; status.sh, the four *.cgi files, httpd.conf, monitor.sh and mqtt.sh are byte-identical to 40fab86; the page itself is no longer served on 8099"
     - "One card per host shows: verdict plus reasons, every value of the old page with violated thresholds highlighted (not by colour alone), port chips (ping, SSH, MQTT, HA, Observer), the SSH key line from key_fp/key_type (invalid in red, unknown as a dash), blocked tasks, the last kernel error and the last 10 INCIDENT lines; the page refreshes every 10 s and has a Reload button"
@@ -167,8 +167,8 @@ traceability):
   the CGIs (status.sh output through a subprocess, the hosts file `/etc/haos-monitor.hosts`, the logs under
   `/share/haos-monitor`). Slugs are validated strictly: only [a-z0-9_] and present in the hosts file.
 - D-05: Tests: node tests for the views (follow `admin-ui/tests/js`) and pytest for the server; a CI job for haos-monitor
-  appended at the END of `.github/workflows/lint.yml`, modelled on the `admin-ui` job (zizmor deferrals in zizmor.yml
-  are line-anchored, so no existing line may move); `Makefile` and pre-commit conventions respected.
+  appended at the END of `.github/workflows/lint.yml`, modelled on the `admin-ui` job and, as built since, on the
+  `secrets-sync` job that followed it (zizmor deferrals in zizmor.yml are line-anchored, so no existing line may move); `Makefile` and pre-commit conventions respected.
 - D-06: Dockerfile adds python3 via apk and copies the app; run.sh starts both servers (busybox httpd on 8099 and the
   Python GUI server); a local `docker build` is required before committing the image change; hadolint runs on the
   result; whether `internal/base-image-config.yaml` or `validate-dockerfiles` need haos-monitor is checked (finding in
@@ -999,37 +999,42 @@ re-commit instead of bypassing.
     `git rev-parse --show-toplevel`, executable, passes `shellcheck -e SC1091 -e SC2034`, temp dir from `mktemp -d`
     removed by an EXIT trap with `rm -rf -- "${TMP:?}"`, containers and images removed by the same trap, helpers `ok`,
     `fail`, `check`, `eq`, `STAGE <name> OK|FAILED` lines, non-zero exit on any failure. Arguments pick stages out of
-    `static server frontend ci docker`; no argument runs all. The script never contains the PEM private-key marker as one
-    string (split literal, like the srb script) and generates every key at runtime (`ssh-keygen`, one ed25519 with the
+    `static server frontend ci docker`; no argument runs all and ends with the line `ALL STAGES OK` only when all five
+    stages ran and passed (an argument list that skips a stage never prints it). Every comparison uses one fixed base:
+    `BASE` defaults to `40fab86`, can be overridden from the environment, is printed at the start and must be an
+    ancestor of HEAD (`git merge-base --is-ancestor`), otherwise the script fails; it never uses the moving
+    `origin/main`. The script never contains the PEM private-key marker as one string (split literal, like the srb script) and generates every key at runtime (`ssh-keygen`, one ed25519 with the
     comment `secret-comment@example`, one damaged variant derived with `head`/`tail`). Capture the output of every
     fallible `git` or `docker` command into a variable or file first and filter it in a second step: a failing command
     in a non-final pipeline stage is otherwise swallowed (for example write `git archive` to a tar file before `tar -x`).
 
     Stage `static` (host, no Docker):
-    - `git diff --quiet 40fab86 -- admin-ui` (no lib, skeleton, lock or doc change, D-02/P-11).
+    - `git diff --quiet $BASE -- admin-ui secrets-sync` (no lib, skeleton, lock, doc or consumer change, D-02/P-11).
     - The legacy files `status.sh status.cgi metrics.cgi hosts.cgi incidents.cgi httpd.conf monitor.sh mqtt.sh` are
-      byte-identical to 40fab86 (D-01); `haos-monitor/index.html` does not exist.
-    - `make check-admin-ui-sync` and `make check-admin-ui-rules` exit 0; both LIB.stamp files exist and their `version`
-      line equals `admin-ui/app/web/static/lib/VERSION`; the `OK haos-monitor` lines appear twice.
+      byte-identical to `$BASE` (D-01); `haos-monitor/index.html` does not exist.
+    - `make check-admin-ui-sync` and `make check-admin-ui-rules` exit 0; the sync output has exactly five `OK` lines
+      (admin-ui lock, secrets-sync lib and skeleton, haos-monitor lib and skeleton, all `0.5.0`); both haos-monitor
+      LIB.stamp files exist and their `version` line equals `admin-ui/app/web/static/lib/VERSION`.
     - `config.yaml`: `ingress_port` 8100; `ports` keys are exactly `8099/tcp`; `ports_description` unchanged versus
-      40fab86 (compare the parsed mapping); version `0.7.0-0`; `make validate-versions` passes.
+      `$BASE` (compare the parsed mapping); version `0.7.0-0`; `make validate-versions` passes.
     - No PEM private-key marker (split literal) in any file under `haos-monitor/` or this quick directory; no commit
-      between `40fab86` and HEAD has a `Co-Authored-By` line (`git log 40fab86..HEAD --format=%B`).
-    - `git diff 40fab86 -- .github/workflows/lint.yml` keeps the first 209 lines identical apart from lines 161 and
-      169 (the same `diff` as Task 8).
+      between `$BASE` and HEAD has a `Co-Authored-By` line (`git log $BASE..HEAD --format=%B`, captured first).
+    - lint.yml is a pure append: the lines of `git show $BASE:.github/workflows/lint.yml` (244 at the recorded base,
+      count taken from the base file, not hard-coded) equal the head of the current file byte for byte.
     Stage `server`: the Python suite (`uv run --with pytest --with pyyaml python3 -m pytest haos-monitor/tests -q`, or
     plain `python3 -m pytest` when pytest is importable). Optional extra: run only `test_status.py` once inside an
     `ubuntu` container (default `mawk`, `dash`) when docker and network are available, to prove the real-status.sh
     contract test is not tied to `gawk`; record the result, skip silently without network.
     Stage `frontend`: `node --test haos-monitor/tests/js/*.test.mjs`; `make check-admin-ui-rules`; and a self-check that
-    `make test-admin-ui` still passes (baseline 295 node and 267 pytest tests) because haos-monitor is now a consumer of
+    `make test-admin-ui` still passes (baseline 295 node and 354 pytest tests) because haos-monitor is now a consumer of
     the same tree.
-    Stage `ci`: parse lint.yml with PyYAML: job `haos-monitor` exists with `permissions == {contents: read}`, checkout
-    `persist-credentials: false`, steps that run the node and pytest commands; `lint-results.needs` contains it; the
-    last job in file order is `haos-monitor` (appended at the end).
+    Stage `ci`: parse lint.yml with PyYAML: job `haos-monitor` exists, is the last job in file order (after
+    `secrets-sync`), has `permissions == {contents: read}`, a checkout step with `persist-credentials: false`, steps that
+    run the node glob, `python -m pytest -q` with `working-directory: haos-monitor` and `make check-admin-ui-sync
+    check-admin-ui-rules`; `lint-results.needs` is still exactly `[lint, admin-ui]` (untouched, P-10).
     Stage `docker` (the real two-port proof; skipped with FAIL if `docker info` fails):
-    - Build the image from `haos-monitor/` and a baseline image from `git archive 40fab86 haos-monitor` (both removed
-      afterwards). `hadolint` (local binary, else the hadolint image) passes on the new Dockerfile with the repository
+    - Build the image from `haos-monitor/` and a baseline image from `git archive $BASE haos-monitor` (written to a tar
+      file in the temp dir first, then extracted; both images removed afterwards). `hadolint` (local binary, else the hadolint image) passes on the new Dockerfile with the repository
       ignore list. The image has `python3` and `ssh-keygen` (`command -v`).
     - Start both images with the same `options.json` (built with `jq -n`: two hosts at 127.0.0.1 port 1, one with the
       intact key, one with the damaged key; all required options) and, for the new one only,
@@ -1055,17 +1060,22 @@ re-commit instead of bypassing.
       equivalent) and the GUI answers again within 10 s.
     Final gate after the script is green: `make test-haos-monitor`, `make test-admin-ui`, `make docker-build-check`
     (hadolint over all Dockerfiles), `make check-admin-ui-sync check-admin-ui-rules validate-versions
-    validate-dockerfiles`, and `pre-commit run --files $(git diff --name-only 40fab86...HEAD)` (all hooks, including
-    gitleaks on the staged state). Then commit 5 (the script only, staged by path) and write the quick SUMMARY.md into
-    this directory with the real results, the list of stale admin-ui statements to fix later (DOCS Migration paths and
-    Follow-up entries for haos-monitor), and lib needs found (none expected). Do not touch STATE.md or ROADMAP.md.
+    validate-dockerfiles`, and `pre-commit run --files <the list from git diff --name-only $BASE...HEAD, captured in a
+    variable first>` (all hooks, including gitleaks on the staged state). Commit 5 (the script only, staged by path) is
+    made ONLY after `STAGE docker OK` and `ALL STAGES OK` were seen from a full run (no stage argument) on the final
+    tree. Then write the quick SUMMARY.md into this directory with the real results, the list of stale admin-ui
+    statements to fix later (DOCS Migration paths for secrets-sync and haos-monitor, Follow-up entries for the
+    secrets-sync rewrite, tests in CI and the haos-monitor rebuild) and lib needs found (none expected). Do not touch
+    STATE.md or ROADMAP.md.
   </action>
   <verify>
-    <automated>bash .planning/quick/261102-swd-haos-monitor-admin-ui/261102-swd-verify.sh static server frontend ci && shellcheck -e SC1091 -e SC2034 .planning/quick/261102-swd-haos-monitor-admin-ui/261102-swd-verify.sh</automated>
+    <automated>shellcheck -e SC1091 -e SC2034 .planning/quick/261102-swd-haos-monitor-admin-ui/261102-swd-verify.sh && bash .planning/quick/261102-swd-haos-monitor-admin-ui/261102-swd-verify.sh</automated>
   </verify>
   <done>
-    All five stages print `STAGE <name> OK` (the `docker` stage is run once by hand because it builds two images and takes
-    minutes; its result is recorded in the SUMMARY). Baseline at 40fab86: the script does not exist and the new GUI
+    The full run (no stage argument) printed `STAGE static OK`, `STAGE server OK`, `STAGE frontend OK`, `STAGE ci OK`,
+    `STAGE docker OK` and `ALL STAGES OK`; `STAGE docker OK` is a hard precondition for commit 5, and a docker stage
+    that was skipped, failed or not run blocks it (the run builds two images and takes minutes: use a long timeout or
+    run it in the background and wait for it). Baseline at 40fab86: the script does not exist and the new GUI
     behaviours cannot be observed in a container. The final gate commands are green, five commits exist on
     `feat/haos-monitor-admin-ui`, none carries `Co-Authored-By`, nothing was pushed and no tag was created.
   </done>
@@ -1091,8 +1101,8 @@ Threat IDs are unique within this quick task (T-261102-NN). `T-261102-SC` is the
 | Threat ID | Category | Component | Severity | Disposition | Mitigation Plan |
 |-----------|----------|-----------|----------|-------------|-----------------|
 | T-261102-01 | Spoofing / Elevation | GUI port 8100 reachable without ingress | high | mitigate | Skeleton gate on every method and path (tested in the tracer matrix and again in the docker stage); 8100 is not in `ports`; `docker port` must print nothing; `HAOS_MONITOR_INGRESS_REMOTE` exists only as a test override |
-| T-261102-02 | Tampering / Elevation | Command or path injection through a slug into status.sh or a log path | high | mitigate | No endpoint takes a slug; every slug comes from the hosts file and must `fullmatch` `[a-z0-9_]{1,128}` (never `match`/`$`); argv list without shell; minimal environment; joined log path asserted to stay inside LOGDIR; hostile-line tests in test_hosts, test_status and test_api |
-| T-261102-03 | Information disclosure | Private key, key comment or options values leaking to the browser or logs | high | mitigate | The server never opens options.json or key files; only the whitelisted status fields reach the response; `key_fp`/`key_type` are re-validated against a character class; sentinel-file leak tests (test_api) and the docker leak guard; test keys generated at runtime, PEM marker never committed (scaffold test and verify script) |
+| T-261102-02 | Tampering / Elevation | Command or path injection through a slug into status.sh or a log path | high | mitigate | No endpoint takes a slug; every slug comes from the hosts file and must `fullmatch` `[a-z0-9_]{1,128}` (never `match`/`$`); argv list without shell; minimal environment; joined log path asserted to stay inside LOGDIR; hostile-line tests in test_hosts, test_status and test_server |
+| T-261102-03 | Information disclosure | Private key, key comment or options values leaking to the browser or logs | high | mitigate | The server never opens options.json or key files; only the whitelisted status fields reach the response; `key_fp`/`key_type` are re-validated against a character class; sentinel-file leak tests (test_server) and the docker leak guard; test keys generated at runtime, PEM marker never committed (scaffold test and verify script) |
 | T-261102-04 | Tampering (stored XSS) | Kernel lines, incident lines, task names and host names rendered in the HA origin | high | mitigate | Text nodes only (R-03), scanner rule `markup`, hostile-payload tests in host_card and app tests, strict CSP from the skeleton (R-11, default `script-src 'self'`), no inline script, handler or style |
 | T-261102-05 | Denial of service | Huge log scan or hung status.sh blocking the single GUI server | medium | mitigate | Bounded backward block scan with a 24 MiB cap, status.sh timeout (10 s) and 64 KiB output cap, threaded server, supervised restart in run.sh, 10 s poll on a hidden-aware hook |
 | T-261102-06 | Tampering | Path traversal through the static route | medium | accept | Covered by the skeleton's per-segment regex, extension whitelist and containment check (lib tests); the consumer adds no static route; `LIB.stamp` and `VERSION` are asserted 404 |
@@ -1119,11 +1129,11 @@ Source audit (quick mode: there is no ROADMAP phase, REQUIREMENTS.md or RESEARCH
 | CONTEXT | Out of scope and deferred: auth for 8099, MQTT/metrics changes, info link, per-host endpoints, base-image-config listing, admin-ui edits | not planned (see objective) |
 
 Overall checks (the runnable form is `261102-swd-verify.sh`, Task 11):
-- `make sync-admin-ui ADDON=haos-monitor`, `make check-admin-ui-sync`, `make check-admin-ui-rules` pass; `git diff 40fab86 -- admin-ui` is empty.
+- `make sync-admin-ui ADDON=haos-monitor`, `make check-admin-ui-sync`, `make check-admin-ui-rules` pass; `git diff 40fab86 -- admin-ui secrets-sync` is empty; the sync output shows five OK lines (admin-ui, secrets-sync and haos-monitor at 0.5.0).
 - `make test-haos-monitor` and `make test-admin-ui` pass.
 - Local `docker build` of `haos-monitor/` succeeds, hadolint passes, the container shows the gated GUI on 8100 next to the unchanged 8099 endpoints.
 - `make validate-versions` shows 0.7.0-0 / 0.7.0 / 0.7.0; no tag was created.
-- The first 209 lines of lint.yml equal 40fab86 except lines 161 and 169.
+- lint.yml is a pure append: its first 244 lines equal the file at 40fab86, `haos-monitor` is the last job, `lint-results` is untouched.
 </verification>
 
 <success_criteria>
@@ -1137,6 +1147,6 @@ Overall checks (the runnable form is `261102-swd-verify.sh`, Task 11):
 <output>
 After completion, create `.planning/quick/261102-swd-haos-monitor-admin-ui/261102-swd-SUMMARY.md` with the real
 verification results, the five commit hashes, deviations, the stale `admin-ui/DOCS.md` statements to fix in a follow-up
-(Migration paths > haos-monitor, Follow-up entries) and any lib needs found. Do not touch `.planning/STATE.md` or
+(Migration paths for secrets-sync and haos-monitor, the Follow-up entries) and any lib needs found. Do not touch `.planning/STATE.md` or
 `.planning/ROADMAP.md` in this worktree.
 </output>
