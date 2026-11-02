@@ -4,6 +4,15 @@ All notable changes to the **Admin UI Blueprint** add-on are documented in this 
 [Keep a Changelog](https://keepachangelog.com/). This is our own code without an upstream project: the version is bumped
 manually with `make update-version`.
 
+## [0.1.0-4] - 2026-11-02
+
+### Added
+
+- Info link in the topbar to the add-on's page in Home Assistant (lib 0.3.0, option `infoPath`): navigates through the
+  HA bridge when it answers, otherwise a plain `target="_top"` link; folds into the burger menu on narrow layouts
+- `api/health` reports `addon_slug` (from the Supervisor, left out when unknown); the spike result block records the
+  info link path in `navigate.last_path` and `navigate.count`, so S7 can be checked live
+
 ## [0.1.0-3] - 2026-11-02
 
 ### Changed

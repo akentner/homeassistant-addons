@@ -95,8 +95,9 @@ All modules live in `admin-ui/app/web/static/lib/`, one self-contained directory
 `Topbar` is sticky (together with the tab bar) and respects the bridge safe-area insets. With `views`, `activeId` and
 `nav="topbar"` the navigation sits in the bar and folds into a burger menu when it does not fit; `nav="tabs"` (default)
 keeps the tab bar. It shows the add-on icon (`./icon`, served from the add-on's `icon.png`) before the name and hides it
-when the image fails to load; `iconSrc={null}` turns it off. The bar stays one compact row: children passed to `Topbar`
-are hidden below 600 px, so put nothing essential there.
+when the image fails to load; `iconSrc={null}` turns it off. `infoPath` adds an info link (bar icon, or burger menu
+entry when folded). The bar stays one compact row: children passed to `Topbar` are hidden below 600 px, so put nothing
+essential there.
 
 The formatters take the language as second argument. `formatDateTime(ms, lang, opts)` merges an optional `opts` object
 (for example `timeZone`) into the `Intl.DateTimeFormat` options and `formatRelative(ms, lang, nowMs)` takes an optional
@@ -243,7 +244,7 @@ the phase 26 planning directory.
 | S4  | Bridge                               | log of every properties message, resize across 870 pixels, rotation     | `narrow` flips at 870 pixels, insets set on notch devices, fallback works on silence | Limited: bridge answered, `narrow` false, insets present; flip at 870 px and rotation not run                                                                               | verified       |
 | S5  | Double top bar                       | frame top measurement in docked, hidden-sidebar, narrow and kiosk modes | no double bar after the policy, menu button opens the drawer, HA restores on leaving | Docked sidebar only: host bar false, kiosk false; hidden sidebar, narrow and kiosk policies not run                                                                         | verified       |
 | S6  | `handleSafeArea`                     | toggle re-subscribes with the option, insets displayed                  | confirms the safe-area handling on iOS and Android, default stays off                | Default off (`safe_area_off`); toggle on iOS and Android not run                                                                                                            | verified       |
-| S7  | `navigate`                           | button posts a navigate message to the config page                      | HA navigates                                                                         | Not run (`not_run`). Follow-up: press the navigate button in a panel run                                                                                                    | not-applicable |
+| S7  | `navigate`                           | button and topbar info link post a navigate message                     | HA navigates                                                                         | Not run (`not_run`). Follow-up: press the navigate button in a panel run                                                                                                    | not-applicable |
 | S8  | Clipboard                            | `CopyField` over HTTP and HTTPS, in panel and card                      | copy works or the fallback message appears                                           | Not run (`not_run`). Follow-up: copy over HTTP and HTTPS, in panel and card                                                                                                 | not-applicable |
 | S9  | CSP                                  | CSP header enabled, violation counter                                   | zero violations during gallery, CRUD and theme sync                                  | `violations_0` in the panel run, but presence of the CSP header was not confirmed, so this is weak evidence. Follow-up: check the response header in the network tab        | verified       |
 | S10 | Storage                              | language survives a reload, behaviour with storage blocked              | no exception, the default language works                                             | Not run (`not_run`). Follow-up: reload test and run with storage blocked                                                                                                    | not-applicable |
@@ -257,6 +258,17 @@ A run is recorded from the copy-as-JSON result block of the demo page. Record th
 browser or companion app and the access path (panel, card, direct tab). Set the status to `verified`, `failed` or
 `not-applicable`, fill the result cell and update the `Verified on:` line. A result may contain HA versions, the browser
 or app, the access path and pass or fail. It must never contain tokens, real hostnames or user names.
+
+### Testing navigate live with the info link (S7)
+
+The topbar shows an info icon (ⓘ) that opens this add-on's page in Home Assistant (`/hassio/addon/<slug>/info`). The
+slug comes from the Supervisor (`GET http://supervisor/addons/self/info`, allowed for every add-on) and reaches the page
+as `addon_slug` in `api/health`. Without a token or answer (direct run) the key is missing and the link is hidden. A
+click sends a `home-assistant/navigate` message when the bridge answers. Otherwise a plain link with `target="_top"`
+takes over, so the link never depends on the bridge. HA does not confirm `navigate`. Expected result: HA opens the
+add-on info page without a full reload; you observe that yourself. The result block records the last path as
+`navigate.last_path` (`bridge`, `fallback` or `none`) and `navigate.count`. On narrow layouts with the burger menu the
+link is an entry of that menu. The existing S7 button stays.
 
 ### Testing the CSP in a live Home Assistant (S9)
 

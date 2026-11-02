@@ -15,7 +15,7 @@ with sync_playwright() as p:
                 for w in (320, 375, 414, 600):
                     ctx = b.new_context(viewport={"width": w, "height": 700})
                     pg = ctx.new_page()
-                    pg.route("**/api/health", lambda r: r.fulfill(json={"status": "ok", "addon_version": "0.1.0-1", "lib_version": "0.2.1"}))
+                    pg.route("**/api/health", lambda r: r.fulfill(json={"status": "ok", "addon_version": "0.1.0-4", "lib_version": "0.3.0", "addon_slug": "local_admin_ui"}))
                     pg.add_init_script(f"localStorage.setItem('admin-ui:demo-nav','{mode}');localStorage.setItem('admin-ui:lang','{lang}');")
                     pg.goto(url.replace("index.html","host.html") if kiosk else url); fr = pg.frame_locator("#f") if kiosk else pg; fr.locator("header.topbar").wait_for(); pg.wait_for_timeout(400)
                     if kiosk:
@@ -25,12 +25,12 @@ with sync_playwright() as p:
                     r = tgt.evaluate("""()=>({sw:document.documentElement.scrollWidth,iw:innerWidth,
                       bsw:document.body.scrollWidth,
                       bar:(()=>{const b=document.querySelector('.topbar');return b.scrollWidth<=b.clientWidth+1})(),
-                      burger:!!document.querySelector('.nav-burger'), h:document.querySelector('.shell-head').getBoundingClientRect().height,menus:document.querySelectorAll('.menu-btn').length,hscroll:document.documentElement.scrollWidth>innerWidth})""")
+                      burger:!!document.querySelector('.nav-burger'), h:document.querySelector('.shell-head').getBoundingClientRect().height,menus:document.querySelectorAll('.menu-btn').length,info:document.querySelectorAll('.info-btn').length,infoMenu:!!document.querySelector('.info-link'),hscroll:document.documentElement.scrollWidth>innerWidth})""")
                     r.update(kiosk=kiosk, mode=mode, lang=lang, w=w, ok=r["sw"] <= r["iw"] and r["bar"])
                     out.append(r); ctx.close()
                 if not kiosk: pass
             pass
     b.close()
 bad = [r for r in out if not r["ok"]]
-for r in out: print({k:r[k] for k in ("kiosk","mode","lang","w","sw","iw","bar","burger","h","menus","ok")})
+for r in out: print({k:r[k] for k in ("kiosk","mode","lang","w","sw","iw","bar","burger","h","menus","info","ok")})
 print("FAILURES", len(bad))

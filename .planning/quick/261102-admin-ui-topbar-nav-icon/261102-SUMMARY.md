@@ -50,3 +50,26 @@ tested.
   hass read in `spike-versions.mjs` to `hass.config.version`.
 - Tests: 267 node (new `spike_versions.test.mjs`, auto/fallback/override/not_recorded/labels de+en in
   `spike_view.test.mjs`), 252 pytest, sync and rules checks green. Dockerfile unchanged, no docker build needed.
+
+## Part 4: add-on info link (lib 0.3.0, add-on 0.1.0-4)
+
+- Slug: `app/addon_info.py` reads `GET http://supervisor/addons/self/info` with `SUPERVISOR_TOKEN` (Bearer). Supervisor
+  docs (contributors.home-assistant.io, communication and security guides): `/addons/self/...` needs no `hassio_api`;
+  the default role covers info endpoints. Slug is validated (`^[a-z0-9][a-z0-9_]{0,63}$`), failures give None (no
+  token, no answer, bad shape), the token and the response are never logged or returned, successes are cached,
+  failures retried after 60 s. `api/health` gets `addon_slug` only when known. Not verified live: the real Supervisor
+  answer (tests use a fake opener); skeleton files unchanged, so no skeleton hash change.
+- Lib: `Topbar` props `infoPath`, `onInfoNavigate`. Bridge answering (`status` ok and `navigate()` posted): navigate
+  message and `preventDefault`; otherwise the anchor (`target="_top"`, `rel="noopener"`) navigates. Info icon in the
+  bar, entry in the burger menu while the navigation is folded. `nav.info` string de+en, aria-label and tooltip.
+  No new export, so the export contract test is unchanged.
+- Demo: `infoPath(health)` builds `/hassio/addon/<slug>/info`; `info-nav.mjs` records `bridge`/`fallback` and a count;
+  the spike view shows it in S7 and the result block has `navigate.last_path` and `navigate.count`. HA does not
+  confirm navigate, so only the chosen path is recorded.
+- Tests: 277 node, 266 pytest (new `test_addon_info.py`), sync and rules checks green.
+- Overflow (Brave via Playwright, `measure-overflow.py` now with `addon_slug` in the health stub): 320/375/414/600 px x
+  topbar/tabs x en/de x with and without the simulated HA host: no horizontal overflow in all 32 cases, topbar stays
+  56 px in the topbar layout, info icon present in the bar in tabs layout, none in the bar while folded. Opened
+  burger menu at 320/414 px: the info entry sits inside the viewport, Escape returns focus to the burger; at 1280 px
+  the icon is in the bar with the expected href. Not tested: a live HA (whether `target="_top"` is allowed by the
+  panel iframe, and the bridge navigate itself: that is S7).
