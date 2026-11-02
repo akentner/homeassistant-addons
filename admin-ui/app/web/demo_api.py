@@ -72,12 +72,21 @@ def _clean_note(value: Any) -> str:
 
 
 def register(
-    router: Router, *, version: str, lib_version: str, clock: Callable[[], int] = _now_ms
+    router: Router,
+    *,
+    version: str,
+    lib_version: str,
+    clock: Callable[[], int] = _now_ms,
+    slug: Callable[[], str | None] = lambda: None,
 ) -> None:
     store = _Store(clock)
 
     def health(_req: Request) -> dict[str, str]:
-        return {"status": "ok", "addon_version": version, "lib_version": lib_version}
+        body = {"status": "ok", "addon_version": version, "lib_version": lib_version}
+        addon_slug = slug()
+        if addon_slug:  # unknown (no token, direct run): the key stays out and the GUI hides the info link
+            body["addon_slug"] = addon_slug
+        return body
 
     def list_items(_req: Request) -> dict[str, Any]:
         with store.lock:
