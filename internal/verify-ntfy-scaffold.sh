@@ -105,7 +105,7 @@ python3 -I - "${BODY}" <<'PY' || fail "api/health content"
 import json, sys
 h = json.loads(sys.argv[1])
 assert h["ntfy"]["healthy"] is True, h
-assert h["db"]["schema_version"] == 10 and h["db"]["supported"] is True, h
+assert h["db"]["schema_version"] in (10, 11) and h["db"]["supported"] is True, h
 PY
 gui "${MAIN}" /api/users "${INGRESS[@]}"
 [ "${STATUS}" = "200" ] || fail "api/users status ${STATUS}"

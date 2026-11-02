@@ -166,9 +166,9 @@ Moving `auth.db` by hand stays possible, but is not supported. When the web UI i
 
 ## Troubleshooting
 
-- **Degraded mode**: if the `auth.db` schema version is not 10, the health page shows the status `degraded`, and every
-  request that touches users, rules, tokens, export or resets is refused with the error `db_unsupported`. ntfy keeps
-  delivering messages. Check the add-on version against the upstream release notes.
+- **Degraded mode**: if the `auth.db` schema version is not one of the audited versions (10 and 11), the health page
+  shows the status `degraded`, and every request that touches users, rules, tokens, export or resets is refused with the
+  error `db_unsupported`. ntfy keeps delivering messages. Check the add-on version against the upstream release notes.
 - **Database locked**: ntfy and the GUI share the database. Writes are serialized and retried. If the problem stays,
   restart the add-on.
 - **No admin**: `admin_password` is empty. Set it and restart.

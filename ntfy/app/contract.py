@@ -20,7 +20,9 @@ from typing import Any, NamedTuple, NotRequired, Protocol, TypedDict
 NTFY_PORT = 8000
 GUI_PORT = 8099
 INGRESS_REMOTE = "172.30.32.2"
-SUPPORTED_AUTH_SCHEMA = 10
+# auth.db schema versions the SQL in authdb.py is audited against: 10 (ntfy 2.36) and 11 (ntfy 2.37 only adds a
+# `topic` table; the user, tier, user_access and user_token tables used here are unchanged)
+SUPPORTED_AUTH_SCHEMAS = (10, 11)
 
 # --- C7 validators -------------------------------------------------------------------------------------------------
 

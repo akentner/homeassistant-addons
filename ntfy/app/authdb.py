@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from app.contract import (
-    SUPPORTED_AUTH_SCHEMA,
+    SUPPORTED_AUTH_SCHEMAS,
     AclRow,
     ApiError,
     SchemaStatus,
@@ -69,7 +69,7 @@ class AuthDb:
                 return {"version": None, "supported": False, "error": "db_unsupported"}
             return {"version": None, "supported": False, "error": exc.code}
         version = int(rows[0]["version"]) if rows else None
-        supported = version == SUPPORTED_AUTH_SCHEMA
+        supported = version in SUPPORTED_AUTH_SCHEMAS
         return {"version": version, "supported": supported, "error": None if supported else "db_unsupported"}
 
     def ensure_supported(self) -> None:

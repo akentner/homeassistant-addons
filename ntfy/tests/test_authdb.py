@@ -125,8 +125,17 @@ def test_connection_is_read_only(db):
         conn.close()
 
 
+@pytest.mark.parametrize("version", [10, 11])
+def test_audited_versions_are_supported(tmp_path, version):
+    db = AuthDb(ntfy_db.make_auth_db(tmp_path / "auth.db", version=version))
+    status = db.check_schema()
+    assert status == {"version": version, "supported": True, "error": None}
+    assert db.list_users()[0]["name"] == "everyone"
+    db.ensure_supported()
+
+
 def test_every_read_checks_schema(tmp_path):
-    db = AuthDb(ntfy_db.make_auth_db(tmp_path / "auth.db", version=11))
+    db = AuthDb(ntfy_db.make_auth_db(tmp_path / "auth.db", version=12))
     for call in (db.list_users, db.list_acl, db.list_tokens, db.counts, lambda: db.has_user("a"),
                  lambda: db.snapshot_acl("a"), lambda: db.reveal_token("a", "x")):
         with pytest.raises(ApiError):
