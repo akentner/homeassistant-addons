@@ -329,14 +329,45 @@ Plans:
 **Goal:** Meta add-on `admin-ui`: a real HA add-on with a demo GUI that is the blueprint for all admin GUIs in this
 repo, now and later. It fixes design and rules (dark/light, a11y minimum, i18n de/en, test duty, ingress/security
 rules) and ships a reusable lib (tokens + base CSS, API client + ingress helper, Preact/htm components, Python server
-skeleton). Source of the lib is the ntfy GUI (Phase 24); migration paths for `secrets-sync`, `haos-monitor` and `ntfy`
-are part of the discussion. Lib distribution into add-ons (copy + drift check vs. alternatives) is an open decision.
-**Requirements**: TBD
+skeleton). Source of the lib is the ntfy GUI (Phase 24). The lib is distributed by copy (`make sync-admin-ui`, drift
+check, `lib.lock`); migration paths for `ntfy`, `secrets-sync` and `haos-monitor` are documented, not executed (own
+follow-up phases).
+**Requirements**: TBD (D-01..D-17 in `26-CONTEXT.md` act as requirements)
 **Depends on:** Phase 24
-**Plans:** 0 plans
+**Plans:** 13 plans
+**Status:** Executed 2026-11-02; verification `human_needed` (see `26-VERIFICATION.md`): live spike only partly run,
+first CI run on GitHub pending.
+
+Success criteria:
+
+1. A real add-on `admin-ui` with a demo GUI exists and builds (HA base image, ingress, 3-file version sync).
+2. The blueprint fixes design and rules (dark/light, a11y, i18n de/en, tests, ingress/security) as `DOCS.md` rules
+   R-01..R-15 with an enforcement column.
+3. A reusable lib ships: tokens + base CSS, API client + ingress helper, Preact/htm components, Python server skeleton.
+4. Distribution is decided and implemented: copy + sync script + drift check + `lib.lock`, version/hash pinned.
+5. Migration paths for `ntfy`, `secrets-sync` and `haos-monitor` are documented; no migration happens in this phase.
+6. Rules are enforced by tests where possible (i18n parity, ingress gate, static rules, a11y minimum, contrast).
+7. CI job for lib tests, pytest and the sync check exists in `lint.yml`.
+8. A live spike of HA theme/iframe access decides what the rules guarantee (partial: run A only).
+
+Research: `26-RESEARCH.md`; spike notes in `.planning/phases/26-admin-ui-blueprint/spikes/ha-iframe-theme.md`; user quick
+tasks (sticky topbar, nav option with burger, icon, mobile overflow fix, CSP guide, spike version detection, add-on info
+link) in `.planning/quick/261102-admin-ui-topbar-nav-icon/`.
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 26 to break down)
+- [x] 26-01-PLAN.md — Wave 1: tracer (gate, router, health, lib client, vendored Preact) and add-on shell, contract C1-C9
+- [x] 26-02-PLAN.md — Wave 2: Python skeleton hardening, demo API, server tests
+- [x] 26-03-PLAN.md — Wave 2: `lib/base.css` tokens, light/dark/`data-theme`, contrast fix and test
+- [x] 26-04-PLAN.md — Wave 2: hooks, ingress helper, Intl formatters, i18n and base strings
+- [x] 26-05-PLAN.md — Wave 2: `color.mjs`, `theme-sync.mjs`, `ha-bridge.mjs`
+- [x] 26-06-PLAN.md — Wave 2: sync script with drift semantics, rules scanner, Makefile targets
+- [x] 26-07-PLAN.md — Wave 2: `DOCS.md` rules, README/CLAUDE.md registration, base-image config
+- [x] 26-08-PLAN.md — Wave 3: a11y helpers, full components, shell, fake-DOM upgrade
+- [x] 26-09-PLAN.md — Wave 3: `lint.yml` job `admin-ui` (human-confirmed tool pins)
+- [x] 26-10-PLAN.md — Wave 4: demo shell, gallery, tokens, language and CRUD views
+- [x] 26-11-PLAN.md — Wave 5: rules checklist view and spike view S1..S15
+- [x] 26-12-PLAN.md — Wave 6: `lib.lock`, hooks, `check-all`, export contract test, final Docker smoke
+- [x] 26-13-PLAN.md — Wave 7: live spike on a real HA instance (run A only), results and follow-ups recorded
 
 ### 📋 v1.4 iac-runner (Phases 16-19) — PLANNING
 
@@ -849,6 +880,7 @@ exercised. Operator documentation (`README.md` + `DOCS.md`) is written from obse
 | 18. MQTT + HA Entities              | v1.4      | 0/TBD                                                         | Planned             | —          |
 | 19. E2E + DOCS                      | v1.4      | 0/TBD                                                         | Planned             | —          |
 | 21. CUPS print server AirPrint/mDNS | —         | 10/10 | Complete | 2026-10-04 |
+| 26. admin-ui blueprint              | —         | 13/13 | Executed, verification human_needed | 2026-11-02 |
 
 ---
 
