@@ -246,6 +246,35 @@ def test_component_topbar_height_and_selected_tab(blocks: list[tuple[str, str, s
     assert '.tab[aria-selected="true"]' in all_selectors(blocks)
 
 
+def small_screen_decls(blocks: list[tuple[str, str, str]], selector: str) -> dict[str, str]:
+    return find_decls(blocks, selector, "max-width: 600px")
+
+
+def test_topbar_stays_one_compact_row_that_can_shrink(blocks: list[tuple[str, str, str]]) -> None:
+    bar = find_decls(blocks, ".topbar")
+    assert bar["height"] == "56px"  # compact sticky head: never wraps into a taller multi-row bar
+    assert "flex-wrap" not in bar or bar["flex-wrap"] == "nowrap"
+    assert find_decls(blocks, ".topbar > *")["min-width"] == "0"
+    h1 = find_decls(blocks, ".topbar h1")
+    assert h1["overflow"] == "hidden" and h1["text-overflow"] == "ellipsis" and h1["white-space"] == "nowrap"
+    assert find_decls(blocks, ".topbar > .brand-icon, .topbar > .menu-btn, .topbar > .badge")["flex"] == "none"
+
+
+def test_topbar_extras_fold_on_small_screens(blocks: list[tuple[str, str, str]]) -> None:
+    assert find_decls(blocks, ".topbar-extra")["display"] == "contents"
+    assert small_screen_decls(blocks, ".topbar-extra")["display"] == "none"
+    assert "max-width" in small_screen_decls(blocks, ".topbar .lang-switch")
+
+
+def test_page_never_scrolls_sideways_safety_net(blocks: list[tuple[str, str, str]]) -> None:
+    assert find_decls(blocks, "html, body")["overflow-x"] == "clip"
+
+
+def test_topnav_keeps_room_for_its_burger(blocks: list[tuple[str, str, str]]) -> None:
+    decls = find_decls(blocks, ".topnav")
+    assert int(decls["min-width"].removesuffix("px")) >= 40
+
+
 def test_component_sr_only_is_visually_hidden(blocks: list[tuple[str, str, str]]) -> None:
     decls = find_decls(blocks, ".sr-only")
     assert decls["position"] == "absolute"

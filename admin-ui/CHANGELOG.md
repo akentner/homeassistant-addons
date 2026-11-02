@@ -4,6 +4,13 @@ All notable changes to the **Admin UI Blueprint** add-on are documented in this 
 [Keep a Changelog](https://keepachangelog.com/). This is our own code without an upstream project: the version is bumped
 manually with `make update-version`.
 
+## [0.1.0-2] - 2026-11-02
+
+### Fixed
+
+- Mobile: the page no longer scrolls sideways. The topbar stays one compact row, the title shrinks with an ellipsis, and
+  the `Topbar` children (the demo's version text and theme chip) fold away under 600 px (lib 0.2.1)
+
 ## [0.1.0-1] - 2026-11-02
 
 ### Added

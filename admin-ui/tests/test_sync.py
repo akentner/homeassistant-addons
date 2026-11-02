@@ -176,7 +176,7 @@ def test_behind_warns_and_strict_fails(repo: Path) -> None:
 def test_ahead_fails(repo: Path) -> None:
     bump(repo, "9.9.0")
     run(repo, "--addon", "fakeaddon")
-    bump(repo, "0.2.0")
+    bump(repo, "0.0.1")
     assert run(repo).returncode == 0
     result = run(repo, "--check")
     assert result.returncode == 1 and "ahead" in result.stdout
@@ -184,10 +184,11 @@ def test_ahead_fails(repo: Path) -> None:
 
 def test_consumers_can_differ_and_addon_updates_only_named(repo: Path) -> None:
     run(repo, "--addon", "fakeaddon", "--addon", "otheraddon")
+    initial = (repo / LIB / "VERSION").read_text().strip()
     bump(repo, "9.9.0")
     assert run(repo, "--addon", "fakeaddon").returncode == 0
     assert "version 9.9.0" in (repo / "fakeaddon" / LIB_COPY / "LIB.stamp").read_text()
-    assert "version 0.2.0" in (repo / "otheraddon" / LIB_COPY / "LIB.stamp").read_text()
+    assert f"version {initial}" in (repo / "otheraddon" / LIB_COPY / "LIB.stamp").read_text()
     result = run(repo, "--check")
     assert result.returncode == 0 and "otheraddon" in result.stdout and "behind" in result.stdout
 

@@ -61,9 +61,10 @@ const DEFAULT_ICON = "./icon";
 const NAV_MODES = ["topbar", "tabs"];
 let menuSeq = 0;
 
-// Collapse the inline navigation into the burger menu when it does not fit its slot. Unknown sizes never collapse.
+// Collapse the inline navigation into the burger menu when it does not fit its slot (a zero-width slot collapses too).
+// Unknown sizes never collapse.
 export const needsBurger = (needed, available) =>
-  Number.isFinite(needed) && Number.isFinite(available) && needed > 0 && available > 0 && needed > available;
+  Number.isFinite(needed) && Number.isFinite(available) && needed > 0 && available >= 0 && needed > available;
 
 const viewTitle = (tt, view) => (view.titleKey ? tt(view.titleKey) : view.title);
 const inside = (root, node) => {
@@ -227,7 +228,8 @@ export function Topbar({ title, iconSrc, status, bridge, children, views, active
       html`<img class="brand-icon" alt="" width="28" height="28" src=${icon} onError=${() => setIconOk(false)} />`}
       <h1>${title}</h1>
       ${inBar && html`<${TopbarNav} views=${list} activeId=${activeId} label=${navLabel} kiosk=${kiosk} />`}
-      ${status && html`<${Badge} kind=${status.kind}>${status.text}<//>`} ${children}
+      ${status && html`<${Badge} kind=${status.kind}>${status.text}<//>`}
+      ${children && html`<span class="topbar-extra">${children}</span>`}
       <${LangSwitch} />
     </header>
     ${mode === "tabs" && list.length > 0 && html`<${TabNav} views=${list} activeId=${activeId} label=${navLabel} />`}
