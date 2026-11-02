@@ -16,7 +16,8 @@ It is our own code, not an upstream wrapper (see the exception in [DOCS.md][docs
 ## Features
 
 - Several hosts per add-on, one log file each in `/share/haos-monitor/<slug>.log` (rotated at 20 MB × 5)
-- Web UI via Ingress (sidebar entry "HAOS Monitor": status, blocked tasks, last kernel error, recent incidents)
+- Web UI via Ingress on the shared admin-ui blueprint (sidebar entry "HAOS Monitor": status, blocked tasks, last kernel
+  error, recent incidents; German and English, light and dark)
 - Status JSON for Gatus at `http://72a005f5-haos-monitor:8099/api/status.json[?host=<slug>]`
 - Prometheus/VictoriaMetrics metrics at `http://72a005f5-haos-monitor:8099/api/metrics.txt`
 - MQTT discovery: one device per host with sensors and binary sensors, availability via Last Will
@@ -36,5 +37,5 @@ See [DOCS.md][docs] for all options, the status endpoint and the MQTT entities.
 [docs]: DOCS.md
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
-[release-shield]: https://img.shields.io/badge/version-v0.6.1-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v0.6.1
+[release-shield]: https://img.shields.io/badge/version-v0.7.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v0.7.0

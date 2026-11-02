@@ -10,11 +10,36 @@ auto-update and ships its scripts in the add-on directory (the repo-wide "no bun
 image is built and published by CI like the others (`image:` key). The other repo rules still apply: HA base image only,
 3-file version sync via `make update-version`, and a local `docker build` before every commit.
 
+The web UI is built on the shared admin-ui library (Preact/htm, vendored under `app/web/static/vendor/admin-ui`, server
+skeleton in `app/web/admin_ui`; both are copied by `make sync-admin-ui` and never edited here). The skeleton's public
+routes (lib 0.5.0) are not used: the machine endpoints stay on the busybox httpd on port 8099, so every request to the
+GUI server must come through Ingress.
+
 ## Prerequisites
 
 - The observer must **not** run on the observed host. Nextgen watches the backup host; the backup host runs its own
   instance watching Nextgen.
 - Every host needs HAOS host SSH on port 22222 (root) with the public key of the configured private key authorized.
+
+## Architecture
+
+Two servers run side by side in the container:
+
+| Server              | Port | Reachable                                    | Serves                                               |
+| ------------------- | ---- | -------------------------------------------- | ---------------------------------------------------- |
+| busybox httpd + CGI | 8099 | Optional published port, no authentication   | The machine endpoints, unchanged (list below)        |
+| Python GUI server   | 8100 | Internal only, never published; Ingress gate | The status page, its static files and `api/overview` |
+
+The machine endpoints on 8099 are `/api/status.json`, `/cgi-bin/status`, `/api/metrics.txt`, `/cgi-bin/metrics`,
+`/api/hosts.json` and `/api/incidents.json`.
+
+The GUI server answers only the Home Assistant Supervisor (peer address `172.30.32.2` with a non-empty `X-Ingress-Path`
+header); every other request, any method and any path, gets `403 {"error":"ingress_only"}`. `config.yaml` sets
+`ingress_port: 8100` and does not list 8100 under `ports`. `api/overview` takes no parameter: it reads the hosts file
+`/etc/haos-monitor.hosts` and runs `status.sh <slug>` per host (the same script behind the status endpoint, the metrics
+and MQTT, so the page cannot disagree with Gatus), plus the last 10 `INCIDENT` lines of
+`/share/haos-monitor/<slug>.log`. It never reads the options file or the key files, so only the fingerprint and key type
+can ever appear on the page.
 
 ## Options
 
@@ -84,8 +109,13 @@ kernel log flood cannot push the samples out of its window.
 ## Web UI (Ingress)
 
 The add-on adds a sidebar entry "HAOS Monitor" (admin only) and the "Open Web UI" button. The page shows one card per
-host: verdict and reasons, all values (violated thresholds highlighted), port reachability, the SSH key fingerprint,
-blocked tasks, the last kernel error and the last 10 `INCIDENT` log lines. It refreshes every 10 seconds.
+host: verdict and reasons, all values (violated thresholds are highlighted and announced to screen readers, not only
+coloured), port chips (ping, SSH, MQTT, HA, Observer), the SSH key fingerprint line (invalid in red), blocked tasks, the
+last kernel error and the last 10 `INCIDENT` log lines. It refreshes every 10 seconds and has a Reload button.
+
+The language follows the browser (German or English) and can be switched in the top bar. The page uses the light or dark
+theme of the system, or the Home Assistant theme when embedded. The page is served by the GUI server on port 8100 only;
+it is no longer available on the published port 8099.
 
 ## Status endpoint
 
@@ -135,7 +165,8 @@ scrape_configs:
 
 The port is closed by default; the scraper must reach the add-on network (`72a005f5-haos-monitor`, e.g. via Supervisor
 DNS). To scrape from elsewhere in the LAN, set a host port for `8099/tcp` in the add-on's Network tab (optional). The
-endpoints have no authentication, so open it only in a trusted network.
+endpoints have no authentication, so open it only in a trusted network. Port 8099 serves the machine endpoints only; the
+web UI is reachable through Home Assistant only.
 
 ## MQTT
 
@@ -148,3 +179,26 @@ endpoints have no authentication, so open it only in a trusted network.
   `kmsg_errors`, `kmsg_last`, `key_fp`, `key_type`).
 - Remove entities: set `mqtt_clear_discovery: true` and restart (publishes empty retained payloads), or
   `mosquitto_pub -r -n -t '<topic>'` per topic. Set it back to `false` afterwards.
+
+## Development
+
+The GUI lives in `app/`:
+
+- `hosts.py` reads the hosts file strictly (slugs must fully match `[a-z0-9_]+`), `status.py` runs `status.sh` with an
+  argv list, a minimal environment, a timeout and an output cap, `incidents.py` finds the last `INCIDENT` lines with a
+  bounded backward scan, and `web/server.py` wires `GET /api/overview` onto the skeleton. `app/main.py` is the entry
+  point started by `run.sh`.
+- `app/web/static/` holds the Preact page (`app.mjs`, `model.mjs`, `views/`, `strings.de.mjs`, `strings.en.mjs`,
+  `app.css`).
+- `app/web/admin_ui/` (skeleton) and `app/web/static/vendor/admin-ui/` (browser lib) are generated copies. Never edit
+  them; run `make sync-admin-ui ADDON=haos-monitor` to take a new lib version.
+
+Run the checks from the repository root:
+
+```bash
+make test-haos-monitor        # node tests for the page, pytest for the server
+make check-admin-ui-sync      # the lib and skeleton copies match the library
+make check-admin-ui-rules     # the page follows the blueprint rules
+```
+
+To take a new lib version: sync, run the three commands, then bump the version with `make update-version`.

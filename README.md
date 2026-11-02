@@ -168,6 +168,7 @@ Own code, no upstream project. Keeps an SSH session to each observed host, logs 
 
 - Multiple hosts per add-on, one rotated log file each
 - `problem` sensor with the reasons as attributes (stale data, I/O pressure, in-flight I/O, D-state tasks)
+- Web UI via Ingress on the shared admin-ui blueprint (German and English, light and dark)
 - Remote side uses shell builtins only, so it keeps working while the data disk is stalled
 
 ### [Secrets Sync](./secrets-sync)
