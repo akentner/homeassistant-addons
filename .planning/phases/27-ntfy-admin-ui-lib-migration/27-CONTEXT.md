@@ -47,6 +47,13 @@ model logic, views and styles. Phase 25 (IaC API) is not part of this phase and 
   `~/Projekte/_worktrees/homeassistant-addons/feat/ntfy-admin-ui-lib`. STATE.md/ROADMAP.md/state.json only in the main
   checkout.
 
+- **D-13:** Planning proposals accepted by the user on 2026-11-02 (plans already reflect them): `strings.{de,en}.mjs`
+  stay aggregators over per-plan part files (no flat layout); HA bridge and theme sync wired in `app.mjs` as
+  progressive enhancement; tab bar navigation (old look); rule delete and token revoke use plain danger confirmations
+  (user delete and resets stay type-to-confirm); backend messages are not shown (R-14), a 409 reads generically;
+  `NTFY_GUI_CSP=off` is a diagnostic env switch only, never an add-on option; the `Server` header changes to `AdminUi`;
+  no `addon_slug` in `api/health`. Open: how the branch build is run in HA for the 27-07 UAT.
+
 ### Claude's Discretion
 Plan split and waves, which skeleton parts fit ntfy's server, test layout, string key naming.
 
