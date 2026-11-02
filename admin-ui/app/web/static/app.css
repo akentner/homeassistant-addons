@@ -1,0 +1,5 @@
+/* Tracer styles only; plan 26-10 replaces this file with the demo page styles on top of lib/base.css. */
+body {
+  font-family: system-ui, sans-serif;
+  margin: 1rem;
+}
