@@ -890,26 +890,28 @@ same way (HA core + frontend version from Settings > About, browser/app, access 
 | A13 | Python 3.12+ stdlib is present via Alpine 3.24 `python3` (exact minor not checked) | Standard stack | Use only syntax ntfy already uses (`from __future__ import annotations`, `X | None` in annotations) |
 | A14 | Lag of a consumer behind the source should be a warning, not a failure | Sync | Strict mode needed; flip default |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Drift semantics (D-06 wording).** Fail on any difference between consumer and source, or only on tamper /
+All questions below are decided in the Shared Contract of `26-01-PLAN.md` (PD-01..PD-09).
+
+1. **Drift semantics (D-06 wording).** Fail on any difference between consumer and source, or only on tamper / RESOLVED: PD-01.
    same-version-different-hash, warn on "behind"?
    - Known: D-06 "consumers pull updates deliberately", "the drift check fails on mismatch".
    - Recommendation: fail on tamper and same-version mismatch, warn on behind, `--strict` flag for the strict reading.
      Ask the user once during planning.
-2. **Does the demo import `lib/` directly or via its own vendored copy?** D-04 says "the demo is always a consumer".
+2. **Does the demo import `lib/` directly or via its own vendored copy?** D-04 says "the demo is always a consumer". RESOLVED: PD-02.
    Recommendation: import the source directly (docker context contains it, one fewer copy), and treat "consumer" as "uses
    only public exports"; the sync test with a fake consumer covers the copy path.
-3. **Python skeleton sync target.** D-05 names only the static path. Recommendation: `admin-ui/app/web/skeleton/` ->
+3. **Python skeleton sync target.** D-05 names only the static path. Recommendation: `admin-ui/app/web/skeleton/` -> RESOLVED: PD-04.
    `<addon>/app/web/admin_ui/` with the same stamp scheme; confirm.
-4. **Location of per-add-on strings.** D-09 says `app/strings.{de,en}.mjs`. Recommendation: `static/strings.{de,en}.mjs`
+4. **Location of per-add-on strings.** D-09 says `app/strings.{de,en}.mjs`. Recommendation: `static/strings.{de,en}.mjs` RESOLVED: PD-05.
    next to `app.mjs` (so `app/` is read as "the web app", not a literal directory).
-5. **`panel_admin` and `boot` of the demo** (A12).
-6. **CSP strictness in the rules** (A9): promise it only after S9.
-7. **Contrast token changes** (`--on-acc`, `--mut`): they alter ntfy's look at migration time; acceptable?
-8. **Minimum HA version** to state in DOCS: frontend `20260128.0` for the bridge; `20260729.0` only for `handleSafeArea`.
+5. **`panel_admin` and `boot` of the demo** (A12). RESOLVED: PD-06.
+6. **CSP strictness in the rules** (A9): promise it only after S9. RESOLVED: PD-07.
+7. **Contrast token changes** (`--on-acc`, `--mut`): they alter ntfy's look at migration time; acceptable? RESOLVED: PD-03.
+8. **Minimum HA version** to state in DOCS: frontend `20260128.0` for the bridge; `20260729.0` only for `handleSafeArea`. RESOLVED: PD-08.
    Which HA core release the user runs is unknown here; the spike records it.
-9. **`haos-monitor` missing from `base-image-config.yaml`** — out of scope, mention in the follow-up phase note.
+9. **`haos-monitor` missing from `base-image-config.yaml`** — out of scope, mention in the follow-up phase note. RESOLVED: PD-09.
 
 ## Environment Availability
 
