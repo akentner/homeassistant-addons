@@ -120,8 +120,9 @@ for path in / /static/app.mjs /static/app.css; do
     gui "${MAIN}" "${path}" "${INGRESS[@]}"
     [ "${STATUS}" = "200" ] || fail "${path} status ${STATUS} with ingress header"
 done
-gui "${MAIN}" /static/app.mjs "${INGRESS[@]}"
-grep -q "api/health" <<<"${BODY}" || fail "app.mjs does not use relative api/health"
+# the API client builds relative URLs (`api/...`, no leading slash) so the page works below an ingress path
+gui "${MAIN}" /static/lib/api.mjs "${INGRESS[@]}"
+grep -q 'url = `api/' <<<"${BODY}" || fail "lib/api.mjs does not build relative api/ URLs"
 echo "✓ frontend shell served"
 
 echo "==> Ingress gate"
