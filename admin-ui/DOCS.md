@@ -215,32 +215,43 @@ Without a valid answer within 1.5 seconds the status becomes `no_answer` and the
 - That dashboard webpage cards work: their frame is sandboxed and does not run the message handler, and the ingress
   session may be refused. This stays unverified until spike item S13.
 - That the kiosk drawer, `handleSafeArea` and the host-bar probe behave the same on all platforms (S5 and S6).
-- That a CSP header is accepted by every setup (R-11, S9).
+- That a CSP header is accepted by every setup (R-11, S9). The single panel run showed zero violations, but the header
+  presence was not confirmed, so R-11 stays `unverified`.
+- That theme changes are detected live (S3 not run) and that sync works outside the admin panel: the direct tab (S12),
+  the dashboard card (S13) and the Companion app were not run.
+- Observed so far (run A, desktop Chromium, panel, HA default dark theme, HA core 2026.10.4): the parent is readable,
+  four of five variables parse, the divider variable is not read (`bd` null), the surface and accent groups are skipped
+  by the contrast guard (own theme stays), the bridge answers, no host bar and no kiosk on a docked sidebar, and the
+  identity headers arrive for an admin.
 
 ## Live spike results
 
 The demo page is the instrument: a `#/spike` view that shows the parent access, the variables, the change counters, the
 bridge messages and a copy-as-JSON result block. Results decide what the rules guarantee.
 
-Verified on: not yet run
+Verified on: HA core 2026.10.4 / frontend not recorded (2026-11-02)
 
-| ID  | Check                                | How the demo page observes it                                           | Pass criterion                                                                       | Result | Status  |
-| --- | ------------------------------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------ | ------- |
-| S1  | Parent access                        | parent document read result and error name, `window.parent` comparison  | readable in the panel, reported as not embedded in a direct tab                      | -      | pending |
-| S2  | Variable read                        | table of all whitelist variables with raw value and parse result        | present and parseable in light, dark, a custom theme and a new primary colour        | -      | pending |
-| S3  | Change detection                     | counters for observer fires and poll differences while switching themes | token change within 1 second without reload, no loops                                | -      | pending |
-| S4  | Bridge                               | log of every properties message, resize across 870 pixels, rotation     | `narrow` flips at 870 pixels, insets set on notch devices, fallback works on silence | -      | pending |
-| S5  | Double top bar                       | frame top measurement in docked, hidden-sidebar, narrow and kiosk modes | no double bar after the policy, menu button opens the drawer, HA restores on leaving | -      | pending |
-| S6  | `handleSafeArea`                     | toggle re-subscribes with the option, insets displayed                  | confirms the safe-area handling on iOS and Android, default stays off                | -      | pending |
-| S7  | `navigate`                           | button posts a navigate message to the config page                      | HA navigates                                                                         | -      | pending |
-| S8  | Clipboard                            | `CopyField` over HTTP and HTTPS, in panel and card                      | copy works or the fallback message appears                                           | -      | pending |
-| S9  | CSP                                  | CSP header enabled, violation counter                                   | zero violations during gallery, CRUD and theme sync                                  | -      | pending |
-| S10 | Storage                              | language survives a reload, behaviour with storage blocked              | no exception, the default language works                                             | -      | pending |
-| S11 | Admin and non-admin                  | `api/whoami` groups, open as non-admin with `panel_admin: false`        | panel visible and functional for non-admins                                          | -      | pending |
-| S12 | Direct access                        | published port and ingress URL in a plain tab                           | port answers 403 `ingress_only`, ingress tab shows the own theme                     | -      | pending |
-| S13 | Dashboard webpage card               | card pointing at the ingress URL                                        | record whether it is blocked and whether theme sync works                            | -      | pending |
-| S14 | Language and theme switch while open | live switch                                                             | re-render without reload                                                             | -      | pending |
-| S15 | After an HA update                   | HA versions recorded per run                                            | re-run per HA release, dated rows in this table                                      | -      | pending |
+Run A only (desktop Chromium, panel via ingress, add-on 0.1.0-2, HA default dark theme). Runs B to H were not done;
+every item without evidence is `not-applicable` with a follow-up. Details: the dated log `spikes/ha-iframe-theme.md` in
+the phase 26 planning directory.
+
+| ID  | Check                                | How the demo page observes it                                           | Pass criterion                                                                       | Result                                                                                                                                                                      | Status         |
+| --- | ------------------------------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| S1  | Parent access                        | parent document read result and error name, `window.parent` comparison  | readable in the panel, reported as not embedded in a direct tab                      | Panel, parent readable (`readable_same`); direct-tab case belongs to S12                                                                                                    | verified       |
+| S2  | Variable read                        | table of all whitelist variables with raw value and parse result        | present and parseable in light, dark, a custom theme and a new primary colour        | HA default dark only: 4 of 5 variables parsed, `bd` null (divider not read), surface and accent skipped by the contrast guard; light, custom and new primary colour not run | verified       |
+| S3  | Change detection                     | counters for observer fires and poll differences while switching themes | token change within 1 second without reload, no loops                                | Not run: no theme switch during the run (observer 0, poll 76, apply 1), change detection unchecked. Follow-up: rerun with live theme switch                                 | not-applicable |
+| S4  | Bridge                               | log of every properties message, resize across 870 pixels, rotation     | `narrow` flips at 870 pixels, insets set on notch devices, fallback works on silence | Limited: bridge answered, `narrow` false, insets present; flip at 870 px and rotation not run                                                                               | verified       |
+| S5  | Double top bar                       | frame top measurement in docked, hidden-sidebar, narrow and kiosk modes | no double bar after the policy, menu button opens the drawer, HA restores on leaving | Docked sidebar only: host bar false, kiosk false; hidden sidebar, narrow and kiosk policies not run                                                                         | verified       |
+| S6  | `handleSafeArea`                     | toggle re-subscribes with the option, insets displayed                  | confirms the safe-area handling on iOS and Android, default stays off                | Default off (`safe_area_off`); toggle on iOS and Android not run                                                                                                            | verified       |
+| S7  | `navigate`                           | button posts a navigate message to the config page                      | HA navigates                                                                         | Not run (`not_run`). Follow-up: press the navigate button in a panel run                                                                                                    | not-applicable |
+| S8  | Clipboard                            | `CopyField` over HTTP and HTTPS, in panel and card                      | copy works or the fallback message appears                                           | Not run (`not_run`). Follow-up: copy over HTTP and HTTPS, in panel and card                                                                                                 | not-applicable |
+| S9  | CSP                                  | CSP header enabled, violation counter                                   | zero violations during gallery, CRUD and theme sync                                  | `violations_0` in the panel run, but presence of the CSP header was not confirmed, so this is weak evidence. Follow-up: check the response header in the network tab        | verified       |
+| S10 | Storage                              | language survives a reload, behaviour with storage blocked              | no exception, the default language works                                             | Not run (`not_run`). Follow-up: reload test and run with storage blocked                                                                                                    | not-applicable |
+| S11 | Admin and non-admin                  | `api/whoami` groups, open as non-admin with `panel_admin: false`        | panel visible and functional for non-admins                                          | Admin only: `identity_yes`, group `system-admin`; non-admin user not run                                                                                                    | verified       |
+| S12 | Direct access                        | published port and ingress URL in a plain tab                           | port answers 403 `ingress_only`, ingress tab shows the own theme                     | Not run: only the ingress path inside the panel, no direct tab, no published port. Follow-up: plain-tab run                                                                 | not-applicable |
+| S13 | Dashboard webpage card               | card pointing at the ingress URL                                        | record whether it is blocked and whether theme sync works                            | Not run: result block came from the panel, not from a dashboard card. Follow-up: webpage card run                                                                           | not-applicable |
+| S14 | Language and theme switch while open | live switch                                                             | re-render without reload                                                             | Not run: `de_dark` is only the state, no live switch. Follow-up: switch language and theme with the page open                                                               | not-applicable |
+| S15 | After an HA update                   | HA versions recorded per run                                            | re-run per HA release, dated rows in this table                                      | Limited: HA core 2026.10.4 recorded, frontend version missing; no run after an HA update yet                                                                                | verified       |
 
 A run is recorded from the copy-as-JSON result block of the demo page. Record the HA core and frontend version, the
 browser or companion app and the access path (panel, card, direct tab). Set the status to `verified`, `failed` or
@@ -289,3 +300,16 @@ which is noted as follow-up only.
 - Add `haos-monitor` to `internal/base-image-config.yaml`.
 - Icon and logo images for the add-on.
 - Re-run the live spike for every HA release.
+- Live spike follow-ups (only run A was done): S3 theme-change detection with a live theme switch; S4 and S5 narrow flip
+  at 870 px, rotation, hidden sidebar and the three kiosk policies; S6 toggle on iOS and Android; S7 navigate; S8
+  clipboard; S10 storage; S12 direct tab; S13 dashboard card; S14 live language and theme switch; non-admin run for S11;
+  record the frontend version (the result block field `ha.frontend` showed the add-on version, do not use it).
+- `bd` is null: find which parent variable and raw value the divider read returns and whether the whitelist
+  (`--divider-color`) needs a correction.
+- Check the CSP response header in the browser network tab before S9 counts as reliable evidence (R-11).
+- R-07 stays `review`, no fix in phase 26. (1) `interpolate()` in `lib/i18n.mjs` inserts parameters with
+  `String(params[name])`, so numeric parameters (`count`, `n`, `done`, `total`) are unformatted; fix: format
+  `typeof number` through `formatNumber`, leave strings unchanged, with a test. (2) Add a scanner rule in
+  `internal/check-admin-ui-rules.py` for `toLocale*`, `toFixed` and `Intl.*` outside `lib/format.mjs`; allow list:
+  `lib/color.mjs` (CSS alpha), the result block in `spike.mjs` (`generatedAt` and counters are machine readable) and
+  `Intl.PluralRules` in `lib/i18n.mjs`. After that R-07 could become `enforced`.

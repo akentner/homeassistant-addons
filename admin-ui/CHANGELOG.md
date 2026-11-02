@@ -6,6 +6,11 @@ manually with `make update-version`.
 
 ## [0.1.0-2] - 2026-11-02
 
+### Verified
+
+- Live spike run A on a real Home Assistant (desktop panel, HA default dark theme): recorded in `DOCS.md`. Items without
+  evidence are `not-applicable` with follow-ups; R-11 and R-13 stay `unverified`
+
 ### Fixed
 
 - Mobile: the page no longer scrolls sideways. The topbar stays one compact row, the title shrinks with an ellipsis, and

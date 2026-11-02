@@ -211,8 +211,8 @@ def test_docs_mentions_make_targets_and_changelog_topics() -> None:
         assert fragment in changelog, fragment
 
 
-def test_docs_spike_items_stay_pending_until_recorded() -> None:
+def test_docs_spike_items_are_recorded() -> None:
     rows = _rows(r"^\| S\d")
-    pending = [r[0] for r in rows if r[5] == "pending"]
-    assert pending == [r[0] for r in rows], "spike results are recorded only by plan 26-13"
-    assert "not yet run" in _text()
+    assert [r[0] for r in rows if r[5] == "pending"] == [], "every spike item needs a recorded status"
+    assert "not yet run" not in _text()
+    assert len(re.findall(r"^Verified on: HA core ", _text(), flags=re.MULTILINE)) == 1
