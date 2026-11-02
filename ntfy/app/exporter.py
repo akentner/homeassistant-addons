@@ -10,7 +10,7 @@ import json
 import re
 from typing import Any
 
-from app.contract import SUPPORTED_AUTH_SCHEMA, AuthReader, db_user_to_api, iso_utc
+from app.contract import AuthReader, db_user_to_api, iso_utc
 from app.origins import OriginStore
 
 SCHEMA_VERSION = 1
@@ -72,7 +72,7 @@ def build_export(
     return {
         "schema": SCHEMA_VERSION,
         "generated_at": iso_utc(now),
-        "source": {"addon": "ntfy", "auth_schema": SUPPORTED_AUTH_SCHEMA},
+        "source": {"addon": "ntfy", "auth_schema": db.check_schema()["version"]},
         "server": {"auth_default_access": auth_default_access},
         "users": users,
         "acl": acl,

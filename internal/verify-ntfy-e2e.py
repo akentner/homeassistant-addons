@@ -196,7 +196,7 @@ def s01_startup() -> None:
     status, icon = gui("GET", "/icon")
     check("GUI icon route serves a PNG", status == 200 and isinstance(icon, bytes) and icon.startswith(b"\x89PNG"), str(status))
     status, health = gui("GET", "/api/health")
-    check("health ok with schema 10", status == 200 and health["status"] == "ok" and health["db"]["schema_version"] == 10, str(health)[:200])
+    check("health ok with a supported schema", status == 200 and health["status"] == "ok" and health["db"]["schema_version"] in (10, 11), str(health)[:200])
 
 
 def s02_effective() -> None:
