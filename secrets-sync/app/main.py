@@ -38,7 +38,7 @@ def _start_web(supervisor: Supervisor, cfg: Config) -> threading.Thread | None:
     def run() -> None:
         while True:
             try:
-                serve(supervisor, str(cfg.state_file), cfg.port, ingress_only=True)
+                serve(supervisor, str(cfg.state_file), cfg.port)
             except Exception as exc:  # keep syncing even if the UI dies
                 log.error("web server stopped (%s)", type(exc).__name__)
             time.sleep(5)
