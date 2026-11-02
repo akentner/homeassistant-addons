@@ -324,6 +324,20 @@ Success criteria:
 Plans:
 - [ ] TBD (run /gsd-plan-phase 25 to break down)
 
+### Phase 26: admin-ui blueprint
+
+**Goal:** Meta add-on `admin-ui`: a real HA add-on with a demo GUI that is the blueprint for all admin GUIs in this
+repo, now and later. It fixes design and rules (dark/light, a11y minimum, i18n de/en, test duty, ingress/security
+rules) and ships a reusable lib (tokens + base CSS, API client + ingress helper, Preact/htm components, Python server
+skeleton). Source of the lib is the ntfy GUI (Phase 24); migration paths for `secrets-sync`, `haos-monitor` and `ntfy`
+are part of the discussion. Lib distribution into add-ons (copy + drift check vs. alternatives) is an open decision.
+**Requirements**: TBD
+**Depends on:** Phase 24
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 26 to break down)
+
 ### 📋 v1.4 iac-runner (Phases 16-19) — PLANNING
 
 **Milestone Goal:** Ship a Home Assistant Supervisor add-on (`iac-runner/`) that clones a Git repo (e.g.
