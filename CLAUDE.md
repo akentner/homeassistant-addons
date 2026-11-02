@@ -122,13 +122,15 @@ yq eval --unsafe '.version' phone-logger/config.yaml
 - Shell: shellcheck with SC1091 and SC2034 ignored (`.pre-commit-config.yaml`)
 - Actions: relaxed shellcheck rules for workflows (`.actionlint.yml`)
 
-## Exception: `haos-monitor` (own code)
+## Exception: `haos-monitor` and `admin-ui` (own code)
 
-The "wrapper around upstream" model above does not apply to `haos-monitor/`. It is our own diagnostic tool with no
-upstream project, so it has no `.upstream.yaml` and no auto-update, and its scripts live in the add-on directory. CI
-builds and publishes its image like the others (`image:` key). Still applies: HA base image only, 3-file version sync
-via `make update-version`, and a local `docker build` before committing Dockerfile changes. Version bumps are manual.
-See `haos-monitor/DOCS.md`.
+The "wrapper around upstream" model above does not apply to `haos-monitor/` and `admin-ui/`. They are our own code (a
+diagnostic tool and the admin-GUI blueprint) with no upstream project, so they have no `.upstream.yaml` and no
+auto-update, and their scripts live in the add-on directory. CI builds and publishes their images like the others
+(`image:` key). Still applies: HA base image only, 3-file version sync via `make update-version`, and a local
+`docker build` before committing Dockerfile changes. Version bumps are manual. See `haos-monitor/DOCS.md` and
+`admin-ui/DOCS.md`. The `admin-ui` lib is distributed to add-ons by `make sync-admin-ui`; consumer copies are never
+edited by hand.
 
 <!-- GSD:project-start source:PROJECT.md -->
 

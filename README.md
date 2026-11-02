@@ -202,6 +202,21 @@ users, ACLs and tokens stay in ntfy's `auth.db`; the add-on options only carry a
 - Backups of `auth.db`, guarded reset actions and a versioned state export (schema 1)
 - Bridge network: reachable inside the HA network as `72a005f5-ntfy:8000`, GUI only through ingress
 
+### [Admin UI Blueprint](./admin-ui)
+
+![Supports amd64 Architecture][amd64-shield]
+
+_Blueprint and demo for ingress admin GUIs: shared browser lib, Python server skeleton and the rules behind them._
+
+Our own code, no upstream project. The add-on serves a demo GUI with fake data behind Home Assistant ingress and is the
+source of the lib that other add-ons copy with `make sync-admin-ui`.
+
+**Features:**
+
+- Component gallery, token view in light and dark, German and English switcher, sample CRUD with error states
+- Rules checklist with the test that enforces each rule, plus a live spike page for the HA theme and layout facts
+- Ingress-only: the GUI port is never published
+
 ### [Authentik](./authentik)
 
 ![Supports amd64 Architecture][amd64-shield]
