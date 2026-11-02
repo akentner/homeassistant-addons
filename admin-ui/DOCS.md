@@ -45,8 +45,9 @@ blueprint deliberately extends it (PD-03). The lib fixes the token pairs while e
 
 ## Library reference
 
-The lib is described from its frozen contract. The API reference is reconciled against the real exports by a test in the
-documentation plan (26-12), so treat a mismatch between this page and the code as a bug in this page.
+The tables below list exactly what the modules export. `admin-ui/tests/js/lib_contract.test.mjs` compares the real
+exports of every lib module with this list and `tests/test_docs.py` checks that every name appears on this page, so a
+mismatch between this page and the code is a bug and turns a test red.
 
 ### Python skeleton
 
@@ -91,6 +92,11 @@ All modules live in `admin-ui/app/web/static/lib/`, one self-contained directory
 | `ui.mjs`                           | the Preact exports, `toast`, `Toasts`, `Modal`, `ConfirmDialog`, `confirmMatches`, `Badge`, `ErrorNote`, `Loading`, `CopyField`, `Tabs`, `DataTable`, `Field`, `useAsync`, `usePoll` |
 | `shell.mjs`                        | `Topbar`, `LangSwitch`, `TabNav`, `ErrorBoundary`, `parseHash`, `useHashRoute`                                                                                                       |
 
+The formatters take the language as second argument. `formatDateTime(ms, lang, opts)` merges an optional `opts` object
+(for example `timeZone`) into the `Intl.DateTimeFormat` options and `formatRelative(ms, lang, nowMs)` takes an optional
+reference time. The bridge state exposes `kioskFrozen` (see the freeze guard below) and the status values `idle`,
+`waiting`, `ok` and `no_answer`; the theme sync reports the reasons `ok`, `not_embedded` and `parent_inaccessible`.
+
 `base.css` provides the tokens
 `--bg --fg --card --bd --mut --ok --warn --err --acc --chip --hover --shadow --on-acc --on-err`. Light is the default on
 `:root`, dark follows `prefers-color-scheme` unless `data-theme="light"` is set, and `data-theme="dark"` or `"light"`
@@ -130,6 +136,9 @@ version deliberately: sync, then bump its own version.
 - `admin-ui/lib.lock` holds the version and the hashes of `lib/` and `skeleton/`.
 - `make sync-admin-ui` refreshes the lock, `make sync-admin-ui ADDON=<name>` creates or updates one consumer.
 - `make check-admin-ui-sync` runs the drift check for the pre-commit hook and CI.
+- `make check-admin-ui-rules` runs the static rules scanner and `make test-admin-ui` the node and pytest suites. Both
+  checks are members of `make check-all` and run as path-scoped pre-commit hooks, so the same commands run locally, in
+  pre-commit and in CI.
 
 | Situation of a consumer copy                    | Check result             |
 | ----------------------------------------------- | ------------------------ |

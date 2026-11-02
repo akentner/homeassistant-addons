@@ -15,6 +15,10 @@ manually with `make update-version`.
 - Blueprint documentation: rules R-01 to R-15 with their enforcing tests, library reference, consumer recipe, HA
   integration facts and the spike result table, guarded by a structure test
 - Sync tooling with drift check and the rules scanner for consumer add-ons, wired into the Makefile and the CI job
+- `admin-ui/lib.lock`, the pre-commit hooks `check-admin-ui-sync` and `check-admin-ui-rules`, and their membership in
+  `make check-all`, so lib drift and rule violations turn red locally, in pre-commit and in the CI job
+- Export contract test of every lib module and a docs test that every export, lib file and make target is documented
+- Extended Docker smoke script covering the whole demo, the API error codes and the response headers
 - Registration in the root README, the repository rules and the base-image tracking file
 
 Release links are added after the first tag exists.

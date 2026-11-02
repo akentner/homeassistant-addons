@@ -136,3 +136,83 @@ def test_docs_addon_readme_and_changelog() -> None:
     assert "DOCS.md" in readme
     changelog = (ADDON / "CHANGELOG.md").read_text(encoding="utf-8")
     assert "## [0.1.0-0]" in changelog
+
+
+# ---- API / docs drift (plan 26-12): the documented API equals the real one ----
+
+BROWSER_EXPORTS = {
+    "api.mjs": "ApiClientError buildUrl request get post put patch del",
+    "ingress.mjs": "isEmbedded assertRelative apiHref errorKey",
+    "hooks.mjs": "useAsync usePoll",
+    "format.mjs": "formatDateTime formatRelative formatBytes formatNumber",
+    "i18n.mjs": "LANGS LANG_STORAGE_KEY detectLang getLang setLang useLang useT t tp tError registerStrings",
+    "color.mjs": "parseColor serializeColor relativeLuminance contrastRatio isDarkColor pickOnColor",
+    "theme-sync.mjs": "createThemeSync THEME_WHITELIST",
+    "ha-bridge.mjs": "createHaBridge",
+    "a11y.mjs": "tabbables nextTabTarget useUid",
+    "shell.mjs": "Topbar LangSwitch TabNav ErrorBoundary parseHash useHashRoute",
+    "ui.mjs": "toast Toasts Modal ConfirmDialog confirmMatches Badge ErrorNote Loading CopyField Tabs DataTable Field",
+}
+SKELETON_EXPORTS = (
+    "ApiError ERROR_STATUS register_error_code Request Router Download StaticFiles INGRESS_REMOTE is_ingress "
+    "ingress_user DEFAULT_CSP security_headers MAX_BODY make_handler make_server serve"
+).split()
+
+
+def _library_reference() -> str:
+    return _text().split("\n## Library reference", 1)[1].split("\n## ", 1)[0]
+
+
+def _mentions(section: str, name: str) -> bool:
+    return re.search(rf"(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])", section) is not None
+
+
+def test_docs_library_reference_documents_every_export() -> None:
+    section = _library_reference()
+    missing = [
+        f"{module}:{name}"
+        for module, names in BROWSER_EXPORTS.items()
+        for name in names.split()
+        if not _mentions(section, name)
+    ]
+    missing += [f"skeleton:{name}" for name in SKELETON_EXPORTS if not _mentions(section, name)]
+    assert not missing, f"undocumented exports: {missing}"
+    for name in ("Component", "createContext", "html", "render", "useState", "useEffect"):
+        assert name in section or "Preact exports" in section
+
+
+def test_docs_library_reference_lists_every_lib_file() -> None:
+    section = _library_reference()
+    lib = ADDON / "app" / "web" / "static" / "lib"
+    names = sorted(p.name for p in lib.glob("*.mjs")) + ["base.css", "preact-htm.mjs"]
+    missing = [n for n in names if n not in section and not (n.startswith("strings.") and "strings.de.mjs" in section)]
+    assert not missing, f"lib files missing from the library reference: {missing}"
+
+
+def test_docs_skeleton_public_names_match_the_package() -> None:
+    import ast
+
+    tree = ast.parse((ADDON / "app" / "web" / "skeleton" / "__init__.py").read_text(encoding="utf-8"))
+    declared = next(
+        ast.literal_eval(node.value)
+        for node in tree.body
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "__all__" for t in node.targets)
+    )
+    # MAX_BODY lives in server.py and is documented there; the package re-exports the rest.
+    assert set(declared) == set(SKELETON_EXPORTS) - {"MAX_BODY"}
+
+
+def test_docs_mentions_make_targets_and_changelog_topics() -> None:
+    text = _text()
+    for target in ("sync-admin-ui", "check-admin-ui-sync", "check-admin-ui-rules", "test-admin-ui"):
+        assert f"make {target}" in text, target
+    changelog = (ADDON / "CHANGELOG.md").read_text(encoding="utf-8").lower()
+    for fragment in ("sync tooling", "rules scanner", "ci job", "export contract", "lib.lock"):
+        assert fragment in changelog, fragment
+
+
+def test_docs_spike_items_stay_pending_until_recorded() -> None:
+    rows = _rows(r"^\| S\d")
+    pending = [r[0] for r in rows if r[5] == "pending"]
+    assert pending == [r[0] for r in rows], "spike results are recorded only by plan 26-13"
+    assert "not yet run" in _text()
