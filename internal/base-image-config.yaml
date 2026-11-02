@@ -51,3 +51,9 @@ addons:
     source_repo: "home-assistant/docker-base"
     source_file: "alpine/Dockerfile"
     version_pattern: 'ARG ALPINE_VERSION=(?P<version>\d+\.\d+)'
+
+  ntfy:
+    image: "ghcr.io/home-assistant/amd64-base"
+    source_repo: "home-assistant/docker-base"
+    source_file: "alpine/Dockerfile"
+    version_pattern: 'ARG ALPINE_VERSION=(?P<version>\d+\.\d+)'
