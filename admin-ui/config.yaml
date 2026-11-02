@@ -1,6 +1,6 @@
 name: "Admin UI Blueprint"
 description: "Blueprint add-on: demo admin GUI behind ingress on a shared Preact lib and server skeleton"
-version: "0.1.0-3"
+version: "0.1.0-4"
 slug: "admin_ui"
 init: false
 arch:

@@ -114,14 +114,15 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 }
 .topbar > * { min-width: 0; }
 .topbar h1 { flex: 0 1 auto; margin: 0; overflow: hidden; font-size: 18px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.topbar > .brand-icon, .topbar > .menu-btn, .topbar > .badge { flex: none; }
+.topbar > .brand-icon, .topbar > .menu-btn, .topbar > .info-btn, .topbar > .badge { flex: none; }
 .topbar-extra { display: contents; }
 .brand-icon { border-radius: 6px; }
-.menu-btn {
+.menu-btn, .info-btn {
   display: inline-flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; padding: 0;
   border: 0; border-radius: 6px; background: transparent; color: var(--fg); font: inherit; cursor: pointer;
 }
-.menu-btn:hover { background: var(--hover); }
+.menu-btn:hover, .info-btn:hover { background: var(--hover); }
+.info-btn { text-decoration: none; }
 .topnav { display: flex; flex: 1 1 0; align-items: center; min-width: 40px; }
 .topnav-slot { position: relative; flex: 1 1 0; min-width: 0; overflow: hidden; }
 .topnav-inline { display: flex; gap: 4px; width: max-content; margin: 0 auto; }
@@ -191,7 +192,7 @@ input[type="text"], input[type="password"], input[type="number"], select, textar
   padding: 6px 8px; border: 1px solid var(--bd); border-radius: 6px; background: var(--card); color: var(--fg); font: inherit;
   max-width: 100%;
 }
-:focus-visible, .btn:focus-visible, .tab:focus-visible, .menu-btn:focus-visible, .topnav-link:focus-visible, .topnav-menu-link:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+:focus-visible, .btn:focus-visible, .tab:focus-visible, .menu-btn:focus-visible, .info-btn:focus-visible, .topnav-link:focus-visible, .topnav-menu-link:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
 .form-row { display: flex; flex-direction: column; gap: 4px; margin: 0 0 12px; }
 .form-row label { color: var(--mut); font-size: 12px; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }

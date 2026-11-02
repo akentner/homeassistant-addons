@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.addon_info import SlugResolver
 from app.web import demo_api
 from app.web.skeleton import DEFAULT_CSP, INGRESS_REMOTE, Router, StaticFiles, make_server, serve
 
@@ -45,7 +46,7 @@ def main() -> int:
     static_dir = PACKAGE_DIR / "web" / "static"
     lib_version = (static_dir / "lib" / "VERSION").read_text(encoding="utf-8").strip()
     router = Router()
-    demo_api.register(router, version=cfg.version, lib_version=lib_version)
+    demo_api.register(router, version=cfg.version, lib_version=lib_version, slug=SlugResolver(os.environ).get)
     server = make_server(router, StaticFiles(static_dir), cfg.port, ingress_remote=cfg.ingress_remote, csp=cfg.csp)
     print(f"listening on port {cfg.port}", flush=True)
     serve(server)

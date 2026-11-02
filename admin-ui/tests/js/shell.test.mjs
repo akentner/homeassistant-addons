@@ -24,9 +24,9 @@ async function mount(vnode) {
 }
 
 // Minimal bridge double with the store shape of ha-bridge.mjs
-function fakeBridge(kiosk = false) {
+function fakeBridge(kiosk = false, status = "idle") {
   const listeners = new Set();
-  const state = { kiosk };
+  const state = { kiosk, status };
   return {
     toggles: 0,
     getState: () => state,
@@ -36,6 +36,12 @@ function fakeBridge(kiosk = false) {
     },
     toggleMenu() {
       this.toggles++;
+    },
+    navigated: [],
+    navigateResult: true,
+    navigate(path) {
+      this.navigated.push(path);
+      return this.navigateResult;
     },
     set(value) {
       state.kiosk = value;
@@ -519,4 +525,104 @@ test("Topbar: safe-area insets from the bridge reach the sticky head as CSS vari
   await settle();
   // Preact only writes the changed properties: top 12 -> 20 and left 8.5 -> 0
   assert.deepEqual(Object.fromEntries(props), { "--safe-top": "20px", "--safe-left": "0px" });
+});
+
+// ---- add-on info link ----
+
+const INFO = "/hassio/addon/local_admin_ui/info";
+const infoLinks = (root) => findAll(root, (n) => n.localName === "a" && (n.className || "").split(" ").some((c) => c === "info-btn" || c === "info-link"));
+
+test("info link: anchor to the path with target _top, noopener, localized label and tooltip", async () => {
+  const root = await mount(html`<${Topbar} title="T" infoPath=${INFO} />`);
+  const [a] = infoLinks(root);
+  assert.equal(a.attributes.href, INFO);
+  assert.equal(a.attributes.target, "_top");
+  assert.equal(a.attributes.rel, "noopener");
+  assert.equal(a.attributes["aria-label"], "Add-on info");
+  assert.equal(a.attributes.title, "Add-on info");
+  setLang("de");
+  await settle();
+  assert.equal(infoLinks(root)[0].attributes["aria-label"], "Add-on-Info");
+});
+
+test("info link: absent without a valid path", async () => {
+  for (const bad of [undefined, null, "", "hassio/x", "//evil.example/x", "https://evil.example/x", "/a b", 5]) {
+    const root = await mount(html`<${Topbar} title="T" infoPath=${bad} />`);
+    assert.equal(infoLinks(root).length, 0, String(bad));
+  }
+});
+
+test("info link: an answering bridge gets a navigate message and the default navigation is prevented", async () => {
+  const bridge = fakeBridge(false, "ok");
+  const seen = [];
+  const root = await mount(html`<${Topbar} title="T" bridge=${bridge} infoPath=${INFO} onInfoNavigate=${(v) => seen.push(v)} />`);
+  const ev = infoLinks(root)[0].dispatch("click");
+  assert.deepEqual(bridge.navigated, [INFO]);
+  assert.equal(ev.defaultPrevented, true);
+  assert.deepEqual(seen, ["bridge"]);
+});
+
+test("info link: no bridge, a silent bridge or a failed post keep the plain link and report the fallback", async () => {
+  const seen = [];
+  const silent = fakeBridge(false, "no_answer");
+  const refusing = fakeBridge(false, "ok");
+  refusing.navigateResult = false;
+  const throwing = fakeBridge(false, "ok");
+  throwing.navigate = () => {
+    throw new Error("boom");
+  };
+  for (const bridge of [undefined, silent, refusing, throwing]) {
+    const root = await mount(html`<${Topbar} title="T" bridge=${bridge} infoPath=${INFO} onInfoNavigate=${(v) => seen.push(v)} />`);
+    const ev = infoLinks(root)[0].dispatch("click");
+    assert.equal(ev.defaultPrevented, false);
+  }
+  assert.deepEqual(silent.navigated, []);
+  assert.deepEqual(seen, ["fallback", "fallback", "fallback", "fallback"]);
+});
+
+test("info link: works without any onInfoNavigate callback", async () => {
+  const root = await mount(html`<${Topbar} title="T" infoPath=${INFO} />`);
+  assert.doesNotThrow(() => infoLinks(root)[0].dispatch("click"));
+});
+
+test("info link: in the tab layout it stays in the bar; in the topbar layout it moves into the burger menu when folded", async () => {
+  const tabs = await mount(html`<${Topbar} title="T" nav="tabs" views=${NAV_VIEWS} activeId="users" infoPath=${INFO} />`);
+  assert.equal(byClass(tabs, "info-btn").length, 1);
+
+  globalThis.__ro = stubObserver();
+  try {
+    const root = await mount(html`<${Topbar} title="T" nav="topbar" views=${NAV_VIEWS} activeId="users" infoPath=${INFO} />`);
+    assert.equal(byClass(root, "info-btn").length, 1, "wide: icon in the bar");
+    await squeeze(root, 600, 300);
+    assert.equal(byClass(root, "info-btn").length, 0, "folded: not in the bar");
+    byClass(root, "nav-burger")[0].dispatch("click");
+    await settle();
+    const [entry] = byClass(root, "info-link");
+    assert.equal(entry.attributes.href, INFO);
+    assert.equal(entry.attributes.target, "_top");
+    assert.equal(entry.textContent.trim(), "Add-on info");
+    entry.dispatch("click");
+    await settle();
+    assert.equal(byClass(root, "topnav-menu").length, 0, "the menu closes after the click");
+    await squeeze(root, 600, 900);
+    assert.equal(byClass(root, "info-btn").length, 1, "wide again: icon is back");
+  } finally {
+    globalThis.__ro.restore();
+  }
+});
+
+test("info link entry in the folded menu reaches the bridge too", async () => {
+  const bridge = fakeBridge(false, "ok");
+  globalThis.__ro = stubObserver();
+  try {
+    const root = await mount(html`<${Topbar} title="T" nav="topbar" bridge=${bridge} views=${NAV_VIEWS} activeId="users" infoPath=${INFO} />`);
+    await squeeze(root, 600, 300);
+    byClass(root, "nav-burger")[0].dispatch("click");
+    await settle();
+    const ev = byClass(root, "info-link")[0].dispatch("click");
+    assert.deepEqual(bridge.navigated, [INFO]);
+    assert.equal(ev.defaultPrevented, true);
+  } finally {
+    globalThis.__ro.restore();
+  }
 });

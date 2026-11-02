@@ -308,7 +308,7 @@ const FIXTURE = {
 test("buildResult snapshot: stable shape and allow-listed content", () => {
   const result = buildResult(FIXTURE);
   assert.equal(result.schema, 1);
-  assert.deepEqual(Object.keys(result), ["schema", "generated_at", "ha", "client", "access_path", "embedded", "probes", "sync", "bridge", "csp", "whoami"]);
+  assert.deepEqual(Object.keys(result), ["schema", "generated_at", "ha", "client", "access_path", "embedded", "probes", "sync", "bridge", "csp", "navigate", "whoami"]);
   assert.deepEqual(Object.keys(result.probes), CHECKS.map((c) => c.id));
   assert.deepEqual(result.ha, {
     core: "2026.10.3", core_source: "manual", frontend: "20261001.0", frontend_source: "manual", addon: "", addon_source: "not_recorded",
@@ -468,4 +468,23 @@ test("the only parent read of the hass object lives in spike-versions.mjs and to
   assert.equal((src.match(/\.hass\b/g) || []).length, 1);
   assert.ok(src.includes(".hass.config.version"));
   for (const bad of ["localStorage", "sessionStorage", "cookie", "hass.states", "hass.user", "hass.auth", "callService"]) assert.ok(!src.includes(bad), bad);
+});
+
+test("the result block records which path the info link took last, never more", async () => {
+  assert.deepEqual(buildResult(FIXTURE).navigate, { last_path: "none", count: 0 });
+  assert.deepEqual(buildResult({ ...FIXTURE, infoNav: { last: "bridge", count: 2 } }).navigate, { last_path: "bridge", count: 2 });
+  assert.deepEqual(buildResult({ ...FIXTURE, infoNav: { last: "https://evil", count: "x" } }).navigate, { last_path: "none", count: 0 });
+  const ha = makeHa();
+  const listeners = new Set();
+  let state = { last: "none", count: 0 };
+  ha.infoNav = { getState: () => state, subscribe: (fn) => (listeners.add(fn), () => listeners.delete(fn)) };
+  const { root } = await mount({ ha });
+  assert.deepEqual(resultJson(root).navigate, { last_path: "none", count: 0 });
+  assert.match(panel(root, "S7").textContent, /Info link last used: not used yet \(0\)/);
+  state = { last: "fallback", count: 1 };
+  listeners.forEach((fn) => fn(state));
+  await settle();
+  assert.deepEqual(resultJson(root).navigate, { last_path: "fallback", count: 1 });
+  assert.match(panel(root, "S7").textContent, /fallback \(link to the top window\) \(1\)/);
+  assert.equal(findAll(root, (n) => n.localName === "button" && n.textContent.trim() === "Open HA settings").length, 1); // S7 button stays
 });

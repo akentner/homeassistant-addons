@@ -42,6 +42,7 @@ export default {
   "lang.en": "English",
 
   "nav.label": "Navigation",
+  "nav.info": "Add-on-Info",
   "nav.menu": "Navigationsmenü",
   "nav.menu_current": "Navigationsmenü: {title}",
 };

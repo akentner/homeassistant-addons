@@ -81,7 +81,7 @@ globalThis.fetch = async (url, init = {}) => {
 
 const { html, render } = await import(new URL("lib/ui.mjs", STATIC));
 const { setLang } = await import(new URL("lib/i18n.mjs", STATIC));
-const { App, VIEWS, ThemeChip, readNavMode, writeNavMode } = await import(new URL("app.mjs", STATIC));
+const { App, VIEWS, ThemeChip, readNavMode, writeNavMode, infoPath } = await import(new URL("app.mjs", STATIC));
 setLang("en");
 
 // ---- HA wiring stubs ----
@@ -724,4 +724,25 @@ test("whole demo: open dialogs keep accessible names in both languages", async (
 
 test.after(() => {
   setTimeout(() => process.exit(process.exitCode ?? 0), 300).unref();
+});
+
+test("infoPath builds HA's add-on info path from a valid slug only", () => {
+  assert.equal(infoPath({ addon_slug: "local_admin_ui" }), "/hassio/addon/local_admin_ui/info");
+  assert.equal(infoPath({ addon_slug: "a1b2c3d4_admin_ui" }), "/hassio/addon/a1b2c3d4_admin_ui/info");
+  for (const bad of [undefined, null, {}, { addon_slug: "" }, { addon_slug: "../x" }, { addon_slug: "A B" }, { addon_slug: 5 }]) {
+    assert.equal(infoPath(bad), null, JSON.stringify(bad));
+  }
+});
+
+test("the topbar shows the info link once api/health reports the slug, and records the path on click", async () => {
+  healthPayload = { status: "ok", addon_version: "0.1.0-4", lib_version: "0.3.0", addon_slug: "local_admin_ui" };
+  const { root, ha } = await mountApp();
+  const links = findAll(root, (n) => n.localName === "a" && n.className.split(" ").includes("info-btn"));
+  assert.equal(links.length, 1);
+  assert.equal(links[0].getAttribute("href"), "/hassio/addon/local_admin_ui/info");
+  links[0].dispatch("click");
+  assert.deepEqual(ha.infoNav.getState(), { last: "fallback", count: 1 });
+  healthPayload = { status: "ok", addon_version: "0.1.0-4", lib_version: "0.3.0" };
+  const { root: plain } = await mountApp();
+  assert.equal(findAll(plain, (n) => n.localName === "a" && n.className.split(" ").includes("info-btn")).length, 0);
 });
