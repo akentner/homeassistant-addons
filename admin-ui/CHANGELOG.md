@@ -4,6 +4,15 @@ All notable changes to the **Admin UI Blueprint** add-on are documented in this 
 [Keep a Changelog](https://keepachangelog.com/). This is our own code without an upstream project: the version is bumped
 manually with `make update-version`.
 
+## [0.1.0-1] - 2026-11-02
+
+### Added
+
+- Sticky topbar (with the tab bar) that respects the HA safe-area insets
+- Lib option `nav="topbar" | "tabs"` for `Topbar`: navigation in the bar with a burger-menu fallback, or the tab bar
+- Add-on icon before the name in the topbar (`./icon`, hidden on load error), plus `icon.png` and `logo.png` for the
+  admin-ui add-on; the demo has a navigation style switch (lib 0.2.0)
+
 ## [0.1.0-0] - 2026-11-02
 
 ### Added

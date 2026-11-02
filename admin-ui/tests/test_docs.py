@@ -150,7 +150,7 @@ BROWSER_EXPORTS = {
     "theme-sync.mjs": "createThemeSync THEME_WHITELIST",
     "ha-bridge.mjs": "createHaBridge",
     "a11y.mjs": "tabbables nextTabTarget useUid",
-    "shell.mjs": "Topbar LangSwitch TabNav ErrorBoundary parseHash useHashRoute",
+    "shell.mjs": "Topbar LangSwitch TabNav ErrorBoundary parseHash useHashRoute needsBurger",
     "ui.mjs": "toast Toasts Modal ConfirmDialog confirmMatches Badge ErrorNote Loading CopyField Tabs DataTable Field",
 }
 SKELETON_EXPORTS = (
