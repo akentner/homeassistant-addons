@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Verify the admin-ui/ add-on tracer in a real image: manifest, build, ingress gate by peer address, vendored runtime
-# and clean SIGTERM shutdown.
+# Verify the admin-ui/ add-on in a real image: manifest, build, ingress gate by peer address, the whole demo (page,
+# every view file, API CRUD, error codes, identity echo, response headers), vendored runtime and clean SIGTERM shutdown.
 # Manual invocation: bash internal/verify-admin-ui-scaffold.sh
 # Optional env: ADMIN_UI_VERIFY_PREFIX (container name prefix, default admin-ui-verify).
 # Builds an image and starts containers: never run it in two worktrees at the same time.
@@ -11,6 +11,7 @@ IMAGE_TAG="admin-ui-verify:local"
 PREFIX="${ADMIN_UI_VERIFY_PREFIX:-admin-ui-verify}"
 MAIN="${PREFIX}-main"
 GATE="${PREFIX}-gate"
+APP_MJS="${ADDON_DIR}/app/web/static/app.mjs"
 VENDOR_FILE="${ADDON_DIR}/app/web/static/lib/vendor/preact-htm.mjs"
 LIB_VERSION_FILE="${ADDON_DIR}/app/web/static/lib/VERSION"
 
@@ -72,7 +73,6 @@ echo "✓ no published port, bridge network, boot manual, panel_admin false, no 
 echo "==> Step 2: docker build"
 docker build \
     --build-arg BUILD_FROM="$(yget "${ADDON_DIR}/build.yaml" build_from.amd64)" \
-    --build-arg VERSION="$(yget "${ADDON_DIR}/build.yaml" args.VERSION)" \
     -t "${IMAGE_TAG}" "${ADDON_DIR}"
 echo "✓ image built from ${ADDON_DIR}"
 
@@ -112,6 +112,68 @@ for path in / /static/app.mjs /api/health /nope; do
     expect_gated "${path} without header"
 done
 echo "✓ 403 ingress_only without the X-Ingress-Path header"
+
+echo "==> Step 5b: the whole demo through the ingress header"
+JSON=(-H "Content-Type: application/json")
+# jfield <json> <python expression over d>  -> prints the value; fails the run on a bad document
+jfield() { python3 -I -c 'import json, sys; d = json.loads(sys.argv[1]); print(eval(sys.argv[2]))' "$1" "$2"; }
+
+gui "${MAIN}" / "${INGRESS[@]}"
+grep -q "<div id=\"app\"" <<<"${BODY}" || fail "demo page lacks the app mount point"
+
+# every view named in the demo VIEWS list must be served as javascript, no more and no less
+views="$(python3 -I - "${APP_MJS}" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+block = re.search(r"export const VIEWS = \[(.*?)\];", text, re.S).group(1)
+print(" ".join(re.findall(r'id: "([a-z-]+)"', block)))
+PY
+)"
+[ -n "${views}" ] || fail "no views found in app.mjs"
+for view in ${views}; do
+    ctype="$(docker exec "${MAIN}" curl -s -o /dev/null -w '%{http_code} %{content_type}' "${INGRESS[@]}" \
+        "http://127.0.0.1:8099/static/views/${view}.mjs")"
+    case "${ctype}" in "200 "*javascript*) ;; *) fail "views/${view}.mjs: ${ctype}" ;; esac
+done
+ctype="$(docker exec "${MAIN}" curl -s -o /dev/null -w '%{http_code} %{content_type}' "${INGRESS[@]}" \
+    http://127.0.0.1:8099/static/lib/base.css)"
+case "${ctype}" in "200 text/css"*) ;; *) fail "base.css: ${ctype}" ;; esac
+echo "✓ demo page, base.css and the view files (${views}) served with the right types"
+
+gui "${MAIN}" /api/items "${INGRESS[@]}"
+[ "${STATUS}" = "200" ] || fail "GET api/items: ${STATUS}"
+[ "$(jfield "${BODY}" 'sorted(i["name"] for i in d["items"])')" = "['alpha', 'beta', 'locked']" ] || fail "seed items: ${BODY}"
+
+gui "${MAIN}" /api/items "${INGRESS[@]}" "${JSON[@]}" -X POST -d '{"name":"gamma","note":"smoke"}'
+[ "${STATUS}" = "201" ] || fail "POST api/items: ${STATUS} ${BODY}"
+new_id="$(jfield "${BODY}" 'd["id"]')"
+gui "${MAIN}" /api/items "${INGRESS[@]}" "${JSON[@]}" -X POST -d '{"name":"gamma","note":"again"}'
+{ [ "${STATUS}" = "409" ] && [ "$(jfield "${BODY}" 'd["error"]')" = "conflict" ]; } || fail "duplicate POST: ${STATUS} ${BODY}"
+gui "${MAIN}" "/api/items/${new_id}" "${INGRESS[@]}" -X DELETE
+{ [ "${STATUS}" = "400" ] && [ "$(jfield "${BODY}" 'd["error"]')" = "confirmation_required" ]; } || fail "DELETE without confirm: ${STATUS} ${BODY}"
+gui "${MAIN}" "/api/items/${new_id}?confirm=gamma" "${INGRESS[@]}" -X DELETE
+[ "${STATUS}" = "204" ] || fail "DELETE with confirm: ${STATUS} ${BODY}"
+echo "✓ CRUD: seeded list, create 201, duplicate 409 conflict, delete 400 confirmation_required then 204"
+
+gui "${MAIN}" /api/fail/teapot "${INGRESS[@]}"
+{ [ "${STATUS}" = "418" ] && [ "$(jfield "${BODY}" 'd["error"]')" = "teapot" ]; } || fail "fail/teapot: ${STATUS} ${BODY}"
+gui "${MAIN}" /api/fail/boom "${INGRESS[@]}"
+[ "${STATUS}" = "500" ] || fail "fail/boom status ${STATUS}"
+[ "$(jfield "${BODY}" 'd["error"]')" = "internal_error" ] || fail "fail/boom body: ${BODY}"
+if grep -qi "secret detail\|RuntimeError\|Traceback" <<<"${BODY}"; then fail "fail/boom leaks exception text"; fi
+echo "✓ error codes: 418 teapot, 500 internal_error without exception text"
+
+gui "${MAIN}" /api/whoami "${INGRESS[@]}" -H "X-Remote-User-Name: smoke-user"
+[ "$(jfield "${BODY}" 'd["user"]["name"]')" = "smoke-user" ] || fail "whoami echo: ${BODY}"
+gui "${MAIN}" /api/whoami "${INGRESS[@]}"
+[ "$(jfield "${BODY}" 'd["user"]')" = "None" ] || fail "whoami without identity headers: ${BODY}"
+echo "✓ whoami echoes the identity header and is null without it"
+
+hdrs="$(docker exec "${MAIN}" curl -s -o /dev/null -D - "${INGRESS[@]}" http://127.0.0.1:8099/ | tr -d '\r')"
+grep -qi "^content-security-policy:.*script-src 'self'" <<<"${hdrs}" || fail "index lacks a CSP with script-src 'self'"
+if grep -qi "^x-frame-options:" <<<"${hdrs}"; then fail "index carries X-Frame-Options (HA frames the page)"; fi
+grep -qi "^x-content-type-options: nosniff" <<<"${hdrs}" || fail "index lacks nosniff"
+echo "✓ CSP present with script-src 'self', no X-Frame-Options"
 
 echo "==> Step 6: foreign peer with header (default remote 172.30.32.2)"
 for path in / /static/app.mjs /api/health /static/lib/vendor/preact-htm.mjs /nope; do
