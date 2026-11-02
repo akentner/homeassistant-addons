@@ -24,14 +24,59 @@ const navigate = async (hash) => {
 let calls = [];
 let healthPayload = { status: "ok", addon_version: "0.1.0-0", lib_version: "0.1.0" };
 let healthFails = false;
+const reply = (status, data) => ({ ok: status < 400, status, json: async () => data });
+const failure = (status, code) => reply(status, { error: code, message: `backend text for ${code}` });
+const FAIL_STATUS = {
+  bad_request: 400, confirmation_required: 400, ingress_only: 403, not_found: 404, method_not_allowed: 405,
+  conflict: 409, protected: 409, payload_too_large: 413, internal_error: 500, teapot: 418,
+};
+const seedItems = () => [
+  { id: "1", name: "alpha", note: "First", locked: false, created: 1700000000000 },
+  { id: "2", name: "<b>alice</b>", note: "hostile", locked: false, created: 1710000000000 },
+  { id: "3", name: "locked", note: "protected", locked: true, created: 1720000000000 },
+];
+let items = seedItems();
+let nextId = 10;
+const nameOk = (v) => typeof v === "string" && v.trim().length >= 1 && v.trim().length <= 40;
+const taken = (name, except) => items.some((i) => i.name.toLowerCase() === name.toLowerCase() && i.id !== except);
+
+// In-JS mirror of the Python demo API (status codes and error codes of C3).
 globalThis.fetch = async (url, init = {}) => {
   const method = init.method || "GET";
-  calls.push({ method, url });
-  if (url === "api/health") {
-    if (healthFails) return { ok: false, status: 500, json: async () => ({ error: "internal_error" }) };
-    return { ok: true, status: 200, json: async () => healthPayload };
+  const body = init.body ? JSON.parse(init.body) : undefined;
+  calls.push({ method, url, body });
+  const path = url.split("?")[0];
+  if (path === "api/health") return healthFails ? failure(500, "internal_error") : reply(200, healthPayload);
+  if (method === "GET" && path === "api/items") return reply(200, { items: items.map((i) => ({ ...i })) });
+  if (method === "POST" && path === "api/items") {
+    if (!nameOk(body.name)) return failure(400, "bad_request");
+    if (taken(body.name.trim())) return failure(409, "conflict");
+    const item = { id: String(nextId++), name: body.name.trim(), note: body.note || "", locked: false, created: 1730000000000 };
+    items.push(item);
+    return reply(201, item);
   }
-  return { ok: false, status: 404, json: async () => ({ error: "not_found" }) };
+  const m = /^api\/items\/(\w+)$/.exec(path);
+  if (m) {
+    const item = items.find((i) => i.id === m[1]);
+    if (!item) return failure(404, "not_found");
+    if (item.locked) return failure(409, "protected");
+    if (method === "PUT") {
+      if (!nameOk(body.name)) return failure(400, "bad_request");
+      if (taken(body.name.trim(), item.id)) return failure(409, "conflict");
+      item.name = body.name.trim();
+      item.note = body.note ?? item.note;
+      return reply(200, item);
+    }
+    if (method === "DELETE") {
+      if (!body || body.confirm !== item.name) return failure(400, "confirmation_required");
+      items = items.filter((i) => i !== item);
+      return { ok: true, status: 204 };
+    }
+  }
+  const f = /^api\/fail\/(\w+)$/.exec(path);
+  if (method === "GET" && f) return failure(FAIL_STATUS[f[1]] || 404, FAIL_STATUS[f[1]] ? f[1] : "not_found");
+  if (method === "GET" && path === "api/slow") return reply(200, { ok: true, waited_ms: 600 });
+  return failure(404, "not_found");
 };
 
 const { html, render } = await import(new URL("lib/ui.mjs", STATIC));
@@ -212,6 +257,7 @@ const { Toasts } = await import(new URL("lib/ui.mjs", STATIC));
 async function mountView(id, { params = {}, ha = makeHa(), lang = "en" } = {}) {
   setLang(lang);
   calls = [];
+  items = seedItems();
   const mod = await import(new URL(`views/${id}.mjs`, STATIC));
   const root = doc.createElement("div");
   render(html`<div><${mod.default} params=${params} ha=${ha} /><${Toasts} /></div>`, root);
@@ -399,6 +445,246 @@ test("tokens: the note names the sync status and the view renders in German", as
   const de = await mountView("tokens", { lang: "de" });
   assert.match(de.textContent, /Theme-Sync: aus/);
   assert.ok(findByText(de, "h2", "Hell").length === 1 && findByText(de, "h2", "Dunkel").length === 1);
+  setLang("en");
+});
+
+
+// ---- language ----
+const typeInto = async (node, value) => {
+  node.value = value;
+  node.dispatch("input", { target: node });
+  await settle();
+};
+const inputById = (root, id) => findAll(root, (n) => n.localName === "input" && n.getAttribute("id") === id)[0];
+
+test("language view: parameters, plurals, formatting and localized probe errors", async () => {
+  const root = await mountView("language");
+  const text = () => root.textContent;
+  assert.match(text(), /Hello Alex, you have 3 new messages\./);
+  assert.match(text(), /1 item(?!s)/);
+  await typeInto(inputById(root, "language-count"), "3");
+  assert.match(text(), /3 items/);
+  assert.match(text(), /1\.5 KiB|1,5 KiB/);
+  assert.match(text(), /1,234,567\.89/);
+  assert.match(text(), /Relative time: .*ago/);
+  assert.ok(text().includes("[teapot]"));
+  assert.ok(text().includes("conflicts with the current state"));
+  assert.ok(!text().includes("backend text for"));
+  assert.ok(calls.some((c) => c.url === "api/fail/teapot") && calls.some((c) => c.url === "api/fail/conflict"));
+});
+
+test("language view: switching the language re-renders every text without reload", async () => {
+  const root = await mountView("language");
+  assert.match(root.textContent, /Hello Alex/);
+  setLang("de");
+  await settle();
+  const text = root.textContent;
+  assert.match(text, /Hallo Alex, Sie haben 3 neue Nachrichten\./);
+  assert.match(text, /1 Eintrag/);
+  assert.match(text, /1\.234\.567,89/);
+  assert.match(text, /Die Seitensprache ist Deutsch\./);
+  assert.ok(text.includes("Der Server konnte nicht erreicht werden") || text.includes("Änderung"), "errors localized");
+  assert.ok(!text.includes("Hello Alex"));
+  setLang("en");
+  await settle();
+  assert.match(root.textContent, /Hello Alex/);
+});
+
+// ---- crud ----
+const rowOf = (root, needle) => findAll(root, (n) => n.localName === "tr").find((r) => r.textContent.includes(needle));
+const byLabel = (root, label) => findAll(root, (n) => n.localName === "button" && n.getAttribute("aria-label") === label)[0];
+const dialogIn = (root) => roleOf(root, "dialog")[0];
+const submit = async (root, id) => {
+  findAll(root, (n) => n.localName === "form" && findAll(n, (c) => c.getAttribute("id") === id).length)[0].dispatch("submit");
+  await settle();
+};
+
+test("crud view: loads the list, shows the locked badge and keeps hostile names as text", async () => {
+  const root = await mountView("crud");
+  assert.ok(calls.some((c) => c.method === "GET" && c.url === "api/items"));
+  assert.equal(findAll(root, (n) => n.localName === "tbody")[0].childNodes.length, 3);
+  assert.ok(root.textContent.includes("<b>alice</b>"));
+  assert.equal(findAll(root, (n) => n.localName === "b").length, 0);
+  assert.ok(rowOf(root, "locked").textContent.includes("locked"));
+  assert.equal(auditNames(root).length, 0);
+});
+
+test("crud view: create posts the form, toasts and reloads; the server validation is localized", async () => {
+  const root = await mountView("crud");
+  await typeInto(inputById(root, "crud-name"), "gamma");
+  await typeInto(inputById(root, "crud-note"), "third");
+  await submit(root, "crud-name");
+  const post = calls.find((c) => c.method === "POST" && c.url === "api/items");
+  assert.deepEqual(post.body, { name: "gamma", note: "third" });
+  assert.ok(roleOf(root, "status").some((n) => n.textContent.includes("Item created")));
+  assert.ok(rowOf(root, "gamma"));
+  assert.equal(inputById(root, "crud-name").value, "");
+
+  await typeInto(inputById(root, "crud-name"), "   ");
+  await submit(root, "crud-name");
+  assert.ok(root.textContent.includes("The request was invalid"));
+  assert.ok(!root.textContent.includes("backend text for"));
+
+  await typeInto(inputById(root, "crud-name"), "ALPHA");
+  await submit(root, "crud-name");
+  assert.ok(root.textContent.includes("The change conflicts with the current state"));
+});
+
+test("crud view: edit through the modal sends PUT; the protected item shows the protected error", async () => {
+  const root = await mountView("crud");
+  byLabel(root, "Edit alpha").dispatch("click");
+  await settle();
+  let dlg = dialogIn(root);
+  await typeInto(inputById(dlg, "crud-edit-name"), "alpha2");
+  await submit(dlg, "crud-edit-name");
+  const put = calls.find((c) => c.method === "PUT");
+  assert.equal(put.url, "api/items/1");
+  assert.equal(put.body.name, "alpha2");
+  assert.equal(roleOf(root, "dialog").length, 0);
+  assert.ok(rowOf(root, "alpha2"));
+
+  byLabel(root, "Edit locked").dispatch("click");
+  await settle();
+  dlg = dialogIn(root);
+  await submit(dlg, "crud-edit-name");
+  assert.ok(dlg.textContent.includes("protected and cannot be changed"));
+
+  await click(dlg, "button", "Cancel");
+  byLabel(root, "Edit <b>alice</b>").dispatch("click");
+  await settle();
+  assert.equal(findAll(root, (n) => n.localName === "b").length, 0);
+  assert.ok(dialogIn(root).textContent.includes("Edit <b>alice</b>"));
+});
+
+test("crud view: delete needs the exact item name and sends it as the confirmation", async () => {
+  const root = await mountView("crud");
+  byLabel(root, "Delete alpha").dispatch("click");
+  await settle();
+  const dlg = dialogIn(root);
+  const input = findAll(dlg, (n) => n.localName === "input")[0];
+  const confirmBtn = () => findByText(dlg, "button", "Delete")[0];
+  assert.equal(prop(confirmBtn(), "disabled"), true);
+  await typeInto(input, "alph");
+  assert.equal(prop(confirmBtn(), "disabled"), true);
+  await typeInto(input, "alpha");
+  assert.equal(prop(confirmBtn(), "disabled"), false);
+  confirmBtn().dispatch("click");
+  await settle();
+  const call = calls.find((c) => c.method === "DELETE");
+  assert.equal(call.url, "api/items/1");
+  assert.deepEqual(call.body, { confirm: "alpha" });
+  assert.equal(roleOf(root, "dialog").length, 0);
+  assert.equal(rowOf(root, "alpha"), undefined);
+  assert.ok(roleOf(root, "status").some((n) => n.textContent.includes("Item deleted")));
+});
+
+test("crud view: hostile names stay text in the confirm dialog; the locked item shows protected", async () => {
+  const root = await mountView("crud");
+  byLabel(root, "Delete <b>alice</b>").dispatch("click");
+  await settle();
+  assert.ok(dialogIn(root).textContent.includes('Delete "<b>alice</b>" permanently'));
+  assert.equal(findAll(root, (n) => n.localName === "b").length, 0);
+  await click(dialogIn(root), "button", "Cancel");
+
+  byLabel(root, "Delete locked").dispatch("click");
+  await settle();
+  const dlg = dialogIn(root);
+  await typeInto(findAll(dlg, (n) => n.localName === "input")[0], "locked");
+  findByText(dlg, "button", "Delete")[0].dispatch("click");
+  await settle();
+  assert.ok(dlg.textContent.includes("protected and cannot be changed"));
+  assert.ok(rowOf(root, "locked"));
+});
+
+test("crud view: slow request shows Loading, the error generator covers every stable code", async () => {
+  const root = await mountView("crud");
+  const slowBtn = findByText(root, "button", "Slow request")[0];
+  slowBtn.dispatch("click");
+  await Promise.resolve();
+  await settle(1);
+  await settle();
+  assert.ok(calls.some((c) => c.url.startsWith("api/slow")));
+  assert.ok(roleOf(root, "status").some((n) => n.textContent.includes("slow request finished")));
+
+  const select = findAll(root, (n) => n.localName === "select")[0];
+  const options = findAll(select, (n) => n.localName === "option").map((n) => n.textContent.trim());
+  assert.deepEqual(options, [
+    "bad_request", "confirmation_required", "ingress_only", "not_found", "method_not_allowed",
+    "conflict", "protected", "payload_too_large", "internal_error", "teapot",
+  ]);
+  const expected = { bad_request: "request was invalid", conflict: "conflicts with the current state", teapot: "[teapot]" };
+  for (const [code, fragment] of Object.entries(expected)) {
+    select.value = code;
+    select.dispatch("change", { target: select });
+    await settle();
+    await click(root, "button", "Trigger error");
+    assert.ok(calls.some((c) => c.url === `api/fail/${code}`), code);
+    assert.ok(roleOf(root, "alert").some((n) => n.textContent.includes(fragment)), code);
+  }
+});
+
+// ---- whole-demo sweeps ----
+test("every VIEWS id has a view file with matching meta, a default component and resolvable imports", async () => {
+  assert.deepEqual(VIEWS.map((v) => v.id), ["gallery", "tokens", "language", "crud"]);
+  for (const v of VIEWS) {
+    const file = new URL(`views/${v.id}.mjs`, STATIC);
+    assert.ok(existsSync(file), v.id);
+    const mod = await import(file);
+    assert.equal(mod.meta.id, v.id);
+    assert.equal(mod.meta.titleKey, v.titleKey);
+    assert.equal(typeof mod.default, "function");
+    const src = readFileSync(file, "utf8");
+    for (const m of src.matchAll(/from\s+"(\.[^"]+)"/g)) {
+      assert.ok(existsSync(new URL(m[1], file)), `${v.id}: ${m[1]}`);
+      assert.ok(!m[1].includes("vendor"), `${v.id}: ${m[1]}`);
+    }
+  }
+});
+
+test("whole demo: every view in en and de has no unlabeled control, no unresolved [key] marker and relative URLs only", async () => {
+  const all = [];
+  for (const lang of ["en", "de"]) {
+    for (const v of VIEWS) {
+      setLang(lang);
+      calls = [];
+      items = seedItems();
+      const root = doc.createElement("div");
+      globalThis.location.hash = `#/${v.id}`;
+      render(html`<${App} ha=${makeHa()} />`, root);
+      await settle(12);
+      const where = `${v.id}/${lang}`;
+      assert.deepEqual(auditNames(root).map((x) => x.tag), [], `${where}: unlabeled control`);
+      assert.deepEqual(auditTables(root), [], `${where}: th without scope`);
+      assert.ok(!/\[(?:app|demo|btn|state|errors|lang|nav|copy|dlg)\.[\w.]+\]/.test(root.textContent), `${where}: missing key`);
+      assert.ok(findAll(root, (n) => n.localName === "h2").length > 0, `${where}: view did not load`);
+      all.push(...calls);
+      render(null, root);
+    }
+  }
+  setLang("en");
+  assert.ok(all.length > 0);
+  for (const c of all) assert.ok(!/^(\/|[a-z][a-z0-9+.-]*:)/i.test(c.url), c.url);
+});
+
+test("whole demo: open dialogs keep accessible names in both languages", async () => {
+  for (const lang of ["en", "de"]) {
+    const gallery = await mountView("gallery", { lang });
+    const buttons = findAll(gallery, (n) => n.localName === "button" && n.className.includes("btn"));
+    for (const label of lang === "en" ? ["Open dialog", "Dangerous confirm"] : ["Dialog öffnen", "Gefährliche Bestätigung"]) {
+      const opener = buttons.find((b) => b.textContent.trim() === label);
+      assert.ok(opener, label);
+      opener.dispatch("click");
+      await settle();
+      assert.deepEqual(auditNames(gallery).map((x) => x.tag), [], `gallery/${lang}/${label}`);
+      doc.dispatch("keydown", { key: "Escape" });
+      await settle();
+    }
+    const crud = await mountView("crud", { lang });
+    const edit = findAll(crud, (n) => n.localName === "button" && (n.getAttribute("aria-label") || "").includes("alpha"))[0];
+    edit.dispatch("click");
+    await settle();
+    assert.deepEqual(auditNames(crud).map((x) => x.tag), [], `crud/${lang}`);
+  }
   setLang("en");
 });
 
