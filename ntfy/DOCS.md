@@ -5,7 +5,9 @@ This add-on runs the upstream [ntfy][ntfy] server and an ingress-only admin GUI 
 ## Install and first start
 
 1. Install the add-on, set `base_url` to the public address of your server and `admin_password` to a strong password.
-2. Start the add-on. The admin from `admin_user` and `admin_password` is created a moment after ntfy has started.
+2. Start the add-on. ntfy starts first. The admin from `admin_user` and `admin_password` and the baseline are created by
+   a bootstrap step a few seconds later (the log line `[bootstrap] done` marks the end). Until then the user list can be
+   empty, and ntfy already delivers messages.
 3. Open the **ntfy** panel in the Home Assistant sidebar and manage users, rules and tokens there.
 
 If `admin_password` is empty, no admin is created and the log says so. Set it and restart the add-on.
@@ -56,8 +58,9 @@ old add-on.
 - A baseline entry that names `admin_user` is ignored with a warning.
 - The admin from `admin_user` and `admin_password` is created only when missing. A password changed in the GUI is never
   overwritten, and `baseline_overwrite_passwords` does not affect the admin.
-- Origins (`gui`, `options`, later `iac`) are kept in a sidecar file in `/data`. Entries without a record, for example
-  created with the ntfy CLI, count as `gui`.
+- Origins are kept in the sidecar file `/data/origins.json`. `gui` and `options` are written by this add-on, `iac` is
+  reserved for a later infrastructure-as-code phase and never written yet. Entries without a record, for example created
+  with the ntfy CLI, count as `gui`.
 
 ## Admin GUI guide
 
@@ -80,10 +83,12 @@ old add-on.
 
 ### Backups
 
-- Backups live in `/data/backups` and are named `auth-<UTC timestamp>-<reason>.db`.
-- One backup is made daily at start, and one before user deletion, before role changes that drop rules and before every
-  reset.
-- Rotation keeps the newest `backup_keep` backups. Backups can be downloaded in the GUI.
+- Backups live in `/data/backups` and are named `auth-<UTC timestamp>-<reason>.db`. The reasons are `daily`, `manual`,
+  `user-delete`, `role-change`, `reset-acls`, `clear-cache` and `reset-everything`.
+- One backup is made daily at start (at most one per UTC day), one before user deletion, one before a promotion to admin
+  that drops rules, and one before every reset. `manual` backups are created with the button in the GUI.
+- Rotation runs after each new backup and keeps the newest `backup_keep` backups of all reasons, so many manual backups
+  can push out the daily one. Backups can be downloaded in the GUI.
 - Backups contain password hashes and clear-text tokens. Treat them like the database itself.
 
 ### Reset actions
@@ -94,10 +99,12 @@ backup first.
 | Phrase             | Effect                                                                          |
 | ------------------ | ------------------------------------------------------------------------------- |
 | `reset acls`       | Removes all ACL rules. Baseline rules return at the next start                  |
-| `clear cache`      | Clears the message cache                                                        |
+| `clear cache`      | Deletes the cached messages and attachment files while ntfy keeps running       |
 | `reset everything` | Removes all users and rules, then recreates admin and baseline from the options |
 
-`reset everything` is refused while `admin_password` is empty.
+- `reset acls` leaves users, tokens and passwords untouched. The origin of the removed rules is forgotten.
+- `reset everything` also forgets all origins and tokens. The admin and the baseline users get the passwords from the
+  options again, so passwords changed in the GUI are gone. It is refused while `admin_password` is empty.
 
 ### Tokens
 
@@ -115,7 +122,9 @@ applies. Matching is case-sensitive: `pub*` does not match `PUB1`.
 
 ### Test publish
 
-The test publish creates a two-minute token for `admin_user`, publishes one real message and removes the token.
+The test publish creates a two-minute token for `admin_user`, publishes one real message and removes the token. The
+result is `ok` with the HTTP status of ntfy. A rate limit of ntfy shows as `ok: false` with status 429, and an
+unreachable ntfy as `ok: false` with status 0.
 
 ## Export
 
@@ -157,7 +166,8 @@ Moving `auth.db` by hand stays possible, but is not supported. When the web UI i
 
 ## Troubleshooting
 
-- **Degraded mode**: if the `auth.db` schema version is not 10, the GUI shows a warning and stays read-only. ntfy keeps
+- **Degraded mode**: if the `auth.db` schema version is not 10, the health page shows the status `degraded`, and every
+  request that touches users, rules, tokens, export or resets is refused with the error `db_unsupported`. ntfy keeps
   delivering messages. Check the add-on version against the upstream release notes.
 - **Database locked**: ntfy and the GUI share the database. Writes are serialized and retried. If the problem stays,
   restart the add-on.

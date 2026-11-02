@@ -10,10 +10,13 @@ the add-on (GUI, options, docs) bumps the subpatch (`-N`).
 
 - ntfy server add-on on the bridge network, listening on container port 8000 (`72a005f5-ntfy:8000`)
 - Options pass-through for base URL, web UI, proxy trust, default access, message cache and attachments
-- Ingress-only admin GUI for users, ACLs, tokens and effective rights
-- Baseline users from the options, applied additively; origin markers `gui` and `options`
+- Ingress-only admin GUI: users, ACL rules with a topic x user matrix, tokens, effective-rights lookup, random topic
+  generator, health with test publish, state export and backups
+- Baseline users from the options, applied additively at each start; origin markers `gui` and `options`; optional
+  `baseline_overwrite_passwords`
 - State export (schema 1) as YAML and JSON, without secrets by default
-- Daily and pre-action backups of `auth.db`, and guarded reset actions with typed confirmation
+- Daily and pre-action backups of `auth.db` with rotation, and guarded reset actions with typed confirmation
+- Guardrails for the last admin and the options admin, and a role-change stash that restores rules on demotion
+- Migration guide from the mrschloemps ntfy Server add-on (see DOCS.md)
 
-[Unreleased]: https://github.com/akentner/homeassistant-addons/compare/ntfy/v2.36.0-0...HEAD
-[2.36.0-0]: https://github.com/akentner/homeassistant-addons/tree/ntfy/v2.36.0-0
+Release links are added after the first tag exists.
