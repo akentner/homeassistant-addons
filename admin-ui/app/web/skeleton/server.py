@@ -7,12 +7,16 @@ gets through, all others see 403 ingress_only, so unknown paths leak nothing.
 from __future__ import annotations
 
 import json
+import signal
+import threading
 import traceback
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from types import FrameType
+from typing import Any, Callable
 
 from .errors import ApiError
+from .headers import DEFAULT_CSP, security_headers
 from .ingress import INGRESS_REMOTE, is_ingress
 from .router import Download, Request, Router
 from .static import StaticFiles
@@ -27,7 +31,11 @@ def make_handler(
     *,
     ingress_remote: str = INGRESS_REMOTE,
     server_version: str = "AdminUi",
+    csp: str | None = DEFAULT_CSP,
+    error_mappers: dict[type[Exception], Callable[[Exception], ApiError]] | None = None,
 ) -> type[BaseHTTPRequestHandler]:
+    mappers = dict(error_mappers or {})
+
     class GuiHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -35,13 +43,20 @@ def make_handler(
             return
 
         def _send(
-            self, status: int, body: bytes, ctype: str, cache: str = "no-store", extra: dict[str, str] | None = None
+            self,
+            status: int,
+            body: bytes,
+            ctype: str,
+            cache: str = "no-store",
+            extra: dict[str, str] | None = None,
+            kind: str = "api",
         ) -> None:
             self.send_response(status)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", cache)
-            self.send_header("X-Content-Type-Options", "nosniff")
+            for key, value in security_headers(kind, csp).items():
+                self.send_header(key, value)
             for key, value in (extra or {}).items():
                 self.send_header(key, value)
             if self.close_connection:
@@ -90,7 +105,8 @@ def make_handler(
                 if method == "GET":
                     asset = static.resolve(parts.path)
                     if asset is not None:
-                        self._send(200, asset[0], asset[1], cache="no-cache")
+                        kind = "html" if parts.path == "/" else "static"
+                        self._send(200, asset[0], asset[1], cache="no-cache", kind=kind)
                         return
                 handler, params = router.match(method, parts.path)
                 body = self._read_body() if method in BODY_METHODS else None
@@ -106,7 +122,11 @@ def make_handler(
             except ApiError as exc:
                 self._error(exc)
                 return
-            except Exception:  # noqa: BLE001 - never leak exception text; traceback goes to stdout only
+            except Exception as exc:  # noqa: BLE001 - never leak exception text; traceback goes to stdout only
+                mapped = next((fn(exc) for cls, fn in mappers.items() if isinstance(exc, cls)), None)
+                if mapped is not None:
+                    self._error(mapped)
+                    return
                 print(traceback.format_exc(), flush=True)
                 self._error(ApiError("internal_error", "internal error"))
                 return
@@ -133,7 +153,25 @@ def make_server(
     *,
     ingress_remote: str = INGRESS_REMOTE,
     host: str = "0.0.0.0",
+    csp: str | None = DEFAULT_CSP,
+    error_mappers: dict[type[Exception], Callable[[Exception], ApiError]] | None = None,
 ) -> ThreadingHTTPServer:
-    server = ThreadingHTTPServer((host, port), make_handler(router, static, ingress_remote=ingress_remote))
+    handler = make_handler(router, static, ingress_remote=ingress_remote, csp=csp, error_mappers=error_mappers)
+    server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     return server
+
+
+def serve(server: ThreadingHTTPServer) -> None:
+    """Run until SIGTERM or SIGINT, then close the socket."""
+
+    def stop(_signum: int, _frame: FrameType | None) -> None:
+        # shutdown() blocks until serve_forever returns, so it must not run in the signal handler's thread
+        threading.Thread(target=server.shutdown, daemon=True).start()
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
