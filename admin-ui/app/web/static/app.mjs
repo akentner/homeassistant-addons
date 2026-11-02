@@ -17,6 +17,7 @@ import { registerStrings, useT } from "./lib/i18n.mjs";
 import { get } from "./lib/api.mjs";
 import { createHaBridge } from "./lib/ha-bridge.mjs";
 import { createThemeSync } from "./lib/theme-sync.mjs";
+import { createInfoNav } from "./info-nav.mjs";
 import de from "./strings.de.mjs";
 import en from "./strings.en.mjs";
 
@@ -67,6 +68,12 @@ export function loadView(id) {
     );
   }
   return cache.get(id);
+}
+
+// HA's own info page of this add-on; the slug comes from the server (api/health), unknown means no link.
+export function infoPath(health) {
+  const slug = health && typeof health.addon_slug === "string" ? health.addon_slug : "";
+  return /^[a-z0-9][a-z0-9_]{0,63}$/.test(slug) ? `/hassio/addon/${slug}/info` : null;
 }
 
 // Shows whether the page follows the embedding Home Assistant theme or uses its own.
@@ -126,6 +133,9 @@ export function App({ ha, load = loadView }) {
   const wiring = useRef(null);
   if (!wiring.current) wiring.current = ha || defaultHa();
   const { bridge, sync } = wiring.current;
+  // The info link record travels to the spike view next to bridge and sync.
+  if (!wiring.current.infoNav) wiring.current.infoNav = createInfoNav();
+  const infoNav = wiring.current.infoNav;
 
   const refresh = () =>
     get("health").then(
@@ -156,7 +166,8 @@ export function App({ ha, load = loadView }) {
   }
 
   return html`<div>
-    <${Topbar} title=${tt("app.title")} status=${status} bridge=${bridge} views=${VIEWS} activeId=${route.id} nav=${nav}>
+    <${Topbar} title=${tt("app.title")} status=${status} bridge=${bridge} views=${VIEWS} activeId=${route.id} nav=${nav}
+      infoPath=${infoPath(health)} onInfoNavigate=${(via) => infoNav.record(via)}>
       ${health && html`<span class="muted">${tt("app.version", { version: String(health.addon_version) })}</span>`}
       <${ThemeChip} sync=${sync} />
     <//>

@@ -257,7 +257,7 @@ def test_topbar_stays_one_compact_row_that_can_shrink(blocks: list[tuple[str, st
     assert find_decls(blocks, ".topbar > *")["min-width"] == "0"
     h1 = find_decls(blocks, ".topbar h1")
     assert h1["overflow"] == "hidden" and h1["text-overflow"] == "ellipsis" and h1["white-space"] == "nowrap"
-    assert find_decls(blocks, ".topbar > .brand-icon, .topbar > .menu-btn, .topbar > .badge")["flex"] == "none"
+    assert find_decls(blocks, ".topbar > .brand-icon, .topbar > .menu-btn, .topbar > .info-btn, .topbar > .badge")["flex"] == "none"
 
 
 def test_topbar_extras_fold_on_small_screens(blocks: list[tuple[str, str, str]]) -> None:
@@ -283,7 +283,7 @@ def test_component_sr_only_is_visually_hidden(blocks: list[tuple[str, str, str]]
 
 
 def test_component_menu_button_touch_target(blocks: list[tuple[str, str, str]]) -> None:
-    decls = find_decls(blocks, ".menu-btn")
+    decls = find_decls(blocks, ".menu-btn, .info-btn")
     assert int(decls["min-width"].removesuffix("px")) >= 40
     assert int(decls["min-height"].removesuffix("px")) >= 40
 

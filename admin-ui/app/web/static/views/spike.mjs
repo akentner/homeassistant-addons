@@ -37,6 +37,7 @@ const POLICY_KEYS = { narrow: "demo.spike.policy.narrow", never: "demo.spike.pol
 const STORAGE_KEYS = { ok: "demo.spike.storage.ok", blocked: "demo.spike.storage.blocked" };
 const PATH_KEYS = { ingress: "demo.spike.path.ingress", direct: "demo.spike.path.direct" };
 const MAX_LOG = 20;
+const NAV_PATHS = ["bridge", "fallback"];
 const SOURCES = ["auto", "manual", "not_recorded"];
 const MAX_TEXT = 80;
 const TOKEN_RE = /^[a-z][a-z0-9_]{0,23}$/;
@@ -179,6 +180,7 @@ export function buildResult(i = {}) {
   for (const [key, n] of Object.entries(csp.counts || {})) violations[key] = num(n);
   const versions = i.versions || {};
   const whoami = i.whoami || null;
+  const nav = i.infoNav || {};
   // Plain strings (typed values) count as manual; a field without a value is "not_recorded" (never guessed).
   const source = (key) => {
     const given = versions[`${key}Source`];
@@ -219,6 +221,8 @@ export function buildResult(i = {}) {
       route_present: Boolean(bridge.route),
     },
     csp: { violations },
+    // Which path the info link took last; HA does not confirm navigate, so this is the path, not a success.
+    navigate: { last_path: NAV_PATHS.includes(nav.last) ? nav.last : "none", count: num(nav.count) },
     whoami: {
       identity_present: Boolean(whoami && whoami.identity_present),
       groups: whoami && Array.isArray(whoami.groups) ? whoami.groups.filter((g) => typeof g === "string" && GROUP_RE.test(g)) : [],
@@ -246,6 +250,7 @@ function Panel({ check, children }) {
 }
 
 // Literal keys (R-06).
+const NAV_KEYS = { none: "demo.spike.info_path.none", bridge: "demo.spike.info_path.bridge", fallback: "demo.spike.info_path.fallback" };
 const SOURCE_KEYS = {
   auto: "demo.spike.source.auto",
   manual: "demo.spike.source.manual",
@@ -286,6 +291,14 @@ export default function Spike({ ha = {} }) {
   const [frontend, setFrontend] = useState("");
   const [addon, setAddon] = useState("");
   const [app, setApp] = useState("");
+  const infoNav = ha.infoNav || null;
+  const [infoState, setInfoState] = useState(() => safe(() => infoNav.getState(), { last: "none", count: 0 }));
+  useEffect(() => {
+    setInfoState(safe(() => infoNav.getState(), { last: "none", count: 0 }));
+    if (!infoNav || typeof infoNav.subscribe !== "function") return undefined;
+    const off = infoNav.subscribe((next) => setInfoState(next && typeof next === "object" ? next : { last: "none", count: 0 }));
+    return () => typeof off === "function" && off();
+  }, [infoNav]);
   const [detected, setDetected] = useState({ core: null, addon: null, app: null });
   const [frameTop, setFrameTop] = useState(() => probeFrameTop(win));
   const logRef = useRef([]);
@@ -377,6 +390,7 @@ export default function Spike({ ha = {} }) {
 
   const inputs = {
     generatedAt: new Date().toISOString().slice(0, 10),
+    infoNav: infoState,
     versions: {
       core: vCore.value,
       coreSource: vCore.source,
@@ -498,6 +512,7 @@ export default function Spike({ ha = {} }) {
     <${Panel} check=${byId("S7")}>
       <button class="btn small secondary" type="button" onClick=${runNavigate}>${tt("demo.spike.navigate")}</button>
       <p>${tt("demo.spike.navigate_result")}: ${navigateResult === null ? "-" : yn(navigateResult)}</p>
+      <p>${tt("demo.spike.info_link")}: ${tt(NAV_KEYS[NAV_PATHS.includes(infoState.last) ? infoState.last : "none"])} (${num(infoState.count)})</p>
     <//>
 
     <${Panel} check=${byId("S8")}>
