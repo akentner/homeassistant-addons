@@ -84,3 +84,38 @@ def test_repo_config_validator_accepts_the_manifest() -> None:
         capture_output=True, text=True, timeout=60, check=False, cwd=REPO_ROOT,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def png_size(path: Path) -> tuple[int, int]:
+    data = path.read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    assert data[12:16] == b"IHDR"
+    return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+
+
+def test_store_icon_and_logo_have_the_store_sizes() -> None:
+    assert png_size(ADDON_DIR / "icon.png") == (128, 128)
+    assert png_size(ADDON_DIR / "logo.png") == (250, 100)
+
+
+def test_dockerfile_ships_the_icon_into_the_static_root() -> None:
+    text = (ADDON_DIR / "Dockerfile").read_text(encoding="utf-8")
+    assert "COPY icon.png ./app/web/static/icon.png" in text
+    assert "icon.png" not in (ADDON_DIR / ".dockerignore").read_text(encoding="utf-8")
+
+
+def test_icon_route_serves_the_shipped_icon_as_png() -> None:
+    from app.web.skeleton import StaticFiles
+
+    static = ADDON_DIR / "app" / "web" / "static"
+    # The Dockerfile copies icon.png into the static root; emulate that layout in a temp tree
+    import shutil
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "static"
+        shutil.copytree(static, root)
+        shutil.copy(ADDON_DIR / "icon.png", root / "icon.png")
+        body, ctype = StaticFiles(root).resolve("/icon") or (b"", "")
+    assert ctype == "image/png"
+    assert body == (ADDON_DIR / "icon.png").read_bytes()
