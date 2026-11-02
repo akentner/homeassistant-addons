@@ -95,7 +95,8 @@ All modules live in `admin-ui/app/web/static/lib/`, one self-contained directory
 `Topbar` is sticky (together with the tab bar) and respects the bridge safe-area insets. With `views`, `activeId` and
 `nav="topbar"` the navigation sits in the bar and folds into a burger menu when it does not fit; `nav="tabs"` (default)
 keeps the tab bar. It shows the add-on icon (`./icon`, served from the add-on's `icon.png`) before the name and hides it
-when the image fails to load; `iconSrc={null}` turns it off.
+when the image fails to load; `iconSrc={null}` turns it off. The bar stays one compact row: children passed to `Topbar`
+are hidden below 600 px, so put nothing essential there.
 
 The formatters take the language as second argument. `formatDateTime(ms, lang, opts)` merges an optional `opts` object
 (for example `timeZone`) into the `Intl.DateTimeFormat` options and `formatRelative(ms, lang, nowMs)` takes an optional
