@@ -387,3 +387,14 @@ s) and rejects options with `!secret` keys missing from that cache. After a writ
   Supervisor skips a reload within 60 s of the previous one.
 - Failure: event `supervisor_reload_failed` (warning), cycle status unaffected, no retry.
 - Tests inject `reloader` into `Supervisor`.
+
+## Web UI on the admin-ui library (0.7)
+
+Front end: Preact/htm views (`static/app.mjs`, `views/*.mjs`, `model.mjs`, `parts.mjs`, `strings.{de,en}.mjs`) on the
+vendored lib. Server: `app/web/server.py` builds a skeleton `Router` (`app/web/admin_ui`, copied, never edited). Routes
+`GET api/health` and `GET api/status.json` are registered `public=True` (optional TCP port); the gate treats every other
+method and path, unknown ones included, as ingress only. Controller exceptions are caught in the handlers and answered
+`500 internal_error` without a traceback (provider output may contain secrets), so the skeleton's stdout traceback never
+fires. `serve()` runs `serve_forever()` directly because the skeleton's `serve()` installs signal handlers (main thread
+only) and the web server runs in a thread. R-04 deviation: type-to-confirm only in the browser, no
+`confirmation_required` (contract `POST api/sync?force=1` stays).

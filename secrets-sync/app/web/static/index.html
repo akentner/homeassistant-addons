@@ -5,51 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Secrets Sync</title>
+<link rel="stylesheet" href="static/vendor/admin-ui/base.css">
 <link rel="stylesheet" href="static/app.css">
 </head>
 <body>
-<header class="topbar">
-  <div class="brand">
-    <img id="brand-icon" class="brand-icon" alt="" width="28" height="28" hidden
-         src="./icon">
-    <h1>Secrets Sync</h1>
-  </div>
-  <div class="badges" id="badges"></div>
-  <div class="actions">
-    <span class="updated" id="updated"></span>
-    <button type="button" id="btn-sync">Sync now</button>
-    <button type="button" id="btn-preview" class="secondary">Preview</button>
-    <button type="button" id="btn-refresh" class="secondary">Refresh</button>
-  </div>
-</header>
-<main>
-  <div id="notice" class="notice" hidden></div>
-  <div id="guard"></div>
-  <section class="card" id="preview" hidden></section>
-  <section class="card"><h2>General</h2><div id="general" class="grid"></div></section>
-  <section class="card"><h2>Providers</h2><div class="scroll" id="providers"></div></section>
-  <div class="tabs" role="tablist" aria-label="Details">
-    <button type="button" role="tab" id="tab-keys" data-tab="keys">Keys <span class="count" id="count-keys"></span></button>
-    <button type="button" role="tab" id="tab-synthetic" data-tab="synthetic">Synthetic keys <span class="count" id="count-synthetic"></span></button>
-    <button type="button" role="tab" id="tab-usage" data-tab="usage">Key usage <span class="count" id="count-usage"></span></button>
-    <button type="button" role="tab" id="tab-events" data-tab="events">Events <span class="count" id="count-events"></span></button>
-  </div>
-  <section class="card panel" role="tabpanel" id="panel-keys" aria-labelledby="tab-keys">
-    <input type="search" id="search-keys" placeholder="Search keys" aria-label="Search keys" autocomplete="off">
-    <div id="body-keys"></div>
-  </section>
-  <section class="card panel" role="tabpanel" id="panel-synthetic" aria-labelledby="tab-synthetic" hidden>
-    <div id="body-synthetic"></div>
-  </section>
-  <section class="card panel" role="tabpanel" id="panel-usage" aria-labelledby="tab-usage" hidden>
-    <input type="search" id="search-usage" placeholder="Search keys" aria-label="Search used keys" autocomplete="off">
-    <div id="body-usage"></div>
-  </section>
-  <section class="card panel" role="tabpanel" id="panel-events" aria-labelledby="tab-events" hidden>
-    <div id="body-events" class="scroll"></div>
-  </section>
-  <noscript><p class="notice">This page needs JavaScript.</p></noscript>
-</main>
-<script src="static/app.js"></script>
+<div id="app"></div>
+<noscript><p class="notice">This page needs JavaScript.</p></noscript>
+<script type="module" src="static/app.mjs"></script>
 </body>
 </html>

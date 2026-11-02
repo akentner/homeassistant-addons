@@ -34,9 +34,9 @@ class FakeController:
 
 
 class Srv:
-    def __init__(self, ctrl: Any, state: Path, ingress_only: bool = True) -> None:
+    def __init__(self, ctrl: Any, state: Path) -> None:
         # Remote is 127.0.0.1 in tests, so it plays the role of the Supervisor proxy.
-        self.httpd = make_server(ctrl, state, 0, ingress_only, host="127.0.0.1", ingress_remote="127.0.0.1")
+        self.httpd = make_server(ctrl, state, 0, host="127.0.0.1", ingress_remote="127.0.0.1")
         self.port = self.httpd.server_address[1]
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
 
@@ -168,7 +168,7 @@ def test_post_requires_ingress_remote(ctrl: FakeController, state_file: Path) ->
     s = Srv(ctrl, state_file)
     s.httpd.shutdown()
     s.httpd.server_close()
-    other = make_server(ctrl, state_file, 0, True, host="127.0.0.1")  # default remote 172.30.32.2
+    other = make_server(ctrl, state_file, 0, host="127.0.0.1")  # default remote 172.30.32.2
     threading.Thread(target=other.serve_forever, daemon=True).start()
     try:
         conn = http.client.HTTPConnection("127.0.0.1", other.server_address[1], timeout=5)
@@ -217,20 +217,42 @@ def test_controller_exception_is_not_leaked(state_file: Path) -> None:
 
 
 def test_unknown_routes_and_methods(srv: Srv) -> None:
-    assert srv.req("GET", "/api/nope")[0] == 404
-    assert srv.req("POST", "/api/health", INGRESS)[0] == 404
+    code, body = srv.req("GET", "/api/nope", INGRESS)
+    assert code == 404 and json.loads(body)["error"] == "not_found"
+    code, body = srv.req("POST", "/api/health", INGRESS)
+    assert code == 405 and json.loads(body)["error"] == "method_not_allowed"
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/api/nope"), ("POST", "/api/health"), ("POST", "/api/status.json"), ("GET", "/api/health/"),
+        ("GET", "//api/health"), ("GET", "/api/./health"), ("GET", "/api/%68ealth"), ("GET", "/API/health"),
+        ("GET", "/api/health/../sync"), ("HEAD", "/api/health"), ("OPTIONS", "/api/health"), ("GET", "/"),
+        ("GET", "/icon"), ("GET", "/static/app.mjs"), ("POST", "/api/sync"), ("POST", "/api/preview"),
+    ],
+)
+def test_only_health_and_status_are_public(srv: Srv, ctrl: FakeController, method: str, path: str) -> None:
+    """Without ingress (the optional TCP port) exactly GET api/health and GET api/status.json answer."""
+    assert srv.req(method, path)[0] == 403
+    assert ctrl.calls == []
+
+
+def test_public_routes_answer_without_ingress_and_with_query(srv: Srv) -> None:
+    assert srv.req("GET", "/api/health")[0] == 200
+    assert srv.req("GET", "/api/status.json")[0] == 200
+    assert srv.req("GET", "/api/status.json?x=1")[0] == 200
 
 
 def test_shell_is_static_and_relative(srv: Srv, state_file: Path) -> None:
     code, body = srv.req("GET", "/", INGRESS)
     assert code == 200
-    assert 'href="static/app.css"' in body and 'src="static/app.js"' in body
+    assert 'href="static/vendor/admin-ui/base.css"' in body and 'src="static/app.mjs"' in body
     for needle in ("mqtt_password", "bitwarden", "sync_ok"):
         assert needle not in body  # no state data in the shell
-    assert "http://" not in body.replace("http://www.w3.org/2000/svg", "")
-    assert "https://" not in body
-    assert 'src="./icon"' in body
+    assert "http://" not in body and "https://" not in body
     assert 'href="/' not in body and 'src="/' not in body and "innerHTML" not in body
+    assert "<style" not in body and " style=" not in body and " onclick=" not in body
 
 
 def test_shell_identical_for_any_state(ctrl: FakeController, tmp_path: Path) -> None:
@@ -248,7 +270,7 @@ def test_shell_identical_for_any_state(ctrl: FakeController, tmp_path: Path) -> 
 
 @pytest.mark.parametrize(
     ("path", "ctype"),
-    [("/static/app.css", "text/css"), ("/static/app.js", "text/javascript"), ("/", "text/html")],
+    [("/static/app.css", "text/css"), ("/static/app.mjs", "text/javascript"), ("/", "text/html")],
 )
 def test_assets_served_with_headers(srv: Srv, path: str, ctype: str) -> None:
     conn = http.client.HTTPConnection("127.0.0.1", srv.port, timeout=5)
@@ -262,7 +284,7 @@ def test_assets_served_with_headers(srv: Srv, path: str, ctype: str) -> None:
     assert resp.getheader("X-Content-Type-Options") == "nosniff"
 
 
-@pytest.mark.parametrize("path", ["/static/app.css", "/static/app.js", "/"])
+@pytest.mark.parametrize("path", ["/static/app.css", "/static/app.mjs", "/static/views/keys.mjs", "/"])
 def test_assets_ingress_only(srv: Srv, path: str) -> None:
     assert srv.req("GET", path)[0] == 403
 
@@ -271,8 +293,8 @@ def test_assets_ingress_only(srv: Srv, path: str) -> None:
     "path",
     [
         "/static/", "/static", "/static/index.html", "/static/../app/web/server.py", "/static/%2e%2e/server.py",
-        "/static/..%2fserver.py", "/static/app.js/", "/static/app.js/../server.py", "/index.html", "/app.js",
-        "//etc/passwd", "/static/nope.js", "/%2e%2e/%2e%2e/etc/passwd",
+        "/static/..%2fserver.py", "/static/app.mjs/", "/static/app.mjs/../server.py", "/index.html", "/app.js",
+        "//etc/passwd", "/static/nope.mjs", "/%2e%2e/%2e%2e/etc/passwd",
     ],
 )
 def test_asset_whitelist_and_traversal(srv: Srv, path: str) -> None:
@@ -282,20 +304,19 @@ def test_asset_whitelist_and_traversal(srv: Srv, path: str) -> None:
 
 
 def test_asset_query_string_ignored(srv: Srv) -> None:
-    assert srv.req("GET", "/static/app.js?v=1", INGRESS)[0] == 200
+    assert srv.req("GET", "/static/app.mjs?v=1", INGRESS)[0] == 200
 
 
 def test_assets_use_no_inner_html_or_external_urls() -> None:
     static = Path(__file__).resolve().parents[2] / "app" / "web" / "static"
-    js = (static / "app.js").read_text()
-    assert "innerHTML" not in js and "outerHTML" not in js and "insertAdjacentHTML" not in js
-    assert "document.write" not in js and "eval(" not in js
-    for f in static.iterdir():
-        if f.suffix == ".png":
-            continue
+    files = [f for f in static.rglob("*") if f.is_file() and f.suffix != ".png" and "vendor" not in f.relative_to(static).parts]
+    assert {f.name for f in files} >= {"index.html", "app.mjs", "app.css"}
+    for f in files:
         text = f.read_text()
-        assert "http://" not in text.replace("http://www.w3.org/2000/svg", "") and "https://" not in text
-        assert "@import" not in text and "url(" not in text
+        assert "innerHTML" not in text and "outerHTML" not in text and "insertAdjacentHTML" not in text, f
+        assert "document.write" not in text and "eval(" not in text, f
+        assert "http://" not in text and "https://" not in text, f
+        assert "@import" not in text and "url(" not in text, f
 
 
 def test_obsolete_server_side_rendering_removed() -> None:
