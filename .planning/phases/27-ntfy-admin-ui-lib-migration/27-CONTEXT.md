@@ -52,7 +52,11 @@ model logic, views and styles. Phase 25 (IaC API) is not part of this phase and 
   progressive enhancement; tab bar navigation (old look); rule delete and token revoke use plain danger confirmations
   (user delete and resets stay type-to-confirm); backend messages are not shown (R-14), a 409 reads generically;
   `NTFY_GUI_CSP=off` is a diagnostic env switch only, never an add-on option; the `Server` header changes to `AdminUi`;
-  no `addon_slug` in `api/health`. Open: how the branch build is run in HA for the 27-07 UAT.
+  no `addon_slug` in `api/health`.
+- **D-14:** UAT (decided by the user 2026-11-02): build the add-on locally from the worktree and deploy it as a LOCAL
+  add-on on HA Nextgen (`haos-op3050-1`) by copying it to `/addons/ntfy-uat/` (copy with `image:` removed, slug
+  `ntfy-uat`, version `2.37.0-uatN`), instead of publishing unfinished versions to the registry. The copy is made
+  outside the repo; the repo files are not changed for it. Production add-ons and data are not touched.
 
 ### Claude's Discretion
 Plan split and waves, which skeleton parts fit ntfy's server, test layout, string key naming.
