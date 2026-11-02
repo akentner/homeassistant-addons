@@ -20,3 +20,7 @@
 .swatch-shadow { box-shadow: var(--shadow); }
 .swatch-on-acc { background: var(--on-acc); }
 .swatch-on-err { background: var(--on-err); }
+
+.rules-list { list-style: none; margin: 0; padding: 0; }
+.rule { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--bd); }
+.rule p { margin: 4px 0 0; }

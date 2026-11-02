@@ -27,6 +27,7 @@ export const VIEWS = [
   { id: "tokens", titleKey: "demo.nav.tokens" },
   { id: "language", titleKey: "demo.nav.language" },
   { id: "crud", titleKey: "demo.nav.crud" },
+  { id: "rules", titleKey: "demo.nav.rules" },
 ];
 const IDS = VIEWS.map((v) => v.id);
 const DEFAULT_VIEW = "gallery";

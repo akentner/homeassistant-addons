@@ -625,7 +625,7 @@ test("crud view: slow request shows Loading, the error generator covers every st
 
 // ---- whole-demo sweeps ----
 test("every VIEWS id has a view file with matching meta, a default component and resolvable imports", async () => {
-  assert.deepEqual(VIEWS.map((v) => v.id), ["gallery", "tokens", "language", "crud"]);
+  assert.deepEqual(VIEWS.map((v) => v.id), ["gallery", "tokens", "language", "crud", "rules"]);
   for (const v of VIEWS) {
     const file = new URL(`views/${v.id}.mjs`, STATIC);
     assert.ok(existsSync(file), v.id);
