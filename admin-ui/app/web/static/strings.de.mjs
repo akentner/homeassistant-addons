@@ -7,6 +7,9 @@ export default {
   "demo.nav.tokens": "Tokens",
   "demo.nav.language": "Sprache",
   "demo.nav.crud": "Beispiel-CRUD",
+  "demo.nav.mode.label": "Navigationsstil",
+  "demo.nav.mode.topbar": "Topbar",
+  "demo.nav.mode.tabs": "Tabs",
 
   "demo.health.label": "Add-on-Status",
 

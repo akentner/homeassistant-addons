@@ -282,7 +282,8 @@ def test_hygiene_only_declared_tokens_referenced(css: str, themes: dict[str, dic
     sync = {f"--sync-{n}" for n in SYNCED}
     for m in re.finditer(r"var\((--[a-z-]+)", css):
         name = m.group(1)
-        assert name in declared or name in sync, f"undeclared token {name}"
+        # --safe-* are layout variables set per element from the bridge insets, not theme tokens
+        assert name in declared or name in sync or name.startswith("--safe-"), f"undeclared token {name}"
 
 
 def test_hygiene_file_ends_with_single_newline() -> None:

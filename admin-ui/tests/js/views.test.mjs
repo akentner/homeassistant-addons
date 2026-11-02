@@ -81,7 +81,7 @@ globalThis.fetch = async (url, init = {}) => {
 
 const { html, render } = await import(new URL("lib/ui.mjs", STATIC));
 const { setLang } = await import(new URL("lib/i18n.mjs", STATIC));
-const { App, VIEWS, ThemeChip } = await import(new URL("app.mjs", STATIC));
+const { App, VIEWS, ThemeChip, readNavMode, writeNavMode } = await import(new URL("app.mjs", STATIC));
 setLang("en");
 
 // ---- HA wiring stubs ----
@@ -153,8 +153,9 @@ test("a failing health request renders the error badge", async () => {
 
 test("topbar, navigation, main region and language switch render", async () => {
   const { root } = await mountApp();
-  assert.equal(findAll(root, (n) => n.localName === "header" && n.className === "topbar").length, 1);
-  const links = findAll(root, (n) => n.localName === "a" && n.className.includes("tab"));
+  assert.equal(findAll(root, (n) => n.localName === "header" && n.className.split(" ").includes("topbar")).length, 1);
+  assert.equal(findAll(root, (n) => (n.className || "").split(" ").includes("tabs")).length, 0);
+  const links = findAll(root, (n) => n.localName === "a" && n.className.split(" ").includes("topnav-link"));
   assert.deepEqual(
     links.map((a) => a.getAttribute("href")),
     VIEWS.map((v) => `#/${v.id}`),
@@ -162,6 +163,39 @@ test("topbar, navigation, main region and language switch render", async () => {
   assert.equal(findAll(root, (n) => n.localName === "main").length, 1);
   assert.equal(findAll(root, (n) => n.localName === "select" && n.className === "lang-switch").length, 1);
   assert.equal(auditNames(root).length, 0);
+});
+
+test("navigation style: default topbar, switch to tabs and back, choice persists in namespaced storage", async () => {
+  const store = new Map();
+  globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, v) };
+  try {
+    const { root } = await mountApp();
+    const cls = (c) => findAll(root, (n) => (n.className || "").split(" ").includes(c));
+    assert.equal(cls("topnav").length, 1);
+    const [select] = findAll(root, (n) => n.localName === "select" && n.attributes.id === "nav-mode");
+    assert.deepEqual(findAll(select, (n) => n.localName === "option").map((o) => prop(o, "value")), ["topbar", "tabs"]);
+    select.value = "tabs";
+    select.dispatch("change");
+    await settle();
+    assert.equal(cls("topnav").length, 0);
+    assert.equal(cls("tabs").length, 1);
+    assert.deepEqual([...store], [["admin-ui:demo-nav", "tabs"]]);
+    assert.equal((await mountApp()).root && readNavMode(), "tabs");
+    select.value = "topbar";
+    select.dispatch("change");
+    await settle();
+    assert.equal(cls("topnav").length, 1);
+    assert.equal(store.get("admin-ui:demo-nav"), "topbar");
+  } finally {
+    delete globalThis.localStorage;
+  }
+});
+
+test("navigation style storage: invalid values and throwing storage fall back to topbar", () => {
+  assert.equal(readNavMode({ getItem: () => "bogus" }), "topbar");
+  assert.equal(readNavMode({ getItem: () => { throw new Error("blocked"); } }), "topbar");
+  assert.equal(readNavMode(undefined), "topbar");
+  assert.doesNotThrow(() => writeNavMode("tabs", { setItem: () => { throw new Error("blocked"); } }));
 });
 
 test("the default route is the gallery, an unknown or hostile hash falls back to it", async () => {
