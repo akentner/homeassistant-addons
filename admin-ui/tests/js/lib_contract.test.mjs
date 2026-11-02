@@ -29,7 +29,7 @@ const PREACT = [
 
 const EXPECTED = {
   "api.mjs": ["ApiClientError", "buildUrl", "request", "get", "post", "put", "patch", "del"],
-  "ingress.mjs": ["isEmbedded", "assertRelative", "apiHref", "errorKey"],
+  "ingress.mjs": ["isEmbedded", "assertRelative", "apiHref", "errorKey", "detectEmbedContext", "infoLinkPlan"],
   "hooks.mjs": ["useAsync", "usePoll"],
   "format.mjs": ["formatDateTime", "formatRelative", "formatBytes", "formatNumber"],
   "i18n.mjs": [

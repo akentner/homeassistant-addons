@@ -80,7 +80,7 @@ All modules live in `admin-ui/app/web/static/lib/`, one self-contained directory
 | Module                             | Exports                                                                                                                                                                              |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `api.mjs`                          | `ApiClientError`, `buildUrl`, `request`, `get`, `post`, `put`, `patch`, `del`                                                                                                        |
-| `ingress.mjs`                      | `isEmbedded`, `assertRelative`, `apiHref`, `errorKey`                                                                                                                                |
+| `ingress.mjs`                      | `isEmbedded`, `assertRelative`, `apiHref`, `errorKey`, `detectEmbedContext`, `infoLinkPlan`                                                                                          |
 | `hooks.mjs`                        | `useAsync`, `usePoll`                                                                                                                                                                |
 | `format.mjs`                       | `formatDateTime`, `formatRelative`, `formatBytes`, `formatNumber` (Intl based, epoch milliseconds)                                                                                   |
 | `i18n.mjs`                         | `LANGS`, `LANG_STORAGE_KEY`, `detectLang`, `getLang`, `setLang`, `useLang`, `useT`, `t`, `tp`, `tError`, `registerStrings`                                                           |
@@ -244,13 +244,13 @@ the phase 26 planning directory.
 | S4  | Bridge                               | log of every properties message, resize across 870 pixels, rotation     | `narrow` flips at 870 pixels, insets set on notch devices, fallback works on silence | Limited: bridge answered, `narrow` false, insets present; flip at 870 px and rotation not run                                                                                                                                                                                 | verified       |
 | S5  | Double top bar                       | frame top measurement in docked, hidden-sidebar, narrow and kiosk modes | no double bar after the policy, menu button opens the drawer, HA restores on leaving | Docked sidebar only: host bar false, kiosk false; hidden sidebar, narrow and kiosk policies not run                                                                                                                                                                           | verified       |
 | S6  | `handleSafeArea`                     | toggle re-subscribes with the option, insets displayed                  | confirms the safe-area handling on iOS and Android, default stays off                | Default off (`safe_area_off`); toggle on iOS and Android not run                                                                                                                                                                                                              | verified       |
-| S7  | `navigate`                           | button and topbar info link post a navigate message                     | HA navigates                                                                         | Not run (`not_run`). Follow-up: press the navigate button in a panel run                                                                                                                                                                                                      | not-applicable |
+| S7  | `navigate`                           | button and topbar info link post a navigate message                     | HA navigates                                                                         | Panel: the S7 button navigates (user observation, 2026-11-02). The info link used a retired path and opened the wrong page; fixed to `/config/app/<slug>/info`, re-test open. Dashboard card: message sent, ignored by the host (no answer, no navigation)                    | verified       |
 | S8  | Clipboard                            | `CopyField` over HTTP and HTTPS, in panel and card                      | copy works or the fallback message appears                                           | Not run (`not_run`). Follow-up: copy over HTTP and HTTPS, in panel and card                                                                                                                                                                                                   | not-applicable |
 | S9  | CSP                                  | CSP header enabled, violation counter                                   | zero violations during gallery, CRUD and theme sync                                  | `violations_0` in run A, but the header was not confirmed live in HA and the counter counts only while `#/spike` is open. The image sends it (smoke script), no live look at HA or proxies. Follow-up: check the header in the network tab (see Testing the CSP), then set S9 | not-applicable |
 | S10 | Storage                              | language survives a reload, behaviour with storage blocked              | no exception, the default language works                                             | Not run (`not_run`). Follow-up: reload test and run with storage blocked                                                                                                                                                                                                      | not-applicable |
 | S11 | Admin and non-admin                  | `api/whoami` groups, open as non-admin with `panel_admin: false`        | panel visible and functional for non-admins                                          | Admin only: `identity_yes`, group `system-admin`; non-admin user not run                                                                                                                                                                                                      | verified       |
 | S12 | Direct access                        | published port and ingress URL in a plain tab                           | port answers 403 `ingress_only`, ingress tab shows the own theme                     | Not run: only the ingress path inside the panel, no direct tab, no published port. Follow-up: plain-tab run                                                                                                                                                                   | not-applicable |
-| S13 | Dashboard webpage card               | card pointing at the ingress URL                                        | record whether it is blocked and whether theme sync works                            | Not run: result block came from the panel, not from a dashboard card. Follow-up: webpage card run                                                                                                                                                                             | not-applicable |
+| S13 | Dashboard webpage card               | card pointing at the ingress URL                                        | record whether it is blocked and whether theme sync works                            | Partly: a third-party card (`custom:addon-iframe-card`) loads the page, but the host protocol is not answered and top navigation is blocked by the frame sandbox. Theme sync in the card not checked                                                                          | not-applicable |
 | S14 | Language and theme switch while open | live switch                                                             | re-render without reload                                                             | Not run: `de_dark` is only the state, no live switch. Follow-up: switch language and theme with the page open                                                                                                                                                                 | not-applicable |
 | S15 | After an HA update                   | HA versions recorded per run                                            | re-run per HA release, dated rows in this table                                      | Limited: HA core 2026.10.4 recorded, frontend version missing; no run after an HA update yet                                                                                                                                                                                  | verified       |
 
@@ -261,14 +261,36 @@ or app, the access path and pass or fail. It must never contain tokens, real hos
 
 ### Testing navigate live with the info link (S7)
 
-The topbar shows an info icon (ⓘ) that opens this add-on's page in Home Assistant (`/hassio/addon/<slug>/info`). The
-slug comes from the Supervisor (`GET http://supervisor/addons/self/info`, allowed for every add-on) and reaches the page
-as `addon_slug` in `api/health`. Without a token or answer (direct run) the key is missing and the link is hidden. A
-click sends a `home-assistant/navigate` message when the bridge answers. Otherwise a plain link with `target="_top"`
-takes over, so the link never depends on the bridge. HA does not confirm `navigate`. Expected result: HA opens the
-add-on info page without a full reload; you observe that yourself. The result block records the last path as
-`navigate.last_path` (`bridge`, `fallback` or `none`) and `navigate.count`. On narrow layouts with the burger menu the
-link is an entry of that menu. The existing S7 button stays.
+The topbar shows an info icon (ⓘ) that opens this add-on's page in Home Assistant (`/config/app/<slug>/info`). Since HA
+2026.2 add-ons are called apps and the frontend route is `/config/app/<slug>/...` (tabs info, documentation, config,
+logs); the old `/hassio/addon/<slug>/info` is not a route of the current frontend, and older HA versions are not
+supported by this link. The slug comes from the Supervisor (`GET http://supervisor/addons/self/info`, allowed for every
+add-on) and reaches the page as `addon_slug` in `api/health`. Without a token or answer (direct run) the key is missing
+and the link is hidden. How the link works depends on the embedding (see below). In the app panel a click sends a
+`home-assistant/navigate` message, with the plain link as fallback. HA never confirms `navigate`, so the page can only
+say "sent, not confirmed by the host". Expected result: HA opens the add-on page without a full reload; you observe that
+yourself. The result block records the last path as `navigate.last_path` (`bridge`, `fallback` or `new_tab`, else
+`none`) and `navigate.count`. On narrow layouts with the burger menu the link is an entry of that menu. The existing S7
+button stays.
+
+### Embedding contexts
+
+`detectEmbedContext` and `infoLinkPlan` (lib `ingress.mjs`) read how the page is embedded and the info link follows:
+
+| Context | Detected by                                           | Info link                                                                    |
+| ------- | ----------------------------------------------------- | ---------------------------------------------------------------------------- |
+| panel   | the HA bridge answers (`properties` message)          | navigate message; plain link to the top window as fallback                   |
+| card    | framed, `sandbox` attribute on the frame, host silent | top window if the sandbox allows it, a new tab if only `allow-popups` is set |
+| tab     | no parent frame                                       | plain link in the same window                                                |
+| unknown | framed, host silent, frame not readable               | link to the top window                                                       |
+
+The frame is only readable when the parent is same-origin, and a sandbox sent as a header cannot be seen. A sandbox
+without `allow-top-navigation` or `allow-top-navigation-by-user-activation` blocks a top-window link: the browser then
+logs an error and nothing happens. So the link opens a new tab when `allow-popups` is set and is hidden otherwise. The
+spike view shows the context (`embed.kind`, the relevant sandbox tokens, `embed.top_navigation`) in the result block.
+Observed on 2026-11-02 (HA core 2026.10.4, Chromium): the panel answers the bridge and the S7 button navigates; a
+third-party dashboard card (`custom:addon-iframe-card`) loads the page but ignores the navigate protocol (only the app
+panel of HA implements it) and its sandbox blocks top navigation.
 
 ### Testing the CSP in a live Home Assistant (S9)
 

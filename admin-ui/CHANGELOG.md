@@ -4,6 +4,20 @@ All notable changes to the **Admin UI Blueprint** add-on are documented in this 
 [Keep a Changelog](https://keepachangelog.com/). This is our own code without an upstream project: the version is bumped
 manually with `make update-version`.
 
+## [0.1.0-5] - 2026-11-02
+
+### Fixed
+
+- The info link opens the add-on page at `/config/app/<slug>/info` (the old `/hassio/addon/...` route is gone since
+  add-ons became apps)
+- No more blocked top navigation inside sandboxed frames such as a dashboard card: the link opens a new tab when the
+  sandbox allows popups and is hidden otherwise (lib 0.4.0: `detectEmbedContext`, `infoLinkPlan`)
+
+### Changed
+
+- Spike view: S7 says "sent, not confirmed by the host" and shows the embedding context; the result block has `embed`
+  and the info link path `new_tab`
+
 ## [0.1.0-4] - 2026-11-02
 
 ### Added

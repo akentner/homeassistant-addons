@@ -70,10 +70,12 @@ export function loadView(id) {
   return cache.get(id);
 }
 
-// HA's own info page of this add-on; the slug comes from the server (api/health), unknown means no link.
+// HA's info page of this add-on; the slug comes from the server (api/health), unknown means no link. Since HA 2026.2
+// ("add-ons are now apps") the frontend route is /config/app/<slug>/info; the old /hassio/addon/<slug>/info has no route
+// any more and older HA versions are not supported by this link.
 export function infoPath(health) {
   const slug = health && typeof health.addon_slug === "string" ? health.addon_slug : "";
-  return /^[a-z0-9][a-z0-9_]{0,63}$/.test(slug) ? `/hassio/addon/${slug}/info` : null;
+  return /^[a-z0-9][a-z0-9_]{0,63}$/.test(slug) ? `/config/app/${slug}/info` : null;
 }
 
 // Shows whether the page follows the embedding Home Assistant theme or uses its own.

@@ -183,10 +183,10 @@ test("S6 toggles handleSafeArea through configure", async () => {
 
 test("S7 calls navigate('/config') exactly once per click and shows the returned boolean", async () => {
   const { root, ha } = await mount();
-  assert.match(panel(root, "S7").textContent, /Message sent: -/);
+  assert.match(panel(root, "S7").textContent, /Sent, not confirmed by the host: -/);
   await click(root, "Open HA settings");
   assert.deepEqual(ha.calls.navigate, ["/config"]);
-  assert.match(panel(root, "S7").textContent, /Message sent: yes/);
+  assert.match(panel(root, "S7").textContent, /Sent, not confirmed by the host: yes/);
   assert.equal(resultJson(root).probes.S7.ok, true);
 });
 
@@ -308,7 +308,7 @@ const FIXTURE = {
 test("buildResult snapshot: stable shape and allow-listed content", () => {
   const result = buildResult(FIXTURE);
   assert.equal(result.schema, 1);
-  assert.deepEqual(Object.keys(result), ["schema", "generated_at", "ha", "client", "access_path", "embedded", "probes", "sync", "bridge", "csp", "navigate", "whoami"]);
+  assert.deepEqual(Object.keys(result), ["schema", "generated_at", "ha", "client", "access_path", "embedded", "probes", "sync", "bridge", "csp", "embed", "navigate", "whoami"]);
   assert.deepEqual(Object.keys(result.probes), CHECKS.map((c) => c.id));
   assert.deepEqual(result.ha, {
     core: "2026.10.3", core_source: "manual", frontend: "20261001.0", frontend_source: "manual", addon: "", addon_source: "not_recorded",
@@ -487,4 +487,49 @@ test("the result block records which path the info link took last, never more", 
   assert.deepEqual(resultJson(root).navigate, { last_path: "fallback", count: 1 });
   assert.match(panel(root, "S7").textContent, /fallback \(link to the top window\) \(1\)/);
   assert.equal(findAll(root, (n) => n.localName === "button" && n.textContent.trim() === "Open HA settings").length, 1); // S7 button stays
+});
+
+// ---- embedding context (S7, S13) ----
+
+const frameWith = (sandbox) => ({ getBoundingClientRect: () => ({ top: 40 }), getAttribute: (n) => (n === "sandbox" ? sandbox : null) });
+const embedWindow = (frame) => {
+  const win = embeddedWindow();
+  win.frameElement = frame;
+  return win;
+};
+const silentHa = () => makeHa({ bridge: { status: "no_answer" } });
+
+test("result block and S7 panel report the embedding: panel, sandboxed card without top navigation, plain frame, tab", async () => {
+  let { root } = await mount({ win: embeddedWindow() });
+  assert.deepEqual(resultJson(root).embed, { kind: "panel", sandbox: null, top_navigation: "allowed" });
+
+  ({ root } = await mount({ ha: silentHa(), win: embedWindow(frameWith("allow-scripts allow-same-origin allow-popups")) }));
+  assert.deepEqual(resultJson(root).embed, { kind: "card", sandbox: ["popups"], top_navigation: "blocked" });
+  const text = panel(root, "S7").textContent;
+  assert.match(text, /Embedding context: sandboxed frame, e\.g\. a dashboard card/);
+  assert.match(text, /Navigation of the top window: blocked by the sandbox/);
+  assert.match(text, /Frame sandbox tokens \(navigation relevant\): popups/);
+
+  ({ root } = await mount({ ha: silentHa(), win: embedWindow(frameWith("allow-scripts allow-top-navigation-by-user-activation")) }));
+  assert.deepEqual(resultJson(root).embed, { kind: "card", sandbox: ["top_user"], top_navigation: "allowed" });
+
+  ({ root } = await mount({ ha: silentHa(), win: embedWindow(null) }));
+  assert.deepEqual(resultJson(root).embed, { kind: "unknown", sandbox: null, top_navigation: "unknown" });
+
+  ({ root } = await mount({ ha: silentHa(), win: plainWindow() }));
+  assert.deepEqual(resultJson(root).embed, { kind: "tab", sandbox: null, top_navigation: "allowed" });
+});
+
+test("embed block keeps the redaction: long sandbox names never reach the result, only short tokens", () => {
+  const block = buildResult({ ...FIXTURE, embed: { kind: "card", sandbox: ["allow-top-navigation-by-user-activation", "allow-popups", "evil"], topNavigation: "blocked" } });
+  assert.deepEqual(block.embed, { kind: "card", sandbox: ["top_user", "popups"], top_navigation: "blocked" });
+  assert.deepEqual(buildResult({ ...FIXTURE, embed: { kind: "https://evil", topNavigation: 5 } }).embed, { kind: "unknown", sandbox: null, top_navigation: "unknown" });
+  assert.deepEqual(buildResult({ ...FIXTURE, infoNav: { last: "new_tab", count: 1 } }).navigate, { last_path: "new_tab", count: 1 });
+});
+
+test("S7 wording is honest in de and en and the new texts resolve", async () => {
+  const { root } = await mount({ lang: "de" });
+  assert.match(panel(root, "S7").textContent, /Gesendet, vom Host nicht bestätigt/);
+  assert.ok(!/\[demo\./.test(panel(root, "S7").textContent));
+  setLang("en");
 });

@@ -142,7 +142,7 @@ def test_docs_addon_readme_and_changelog() -> None:
 
 BROWSER_EXPORTS = {
     "api.mjs": "ApiClientError buildUrl request get post put patch del",
-    "ingress.mjs": "isEmbedded assertRelative apiHref errorKey",
+    "ingress.mjs": "isEmbedded assertRelative apiHref errorKey detectEmbedContext infoLinkPlan",
     "hooks.mjs": "useAsync usePoll",
     "format.mjs": "formatDateTime formatRelative formatBytes formatNumber",
     "i18n.mjs": "LANGS LANG_STORAGE_KEY detectLang getLang setLang useLang useT t tp tError registerStrings",
