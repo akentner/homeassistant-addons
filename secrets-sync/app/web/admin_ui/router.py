@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import urllib.parse
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -26,6 +27,9 @@ class Request:
     query: dict[str, list[str]] = field(default_factory=dict)
     headers: Any = field(default_factory=dict)
     json: Any = None
+    # True for a request that did not come through ingress (only possible on routes registered with public=True).
+    # Such a request carries no ingress identity: never trust identity headers there.
+    public: bool = False
 
     def arg(self, name: str) -> str | None:
         """First query value or None."""
@@ -44,12 +48,41 @@ class Request:
 Handler = Callable[[Request], Any]
 
 
+# A public route is a literal path: segments of plain characters only, no `{param}`, no dot segments, no trailing slash.
+PUBLIC_PATH_RE = re.compile(r"^(?:/[A-Za-z0-9_-][A-Za-z0-9_.-]*)+$")
+# Served by the static handler or reserved for it: never public.
+NEVER_PUBLIC = ("/icon", "/static")
+
+
 class Router:
     def __init__(self) -> None:
         self._routes: list[tuple[str, str, list[str], Handler]] = []
+        self._public: set[tuple[str, str]] = set()
 
-    def add(self, method: str, pattern: str, handler: Handler) -> None:
-        self._routes.append((method.upper(), pattern, pattern.strip("/").split("/"), handler))
+    def add(self, method: str, pattern: str, handler: Handler, public: bool = False) -> None:
+        """Register a route. `public=True` lets exactly this method and literal path through without ingress (for
+        example a health check on an optionally published port); everything else stays ingress-only."""
+        method = method.upper()
+        if public:
+            segments = pattern.split("/")
+            if (
+                not PUBLIC_PATH_RE.match(pattern)
+                or ".." in segments
+                or "." in segments
+                or pattern == NEVER_PUBLIC[0]
+                or pattern == NEVER_PUBLIC[1]
+                or pattern.startswith(NEVER_PUBLIC[1] + "/")
+            ):
+                raise ValueError(f"public route needs a literal path outside /, /icon and /static: {pattern!r}")
+            self._public.add((method, pattern))
+        self._routes.append((method, pattern, pattern.strip("/").split("/"), handler))
+
+    def is_public(self, method: str, path: str) -> bool:
+        """True only when this exact method AND this exact raw path were registered with public=True.
+
+        No normalisation, no prefix match, no case folding: `/api/health/`, `//api/health`, `/api/./health`,
+        `/api/%68ealth` and `/API/health` are all not public. HEAD and OPTIONS are public only when registered."""
+        return (method, path) in self._public
 
     def routes(self) -> list[tuple[str, str]]:
         return [(method, pattern) for method, pattern, _, _ in self._routes]
