@@ -1,7 +1,7 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions verify-update-version-tag-timing update-version validate-dockerfiles docker-build-check build-addon release install-provider verify-install-provider verify-images verify-images-self-test
+.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions verify-update-version-tag-timing update-version validate-dockerfiles docker-build-check build-addon release install-provider verify-install-provider verify-images verify-images-self-test sync-admin-ui check-admin-ui-sync check-admin-ui-rules test-admin-ui
 
 # Default target
 help: ## Show this help message
@@ -106,6 +106,19 @@ validate-addons: ## Validate add-on configurations
 validate-versions: ## Validate add-on versioning consistency
 	@echo "🔍 Validating add-on versions..."
 	./internal/validate-versions.sh
+
+sync-admin-ui: ## Copy the admin-ui lib to consumers (ADDON=<name> for one, default all) and refresh admin-ui/lib.lock
+	python3 internal/sync-admin-ui.py $(if $(ADDON),--addon $(ADDON),--all)
+
+check-admin-ui-sync: ## Check admin-ui lib copies and lock for drift (STRICT=yes: behind consumers fail)
+	python3 internal/sync-admin-ui.py --check $(if $(filter yes,$(STRICT)),--strict,)
+
+check-admin-ui-rules: ## Scan admin-ui front ends against the static blueprint rules
+	python3 internal/check-admin-ui-rules.py
+
+test-admin-ui: ## Run the admin-ui Node and pytest suites
+	node --test admin-ui/tests/js/*.test.mjs
+	uv run --with pytest --with pyyaml python3 -m pytest admin-ui/tests -q
 
 # Unlike verify-images below, this is offline, deterministic, and fails only for
 # something in this repo's own internal/update-version.py -- it builds a
@@ -306,7 +319,7 @@ install-provider: ## Build and install terraform-provider-homeassistant for Open
 verify-install-provider: ## Hermetic E2E check that make install-provider produces a runnable Provider
 	@bash internal/verify-install-provider.sh
 
-check-all: lint validate-addons validate-versions validate-dockerfiles verify-update-version-tag-timing ## Run all checks (lint + validate + versions + dockerfile args + tag-timing)
+check-all: lint validate-addons validate-versions validate-dockerfiles verify-update-version-tag-timing check-admin-ui-sync check-admin-ui-rules ## Run all checks (lint + validate + versions + dockerfile args + tag-timing + admin-ui sync and rules)
 
 test: check-all ## Run all tests and checks
 

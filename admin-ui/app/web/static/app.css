@@ -1,0 +1,27 @@
+/* Demo-only layout on top of lib/base.css. Tokens only, no literal colours. */
+.section h2 { font-size: 16px; margin: 0 0 8px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.panel { background: var(--bg); color: var(--fg); border: 1px solid var(--bd); border-radius: 8px; padding: 16px; }
+.swatches { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.swatches li { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.swatch { display: inline-block; width: 18px; height: 18px; border: 1px solid var(--bd); border-radius: 4px; flex: none; }
+.swatch-bg { background: var(--bg); }
+.swatch-fg { background: var(--fg); }
+.swatch-card { background: var(--card); }
+.swatch-bd { background: var(--bd); }
+.swatch-mut { background: var(--mut); }
+.swatch-ok { background: var(--ok); }
+.swatch-warn { background: var(--warn); }
+.swatch-err { background: var(--err); }
+.swatch-acc { background: var(--acc); }
+.swatch-chip { background: var(--chip); }
+.swatch-hover { background: var(--hover); }
+.swatch-shadow { box-shadow: var(--shadow); }
+.swatch-on-acc { background: var(--on-acc); }
+.swatch-on-err { background: var(--on-err); }
+
+.rules-list { list-style: none; margin: 0; padding: 0; }
+.rule { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--bd); }
+.rule p { margin: 4px 0 0; }
+.spike-result { overflow: auto; max-height: 24em; padding: 8px; border: 1px solid var(--bd); border-radius: 4px; }

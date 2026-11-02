@@ -181,6 +181,62 @@ A handful of real bugs fixed in this repo generalize into rules worth following 
    `make update-version ADDON=<name> VERSION=<explicit-string>`. See `## Versioning Rules` above; this is the same hard
    rule, repeated here only as a pointer, not duplicated.
 
+## Admin UI blueprint and lib sync
+
+The `admin-ui` add-on is the blueprint for admin GUIs behind Home Assistant ingress. Two directories are the single
+source of truth for code that every GUI add-on shares:
+
+- `admin-ui/app/web/static/lib/` — browser lib (JSON client, UI helpers, vendored Preact/htm), version in
+  `admin-ui/app/web/static/lib/VERSION`
+- `admin-ui/app/web/skeleton/` — Python HTTP skeleton (gate, router, static whitelist, security headers)
+
+The Docker build context of an add-on is `./<addon>`, so consumers cannot reference these directories. They receive
+byte-identical copies instead: `<addon>/app/web/static/vendor/admin-ui/` (lib) and `<addon>/app/web/admin_ui/`
+(skeleton). Each copy carries a plain-text `LIB.stamp` (`version X.Y.Z` and `sha256 <tree hash>`), and
+`admin-ui/lib.lock` records the source state. Copies are never hand-edited.
+
+### Workflow
+
+1. Edit only the two source directories. Bump `admin-ui/app/web/static/lib/VERSION` for a change that consumers should
+   pick up.
+2. Run `make sync-admin-ui` (all consumers) or `make sync-admin-ui ADDON=<name>` (one consumer, a deliberate pull). The
+   target refreshes the copies and `admin-ui/lib.lock`.
+3. Bump the consumer's own add-on version with `make update-version`; the sync never touches version files.
+4. Run `make check-admin-ui-sync` and `make check-admin-ui-rules` before committing.
+
+### Drift check
+
+`make check-admin-ui-sync` checks the lock first, then every consumer part (lib copy and skeleton copy) on its own:
+
+| Situation                                             | Result                      |
+| ----------------------------------------------------- | --------------------------- |
+| Source changed without a refreshed `lib.lock`         | FAIL (lock stale)           |
+| Copy differs from its stamp (hand edit)               | FAIL (tampered)             |
+| Same version as the source but a different hash       | FAIL (bump `VERSION`, sync) |
+| Consumer behind the source                            | WARN                        |
+| Consumer behind the source with `make ... STRICT=yes` | FAIL                        |
+| Consumer ahead of the source                          | FAIL                        |
+
+Exit codes: 0 ok (warnings allowed), 1 drift, 2 usage or IO error. Symlinks in either tree and unsafe add-on names are
+refused.
+
+### Rules scanner and make targets
+
+`make check-admin-ui-rules` scans the demo and every consumer for the static rules: relative URLs only, no raw-markup
+APIs or `eval`, no inline script, handler or style in HTML, the vendored bundle pinned by sha256, a self-contained lib,
+app code importing only the lib's public modules and namespaced storage keys. It is a regex scanner, so dynamic
+constructions still need review; `python3 internal/check-admin-ui-rules.py --self-test` proves its detection.
+
+| Target                          | Purpose                                                         |
+| ------------------------------- | --------------------------------------------------------------- |
+| `make sync-admin-ui [ADDON=..]` | copy lib and skeleton to consumers, refresh `lib.lock`          |
+| `make check-admin-ui-sync`      | drift check (`STRICT=yes` makes consumers that are behind fail) |
+| `make check-admin-ui-rules`     | static rules scan                                               |
+| `make test-admin-ui`            | Node and pytest suites of the blueprint                         |
+
+The Docker verify scripts (`internal/verify-admin-ui-*.sh`) build images and start containers: never run the same script
+in two worktrees at once.
+
 ## Pre-commit Validation
 
 A pre-commit hook automatically validates:
