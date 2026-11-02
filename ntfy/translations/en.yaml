@@ -1,0 +1,57 @@
+configuration:
+  base_url:
+    name: Base URL
+    description: Public URL of the ntfy server (for example https://ntfy.example.com). Used for links, attachments and
+      the web app. Behind a reverse proxy this is the proxy address, not the add-on address.
+  enable_web_ui:
+    name: Enable web UI
+    description: Serves the ntfy web app at / and /app when enabled. When disabled the web UI is switched off; the
+      publish and subscribe API keeps working.
+  behind_proxy:
+    name: Behind proxy
+    description: Trust the X-Forwarded-For header of the reverse proxy (Cloudflared, Traefik) for client IPs and rate
+      limits. Disable it when clients reach the add-on directly.
+  auth_default_access:
+    name: Default access
+    description: Access of users and anonymous clients on topics without a matching ACL rule (deny-all, read-only,
+      write-only or read-write). deny-all is the safe default.
+  admin_user:
+    name: Admin user
+    description: Name of the admin account. It is created at start only when it does not exist yet and cannot be
+      deleted or demoted in the GUI.
+  admin_password:
+    name: Admin password
+    description: Password for the admin account. Used only to create the admin when it does not exist; a password
+      changed in the GUI is never overwritten. When empty, no admin is created and a log line says so.
+  baseline_users:
+    name: Baseline users
+    description: Users with an optional ACL on one topic, with the same fields as the users list of the old ntfy Server
+      add-on (username, password, topic, write_access). They are applied additively at every start and never deleted.
+      With a topic the rule is rw (write_access true) or ro; an empty topic creates only the user. The GUI marks them
+      with origin options.
+  baseline_overwrite_passwords:
+    name: Overwrite baseline passwords
+    description: Default off, a baseline user that already exists keeps its password (rotate it in the GUI). When on,
+      the baseline password is set again at every start, like the old add-on did.
+  backup_keep:
+    name: Backups to keep
+    description: Number of auth.db backups kept in /data/backups. The oldest are rotated out (1 to 100). One backup is
+      made daily at start and before destructive actions.
+  cache_duration:
+    name: Message cache duration
+    description: How long ntfy keeps messages for late subscribers, for example 12h or 3d. The cache lives in /data.
+  attachments_enabled:
+    name: Enable attachments
+    description: Allows file attachments up to the limits below. Enabled by default, like the old add-on.
+  attachment_total_size_limit:
+    name: Attachment total size limit
+    description: Total storage for all attachments, for example 1G. Only used when attachments are enabled.
+  attachment_file_size_limit:
+    name: Attachment file size limit
+    description: Maximum size of one attachment, for example 15M. Only used when attachments are enabled.
+  attachment_expiry_duration:
+    name: Attachment expiry
+    description: How long attachments are kept, for example 12h. Only used when attachments are enabled.
+  log_level:
+    name: Log level
+    description: Log verbosity of ntfy (trace, debug, info, warn, error). Secrets are never logged at any level.
