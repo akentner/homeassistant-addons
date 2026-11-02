@@ -90,7 +90,12 @@ All modules live in `admin-ui/app/web/static/lib/`, one self-contained directory
 | `ha-bridge.mjs`                    | `createHaBridge`                                                                                                                                                                     |
 | `a11y.mjs`                         | `tabbables`, `nextTabTarget`, `useUid`                                                                                                                                               |
 | `ui.mjs`                           | the Preact exports, `toast`, `Toasts`, `Modal`, `ConfirmDialog`, `confirmMatches`, `Badge`, `ErrorNote`, `Loading`, `CopyField`, `Tabs`, `DataTable`, `Field`, `useAsync`, `usePoll` |
-| `shell.mjs`                        | `Topbar`, `LangSwitch`, `TabNav`, `ErrorBoundary`, `parseHash`, `useHashRoute`                                                                                                       |
+| `shell.mjs`                        | `Topbar`, `LangSwitch`, `TabNav`, `ErrorBoundary`, `parseHash`, `useHashRoute`, `needsBurger`                                                                                        |
+
+`Topbar` is sticky (together with the tab bar) and respects the bridge safe-area insets. With `views`, `activeId` and
+`nav="topbar"` the navigation sits in the bar and folds into a burger menu when it does not fit; `nav="tabs"` (default)
+keeps the tab bar. It shows the add-on icon (`./icon`, served from the add-on's `icon.png`) before the name and hides it
+when the image fails to load; `iconSrc={null}` turns it off.
 
 The formatters take the language as second argument. `formatDateTime(ms, lang, opts)` merges an optional `opts` object
 (for example `timeZone`) into the `Intl.DateTimeFormat` options and `formatRelative(ms, lang, nowMs)` takes an optional

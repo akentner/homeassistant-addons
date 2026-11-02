@@ -49,7 +49,7 @@ const EXPECTED = {
   "theme-sync.mjs": ["createThemeSync", "THEME_WHITELIST"],
   "ha-bridge.mjs": ["createHaBridge"],
   "a11y.mjs": ["tabbables", "nextTabTarget", "useUid"],
-  "shell.mjs": ["Topbar", "LangSwitch", "TabNav", "ErrorBoundary", "parseHash", "useHashRoute"],
+  "shell.mjs": ["Topbar", "LangSwitch", "TabNav", "ErrorBoundary", "parseHash", "useHashRoute", "needsBurger"],
   "ui.mjs": [
     ...PREACT,
     "toast",

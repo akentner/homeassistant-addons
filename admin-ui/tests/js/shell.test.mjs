@@ -9,7 +9,7 @@ const shell = await import(new URL("lib/shell.mjs", STATIC));
 const { setLang, getLang } = await import(new URL("lib/i18n.mjs", STATIC));
 const { auditNames, auditTables } = await import("./a11y_audit.mjs");
 const { html, render } = ui;
-const { parseHash, useHashRoute, Topbar, LangSwitch, TabNav, ErrorBoundary } = shell;
+const { parseHash, useHashRoute, Topbar, LangSwitch, TabNav, ErrorBoundary, needsBurger } = shell;
 
 const IDS = ["users", "acl", "health"];
 const tag = (root, name) => findAll(root, (n) => n.localName === name);
@@ -147,8 +147,19 @@ test("Topbar: brand image is empty-alt and disappears after an error", async () 
   img.dispatch("error");
   await settle();
   assert.equal(tag(root, "img").length, 0);
-  const noIcon = await mount(html`<${Topbar} title="T" />`);
+  const noIcon = await mount(html`<${Topbar} title="T" iconSrc=${null} />`);
   assert.equal(tag(noIcon, "img").length, 0);
+});
+
+test("Topbar: shows ./icon by default, decorative, and hides it on error; null turns it off", async () => {
+  const root = await mount(html`<${Topbar} title="T" />`);
+  const [img] = tag(root, "img");
+  assert.equal(img.attributes.src, "./icon");
+  assert.equal(img.attributes.alt, "");
+  img.dispatch("error");
+  await settle();
+  assert.equal(tag(root, "img").length, 0);
+  assert.equal(tag(await mount(html`<${Topbar} title="T" iconSrc="" />`), "img").length, 0);
 });
 
 test("Topbar: hostile title and status stay text nodes", async () => {
@@ -273,4 +284,233 @@ test("shell pieces pass the accessible-name audit and resolve all texts in de an
 // Preact timers can outlive the tests; end the worker once the results are reported.
 test.after(() => {
   setTimeout(() => process.exit(process.exitCode ?? 0), 300).unref();
+});
+
+// ---- sticky head, safe-area insets, navigation variants ----
+
+const NAV_VIEWS = [
+  { id: "users", title: "Users" },
+  { id: "acl", titleKey: "btn.save" },
+];
+
+test("Topbar: header and tabs sit in one sticky head wrapper", async () => {
+  const root = await mount(html`<${Topbar} title="T" views=${NAV_VIEWS} activeId="users" />`);
+  const [head] = byClass(root, "shell-head");
+  assert.equal(tag(head, "header").length, 1);
+  assert.equal(tag(head, "nav").length, 1);
+  assert.equal(byClass(head, "tabs").length, 1);
+});
+
+test("Topbar: nav=tabs (and the default) keep the tab bar and no topbar navigation", async () => {
+  for (const props of [{}, { nav: "tabs" }, { nav: "bogus" }]) {
+    const root = await mount(html`<${Topbar} title="T" views=${NAV_VIEWS} activeId="acl" ...${props} />`);
+    assert.equal(byClass(root, "topnav").length, 0);
+    const tabs = byClass(root, "tab");
+    assert.equal(tabs.length, 2);
+    assert.equal(tabs[1].attributes["aria-current"], "page");
+  }
+});
+
+test("Topbar: without views no navigation renders in either mode", async () => {
+  for (const nav of ["tabs", "topbar"]) {
+    const root = await mount(html`<${Topbar} title="T" nav=${nav} />`);
+    assert.equal(tag(root, "nav").length, 0);
+  }
+});
+
+test("Topbar: nav=topbar puts the links between the name and the status, no tab bar", async () => {
+  const root = await mount(
+    html`<${Topbar} title="T" nav="topbar" views=${NAV_VIEWS} activeId="acl" status=${{ kind: "ok", text: "OK" }} />`,
+  );
+  assert.equal(byClass(root, "tabs").length, 0);
+  const header = tag(root, "header")[0];
+  const order = header.childNodes.map((n) => (n.localName === "h1" ? "h1" : n.attributes && n.attributes.class) || "");
+  const idx = (needle) => order.findIndex((c) => c === needle || c.split(" ").includes(needle));
+  assert.ok(idx("h1") >= 0 && idx("h1") < idx("topnav"));
+  assert.ok(idx("topnav") < idx("badge"));
+  const links = byClass(root, "topnav-link");
+  assert.deepEqual(links.map((a) => a.attributes.href), ["#/users", "#/acl"]);
+  assert.deepEqual(links.map((a) => a.textContent.trim()), ["Users", "Save"]);
+  assert.equal(links[0].attributes["aria-current"], undefined);
+  assert.equal(links[1].attributes["aria-current"], "page");
+  assert.equal(byClass(root, "nav-burger").length, 0);
+});
+
+test("needsBurger: only collapses on known, positive and insufficient sizes", () => {
+  assert.equal(needsBurger(500, 300), true);
+  assert.equal(needsBurger(300, 300), false);
+  assert.equal(needsBurger(200, 300), false);
+  for (const bad of [undefined, null, NaN, 0]) {
+    assert.equal(needsBurger(bad, 300), false);
+    assert.equal(needsBurger(500, bad), false);
+  }
+});
+
+// ResizeObserver double: the test sets the measured sizes and triggers the callback by hand.
+function stubObserver() {
+  const seen = [];
+  globalThis.ResizeObserver = class {
+    constructor(cb) {
+      this.cb = cb;
+      seen.push(this);
+    }
+    observe(node) {
+      this.node = node;
+    }
+    disconnect() {
+      this.gone = true;
+    }
+  };
+  return {
+    seen,
+    restore: () => delete globalThis.ResizeObserver,
+  };
+}
+
+async function squeeze(root, needed, available) {
+  const [wrap] = byClass(root, "topnav");
+  const [inline] = byClass(root, "topnav-inline");
+  inline.scrollWidth = needed;
+  wrap.clientWidth = available;
+  for (const ro of globalThis.__ro.seen) if (!ro.gone) ro.cb();
+  await settle();
+}
+
+async function mountNarrow(props = {}) {
+  globalThis.__ro = stubObserver();
+  const root = await mount(html`<${Topbar} title="T" nav="topbar" views=${NAV_VIEWS} activeId="users" ...${props} />`);
+  await squeeze(root, 600, 300);
+  return root;
+}
+
+test("topbar nav: too little room collapses into a burger button with aria wiring", async () => {
+  const root = await mountNarrow();
+  try {
+    assert.ok(byClass(root, "topnav-inline")[0].className.includes("is-collapsed"));
+    const [btn] = byClass(root, "nav-burger");
+    assert.equal(btn.localName, "button");
+    assert.equal(btn.attributes.type, "button");
+    assert.equal(btn.attributes["aria-label"], "Navigation menu");
+    assert.equal(btn.attributes["aria-expanded"], "false");
+    assert.equal(byClass(root, "topnav-menu").length, 0);
+    btn.dispatch("click");
+    await settle();
+    const [menu] = byClass(root, "topnav-menu");
+    assert.equal(btn.attributes["aria-expanded"], "true");
+    assert.equal(btn.attributes["aria-controls"], menu.attributes.id);
+    const items = byClass(menu, "topnav-menu-link");
+    assert.deepEqual(items.map((a) => a.attributes.href), ["#/users", "#/acl"]);
+    assert.equal(items[0].attributes["aria-current"], "page");
+    assert.equal(items[1].attributes["aria-current"], undefined);
+  } finally {
+    globalThis.__ro.restore();
+  }
+});
+
+test("topbar nav: Escape closes the menu and returns focus to the burger; picking a link closes it", async () => {
+  const root = await mountNarrow();
+  try {
+    const [btn] = byClass(root, "nav-burger");
+    btn.dispatch("click");
+    await settle();
+    const [first] = byClass(root, "topnav-menu-link");
+    first.focus();
+    first.dispatch("keydown", { key: "Escape", bubbles: true });
+    await settle();
+    assert.equal(byClass(root, "topnav-menu").length, 0);
+    assert.equal(btn.attributes["aria-expanded"], "false");
+    assert.equal(doc.activeElement, btn);
+    btn.dispatch("click");
+    await settle();
+    byClass(root, "topnav-menu-link")[1].dispatch("click");
+    await settle();
+    assert.equal(byClass(root, "topnav-menu").length, 0);
+  } finally {
+    globalThis.__ro.restore();
+  }
+});
+
+test("topbar nav: focus leaving the menu closes it, an outside pointer press closes it, tab order is button then links", async () => {
+  const root = await mountNarrow();
+  try {
+    const [btn] = byClass(root, "nav-burger");
+    btn.dispatch("click");
+    await settle();
+    const [wrap] = byClass(root, "topnav");
+    const focusable = findAll(wrap, (n) => n.tabIndex === 0 && !byClass(n, "topnav-inline").length);
+    const hidden = byClass(root, "topnav-inline")[0];
+    const visible = focusable.filter((n) => !hidden.contains(n));
+    assert.deepEqual(visible.map((n) => n.localName), ["button", "a", "a"]);
+    byClass(root, "topnav-menu-link")[1].dispatch("focusout", { bubbles: true, relatedTarget: doc.createElement("input") });
+    await settle();
+    assert.equal(byClass(root, "topnav-menu").length, 0);
+    btn.dispatch("click");
+    await settle();
+    doc.dispatch("pointerdown", { target: doc.createElement("div") });
+    await settle();
+    assert.equal(byClass(root, "topnav-menu").length, 0);
+  } finally {
+    globalThis.__ro.restore();
+  }
+});
+
+test("topbar nav: more room expands the links again and drops the burger", async () => {
+  const root = await mountNarrow();
+  try {
+    await squeeze(root, 600, 900);
+    assert.equal(byClass(root, "nav-burger").length, 0);
+    assert.ok(!byClass(root, "topnav-inline")[0].className.includes("is-collapsed"));
+  } finally {
+    globalThis.__ro.restore();
+  }
+});
+
+test("topbar nav: in kiosk mode the nav trigger shows the current view and differs from the host menu button", async () => {
+  const bridge = fakeBridge(true);
+  const root = await mountNarrow({ bridge });
+  try {
+    const hostBtn = byClass(root, "menu-btn").filter((b) => !b.className.includes("nav-burger"));
+    assert.equal(hostBtn.length, 1);
+    assert.equal(hostBtn[0].attributes["aria-label"], "Menu");
+    const [burger] = byClass(root, "nav-burger");
+    assert.ok(burger.textContent.includes("Users"));
+    assert.equal(burger.attributes["aria-label"], "Navigation menu: Users");
+    assert.notEqual(burger.textContent.trim(), hostBtn[0].textContent.trim());
+  } finally {
+    globalThis.__ro.restore();
+  }
+});
+
+test("topbar nav: the burger label follows the language", async () => {
+  const root = await mountNarrow();
+  try {
+    setLang("de");
+    await settle();
+    assert.equal(byClass(root, "nav-burger")[0].attributes["aria-label"], "Navigationsmenü");
+  } finally {
+    globalThis.__ro.restore();
+  }
+});
+
+test("topbar nav: unmount disconnects the observer", async () => {
+  const root = await mountNarrow();
+  const ros = globalThis.__ro.seen;
+  render(null, root);
+  await settle();
+  globalThis.__ro.restore();
+  assert.ok(ros.length > 0 && ros.every((ro) => ro.gone));
+});
+
+test("Topbar: safe-area insets from the bridge reach the sticky head as CSS variables", async () => {
+  const bridge = fakeBridge(false);
+  bridge.getState().safeAreaInsets = { top: "12px", right: "0", bottom: "-4px", left: "8.5px" };
+  const props = [];
+  const root = await mount(html`<${Topbar} title="T" bridge=${bridge} />`);
+  const [head] = byClass(root, "shell-head");
+  head.style.setProperty = (k, v) => props.push([k, v]);
+  bridge.getState().safeAreaInsets = { top: "20px", right: "0px", bottom: "0px", left: "0px" };
+  bridge.set(false);
+  await settle();
+  // Preact only writes the changed properties: top 12 -> 20 and left 8.5 -> 0
+  assert.deepEqual(Object.fromEntries(props), { "--safe-top": "20px", "--safe-left": "0px" });
 });

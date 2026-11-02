@@ -42,4 +42,6 @@ export default {
   "lang.en": "English",
 
   "nav.label": "Navigation",
+  "nav.menu": "Navigationsmenü",
+  "nav.menu_current": "Navigationsmenü: {title}",
 };

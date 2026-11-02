@@ -12,7 +12,7 @@ import {
   Loading,
   Toasts,
 } from "./lib/ui.mjs";
-import { Topbar, TabNav, ErrorBoundary, useHashRoute } from "./lib/shell.mjs";
+import { Topbar, ErrorBoundary, useHashRoute } from "./lib/shell.mjs";
 import { registerStrings, useT } from "./lib/i18n.mjs";
 import { get } from "./lib/api.mjs";
 import { createHaBridge } from "./lib/ha-bridge.mjs";
@@ -33,6 +33,25 @@ export const VIEWS = [
 const IDS = VIEWS.map((v) => v.id);
 const DEFAULT_VIEW = "gallery";
 const HEALTH_POLL_MS = 15000;
+const NAV_KEY = "admin-ui:demo-nav";
+const NAV_MODES = ["topbar", "tabs"];
+
+// Navigation style choice, kept per browser; storage may be missing or blocked, then the default applies.
+export function readNavMode(storage = globalThis.localStorage) {
+  try {
+    const raw = storage.getItem(NAV_KEY);
+    return NAV_MODES.includes(raw) ? raw : "topbar";
+  } catch {
+    return "topbar";
+  }
+}
+export function writeNavMode(mode, storage = globalThis.localStorage) {
+  try {
+    storage.setItem(NAV_KEY, mode);
+  } catch {
+    // storage unavailable: the choice only lasts for this page load
+  }
+}
 
 const cache = new Map();
 // The id is always validated against VIEWS by parseHash before it gets here. The literal relative prefix keeps the
@@ -98,6 +117,12 @@ export function App({ ha, load = loadView }) {
   const route = useHashRoute(IDS, DEFAULT_VIEW);
   const [health, setHealth] = useState(null);
   const [failed, setFailed] = useState(false);
+  const [nav, setNav] = useState(() => readNavMode());
+  const changeNav = (mode) => {
+    if (!NAV_MODES.includes(mode)) return;
+    setNav(mode);
+    writeNavMode(mode);
+  };
   const wiring = useRef(null);
   if (!wiring.current) wiring.current = ha || defaultHa();
   const { bridge, sync } = wiring.current;
@@ -131,12 +156,19 @@ export function App({ ha, load = loadView }) {
   }
 
   return html`<div>
-    <${Topbar} title=${tt("app.title")} status=${status} bridge=${bridge}>
+    <${Topbar} title=${tt("app.title")} status=${status} bridge=${bridge} views=${VIEWS} activeId=${route.id} nav=${nav}>
       ${health && html`<span class="muted">${tt("app.version", { version: String(health.addon_version) })}</span>`}
       <${ThemeChip} sync=${sync} />
     <//>
-    <${TabNav} views=${VIEWS} activeId=${route.id} />
     <main>
+      <div class="toolbar">
+        <label class="hint" for="nav-mode">${tt("demo.nav.mode.label")}</label>
+        <select id="nav-mode" value=${nav} onChange=${(ev) => changeNav(ev.target.value)}>
+          ${NAV_MODES.map(
+            (mode) => html`<option key=${mode} value=${mode} selected=${mode === nav}>${tt(`demo.nav.mode.${mode}`)}</option>`,
+          )}
+        </select>
+      </div>
       <${Guarded} id=${route.id} params=${route.params} ha=${wiring.current} load=${load} />
     </main>
     <${Toasts} />
