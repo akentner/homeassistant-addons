@@ -158,7 +158,7 @@ jobs:
           echo "✅ Common issues check passed"
 
   lint-results:
-    needs: lint
+    needs: [lint, admin-ui]
     runs-on: ubuntu-latest
     # Reporting job: echoes a verdict and exits. Seconds, not minutes.
     timeout-minutes: 5
@@ -166,9 +166,44 @@ jobs:
     steps:
       - name: Report results
         run: |
-          if [[ "${{ needs.lint.result }}" == "success" ]]; then
+          if [[ "${{ needs.lint.result }}" == "success" && "${{ needs.admin-ui.result }}" == "success" ]]; then
             echo "✅ All lint checks passed!"
           else
             echo "❌ Lint checks failed. Please fix the issues above."
             exit 1
           fi
+
+  # Appended on purpose: zizmor.yml deferrals for this file are line-anchored,
+  # so no line above this job may move.
+  admin-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install test dependencies
+        run: python -m pip install 'pytest==9.1.1' 'pyyaml==6.0.3'
+
+      - name: Lib unit tests (node)
+        run: node --test admin-ui/tests/js/*.test.mjs
+
+      - name: Server, rule and docs tests (pytest)
+        run: python -m pytest admin-ui/tests -q
+
+      - name: Lib copies in sync
+        run: make check-admin-ui-sync
