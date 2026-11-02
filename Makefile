@@ -319,7 +319,7 @@ install-provider: ## Build and install terraform-provider-homeassistant for Open
 verify-install-provider: ## Hermetic E2E check that make install-provider produces a runnable Provider
 	@bash internal/verify-install-provider.sh
 
-check-all: lint validate-addons validate-versions validate-dockerfiles verify-update-version-tag-timing ## Run all checks (lint + validate + versions + dockerfile args + tag-timing)
+check-all: lint validate-addons validate-versions validate-dockerfiles verify-update-version-tag-timing check-admin-ui-sync check-admin-ui-rules ## Run all checks (lint + validate + versions + dockerfile args + tag-timing + admin-ui sync and rules)
 
 test: check-all ## Run all tests and checks
 
