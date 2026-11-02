@@ -22,9 +22,9 @@ no code or default changed.**
 
 ## Result
 
-- Verified (limited): S1, S2, S4, S5, S6, S9 (reservation: CSP header presence unconfirmed), S11 (admin only), S15
+- Verified (limited): S1, S2, S4, S5, S6, S11 (admin only), S15
   (frontend version missing).
-- Not-applicable (not run): S3, S7, S8, S10, S12, S13, S14.
+- Not-applicable (not run): S3, S7, S8, S10, S12, S13, S14; S9 (violations_0, CSP header not confirmed live).
 - R-11 and R-13 stay `unverified`; R-07 stays `review` (user decision). Rule statuses in `DOCS.md` and `views/rules.mjs`
   are unchanged and agree.
 - No change to the kiosk default, the CSP constant or the origin check: the data does not contradict the design.

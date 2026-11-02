@@ -47,7 +47,9 @@ or card cases; the human classified them as not run.
 - **S6** [V] verified, limited: default off (`safe_area_off`). Toggle on iOS and Android not run.
 - **S7** [A] not-applicable: not run.
 - **S8** [A] not-applicable: not run.
-- **S9** [V] verified with reservation: `violations_0`, but CSP header presence was not confirmed, so weak evidence.
+- **S9** [A] not-applicable: `violations_0` in run A, but the CSP header was not confirmed live in HA and the counter
+  counts only while `#/spike` is open. The image sends the header (smoke script); HA and proxies were not observed.
+  Set S9 after the header is seen in the network tab.
 - **S10** [A] not-applicable: not run.
 - **S11** [V] verified, admin only: identity present, group `system-admin`. Non-admin not run.
 - **S12** [A] not-applicable: only the ingress path in the panel; no direct tab, no published port.
