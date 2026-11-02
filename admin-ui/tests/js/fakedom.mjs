@@ -1,6 +1,21 @@
 // Minimal DOM double, just enough for Preact render and the view mount tests. Markup is never parsed.
 const HTML_NS = "http://www.w3.org/1999/xhtml";
-const EVENT_PROPS = ["onclick", "oninput", "onchange", "onfocus", "onerror", "onkeydown", "onblur", "onsubmit"];
+const EVENT_PROPS = [
+  "onclick",
+  "oninput",
+  "onchange",
+  "onfocus",
+  "onerror",
+  "onkeydown",
+  "onblur",
+  "onsubmit",
+  "onkeyup",
+  "onkeypress",
+  "onpointerdown",
+  "onfocusin",
+  "onfocusout",
+  "onmousedown",
+];
 
 class FakeNode {
   constructor(nodeType) {
@@ -33,6 +48,8 @@ class FakeNode {
     const i = this.childNodes.indexOf(child);
     if (i >= 0) this.childNodes.splice(i, 1);
     child.parentNode = null;
+    const doc = child.ownerDocument;
+    if (doc && doc.activeElement && child.contains && child.contains(doc.activeElement)) doc.activeElement = null;
     return child;
   }
 
@@ -126,10 +143,58 @@ export class FakeElement extends FakeNode {
     this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn);
   }
 
+  // Pass { bubbles: true } to walk the parent chain (off by default, as before).
   dispatch(type, extra = {}) {
-    const ev = { type, target: this, currentTarget: this, key: "", preventDefault() {}, stopPropagation() {}, ...extra };
-    for (const fn of [...(this.listeners[type] || [])]) fn.call(this, ev);
+    const { bubbles, ...rest } = extra;
+    let stopped = false;
+    const ev = {
+      type,
+      target: this,
+      currentTarget: this,
+      key: "",
+      defaultPrevented: false,
+      preventDefault() {
+        ev.defaultPrevented = true;
+      },
+      stopPropagation() {
+        stopped = true;
+      },
+      ...rest,
+    };
+    for (let node = this; node && !stopped; node = bubbles ? node.parentNode : null) {
+      if (!node.listeners) continue;
+      ev.currentTarget = node;
+      for (const fn of [...(node.listeners[type] || [])]) fn.call(node, ev);
+    }
     return ev;
+  }
+
+  get tabIndex() {
+    const raw = this.attributes.tabindex;
+    if (raw !== undefined && Number.isFinite(Number(raw))) return Number(raw);
+    return ["a", "button", "input", "select", "textarea"].includes(this.localName) ? 0 : -1;
+  }
+
+  // True for the element itself and every descendant.
+  contains(node) {
+    for (let n = node; n; n = n.parentNode) if (n === this) return true;
+    return false;
+  }
+
+  focus() {
+    const doc = this.ownerDocument;
+    if (!doc || doc.activeElement === this) return;
+    const previous = doc.activeElement;
+    doc.activeElement = this;
+    if (previous) previous.dispatch("blur");
+    this.dispatch("focus");
+  }
+
+  blur() {
+    const doc = this.ownerDocument;
+    if (!doc || doc.activeElement !== this) return;
+    doc.activeElement = null;
+    this.dispatch("blur");
   }
 
   select() {}
@@ -137,8 +202,14 @@ export class FakeElement extends FakeNode {
 
 export function createDocument() {
   const doc = new FakeElement("#document");
-  doc.createElement = (tag) => new FakeElement(tag);
-  doc.createElementNS = (_ns, tag) => new FakeElement(tag);
+  doc.activeElement = null;
+  const make = (tag) => {
+    const node = new FakeElement(tag);
+    node.ownerDocument = doc;
+    return node;
+  };
+  doc.createElement = make;
+  doc.createElementNS = (_ns, tag) => make(tag);
   doc.createTextNode = (text) => new FakeText(text);
   doc.getElementById = () => null;
   doc.visibilityState = "visible";
