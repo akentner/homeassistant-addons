@@ -8,6 +8,7 @@ import { isEmbedded } from "../lib/ingress.mjs";
 import { THEME_WHITELIST } from "../lib/theme-sync.mjs";
 import { formatDateTime } from "../lib/format.mjs";
 import { get } from "../lib/api.mjs";
+import { cleanVersion, detectBrowser, readCoreVersion, resolveVersion } from "../spike-versions.mjs";
 
 export const meta = { id: "spike", titleKey: "demo.nav.spike" };
 
@@ -36,6 +37,7 @@ const POLICY_KEYS = { narrow: "demo.spike.policy.narrow", never: "demo.spike.pol
 const STORAGE_KEYS = { ok: "demo.spike.storage.ok", blocked: "demo.spike.storage.blocked" };
 const PATH_KEYS = { ingress: "demo.spike.path.ingress", direct: "demo.spike.path.direct" };
 const MAX_LOG = 20;
+const SOURCES = ["auto", "manual", "not_recorded"];
 const MAX_TEXT = 80;
 const TOKEN_RE = /^[a-z][a-z0-9_]{0,23}$/;
 const NAME_RE = /^[A-Za-z]{1,40}$/;
@@ -177,11 +179,24 @@ export function buildResult(i = {}) {
   for (const [key, n] of Object.entries(csp.counts || {})) violations[key] = num(n);
   const versions = i.versions || {};
   const whoami = i.whoami || null;
+  // Plain strings (typed values) count as manual; a field without a value is "not_recorded" (never guessed).
+  const source = (key) => {
+    const given = versions[`${key}Source`];
+    if (SOURCES.includes(given) && text(versions[key])) return given;
+    return text(versions[key]) ? "manual" : "not_recorded";
+  };
   return redact({
     schema: 1,
     generated_at: text(i.generatedAt),
-    ha: { core: text(versions.core), frontend: text(versions.frontend) },
-    client: { app: text(versions.app) },
+    ha: {
+      core: text(versions.core),
+      core_source: source("core"),
+      frontend: text(versions.frontend),
+      frontend_source: source("frontend"),
+      addon: text(versions.addon),
+      addon_source: source("addon"),
+    },
+    client: { app: text(versions.app), app_source: source("app") },
     access_path: token(i.accessPath, "direct"),
     embedded: Boolean(i.embedded),
     probes: evaluateProbes(i),
@@ -230,6 +245,21 @@ function Panel({ check, children }) {
   </section>`;
 }
 
+// Literal keys (R-06).
+const SOURCE_KEYS = {
+  auto: "demo.spike.source.auto",
+  manual: "demo.spike.source.manual",
+  not_recorded: "demo.spike.source.not_recorded",
+};
+
+// One version row: the effective value with its source, and an optional typed override.
+function VersionField({ id, label, resolved, value, onChange, max }) {
+  const tt = useT();
+  return html`<${Field} id=${id} label=${label} hint=${`${resolved.value || tt(SOURCE_KEYS.not_recorded)} (${tt(SOURCE_KEYS[resolved.source])})`}>
+    <input id=${id} type="text" value=${value} maxlength=${max} placeholder=${tt("demo.spike.override")} onInput=${(ev) => onChange(ev.target.value)} />
+  <//>`;
+}
+
 const byId = (id) => CHECKS.find((c) => c.id === id);
 
 export default function Spike({ ha = {} }) {
@@ -251,9 +281,12 @@ export default function Spike({ ha = {} }) {
   const [whoamiFailed, setWhoamiFailed] = useState(false);
   const [clipboard, setClipboard] = useState(null);
   const [note, setNote] = useState("");
+  // Typed overrides; empty means "use the detected value". Detection is read-only and runs once.
   const [core, setCore] = useState("");
   const [frontend, setFrontend] = useState("");
+  const [addon, setAddon] = useState("");
   const [app, setApp] = useState("");
+  const [detected, setDetected] = useState({ core: null, addon: null, app: null });
   const [frameTop, setFrameTop] = useState(() => probeFrameTop(win));
   const logRef = useRef([]);
 
@@ -314,6 +347,23 @@ export default function Spike({ ha = {} }) {
     runWhoami();
   }, []);
 
+  useEffect(() => {
+    let live = true;
+    setDetected((d) => ({ ...d, core: readCoreVersion(win) }));
+    get("health").then(
+      (data) => live && setDetected((d) => ({ ...d, addon: cleanVersion(data && data.addon_version) })),
+      () => {},
+    );
+    detectBrowser(globalThis.navigator).then((app) => live && setDetected((d) => ({ ...d, app })));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const vCore = resolveVersion(detected.core, core);
+  const vFrontend = resolveVersion(null, frontend);
+  const vAddon = resolveVersion(detected.addon, addon);
+  const vApp = resolveVersion(detected.app, app);
+
   const applyPolicy = (next) => {
     safe(() => bridge.configure({ kiosk: next }), false);
     setPolicy(next);
@@ -327,7 +377,16 @@ export default function Spike({ ha = {} }) {
 
   const inputs = {
     generatedAt: new Date().toISOString().slice(0, 10),
-    versions: { core, frontend, app },
+    versions: {
+      core: vCore.value,
+      coreSource: vCore.source,
+      frontend: vFrontend.value,
+      frontendSource: vFrontend.source,
+      addon: vAddon.value,
+      addonSource: vAddon.source,
+      app: vApp.value,
+      appSource: vApp.source,
+    },
     accessPath,
     embedded,
     parent,
@@ -504,15 +563,10 @@ export default function Spike({ ha = {} }) {
     <//>
 
     <${Panel} check=${byId("S15")}>
-      <${Field} id="spike-core" label=${tt("demo.spike.ha_core")}>
-        <input id="spike-core" type="text" value=${core} maxlength="30" onInput=${(ev) => setCore(ev.target.value)} />
-      <//>
-      <${Field} id="spike-frontend" label=${tt("demo.spike.ha_frontend")}>
-        <input id="spike-frontend" type="text" value=${frontend} maxlength="30" onInput=${(ev) => setFrontend(ev.target.value)} />
-      <//>
-      <${Field} id="spike-app" label=${tt("demo.spike.client_app")}>
-        <input id="spike-app" type="text" value=${app} maxlength=${MAX_TEXT} onInput=${(ev) => setApp(ev.target.value)} />
-      <//>
+      <${VersionField} id="spike-core" label=${tt("demo.spike.ha_core")} resolved=${vCore} value=${core} onChange=${setCore} max=${30} />
+      <${VersionField} id="spike-frontend" label=${tt("demo.spike.ha_frontend")} resolved=${vFrontend} value=${frontend} onChange=${setFrontend} max=${30} />
+      <${VersionField} id="spike-addon" label=${tt("demo.spike.addon_version")} resolved=${vAddon} value=${addon} onChange=${setAddon} max=${30} />
+      <${VersionField} id="spike-app" label=${tt("demo.spike.client_app")} resolved=${vApp} value=${app} onChange=${setApp} max=${MAX_TEXT} />
     <//>
 
     <section class="section card">
