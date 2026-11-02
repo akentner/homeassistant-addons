@@ -1,5 +1,6 @@
-/* Tracer styles only; plan 26-10 replaces this file with the demo page styles on top of lib/base.css. */
-body {
-  font-family: system-ui, sans-serif;
-  margin: 1rem;
-}
+/* Demo-only layout on top of lib/base.css. Tokens only, no literal colours. */
+main { padding: 16px; }
+.section { margin: 0 0 24px; }
+.section h2 { font-size: 16px; margin: 0 0 8px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
