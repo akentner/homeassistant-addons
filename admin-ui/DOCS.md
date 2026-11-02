@@ -258,6 +258,44 @@ browser or companion app and the access path (panel, card, direct tab). Set the 
 `not-applicable`, fill the result cell and update the `Verified on:` line. A result may contain HA versions, the browser
 or app, the access path and pass or fail. It must never contain tokens, real hostnames or user names.
 
+### Testing the CSP in a live Home Assistant (S9)
+
+1. **Find the header.** Open the add-on in Home Assistant (sidebar panel). In the browser developer tools open the
+   Network tab, tick "Disable cache", filter by `hassio_ingress` and reload the page. Select the document request
+   (`.../api/hassio_ingress/<token>/`, type `document`) and read the response header `Content-Security-Policy`. It must
+   equal `DEFAULT_CSP` from `admin-ui/app/web/skeleton/headers.py`. The header is sent on the HTML page and on static
+   files, not on `api/` responses. `curl` or a headless browser cannot test this: the ingress path needs a Home
+   Assistant session, and the point is what HA and its proxies actually deliver.
+2. **Header missing or different?** Then the result proves nothing. The container sends it unless the environment
+   variable `ADMIN_UI_CSP` is `off` (`strict` is the default, read in `app/main.py`). The add-on has no options and
+   `run.sh` does not set the variable, so a missing header means a proxy or HA changed it. Record that as the finding.
+3. **Recognise violations.** Open the Console during the whole test. A violation shows as `Refused to load ...` or
+   `Refused to execute inline ...` plus the violated directive, and the browser fires a `securitypolicyviolation` event.
+   The counter of S9 counts only those events, only for this page's document, and only while the `#/spike` view is open
+   (the listener lives in that view). Violations on other views, in the HA frame around it and anything that is only
+   logged by HA are not counted: watch the Console there yourself.
+4. **When a zero counter counts.** Only if step 1 confirmed the header, the page was loaded with the cache disabled, and
+   the actions below were done. The smoke script (`internal/verify-admin-ui-scaffold.sh`) shows the header on the
+   container itself (26-13 summary). That is not an observation of what HA or a proxy delivers, so it does not replace
+   step 1.
+5. **Actions during the test.** Open the gallery and use toast, modal and confirm dialog. Do the sample CRUD (create,
+   edit, delete with type-to-confirm). Switch language and dark mode so theme sync applies. On `#/spike` press the
+   bridge buttons (policy, `handleSafeArea`, navigate), copy a sample and run the storage and identity checks. Return to
+   `#/spike` at the end and read the counter.
+6. **Record it.** Update the S9 row with the date, the HA core version and the access path (panel, card, direct tab),
+   and say whether the header was seen in the network tab. Set `verified` only with a confirmed header and no violation.
+   The `Verified on:` line gets the same date.
+7. **On a violation** the fix is a code change, not a setting: `DEFAULT_CSP` is a constant in
+   `admin-ui/app/web/skeleton/headers.py` and cannot be changed through add-on options. Note the directive and the
+   blocked kind (`inline`, `eval`, `self`, other), fix the page or loosen the constant deliberately, rerun
+   `make test-admin-ui`, and run the test again. Do not switch the header off to get a green result.
+
+The versions of S15 are filled in automatically where Home Assistant allows it: the HA core version is read from the
+same-origin parent (`hass.config.version`), the add-on version from `api/health`, the browser from client hints or the
+user agent. The result block marks each source as `auto`, `manual` or `not_recorded`. The HA frontend version is not
+detected: Home Assistant only knows it as a build-time constant, so type it in from Settings, About. A typed value
+overrides a detected one, and nothing is guessed.
+
 ## Migration paths
 
 None of these is executed in this phase (D-07); they are the planned follow-up phases.
