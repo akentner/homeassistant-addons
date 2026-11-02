@@ -32,3 +32,21 @@ menu button shows): `documentElement.scrollWidth <= innerWidth` and no overflow 
 topbar height stays 56 px, exactly one nav burger plus the host button in kiosk (2 `.menu-btn`). Also 700 and 1280 px:
 no overflow, inline links at 1280 px, burger at 700 px. The Fake-DOM and CSS tests cover the rules; real HA/phone not
 tested.
+
+## Part 3: CSP test guide and automatic spike versions (add-on 0.1.0-3, lib unchanged)
+
+- DOCS.md section "Testing the CSP in a live Home Assistant (S9)" and spike log sections 4 and 5. Facts checked in
+  code: header `Content-Security-Policy` on html and static responses only, constant `DEFAULT_CSP` in
+  `app/web/skeleton/headers.py`, environment variable `ADMIN_UI_CSP` (`strict`|`off`, `app/main.py`), not set by
+  `run.sh`, add-on `options: {}`. Finding worth knowing: the S9 counter lives in the `#/spike` view, so it only counts
+  violations while that view is open (documented; moving it to app level would be a follow-up).
+- Spike versions: new demo module `static/spike-versions.mjs` (no lib change). Core from
+  `window.parent.document.querySelector("home-assistant").hass.config.version`, add-on from `api/health`, browser from
+  `userAgentData.getHighEntropyValues(["fullVersionList"])` with user-agent fallback. Frontend: HA frontend source
+  (`ha-config-info.ts`) shows `__VERSION__`/`__BUILD__`, build-time constants declared in `types.ts` and not attached to
+  `hass`, so there is no stable read-only path: it stays a typed field ("not recorded" otherwise).
+- Result block (schema 1, additive): `ha.core_source`, `ha.frontend_source`, `ha.addon`, `ha.addon_source`,
+  `client.app_source`. Redaction unchanged. Existing guard test on `views/spike.mjs` stays; a new test pins the single
+  hass read in `spike-versions.mjs` to `hass.config.version`.
+- Tests: 267 node (new `spike_versions.test.mjs`, auto/fallback/override/not_recorded/labels de+en in
+  `spike_view.test.mjs`), 252 pytest, sync and rules checks green. Dockerfile unchanged, no docker build needed.

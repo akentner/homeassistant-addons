@@ -18,9 +18,11 @@ const { CHECKS, buildResult, redact, cspKey, accessPathOf, probeStorage, probePa
 
 // ---- stubs ----
 let fetchCalls = [];
+let healthReply = null;
 let whoamiReply = { user: { user_id: "u-123", name: "Alice Admin", display_name: "Alice", groups: ["system-admin", "system-users"] } };
 globalThis.fetch = async (url) => {
   fetchCalls.push(url);
+  if (url === "api/health") return healthReply ? { ok: true, status: 200, json: async () => healthReply } : { ok: false, status: 503, json: async () => ({ error: "internal_error" }) };
   if (url === "api/whoami") return { ok: true, status: 200, json: async () => whoamiReply };
   return { ok: false, status: 404, json: async () => ({ error: "not_found" }) };
 };
@@ -226,7 +228,7 @@ test("S10 reports ok and blocked storage and removes its own key", async () => {
 
 test("S11 requests api/whoami with a relative URL and shows groups, never the identity", async () => {
   const { root } = await mount();
-  assert.deepEqual(fetchCalls, ["api/whoami"]);
+  assert.deepEqual(fetchCalls, ["api/whoami", "api/health"]);
   const text = panel(root, "S11").textContent;
   assert.match(text, /Identity header present: yes/);
   assert.match(text, /system-admin, system-users/);
@@ -308,7 +310,10 @@ test("buildResult snapshot: stable shape and allow-listed content", () => {
   assert.equal(result.schema, 1);
   assert.deepEqual(Object.keys(result), ["schema", "generated_at", "ha", "client", "access_path", "embedded", "probes", "sync", "bridge", "csp", "whoami"]);
   assert.deepEqual(Object.keys(result.probes), CHECKS.map((c) => c.id));
-  assert.deepEqual(result.ha, { core: "2026.10.3", frontend: "20261001.0" });
+  assert.deepEqual(result.ha, {
+    core: "2026.10.3", core_source: "manual", frontend: "20261001.0", frontend_source: "manual", addon: "", addon_source: "not_recorded",
+  });
+  assert.deepEqual(result.client, { app: "Firefox 140 on Linux", app_source: "manual" });
   assert.deepEqual(result.sync.colors, { bg: "#101010", card: "#202020", fg: "#f0f0f0", bd: "#303030", acc: null });
   assert.deepEqual(result.sync.skipped, ["accent", "other"]);
   assert.deepEqual(result.bridge, { status: "ok", narrow: false, kiosk: false, hostBar: false, kioskFrozen: false, messages: 3, insets_present: true, route_present: true });
@@ -372,4 +377,95 @@ test("the view source never touches parent storage, cookies or hass objects", ()
 
 test.after(() => {
   setTimeout(() => process.exit(process.exitCode ?? 0), 300).unref();
+});
+
+// ---- automatic version detection (S15) ----
+
+function haWindow(version) {
+  const win = embeddedWindow({
+    document: { documentElement: {}, querySelector: (sel) => (sel === "home-assistant" && version !== undefined ? { hass: { config: { version } } } : null) },
+    location: { origin: "https://ha.example" },
+  });
+  return win;
+}
+const setNavigator = (value) => Object.defineProperty(globalThis, "navigator", { value, configurable: true, writable: true });
+const NAVIGATOR_BACKUP = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+const restoreNavigator = () => (NAVIGATOR_BACKUP ? Object.defineProperty(globalThis, "navigator", NAVIGATOR_BACKUP) : delete globalThis.navigator);
+const field = (root, id) => findAll(root, (n) => n.localName === "input" && n.getAttribute("id") === id)[0];
+const hint = (root, id) => findAll(root, (n) => n.getAttribute && n.getAttribute("id") === `${id}-hint`)[0].textContent;
+
+test("S15 detects core (parent), add-on (health) and browser (client hints) and keeps the frontend untouched", async () => {
+  healthReply = { status: "ok", addon_version: "0.1.0-3" };
+  setNavigator({ userAgentData: { getHighEntropyValues: async () => ({ fullVersionList: [{ brand: "Not/A)Brand", version: "99.0.0.0" }, { brand: "Chromium", version: "156.0.8078.48" }, { brand: "Google Chrome", version: "156.0.8078.48" }] }) }, userAgent: "ignored" });
+  try {
+    const { root } = await mount({ win: haWindow("2026.10.4") });
+    await settle();
+    assert.match(hint(root, "spike-core"), /2026\.10\.4 \(Detected automatically\)/);
+    assert.match(hint(root, "spike-addon"), /0\.1\.0-3 \(Detected automatically\)/);
+    assert.match(hint(root, "spike-app"), /Google Chrome 156\.0\.8078\.48/);
+    assert.match(hint(root, "spike-frontend"), /not recorded/);
+    const result = resultJson(root);
+    assert.deepEqual(result.ha, { core: "2026.10.4", core_source: "auto", frontend: "", frontend_source: "not_recorded", addon: "0.1.0-3", addon_source: "auto" });
+    assert.deepEqual(result.client, { app: "Google Chrome 156.0.8078.48", app_source: "auto" });
+    assert.equal(result.probes.S15.ok, false); // the frontend version is still missing, nothing is guessed
+  } finally {
+    healthReply = null;
+    restoreNavigator();
+  }
+});
+
+test("S15 falls back to not_recorded when parent, health and navigator give nothing", async () => {
+  setNavigator({});
+  try {
+    const { root } = await mount({ win: haWindow(undefined) });
+    await settle();
+    const { ha, client } = resultJson(root);
+    assert.deepEqual(ha, { core: "", core_source: "not_recorded", frontend: "", frontend_source: "not_recorded", addon: "", addon_source: "not_recorded" });
+    assert.deepEqual(client, { app: "", app_source: "not_recorded" });
+  } finally {
+    restoreNavigator();
+  }
+});
+
+test("S15 typed values override detected ones per field and are labelled manual; the add-on never lands in the frontend field", async () => {
+  healthReply = { status: "ok", addon_version: "0.1.0-3" };
+  setNavigator({ userAgent: "Mozilla/5.0 Firefox/140.0" });
+  try {
+    const { root } = await mount({ win: haWindow("2026.10.4") });
+    await settle();
+    for (const [id, value] of [["spike-core", "2026.10.9"], ["spike-frontend", "20261001.0"]]) {
+      const el = field(root, id);
+      el.value = value;
+      el.dispatch("input", { target: el });
+    }
+    await settle();
+    const { ha, client } = resultJson(root);
+    assert.equal(ha.core, "2026.10.9");
+    assert.equal(ha.core_source, "manual");
+    assert.equal(ha.frontend, "20261001.0");
+    assert.equal(ha.frontend_source, "manual");
+    assert.equal(ha.addon, "0.1.0-3");
+    assert.equal(ha.addon_source, "auto");
+    assert.deepEqual(client, { app: "Firefox 140.0", app_source: "auto" });
+    assert.equal(resultJson(root).probes.S15.ok, true);
+  } finally {
+    healthReply = null;
+    restoreNavigator();
+  }
+});
+
+test("S15 has four separately labelled version fields in de and en", async () => {
+  for (const [lang, labels] of [["en", ["HA core version", "HA frontend version", "Add-on version", "Browser or app"]], ["de", ["HA-Core-Version", "HA-Frontend-Version", "Add-on-Version", "Browser oder App"]]]) {
+    const { root } = await mount({ lang });
+    const text = panel(root, "S15").textContent;
+    for (const label of labels) assert.ok(text.includes(label), `${lang} ${label}`);
+  }
+  setLang("en");
+});
+
+test("the only parent read of the hass object lives in spike-versions.mjs and touches config.version only", () => {
+  const src = readFileSync(new URL("spike-versions.mjs", STATIC), "utf8");
+  assert.equal((src.match(/\.hass\b/g) || []).length, 1);
+  assert.ok(src.includes(".hass.config.version"));
+  for (const bad of ["localStorage", "sessionStorage", "cookie", "hass.states", "hass.user", "hass.auth", "callService"]) assert.ok(!src.includes(bad), bad);
 });

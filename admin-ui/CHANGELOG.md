@@ -4,6 +4,15 @@ All notable changes to the **Admin UI Blueprint** add-on are documented in this 
 [Keep a Changelog](https://keepachangelog.com/). This is our own code without an upstream project: the version is bumped
 manually with `make update-version`.
 
+## [0.1.0-3] - 2026-11-02
+
+### Changed
+
+- Spike view detects the HA core version (same-origin parent), the add-on version (`api/health`) and the browser itself;
+  the result block gets `*_source` fields (`auto`, `manual`, `not_recorded`) and separate, labelled override fields. The
+  frontend version stays a typed field because HA offers no runtime read for it
+- DOCS: step-by-step guide to test the CSP in a live Home Assistant
+
 ## [0.1.0-2] - 2026-11-02
 
 ### Verified
