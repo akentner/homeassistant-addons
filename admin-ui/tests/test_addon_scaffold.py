@@ -41,6 +41,12 @@ def test_manifest_is_ingress_only_and_manual() -> None:
     assert config["image"].endswith("{arch}-admin_ui")
 
 
+def test_manifest_is_marked_experimental() -> None:
+    assert load_yaml("config.yaml")["stage"] == "experimental"
+    readme = (ADDON_DIR / "README.md").read_text(encoding="utf-8")
+    assert "project%20stage-experimental" in readme
+
+
 def test_no_upstream_file() -> None:
     assert not (ADDON_DIR / ".upstream.yaml").exists()
 
