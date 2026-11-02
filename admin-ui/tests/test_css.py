@@ -184,3 +184,107 @@ def test_contrast_focus_ring(themes: dict[str, dict[str, str]], theme_name: str)
     for bg in ("bg", "card"):
         ratio = contrast(fallback(token(theme, "acc")), fallback(token(theme, bg)))
         assert ratio >= 3.0, f"{theme_name}: focus ring on --{bg} is {ratio:.2f}"
+
+
+# ---------------------------------------------------------------- components and a11y
+
+CONTRACT_SELECTORS = [
+    ".topbar", ".brand-icon", ".tabs", ".tab", ".tab.active", ".card", ".grid", ".toolbar", ".spacer", "table.data",
+    ".badge", ".badge.ok", ".badge.warn", ".badge.degraded", ".badge.error", ".badge.muted", ".badge.info", ".btn",
+    ".btn.secondary", ".btn.danger", ".btn.small", ".form-row", ".actions", ".copy-field", ".notice", ".notice.error",
+    ".notice.info", ".modal-backdrop", ".modal", ".modal-head", ".modal-body", ".toast-stack", ".toast",
+    ".danger-zone", ".danger-row", ".mono", ".muted", ".loading", ".sr-only", ".menu-btn", ".lang-switch",
+    ".theme-isolated", ".tablist", ".tabpanel", ".hint",
+]  # fmt: skip
+
+ABSENT_SELECTORS = [".matrix", ".badge.gui", ".badge.options", ".badge.iac", ".toolbar label"]
+
+
+def all_selectors(blocks: list[tuple[str, str, str]]) -> set[str]:
+    found: set[str] = set()
+    for _, sel, _ in blocks:
+        for part in sel.split(","):
+            found.add(re.sub(r"\s+", " ", part.strip()))
+    return found
+
+
+def test_component_contract_classes_present(blocks: list[tuple[str, str, str]]) -> None:
+    present = all_selectors(blocks)
+    missing = [s for s in CONTRACT_SELECTORS if s not in present]
+    assert not missing, f"missing selectors: {missing}"
+
+
+def test_component_ntfy_only_selectors_absent(blocks: list[tuple[str, str, str]]) -> None:
+    present = all_selectors(blocks)
+    leaked = [s for s in present if any(s == a or s.startswith(a + " ") or s.startswith(a + ".") for a in ABSENT_SELECTORS)]
+    assert not leaked, f"ntfy-only selectors leaked: {leaked}"
+
+
+def test_component_button_colours_use_tokens(blocks: list[tuple[str, str, str]]) -> None:
+    assert find_decls(blocks, ".btn")["color"] == "var(--on-acc)"
+    assert find_decls(blocks, ".btn.danger")["color"] == "var(--on-err)"
+
+
+def test_a11y_focus_visible_rule(blocks: list[tuple[str, str, str]], css: str) -> None:
+    rule = next((b for b in blocks if ":focus-visible" in b[1]), None)
+    assert rule is not None
+    decls = parse_decls(rule[2])
+    assert decls["outline"].startswith("2px solid var(--acc)")
+    assert "input:focus," not in css
+
+
+def test_a11y_reduced_motion_and_small_screen(blocks: list[tuple[str, str, str]]) -> None:
+    reduced = [b for b in blocks if "prefers-reduced-motion: reduce" in b[0]]
+    assert reduced, "reduced-motion block missing"
+    joined = " ".join(b[2] for b in reduced)
+    assert "animation" in joined and "transition" in joined
+    assert any("max-width: 600px" in b[0] for b in blocks)
+
+
+def test_component_topbar_height_and_selected_tab(blocks: list[tuple[str, str, str]]) -> None:
+    assert find_decls(blocks, ".topbar")["height"] == "56px"
+    assert '.tab[aria-selected="true"]' in all_selectors(blocks)
+
+
+def test_component_sr_only_is_visually_hidden(blocks: list[tuple[str, str, str]]) -> None:
+    decls = find_decls(blocks, ".sr-only")
+    assert decls["position"] == "absolute"
+    assert decls["width"] == "1px" and decls["height"] == "1px"
+    assert decls["overflow"] == "hidden"
+
+
+def test_component_menu_button_touch_target(blocks: list[tuple[str, str, str]]) -> None:
+    decls = find_decls(blocks, ".menu-btn")
+    assert int(decls["min-width"].removesuffix("px")) >= 40
+    assert int(decls["min-height"].removesuffix("px")) >= 40
+
+
+# ---------------------------------------------------------------- hygiene
+
+
+def test_hygiene_no_import_and_no_absolute_url(css: str) -> None:
+    assert "@import" not in css
+    for m in re.finditer(r"url\(\s*['\"]?([^)'\"]*)", css):
+        target = m.group(1).strip()
+        assert not target.startswith("/") and not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", target), target
+
+
+def test_hygiene_hex_only_inside_token_blocks(blocks: list[tuple[str, str, str]]) -> None:
+    token_selectors = {":root", ':root:not([data-theme="light"])', '[data-theme="dark"]', '[data-theme="light"]'}
+    for ctx, sel, body in blocks:
+        if sel in token_selectors:
+            continue
+        assert not re.search(r"#[0-9a-fA-F]{3,8}\b", body), f"hex colour outside token blocks in {sel!r}"
+
+
+def test_hygiene_only_declared_tokens_referenced(css: str, themes: dict[str, dict[str, str]]) -> None:
+    declared = {k for k in themes["light"] if k.startswith("--")}
+    sync = {f"--sync-{n}" for n in SYNCED}
+    for m in re.finditer(r"var\((--[a-z-]+)", css):
+        name = m.group(1)
+        assert name in declared or name in sync, f"undeclared token {name}"
+
+
+def test_hygiene_file_ends_with_single_newline() -> None:
+    raw = CSS_PATH.read_bytes()
+    assert raw.endswith(b"\n") and not raw.endswith(b"\n\n")
