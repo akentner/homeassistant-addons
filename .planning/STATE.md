@@ -188,6 +188,8 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 - Phase 23 added: coding-assistants: Claude Code + herdr (replaces tmux)
 - Phase 24 added: ntfy add-on + admin GUI (live ACLs in `auth.db`, GUI via ingress, export of desired state)
 - Phase 25 added: ntfy IaC API (own bearer token, `desired-state` with dry-run/additive/prune; starts after Phase 24)
+- Phase 27 added: ntfy admin-ui lib migration (user decision 2026-11-02: first verify Phase 24 incl. UAT, then
+  Phase 27, then Phase 25)
 
 ### Key Decisions (v1.3)
 

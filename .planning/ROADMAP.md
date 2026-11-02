@@ -369,6 +369,18 @@ Plans:
 - [x] 26-12-PLAN.md — Wave 6: `lib.lock`, hooks, `check-all`, export contract test, final Docker smoke
 - [x] 26-13-PLAN.md — Wave 7: live spike on a real HA instance (run A only), results and follow-ups recorded
 
+### Phase 27: ntfy admin-ui lib migration
+
+**Goal:** The ntfy admin GUI (frontend and server skeleton) runs on the shared admin-ui lib (`make sync-admin-ui
+ADDON=ntfy`) instead of its own duplicates, keeps only ntfy-specific model/views/styles, has de+en strings, and its
+frontend tests run in CI. API error codes and the Phase 24 contract (C8, registry tests) stay unchanged.
+**Requirements**: TBD
+**Depends on:** Phase 24 (verified incl. UAT), Phase 26; runs before Phase 25 (IaC API)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 27 to break down)
+
 ### 📋 v1.4 iac-runner (Phases 16-19) — PLANNING
 
 **Milestone Goal:** Ship a Home Assistant Supervisor add-on (`iac-runner/`) that clones a Git repo (e.g.
