@@ -3,6 +3,7 @@
 import { html, useState, useEffect, useLayoutEffect, useRef, useErrorBoundary } from "./vendor/preact-htm.mjs";
 import { Badge, ErrorNote } from "./ui.mjs";
 import { LANGS, setLang, useLang, useT } from "./i18n.mjs";
+import { detectEmbedContext, infoLinkPlan } from "./ingress.mjs";
 
 const LANG_KEYS = { de: "lang.de", en: "lang.en" };
 
@@ -58,7 +59,7 @@ export function LangSwitch() {
 }
 
 const DEFAULT_ICON = "./icon";
-// An absolute path on the HA origin ("/hassio/addon/<slug>/info"): no scheme, no protocol-relative form.
+// An absolute path on the HA origin ("/config/app/<slug>/info"): no scheme, no protocol-relative form.
 const isInfoPath = (path) => typeof path === "string" && /^\/[A-Za-z0-9._~\-/]{1,200}$/.test(path) && !path.startsWith("//");
 const NAV_MODES = ["topbar", "tabs"];
 let menuSeq = 0;
@@ -191,7 +192,7 @@ function TopbarNav({ views, activeId, label, kiosk, info, onCollapse }) {
     html`<div class="topnav-menu" id=${menuId.current} role="group" aria-label=${label || tt("nav.label")}>
       ${links("topnav-menu-link")}
       ${info &&
-      html`<a class="topnav-menu-link info-link" href=${info.href} target="_top" rel="noopener" onClick=${(ev) => {
+      html`<a class="topnav-menu-link info-link" href=${info.href} target=${info.target} rel=${info.rel} onClick=${(ev) => {
         setOpen(false);
         info.onClick(ev);
       }}>
@@ -205,48 +206,57 @@ function TopbarNav({ views, activeId, label, kiosk, info, onCollapse }) {
 // With `views`, `nav` picks where the navigation goes: "tabs" (default: tab bar below the bar) or "topbar" (links in
 // the bar between name and status, folding into a burger menu when too narrow). The whole head is sticky.
 // The menu button only shows while the bridge reports a requested kiosk mode.
-// infoPath ("/hassio/addon/<slug>/info") adds an info link: icon in the bar, or an entry in the burger menu once the
-// navigation folds. onInfoNavigate("bridge" | "fallback") reports which path a click took.
+// infoPath ("/config/app/<slug>/info") adds an info link: icon in the bar, or an entry in the burger menu once the
+// navigation folds. onInfoNavigate("bridge" | "fallback" | "new_tab") reports which path a click took.
 export function Topbar({ title, iconSrc, status, bridge, children, views, activeId, nav, navLabel, infoPath, onInfoNavigate }) {
   const tt = useT();
   const [iconOk, setIconOk] = useState(true);
   const [kiosk, setKiosk] = useState(() => Boolean(bridge && bridge.getState().kiosk === true));
   const [safe, setSafe] = useState(() => (bridge ? insetKey(bridge.getState().safeAreaInsets) : ""));
+  const [bridgeOk, setBridgeOk] = useState(() => Boolean(bridge && bridge.getState().status === "ok"));
   useEffect(() => {
     if (!bridge) {
       setKiosk(false);
       setSafe("");
+      setBridgeOk(false);
       return undefined;
     }
     const sync = () => {
       const state = bridge.getState();
       setKiosk(state.kiosk === true);
       setSafe(insetKey(state.safeAreaInsets));
+      setBridgeOk(state.status === "ok");
     };
     sync();
     const off = bridge.subscribe(sync);
     return () => typeof off === "function" && off();
   }, [bridge]);
   const [navCollapsed, setNavCollapsed] = useState(false);
-  // The bridge is preferred (live navigation inside HA without a reload); without an answering bridge the anchor's own
-  // target="_top" navigation runs. HA never confirms navigate, so only the chosen path is reported, not a success.
-  const info = isInfoPath(infoPath)
-    ? {
-        href: infoPath,
-        onClick: (ev) => {
-          let via = "fallback";
-          try {
-            if (bridge && bridge.getState().status === "ok" && bridge.navigate(infoPath) === true) {
-              ev.preventDefault();
-              via = "bridge";
+  // How the link is offered depends on the embedding (see infoLinkPlan): bridge first inside HA's own app panel, a
+  // top-window link in a plain frame, a new tab when the sandbox blocks top navigation but allows popups, and no link at
+  // all when neither works (a click would only log a console error). HA never confirms navigate, so only the chosen
+  // path is reported, not a success.
+  const plan = infoLinkPlan(detectEmbedContext(globalThis.window, { bridgeOk }));
+  const info =
+    isInfoPath(infoPath) && plan !== "hidden"
+      ? {
+          href: infoPath,
+          target: plan === "same" ? "_self" : plan === "blank" ? "_blank" : "_top",
+          rel: plan === "blank" ? "noopener noreferrer" : "noopener",
+          onClick: (ev) => {
+            let via = plan === "blank" ? "new_tab" : "fallback";
+            try {
+              if (bridge && bridge.getState().status === "ok" && bridge.navigate(infoPath) === true) {
+                ev.preventDefault();
+                via = "bridge";
+              }
+            } catch {
+              // keep the plain link
             }
-          } catch {
-            via = "fallback";
-          }
-          if (typeof onInfoNavigate === "function") onInfoNavigate(via);
-        },
-      }
-    : null;
+            if (typeof onInfoNavigate === "function") onInfoNavigate(via);
+          },
+        }
+      : null;
   const icon = iconSrc === undefined ? DEFAULT_ICON : iconSrc;
   const list = Array.isArray(views) ? views : [];
   const mode = NAV_MODES.includes(nav) ? nav : "tabs";
@@ -264,7 +274,7 @@ export function Topbar({ title, iconSrc, status, bridge, children, views, active
       ${inBar && html`<${TopbarNav} views=${list} activeId=${activeId} label=${navLabel} kiosk=${kiosk} info=${info} onCollapse=${setNavCollapsed} />`}
       ${info &&
       !(inBar && navCollapsed) &&
-      html`<a class="info-btn" href=${info.href} target="_top" rel="noopener" aria-label=${tt("nav.info")} title=${tt("nav.info")} onClick=${info.onClick}>ⓘ</a>`}
+      html`<a class="info-btn" href=${info.href} target=${info.target} rel=${info.rel} aria-label=${tt("nav.info")} title=${tt("nav.info")} onClick=${info.onClick}>ⓘ</a>`}
       ${status && html`<${Badge} kind=${status.kind}>${status.text}<//>`}
       ${children && html`<span class="topbar-extra">${children}</span>`}
       <${LangSwitch} />

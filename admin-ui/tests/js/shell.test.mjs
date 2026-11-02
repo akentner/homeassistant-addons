@@ -529,14 +529,14 @@ test("Topbar: safe-area insets from the bridge reach the sticky head as CSS vari
 
 // ---- add-on info link ----
 
-const INFO = "/hassio/addon/local_admin_ui/info";
+const INFO = "/config/app/local_admin_ui/info";
 const infoLinks = (root) => findAll(root, (n) => n.localName === "a" && (n.className || "").split(" ").some((c) => c === "info-btn" || c === "info-link"));
 
 test("info link: anchor to the path with target _top, noopener, localized label and tooltip", async () => {
   const root = await mount(html`<${Topbar} title="T" infoPath=${INFO} />`);
   const [a] = infoLinks(root);
   assert.equal(a.attributes.href, INFO);
-  assert.equal(a.attributes.target, "_top");
+  assert.equal(a.attributes.target, "_self"); // no parent frame: same window
   assert.equal(a.attributes.rel, "noopener");
   assert.equal(a.attributes["aria-label"], "Add-on info");
   assert.equal(a.attributes.title, "Add-on info");
@@ -599,7 +599,7 @@ test("info link: in the tab layout it stays in the bar; in the topbar layout it 
     await settle();
     const [entry] = byClass(root, "info-link");
     assert.equal(entry.attributes.href, INFO);
-    assert.equal(entry.attributes.target, "_top");
+    assert.equal(entry.attributes.target, "_self");
     assert.equal(entry.textContent.trim(), "Add-on info");
     entry.dispatch("click");
     await settle();
@@ -625,4 +625,94 @@ test("info link entry in the folded menu reaches the bridge too", async () => {
   } finally {
     globalThis.__ro.restore();
   }
+});
+
+// ---- info link per embedding context ----
+
+const withWindow = async (win, fn) => {
+  const saved = globalThis.window;
+  globalThis.window = win;
+  try {
+    return await fn();
+  } finally {
+    globalThis.window = saved;
+  }
+};
+const framed = (sandbox) => {
+  const win = { addEventListener() {}, removeEventListener() {}, location: { origin: "https://ha.example" } };
+  win.parent = { document: {} };
+  win.frameElement = sandbox === undefined ? null : { getAttribute: (n) => (n === "sandbox" ? sandbox : null) };
+  return win;
+};
+
+test("info link per context: panel navigates by bridge; a plain frame links to the top window", async () => {
+  await withWindow(framed(undefined), async () => {
+    const root = await mount(html`<${Topbar} title="T" bridge=${fakeBridge(false, "ok")} infoPath=${INFO} />`);
+    assert.equal(infoLinks(root)[0].attributes.target, "_top");
+    assert.equal(infoLinks(root)[0].attributes.rel, "noopener");
+  });
+  await withWindow(framed(undefined), async () => {
+    const root = await mount(html`<${Topbar} title="T" infoPath=${INFO} />`);
+    assert.equal(infoLinks(root)[0].attributes.target, "_top"); // frame readable without sandbox: top navigation allowed
+  });
+});
+
+test("info link per context: sandbox without top navigation but with popups opens a new tab", async () => {
+  await withWindow(framed("allow-scripts allow-same-origin allow-popups"), async () => {
+    const seen = [];
+    const root = await mount(html`<${Topbar} title="T" infoPath=${INFO} onInfoNavigate=${(v) => seen.push(v)} />`);
+    const [a] = infoLinks(root);
+    assert.equal(a.attributes.target, "_blank");
+    assert.equal(a.attributes.rel, "noopener noreferrer");
+    a.dispatch("click");
+    assert.deepEqual(seen, ["new_tab"]);
+  });
+});
+
+test("info link per context: sandbox without top navigation and without popups hides the link", async () => {
+  await withWindow(framed("allow-scripts allow-same-origin"), async () => {
+    const root = await mount(html`<${Topbar} title="T" infoPath=${INFO} />`);
+    assert.equal(infoLinks(root).length, 0);
+  });
+});
+
+test("info link per context: top navigation tokens keep the top link in a sandbox", async () => {
+  for (const sandbox of ["allow-scripts allow-top-navigation", "allow-top-navigation-by-user-activation"]) {
+    await withWindow(framed(sandbox), async () => {
+      const root = await mount(html`<${Topbar} title="T" infoPath=${INFO} />`);
+      assert.equal(infoLinks(root)[0].attributes.target, "_top", sandbox);
+    });
+  }
+});
+
+test("info link per context: a bridge that answers keeps the link even when the sandbox blocks top navigation", async () => {
+  await withWindow(framed("allow-scripts"), async () => {
+    const bridge = fakeBridge(false, "ok");
+    const root = await mount(html`<${Topbar} title="T" bridge=${bridge} infoPath=${INFO} />`);
+    const [a] = infoLinks(root);
+    const ev = a.dispatch("click");
+    assert.deepEqual(bridge.navigated, [INFO]);
+    assert.equal(ev.defaultPrevented, true);
+  });
+});
+
+test("info link per context: an unreadable frame element leaves the top link in place", async () => {
+  const win = framed(undefined);
+  Object.defineProperty(win, "frameElement", { get() { throw new DOMException("blocked", "SecurityError"); } });
+  await withWindow(win, async () => {
+    const root = await mount(html`<${Topbar} title="T" infoPath=${INFO} />`);
+    assert.equal(infoLinks(root)[0].attributes.target, "_top");
+  });
+});
+
+test("info link appears when the bridge starts to answer", async () => {
+  await withWindow(framed("allow-scripts"), async () => {
+    const bridge = fakeBridge(false, "idle");
+    const root = await mount(html`<${Topbar} title="T" bridge=${bridge} infoPath=${INFO} />`);
+    assert.equal(infoLinks(root).length, 0);
+    bridge.getState().status = "ok";
+    bridge.set(false);
+    await settle();
+    assert.equal(infoLinks(root).length, 1);
+  });
 });

@@ -727,11 +727,16 @@ test.after(() => {
 });
 
 test("infoPath builds HA's add-on info path from a valid slug only", () => {
-  assert.equal(infoPath({ addon_slug: "local_admin_ui" }), "/hassio/addon/local_admin_ui/info");
-  assert.equal(infoPath({ addon_slug: "a1b2c3d4_admin_ui" }), "/hassio/addon/a1b2c3d4_admin_ui/info");
-  for (const bad of [undefined, null, {}, { addon_slug: "" }, { addon_slug: "../x" }, { addon_slug: "A B" }, { addon_slug: 5 }]) {
+  assert.equal(infoPath({ addon_slug: "local_admin_ui" }), "/config/app/local_admin_ui/info");
+  assert.equal(infoPath({ addon_slug: "a1b2c3d4_admin_ui" }), "/config/app/a1b2c3d4_admin_ui/info");
+  for (const bad of [undefined, null, {}, { addon_slug: "" }, { addon_slug: "../x" }, { addon_slug: "a/../b" }, { addon_slug: "A B" }, { addon_slug: 5 }]) {
     assert.equal(infoPath(bad), null, JSON.stringify(bad));
   }
+});
+
+test("the info path uses the app route, never the retired hassio route", () => {
+  assert.ok(!infoPath({ addon_slug: "x_y" }).includes("hassio"));
+  assert.match(infoPath({ addon_slug: "x_y" }), /^\/config\/app\/x_y\/info$/);
 });
 
 test("the topbar shows the info link once api/health reports the slug, and records the path on click", async () => {
@@ -739,7 +744,8 @@ test("the topbar shows the info link once api/health reports the slug, and recor
   const { root, ha } = await mountApp();
   const links = findAll(root, (n) => n.localName === "a" && n.className.split(" ").includes("info-btn"));
   assert.equal(links.length, 1);
-  assert.equal(links[0].getAttribute("href"), "/hassio/addon/local_admin_ui/info");
+  assert.equal(links[0].getAttribute("href"), "/config/app/local_admin_ui/info");
+  assert.equal(links[0].getAttribute("target"), "_self"); // the fake window has no parent: an own tab
   links[0].dispatch("click");
   assert.deepEqual(ha.infoNav.getState(), { last: "fallback", count: 1 });
   healthPayload = { status: "ok", addon_version: "0.1.0-4", lib_version: "0.3.0" };

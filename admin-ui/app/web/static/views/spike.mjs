@@ -4,7 +4,7 @@
 import { html, useEffect, useRef, useState, Badge, CopyField, DataTable, Field } from "../lib/ui.mjs";
 import { useLang, useT } from "../lib/i18n.mjs";
 import { LangSwitch } from "../lib/shell.mjs";
-import { isEmbedded } from "../lib/ingress.mjs";
+import { detectEmbedContext, isEmbedded } from "../lib/ingress.mjs";
 import { THEME_WHITELIST } from "../lib/theme-sync.mjs";
 import { formatDateTime } from "../lib/format.mjs";
 import { get } from "../lib/api.mjs";
@@ -37,7 +37,11 @@ const POLICY_KEYS = { narrow: "demo.spike.policy.narrow", never: "demo.spike.pol
 const STORAGE_KEYS = { ok: "demo.spike.storage.ok", blocked: "demo.spike.storage.blocked" };
 const PATH_KEYS = { ingress: "demo.spike.path.ingress", direct: "demo.spike.path.direct" };
 const MAX_LOG = 20;
-const NAV_PATHS = ["bridge", "fallback"];
+const NAV_PATHS = ["bridge", "fallback", "new_tab"];
+// Short result tokens: the full sandbox token names are long enough to look like secrets to the redaction.
+const SANDBOX_SHORT = { "allow-top-navigation": "top", "allow-top-navigation-by-user-activation": "top_user", "allow-popups": "popups", "allow-popups-to-escape-sandbox": "popups_escape" };
+const EMBED_KINDS = ["panel", "card", "tab", "unknown"];
+const TOP_STATES = ["allowed", "blocked", "unknown"];
 const SOURCES = ["auto", "manual", "not_recorded"];
 const MAX_TEXT = 80;
 const TOKEN_RE = /^[a-z][a-z0-9_]{0,23}$/;
@@ -181,6 +185,7 @@ export function buildResult(i = {}) {
   const versions = i.versions || {};
   const whoami = i.whoami || null;
   const nav = i.infoNav || {};
+  const embed = i.embed || {};
   // Plain strings (typed values) count as manual; a field without a value is "not_recorded" (never guessed).
   const source = (key) => {
     const given = versions[`${key}Source`];
@@ -222,6 +227,11 @@ export function buildResult(i = {}) {
     },
     csp: { violations },
     // Which path the info link took last; HA does not confirm navigate, so this is the path, not a success.
+    embed: {
+      kind: EMBED_KINDS.includes(embed.kind) ? embed.kind : "unknown",
+      sandbox: Array.isArray(embed.sandbox) ? embed.sandbox.map((t) => SANDBOX_SHORT[t]).filter(Boolean) : null,
+      top_navigation: TOP_STATES.includes(embed.topNavigation) ? embed.topNavigation : "unknown",
+    },
     navigate: { last_path: NAV_PATHS.includes(nav.last) ? nav.last : "none", count: num(nav.count) },
     whoami: {
       identity_present: Boolean(whoami && whoami.identity_present),
@@ -250,7 +260,9 @@ function Panel({ check, children }) {
 }
 
 // Literal keys (R-06).
-const NAV_KEYS = { none: "demo.spike.info_path.none", bridge: "demo.spike.info_path.bridge", fallback: "demo.spike.info_path.fallback" };
+const NAV_KEYS = { none: "demo.spike.info_path.none", bridge: "demo.spike.info_path.bridge", fallback: "demo.spike.info_path.fallback", new_tab: "demo.spike.info_path.new_tab" };
+const EMBED_KIND_KEYS = { panel: "demo.spike.kind.panel", card: "demo.spike.kind.card", tab: "demo.spike.kind.tab", unknown: "demo.spike.kind.unknown" };
+const TOP_KEYS = { allowed: "demo.spike.top.allowed", blocked: "demo.spike.top.blocked", unknown: "demo.spike.top.unknown" };
 const SOURCE_KEYS = {
   auto: "demo.spike.source.auto",
   manual: "demo.spike.source.manual",
@@ -340,6 +352,7 @@ export default function Spike({ ha = {} }) {
     return () => doc.removeEventListener("securitypolicyviolation", onViolation);
   }, []);
 
+  const embedContext = detectEmbedContext(win, { bridgeOk: bridgeState.status === "ok" });
   const parent = probeParent(win);
   const accessPath = accessPathOf(safe(() => win.location.pathname, ""));
   const embedded = parent.embedded;
@@ -391,6 +404,7 @@ export default function Spike({ ha = {} }) {
   const inputs = {
     generatedAt: new Date().toISOString().slice(0, 10),
     infoNav: infoState,
+    embed: embedContext,
     versions: {
       core: vCore.value,
       coreSource: vCore.source,
@@ -512,6 +526,9 @@ export default function Spike({ ha = {} }) {
     <${Panel} check=${byId("S7")}>
       <button class="btn small secondary" type="button" onClick=${runNavigate}>${tt("demo.spike.navigate")}</button>
       <p>${tt("demo.spike.navigate_result")}: ${navigateResult === null ? "-" : yn(navigateResult)}</p>
+      <p>${tt("demo.spike.embed_kind")}: ${tt(EMBED_KIND_KEYS[EMBED_KINDS.includes(embedContext.kind) ? embedContext.kind : "unknown"])}</p>
+      <p>${tt("demo.spike.top_navigation")}: ${tt(TOP_KEYS[embedContext.topNavigation] || TOP_KEYS.unknown)}</p>
+      <p>${tt("demo.spike.sandbox_tokens")}: ${Array.isArray(embedContext.sandbox) ? embedContext.sandbox.map((t) => SANDBOX_SHORT[t]).filter(Boolean).join(", ") || "-" : "-"}</p>
       <p>${tt("demo.spike.info_link")}: ${tt(NAV_KEYS[NAV_PATHS.includes(infoState.last) ? infoState.last : "none"])} (${num(infoState.count)})</p>
     <//>
 
