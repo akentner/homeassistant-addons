@@ -45,5 +45,5 @@ GUI uses the shared `admin-ui` library of this repository.
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [ntfy]: https://github.com/binwiederhier/ntfy
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
-[release-shield]: https://img.shields.io/badge/version-v2.37.0-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v2.37.0
+[release-shield]: https://img.shields.io/badge/version-v2.37.1-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v2.37.1

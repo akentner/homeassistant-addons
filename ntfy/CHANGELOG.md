@@ -1,3 +1,13 @@
+This release fixes a database slowdown in v2.37.0 when using `visitor-subscriber-rate-limiting` with a user database:
+the subscriber activity of UnifiedPush topics was written far too often.
+
+**Bug fixes + maintenance:**
+
+- With `visitor-subscriber-rate-limiting` and a user database, write a UnifiedPush topic's subscriber activity every one
+  to two hours instead of every 5 minutes, spread over time, and not at all when a poll or reconnect only repeats the
+  same subscriber; on ntfy.sh, v2.37.0's writes of ~45k topics every 5 minutes, all due in the same minute, slowed down
+  the database ([#2151](https://github.com/binwiederhier/ntfy/pull/2151))
+
 This release makes UnifiedPush work across several servers: the subscriber who pays for a topic's pushes is shared
 through the database, and app servers are told with `410 Gone` when a subscription has been abandoned for 4 days. It
 also adds `Retry-After` and the draft `RateLimit` headers to rate limit responses, and frees the memory of one-off
