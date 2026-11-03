@@ -1,37 +1,44 @@
-// Topic x user matrix of explicit rules with cell editing (D-17).
-import { html, useState, useAsync, toast, Modal, PermSelect, ErrorNote, Loading } from "../lib/ui.mjs";
-import { get, put, del } from "../lib/api.mjs";
+// Topic x user matrix of explicit rules with cell editing. Cells are real buttons. Built on the admin-ui lib.
+import { html, useState, useAsync, toast, Modal, Loading } from "../vendor/admin-ui/ui.mjs";
+import { get, put, del } from "../vendor/admin-ui/api.mjs";
+import { useT, tError } from "../vendor/admin-ui/i18n.mjs";
+import { PermSelect, ErrorNote } from "../components.mjs";
 import { buildMatrix, validTopic } from "../lib/model.mjs";
 
-export const meta = { id: "matrix", title: "Matrix" };
-
-const msg = (e) => (e && e.message) || String(e);
+export const meta = { id: "matrix", titleKey: "view.matrix" };
 
 function CellEditor({ cell, onClose, onSaved }) {
+  const tt = useT();
   const [value, setValue] = useState(cell.permission || "");
   const save = async () => {
     try {
       if (value) await put("acl", { body: { user: cell.user, topic: cell.topic, permission: value } });
       else if (cell.permission) await del("acl", { query: { user: cell.user, topic: cell.topic } });
-      toast("ok", `${cell.user} on ${cell.topic}: ${value || "no rule"}`);
+      toast("ok", tt("matrix.saved", { user: cell.user, topic: cell.topic, permission: value || tt("matrix.no_rule") }));
       onSaved();
     } catch (e) {
-      toast("error", msg(e));
+      toast("error", tError(e));
     }
   };
-  return html`<${Modal} title=${`${cell.user} on ${cell.topic}`} onClose=${onClose}>
+  return html`<${Modal} title=${tt("matrix.edit.title", { user: cell.user, topic: cell.topic })} onClose=${onClose}>
     <div class="form-row">
-      <label>Permission</label>
-      <${PermSelect} value=${value} includeNone=${true} onChange=${setValue} />
+      <label>${tt("matrix.edit.permission")}</label>
+      <${PermSelect}
+        value=${value}
+        includeNone=${true}
+        label=${tt("matrix.edit.permission")}
+        onChange=${setValue}
+      />
     </div>
     <div class="actions">
-      <button class="btn secondary" type="button" onClick=${onClose}>Cancel</button>
-      <button class="btn" type="button" onClick=${save}>Save</button>
+      <button class="btn secondary" type="button" onClick=${onClose}>${tt("btn.cancel")}</button>
+      <button class="btn" type="button" onClick=${save}>${tt("btn.save")}</button>
     </div>
   <//>`;
 }
 
 export default function View() {
+  const tt = useT();
   const usersQ = useAsync(() => get("users"));
   const rulesQ = useAsync(() => get("acl"));
   const [cell, setCell] = useState(null);
@@ -49,40 +56,50 @@ export default function View() {
   };
   return html`<div>
     <div class="muted">
-      The grid shows explicit rules only. For the effective result of a user and topic use the
-      <a href="#/tools">Tools</a> view.
+      ${tt("matrix.help_before")} <a href="#/tools">${tt("matrix.help_link")}</a>${tt("matrix.help_after")}
     </div>
     <div class="matrix">
       <table>
+        <caption class="sr-only">
+          ${tt("matrix.caption")}
+        </caption>
         <thead>
           <tr>
-            <th>Topic</th>
-            ${columns.map((n) => html`<th key=${n}>${n}</th>`)}
+            <th scope="col">${tt("matrix.col.topic")}</th>
+            ${columns.map((n) => html`<th scope="col" key=${n}>${n}</th>`)}
           </tr>
         </thead>
         <tbody>
           ${grid.topics.map(
-            (t) =>
-              html`<tr key=${t}>
-                <th class="mono">
-                  ${t} ${validTopic(t) && html`<a href=${`#/tools?topic=${encodeURIComponent(t)}`}>?</a>`}
+            (topic) =>
+              html`<tr key=${topic}>
+                <th scope="row" class="mono">
+                  ${topic}
+                  ${validTopic(topic) &&
+                  html`<a
+                    href=${`#/tools?topic=${encodeURIComponent(topic)}`}
+                    aria-label=${tt("matrix.tools_link", { topic })}
+                    >?</a
+                  >`}
                 </th>
-                ${columns.map((n) => {
-                  const permission = (grid.cells[n] || {})[t] || "";
-                  return html`<td
-                    key=${n}
-                    class=${`cell ${permission}`}
-                    title=${`${n} on ${t}`}
-                    onClick=${() => setCell({ user: n, topic: t, permission })}
-                  >
-                    ${permission || "·"}
+                ${columns.map((user) => {
+                  const permission = (grid.cells[user] || {})[topic] || "";
+                  return html`<td key=${user} class=${`cell ${permission}`}>
+                    <button
+                      class="cell-btn"
+                      type="button"
+                      aria-label=${tt("matrix.cell", { user, topic, permission: permission || tt("matrix.no_rule") })}
+                      onClick=${() => setCell({ user, topic, permission })}
+                    >
+                      ${permission || "·"}
+                    </button>
                   </td>`;
                 })}
               </tr>`,
           )}
         </tbody>
       </table>
-      ${grid.topics.length === 0 && html`<div class="muted">No rules yet.</div>`}
+      ${grid.topics.length === 0 && html`<div class="muted">${tt("matrix.empty")}</div>`}
     </div>
     ${cell && html`<${CellEditor} cell=${cell} onClose=${() => setCell(null)} onSaved=${saved} />`}
   </div>`;

@@ -4,18 +4,27 @@ from __future__ import annotations
 
 import logging
 import os
-import signal
 import sys
-import threading
-from types import FrameType
+from collections.abc import Mapping
 
 from app.context import build_context
 from app.contract import GUI_PORT, INGRESS_REMOTE
+from app.web.admin_ui import DEFAULT_CSP, serve
 from app.web.api import register_all
 from app.web.server import Router, make_server
 
 LEVELS = {"trace": logging.DEBUG, "debug": logging.DEBUG, "info": logging.INFO, "warn": logging.WARNING,
           "error": logging.ERROR}
+
+
+def csp_from_env(environ: Mapping[str, str]) -> str | None:
+    """NTFY_GUI_CSP: `strict` (default) keeps the skeleton CSP, `off` removes it (diagnostics only), else ValueError."""
+    value = environ.get("NTFY_GUI_CSP", "strict")
+    if value == "strict":
+        return DEFAULT_CSP
+    if value == "off":
+        return None
+    raise ValueError(f"NTFY_GUI_CSP must be 'strict' or 'off', got {value!r}")
 
 
 def main() -> int:
@@ -25,19 +34,10 @@ def main() -> int:
     router = Router()
     register_all(router, ctx)
     port = int(os.environ.get("NTFY_GUI_PORT", str(GUI_PORT)))
-    server = make_server(router, port, os.environ.get("NTFY_INGRESS_REMOTE", INGRESS_REMOTE))
-
-    def stop(_signum: int, _frame: FrameType | None) -> None:
-        # shutdown() blocks until serve_forever returns, so it must not run in the signal handler's thread
-        threading.Thread(target=server.shutdown, daemon=True).start()
-
-    signal.signal(signal.SIGTERM, stop)
-    signal.signal(signal.SIGINT, stop)
+    server = make_server(router, port, os.environ.get("NTFY_INGRESS_REMOTE", INGRESS_REMOTE),
+                         csp=csp_from_env(os.environ))
     print(f"[gui] listening on port {port}", flush=True)
-    try:
-        server.serve_forever()
-    finally:
-        server.server_close()
+    serve(server)
     return 0
 
 

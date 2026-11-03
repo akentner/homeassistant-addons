@@ -1,12 +1,6 @@
 // Pure helpers (no DOM, no preact, no fetch). Mirrors ntfy/app/contract.py; keep both in sync.
 
 export const PERMISSIONS = ["rw", "ro", "wo", "deny"];
-export const PERMISSION_LABELS = {
-  rw: "read + write",
-  ro: "read only",
-  wo: "write only",
-  deny: "deny",
-};
 export const ORIGINS = ["gui", "options", "iac"];
 export const RESET_PHRASES = { acls: "reset acls", cache: "clear cache", everything: "reset everything" };
 
@@ -58,70 +52,27 @@ export function buildMatrix(users, rules) {
   return { users: [...names].sort(byName), topics, cells };
 }
 
-export function fmtBytes(n) {
-  if (!Number.isFinite(n) || n < 0) return "-";
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-  let v = n;
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i += 1;
-  }
-  return i === 0 ? `${v} B` : `${v.toFixed(1)} ${units[i]}`;
-}
-
-const pad = (n) => String(n).padStart(2, "0");
-
-export function fmtUnix(ts) {
-  if (!ts) return "-";
-  const d = new Date(ts * 1000);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-export function fmtExpiry(ts, nowMs = Date.now()) {
-  if (!ts) return "never";
-  return ts * 1000 <= nowMs ? `expired ${fmtUnix(ts)}` : fmtUnix(ts);
-}
-
-export function relTime(ts, nowMs = Date.now()) {
-  if (!ts) return "-";
-  const sec = Math.round((nowMs - ts * 1000) / 1000);
-  if (sec < 45) return "just now";
-  const min = Math.round(sec / 60);
-  if (min < 60) return `${min} min ago`;
-  const hours = Math.round(min / 60);
-  if (hours < 48) return `${hours} h ago`;
-  return `${Math.round(hours / 24)} d ago`;
-}
-
-const PROTECTION = {
-  last_admin: "last admin",
-  options_admin: "admin from options",
-  anonymous: "anonymous user",
-};
-
-export function protectionLabel(reason) {
-  return PROTECTION[reason] || (reason ? String(reason) : "");
-}
-
-export const confirmMatches = (typed, expected) => typeof typed === "string" && typed === expected;
-
 export function expiryState(ts, nowMs = Date.now()) {
   if (!ts) return "never";
   return ts * 1000 <= nowMs ? "expired" : "active";
 }
 
-export function describeEffective(eff) {
+// ---- key-free logic for the views (additive; the views map kinds to i18n keys) ----
+
+const PROTECTION_KINDS = ["last_admin", "options_admin", "anonymous"];
+
+export function protectionKind(reason) {
+  return PROTECTION_KINDS.includes(reason) ? reason : "other";
+}
+
+const EFFECTIVE_KINDS = { admin: "admin", "user-rule": "user_rule", "everyone-rule": "everyone_rule" };
+
+export function effectiveExplain(eff) {
   const src = eff && eff.source ? eff.source : {};
-  const rule = src.rule ? `${src.rule.user} on ${src.rule.topic} (${src.rule.permission})` : "";
-  switch (src.kind) {
-    case "admin":
-      return "admin role: full access";
-    case "user-rule":
-      return `decided by the user rule ${rule}`;
-    case "everyone-rule":
-      return `decided by the everyone rule ${rule}`;
-    default:
-      return "no rule matches, default access applies";
+  const kind = EFFECTIVE_KINDS[src.kind] || "default";
+  if (kind === "user_rule" || kind === "everyone_rule") {
+    const rule = src.rule || {};
+    return { kind, params: { user: rule.user, topic: rule.topic, permission: rule.permission } };
   }
+  return { kind, params: {} };
 }

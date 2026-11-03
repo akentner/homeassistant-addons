@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ApiClientError, buildUrl, request, get, post, del } from "../../app/web/static/lib/api.mjs";
+import { ApiClientError, buildUrl, request, get, post, del } from "../../app/web/static/vendor/admin-ui/api.mjs";
 
 const resp = (status, body) => ({ status, ok: status >= 200 && status < 300, json: async () => body });
 

@@ -1,20 +1,28 @@
-"""Static guards for the shipped frontend: vendored runtime integrity and ingress/XSS invariants."""
+"""Static guards for the shipped frontend: ingress/XSS invariants and the admin-ui blueprint scanner.
+
+The vendored runtime (bundle hash, licences) belongs to the synced lib copy; the scanner rule `vendor` checks it.
+"""
 
 from __future__ import annotations
 
-import hashlib
+import importlib.util
 import re
-import shutil
-import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-STATIC = Path(__file__).resolve().parents[1] / "app" / "web" / "static"
+REPO = Path(__file__).resolve().parents[2]
+STATIC = REPO / "ntfy" / "app" / "web" / "static"
 VENDOR = STATIC / "vendor"
-BUNDLE = VENDOR / "preact-htm.mjs"
-SHA256 = "72284e8e9079c87817145df1110f74e8a2aa040b2fc384922e18dfcb46fc1fd7"
-REQUIRED_EXPORTS = ["html", "render", "useState", "useEffect", "useMemo", "useRef", "useCallback"]
+LIB = VENDOR / "admin-ui"
+SCRIPT = REPO / "internal" / "check-admin-ui-rules.py"
+
+spec = importlib.util.spec_from_file_location("check_admin_ui_rules", SCRIPT)
+assert spec and spec.loader
+rules = importlib.util.module_from_spec(spec)
+sys.modules["check_admin_ui_rules"] = rules
+spec.loader.exec_module(rules)
 
 # An absolute reference: leading slash (also protocol-relative) or a URL scheme.
 ABS = r"""\s*(?:/|[a-zA-Z][a-zA-Z0-9+.-]*:)"""
@@ -44,25 +52,9 @@ def shipped_files() -> list[Path]:
     return sorted(p for p in files if VENDOR not in p.parents)
 
 
-def test_vendored_bundle_hash() -> None:
-    assert hashlib.sha256(BUNDLE.read_bytes()).hexdigest() == SHA256
-    assert SHA256 in (VENDOR / "README.txt").read_text()
-
-
-def test_licences_present() -> None:
-    assert "Apache License" in (VENDOR / "LICENSE-htm.txt").read_text()
-    assert "MIT License" in (VENDOR / "LICENSE-preact.txt").read_text()
-
-
-@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
-def test_bundle_exports() -> None:
-    script = (
-        f"import({BUNDLE.as_uri()!r}).then(m => console.log(JSON.stringify(Object.keys(m))))"
-    )
-    proc = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=60, check=False)
-    assert proc.returncode == 0, proc.stderr
-    for name in REQUIRED_EXPORTS:
-        assert f'"{name}"' in proc.stdout
+def test_blueprint_scanner_is_clean() -> None:
+    findings = rules.scan_static(STATIC, LIB)
+    assert findings == [], "\n".join(f"{f.path}:{f.line} [{f.rule}] {f.message}" for f in findings)
 
 
 def test_scan_finds_files() -> None:

@@ -19,5 +19,5 @@ Update procedure:
   1. Download the new standalone.module.js of the wanted htm version to a scratch directory.
   2. Compare it with the vendored file, review the changes and the new licences.
   3. Replace preact-htm.mjs, update size, version, URL and sha256 here and the SHA256 constant in
-     ntfy/tests/test_frontend_static.py.
-  4. Run: uv run --with pytest python3 -m pytest ntfy/tests -q
+     admin-ui/tests/test_static_rules.py and internal/check-admin-ui-rules.py.
+  4. Run: uv run --with pytest python3 -m pytest admin-ui/tests -q

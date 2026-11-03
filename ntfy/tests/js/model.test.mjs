@@ -51,24 +51,6 @@ test("sortRules and groupRulesByUser", () => {
   assert.deepEqual(Object.keys(m.groupRulesByUser(rules)), ["everyone", "b"]);
 });
 
-test("formatters", () => {
-  assert.equal(m.fmtBytes(0), "0 B");
-  assert.equal(m.fmtBytes(1536), "1.5 KiB");
-  assert.equal(m.fmtExpiry(0), "never");
-  assert.match(m.fmtExpiry(1, 10 ** 12), /^expired /);
-  const now = 1_000_000_000_000;
-  assert.equal(m.relTime(now / 1000 - 5, now), "just now");
-  assert.equal(m.relTime(now / 1000 - 300, now), "5 min ago");
-  assert.match(m.fmtUnix(1700000000), /^\d{4}-\d\d-\d\d \d\d:\d\d$/);
-  assert.equal(m.protectionLabel("last_admin"), "last admin");
-});
-
-test("confirmMatches is strict", () => {
-  assert.ok(m.confirmMatches("reset acls", "reset acls"));
-  assert.ok(!m.confirmMatches("Reset ACLs", "reset acls"));
-  assert.ok(!m.confirmMatches("reset acls ", "reset acls"));
-});
-
 test("constants mirror the contract", () => {
   assert.deepEqual(m.RESET_PHRASES, { acls: "reset acls", cache: "clear cache", everything: "reset everything" });
   assert.deepEqual(m.PERMISSIONS, ["rw", "ro", "wo", "deny"]);
@@ -81,10 +63,32 @@ test("expiryState", () => {
   assert.equal(m.expiryState(now / 1000 + 100, now), "active");
 });
 
-test("describeEffective", () => {
-  const rule = { user: "bob", topic: "t*", permission: "ro" };
-  assert.match(m.describeEffective({ source: { kind: "admin", rule: null } }), /admin role: full access/);
-  assert.match(m.describeEffective({ source: { kind: "user-rule", rule } }), /bob on t\* \(ro\)/);
-  assert.match(m.describeEffective({ source: { kind: "everyone-rule", rule } }), /everyone rule/);
-  assert.match(m.describeEffective({ source: { kind: "default", rule: null } }), /default access applies/);
+test("protectionKind maps the protection reasons to kinds", () => {
+  assert.equal(m.protectionKind("last_admin"), "last_admin");
+  assert.equal(m.protectionKind("options_admin"), "options_admin");
+  assert.equal(m.protectionKind("anonymous"), "anonymous");
+  assert.equal(m.protectionKind("something_new"), "other");
+  assert.equal(m.protectionKind(null), "other");
+  assert.equal(m.protectionKind(undefined), "other");
+});
+
+test("effectiveExplain returns kind and params, never text", () => {
+  const rule = { user: "alice", topic: "alerts", permission: "rw" };
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "admin", rule: null } }), { kind: "admin", params: {} });
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "user-rule", rule } }), { kind: "user_rule", params: rule });
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "everyone-rule", rule } }), { kind: "everyone_rule", params: rule });
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "default", rule: null } }), { kind: "default", params: {} });
+  assert.deepEqual(m.effectiveExplain(null), { kind: "default", params: {} });
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "user-rule", rule: { ...rule, extra: 1 } } }).params, rule);
+});
+
+test("the public export list is exactly the ntfy logic that stays", () => {
+  assert.deepEqual(
+    Object.keys(m).sort(),
+    [
+      "ORIGINS", "PERMISSIONS", "RESET_PHRASES", "buildMatrix", "effectiveExplain", "expiryState", "groupRulesByUser",
+      "matchTopic", "protectionKind", "sortRules", "validDuration", "validLabel", "validTopic", "validTopicPattern",
+      "validUsername",
+    ],
+  );
 });

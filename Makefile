@@ -1,7 +1,7 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions verify-update-version-tag-timing update-version validate-dockerfiles docker-build-check build-addon release install-provider verify-install-provider verify-images verify-images-self-test sync-admin-ui check-admin-ui-sync check-admin-ui-rules test-admin-ui
+.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions verify-update-version-tag-timing update-version validate-dockerfiles docker-build-check build-addon release install-provider verify-install-provider verify-images verify-images-self-test sync-admin-ui check-admin-ui-sync check-admin-ui-rules test-admin-ui test-ntfy
 
 # Default target
 help: ## Show this help message
@@ -119,6 +119,10 @@ check-admin-ui-rules: ## Scan admin-ui front ends against the static blueprint r
 test-admin-ui: ## Run the admin-ui Node and pytest suites
 	node --test admin-ui/tests/js/*.test.mjs
 	uv run --with pytest --with pyyaml python3 -m pytest admin-ui/tests -q
+
+test-ntfy: ## Run the ntfy Node and pytest suites
+	node --test ntfy/tests/js/*.test.mjs
+	uv run --with pytest --with pyyaml python3 -m pytest ntfy/tests -q
 
 # Unlike verify-images below, this is offline, deterministic, and fails only for
 # something in this repo's own internal/update-version.py -- it builds a

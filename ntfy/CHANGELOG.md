@@ -55,6 +55,28 @@ All notable changes to the **ntfy** add-on are documented in this file. The form
 [Keep a Changelog](https://keepachangelog.com/). The add-on version follows upstream ntfy; a change that only touches
 the add-on (GUI, options, docs) bumps the subpatch (`-N`).
 
+## [2.37.0-2] - 2026-11-03
+
+### Changed
+
+- The admin GUI runs on the shared `admin-ui` library; the look changes slightly, with higher text contrast and
+  different colours
+- Error messages are translated per error code; unknown codes show the code in brackets
+- The page and static files carry a Content-Security-Policy and Referrer-Policy header (`NTFY_GUI_CSP=off` is a
+  diagnostic switch only)
+
+### Added
+
+- German and English interface with a language switch, light and dark theme
+- Keyboard-operable matrix cells, accessible names and table headers
+- Optional Home Assistant theme sync and bridge as progressive enhancement
+- Tests for the GUI and the add-on run in CI
+
+### Fixed
+
+- The role-change message names the number of dropped rules
+- A test publish that ntfy rate-limits or cannot reach is reported as a failure
+
 ## [2.36.0-0] - 2026-11-01
 
 ### Added

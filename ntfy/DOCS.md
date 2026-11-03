@@ -64,6 +64,15 @@ old add-on.
 
 ## Admin GUI guide
 
+The GUI is available in German and English. The language switch sits in the top bar and the choice is stored in the
+browser. Without a stored choice the browser language decides: German for `de*`, English otherwise. The light and dark
+theme follows the system setting, with light as the default.
+
+Since version 2.37.0-2 the GUI uses the shared `admin-ui` design of this repository. The look changed slightly: contrast
+of text, badges and buttons is higher and some colours differ. Behaviour, API and data are unchanged. Errors appear as a
+translated text per error code. For a code the GUI does not know, the code is shown in brackets, for example
+`[some_code]`. The text of the server's own message is never shown.
+
 - **Users**: role, tier, token count and origin. Create users, change passwords, promote or demote.
 - **ACL rules**: per topic and user, including `everyone` and wildcards such as `alerts-*`. A topic x user matrix shows
   all rules at a glance.
@@ -73,6 +82,19 @@ old add-on.
   `akentner` read-only.
 - **Health**: status, database size and schema version, and a test publish.
 - **Export**, **backups** and **reset actions** are described below.
+
+Two behaviours worth knowing: when a role change drops rules, the message names the number of dropped rules, and a test
+publish that ntfy rate-limits or cannot reach is shown as a failure, not as a success. The cells of the topic x user
+matrix are buttons and can be operated with the keyboard.
+
+### Home Assistant theme and layout (optional)
+
+When the page runs inside the Home Assistant panel, it may adopt the Home Assistant theme and use the HA bridge (menu
+button, safe-area insets). Both are progressive enhancement only: the GUI works the same with its own theme and fixed
+layout when they are not available. In a dashboard card (`custom:addon-iframe-card`), navigation to Home Assistant pages
+is blocked by the frame and the navigate message is not answered, so nothing in the GUI depends on it. This behaviour is
+not verified live on all setups. For the details see the "HA integration" and "Embedding contexts" sections of the
+`admin-ui` documentation.
 
 ### Guardrails
 
@@ -159,6 +181,8 @@ Moving `auth.db` by hand stays possible, but is not supported. When the web UI i
 
 - The GUI answers only to the HA ingress proxy (peer `172.30.32.2` plus an `X-Ingress-Path` header), including static
   files and read requests.
+- The page and the static files carry a `Content-Security-Policy` (scripts, styles and connections only from the add-on
+  itself) and `Referrer-Policy: same-origin`. API answers do not carry the CSP.
 - Passwords reach the ntfy CLI only through the environment. Secrets are never logged.
 - Add-on options, and so HA backups, hold the admin and baseline passwords in clear text.
 - ntfy stores tokens in clear text. `auth.db` and its backups contain password hashes and clear-text tokens.
@@ -172,6 +196,9 @@ Moving `auth.db` by hand stays possible, but is not supported. When the web UI i
 - **Database locked**: ntfy and the GUI share the database. Writes are serialized and retried. If the problem stays,
   restart the add-on.
 - **No admin**: `admin_password` is empty. Set it and restart.
+- **Blank or unstyled page**: the Content-Security-Policy may block a resource. Look at the browser console for a CSP
+  message. For diagnosis only, the container environment variable `NTFY_GUI_CSP=off` removes the policy. It is not an
+  add-on option and must never stay set permanently. Valid values are `strict` (default) and `off`.
 
 ## Limitations
 
@@ -184,6 +211,7 @@ Moving `auth.db` by hand stays possible, but is not supported. When the web UI i
 
 - Upstream ntfy by Philipp C. Heckel (binwiederhier), Apache-2.0 and GPLv2.
 - The icon comes from the upstream repository.
-- The GUI vendors htm and Preact; their licences are in `app/web/static/vendor`.
+- The GUI uses the shared `admin-ui` library of this repository. A copy lives in `app/web/static/vendor/admin-ui`
+  (licences of htm and Preact in its `vendor` folder). It is copied in at build time and never edited in the add-on.
 
 [ntfy]: https://github.com/binwiederhier/ntfy
