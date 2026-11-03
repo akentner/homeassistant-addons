@@ -83,4 +83,18 @@ export default {
   "acl.delete.title": "Regel löschen",
   "acl.delete.message": "Die Regel für {user} auf {topic} löschen?",
   "acl.delete.done": "Regel gelöscht",
+
+  // ---- matrix ----
+  "matrix.help_before": "Das Raster zeigt nur ausdrückliche Regeln. Das tatsächliche Ergebnis für einen Benutzer und ein Topic zeigt die Ansicht",
+  "matrix.help_link": "Werkzeuge",
+  "matrix.help_after": ".",
+  "matrix.caption": "Ausdrückliche Berechtigungen je Topic und Benutzer",
+  "matrix.col.topic": "Topic",
+  "matrix.empty": "Noch keine Regeln.",
+  "matrix.no_rule": "keine Regel",
+  "matrix.cell": "{user} auf {topic}: {permission}",
+  "matrix.tools_link": "Tatsächliche Rechte für {topic} prüfen",
+  "matrix.edit.title": "{user} auf {topic}",
+  "matrix.edit.permission": "Berechtigung",
+  "matrix.saved": "{user} auf {topic}: {permission}",
 };

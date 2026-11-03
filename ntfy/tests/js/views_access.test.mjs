@@ -406,12 +406,132 @@ test("acl view: a German mount has no English literal and no key placeholder", a
   assert.deepEqual(auditNames(root), []);
 });
 
-test("matrix view has everyone column and a row per topic", async () => {
+// ---------------------------------------------------------------- matrix
+
+const cellBtns = (root) => findAll(root, (n) => n.localName === "button" && cls(n).includes("cell-btn"));
+const cellFor = (root, user, topic) =>
+  cellBtns(root).find((b) => (b.getAttribute("aria-label") || "").startsWith(`${user} on ${topic}:`));
+const dialogOf = (root) => findAll(root, (n) => n.getAttribute && n.getAttribute("role") === "dialog")[0];
+
+test("matrix view: meta, grid structure with caption and header scopes, everyone column, no admin column", async () => {
+  const mod = await import(new URL("views/matrix.mjs", STATIC));
+  assert.deepEqual(mod.meta, { id: "matrix", titleKey: "view.matrix" });
   const root = await mount("matrix");
-  const heads = findAll(root, (n) => n.localName === "th").map((n) => n.textContent.trim());
-  assert.ok(heads.includes("everyone"));
-  const body = findAll(root, (n) => n.localName === "tbody")[0];
-  assert.equal(findAll(body, (n) => n.localName === "tr").length, 2);
+  const wrap = findAll(root, (n) => cls(n).includes("matrix"))[0];
+  assert.ok(wrap && byTag(wrap, "table").length === 1);
+  const caption = byTag(root, "caption")[0];
+  assert.ok(caption && cls(caption).includes("sr-only"));
+  const head = byTag(byTag(root, "thead")[0], "th");
+  assert.deepEqual(head.map((th) => th.textContent.trim()), ["Topic", "everyone", ALICE]);
+  assert.ok(head.every((th) => th.getAttribute("scope") === "col"));
+  const body = byTag(root, "tbody")[0];
+  const rows = byTag(body, "tr");
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every((r) => byTag(r, "th")[0].getAttribute("scope") === "row"));
+  assert.ok(!all(root).includes("admin"));
+  assert.deepEqual(auditNames(root), []);
+  assert.deepEqual(auditTables(root), []);
+});
+
+test("matrix view: every cell is a real button with an aria-label naming user, topic and permission", async () => {
+  const root = await mount("matrix");
+  const cells = cellBtns(root);
+  assert.equal(cells.length, 4);
+  assert.ok(cells.every((b) => b.getAttribute("type") === "button"));
+  assert.equal(cellFor(root, ALICE, "alerts").getAttribute("aria-label"), `${ALICE} on alerts: rw`);
+  assert.equal(cellFor(root, ALICE, "alerts").textContent.trim(), "rw");
+  assert.equal(cellFor(root, "everyone", "alerts").getAttribute("aria-label"), "everyone on alerts: no rule");
+  assert.ok(byTag(root, "td").every((td) => !(td.listeners.click || []).length), "no clickable td");
+});
+
+test("matrix view: a cell opens a labelled editor with none; saving sends PUT with user, topic, permission", async () => {
+  await withData({ "PUT api/acl": { ok: true } }, async () => {
+    const root = await mount("matrix");
+    const stack = await toasts();
+    await click(cellFor(root, "everyone", "alerts"));
+    const dialog = dialogOf(root);
+    assert.ok(dialog && dialog.textContent.includes("everyone on alerts"));
+    const select = byTag(dialog, "select")[0];
+    assert.equal(select.getAttribute("aria-label"), "Permission");
+    assert.deepEqual(findAll(select, (n) => n.localName === "option").map((o) => prop(o, "value")), ["", "rw", "ro", "wo", "deny"]);
+    assert.deepEqual(auditNames(root), []);
+    await choose(select, "ro");
+    await click(findByText(dialog, "button", "Save")[0]);
+    assert.deepEqual(used("PUT", "api/acl")[0].body, { user: "everyone", topic: "alerts", permission: "ro" });
+    assert.match(stack.textContent, /everyone on alerts: ro/);
+    assert.equal(dialogOf(root), undefined, "dialog closed");
+    assert.equal(used("GET", "api/acl").length, 2, "rules reloaded");
+    assert.equal(used("GET", "api/users").length, 2, "users reloaded");
+  });
+});
+
+test("matrix view: none deletes an existing rule, none without a rule sends nothing", async () => {
+  await withData({ "DELETE api/acl": { ok: true } }, async () => {
+    const root = await mount("matrix");
+    await click(cellFor(root, ALICE, "alerts"));
+    await choose(byTag(dialogOf(root), "select")[0], "");
+    await click(findByText(dialogOf(root), "button", "Save")[0]);
+    const del = calls().filter((c) => c.method === "DELETE").pop();
+    assert.equal(del.url, "api/acl?user=%3Cb%3Ealice%3C%2Fb%3E&topic=alerts");
+    const before = calls().length;
+    await click(cellFor(root, "everyone", "alerts"));
+    await click(findByText(dialogOf(root), "button", "Save")[0]);
+    assert.equal(calls().slice(before).filter((c) => c.method !== "GET").length, 0);
+  });
+});
+
+test("matrix view: a failing save toasts the localized code text and keeps the editor open", async () => {
+  await withData({}, async () => {
+    const root = await mount("matrix");
+    const stack = await toasts();
+    failures["PUT api/acl"] = { status: 423, error: "locked", message: "raw backend text" };
+    await click(cellFor(root, "everyone", "alerts"));
+    await choose(byTag(dialogOf(root), "select")[0], "rw");
+    await click(findByText(dialogOf(root), "button", "Save")[0]);
+    delete failures["PUT api/acl"];
+    assert.match(stack.textContent, /The ntfy auth database is locked/);
+    assert.ok(!stack.textContent.includes("raw backend text"));
+    assert.ok(dialogOf(root));
+  });
+});
+
+test("matrix view: concrete topics get a Tools link with a name, patterns do not; the help sentence links to Tools", async () => {
+  const root = await mount("matrix");
+  const links = findAll(root, (n) => n.localName === "a" && (n.getAttribute("href") || "").startsWith("#/tools"));
+  const topicLink = links.find((a) => a.getAttribute("href") === "#/tools?topic=alerts");
+  assert.ok(topicLink);
+  assert.match(topicLink.getAttribute("aria-label"), /alerts/);
+  assert.ok(!links.some((a) => (a.getAttribute("href") || "").includes("news")), "no link for the pattern news-*");
+  assert.ok(links.some((a) => a.getAttribute("href") === "#/tools" && a.textContent.trim() === "Tools"));
+});
+
+test("matrix view: empty state and hostile names stay text", async () => {
+  await withData({ "GET api/acl": { rules: [] } }, async () => {
+    assert.match(all(await mount("matrix")), /No rules yet\./);
+  });
+  await withData(
+    { "GET api/acl": { rules: [{ user: ALICE, topic: "<i>x</i>", permission: "rw", origin: "gui" }] } },
+    async () => {
+      const root = await mount("matrix");
+      assert.ok(all(root).includes("<i>x</i>"));
+      assert.equal(findAll(root, (n) => n.localName === "b" || n.localName === "i").length, 0);
+    },
+  );
+});
+
+test("matrix view: a German mount has no English literal and no key placeholder", async () => {
+  const root = await mount("matrix", {}, { lang: "de" });
+  const text = all(root);
+  assert.match(text, /Das Raster zeigt nur ausdrückliche Regeln/);
+  assert.match(text, /Werkzeuge/);
+  assert.ok(!/Topic\b.*Add|No rules|The grid|Save|Cancel/.test(text), text);
+  assert.equal(cellFor(root, "everyone", "alerts"), undefined);
+  assert.equal(cellBtns(root)[0].getAttribute("aria-label").includes(" auf "), true);
+  noPlaceholder(text, "matrix");
+  await click(cellBtns(root)[0]);
+  assert.match(dialogOf(root).textContent, /Berechtigung/);
+  assert.ok(!/Permission|Save|Cancel/.test(dialogOf(root).textContent));
+  assert.deepEqual(auditNames(root), []);
 });
 
 // Preact/toast timers can outlive the tests; end the worker once the results are reported.

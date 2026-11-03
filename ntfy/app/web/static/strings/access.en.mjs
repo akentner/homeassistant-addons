@@ -83,4 +83,18 @@ export default {
   "acl.delete.title": "Delete rule",
   "acl.delete.message": "Delete the rule for {user} on {topic}?",
   "acl.delete.done": "Rule deleted",
+
+  // ---- matrix ----
+  "matrix.help_before": "The grid shows explicit rules only. For the effective result of a user and topic use the",
+  "matrix.help_link": "Tools",
+  "matrix.help_after": "view.",
+  "matrix.caption": "Explicit permissions per topic and user",
+  "matrix.col.topic": "Topic",
+  "matrix.empty": "No rules yet.",
+  "matrix.no_rule": "no rule",
+  "matrix.cell": "{user} on {topic}: {permission}",
+  "matrix.tools_link": "Check the effective rights for {topic}",
+  "matrix.edit.title": "{user} on {topic}",
+  "matrix.edit.permission": "Permission",
+  "matrix.saved": "{user} on {topic}: {permission}",
 };
