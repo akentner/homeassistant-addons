@@ -7,7 +7,7 @@ export { findAll, findByText, prop, settle } from "./fakedom.mjs";
 export const doc = install();
 export const STATIC = new URL("../../app/web/static/", import.meta.url);
 
-const { html, render } = await import(new URL("lib/ui.mjs", STATIC));
+const { html, render } = await import(new URL("vendor/admin-ui/ui.mjs", STATIC));
 const i18n = await import(new URL("vendor/admin-ui/i18n.mjs", STATIC));
 const { default: de } = await import(new URL("strings.de.mjs", STATIC));
 const { default: en } = await import(new URL("strings.en.mjs", STATIC));
