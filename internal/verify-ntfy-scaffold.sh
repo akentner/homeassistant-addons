@@ -129,8 +129,9 @@ echo "==> Frontend closure"
 # every servable file below static/ (found on the host) must answer 200 through the gate
 served=0
 while IFS= read -r rel; do
-    gui "${MAIN}" "/static/${rel}" "${INGRESS[@]}"
-    [ "${STATUS}" = "200" ] || fail "/static/${rel} status ${STATUS} (expected 200)"
+    # status only: some files (icon.png) are binary and must not pass through a shell variable
+    code="$(docker exec "${MAIN}" curl -s -o /dev/null -w '%{http_code}' --path-as-is "${INGRESS[@]}" "http://127.0.0.1:8099/static/${rel}")" || true
+    [ "${code}" = "200" ] || fail "/static/${rel} status ${code} (expected 200)"
     served=$((served + 1))
 done < <(find "${ADDON_DIR}/app/web/static" -type f \( -name '*.mjs' -o -name '*.js' -o -name '*.css' -o -name '*.png' -o -name '*.svg' -o -name '*.txt' \) -printf '%P\n' | sort)
 [ "${served}" -ge 30 ] || fail "frontend closure covers only ${served} files (expected at least 30)"
