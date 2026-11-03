@@ -439,6 +439,150 @@ test("tokens: German mount has no English literal, also with the create dialog o
   assert.equal(auditTables(root).length, 0);
 });
 
+// ---- data ----
+
+test("data: export link is relative and exactly what apiHref builds; the hashes box shows the notice", async () => {
+  const root = await mount("data");
+  const link = () => findAll(root, (n) => n.localName === "a" && cls(n).includes("btn") && !cls(n).includes("small"))[0];
+  assert.equal(prop(link(), "href"), apiHref("export", { format: "yaml", include_hashes: 0 }));
+  assert.ok(!prop(link(), "href").startsWith("/"));
+  assert.ok(link().getAttribute("download") !== null);
+  assert.match(all(root), /Token values are never exported\./);
+  assert.ok(!all(root).includes("Password hashes are secrets"));
+  const box = findAll(root, (n) => n.localName === "input" && prop(n, "type") === "checkbox")[0];
+  box.checked = true;
+  box.dispatch("change");
+  await settle();
+  assert.equal(prop(link(), "href"), apiHref("export", { format: "yaml", include_hashes: 1 }));
+  assert.ok(all(root).includes("Password hashes are secrets. Store the file like a password."));
+  await choose(byId(root, "data-format"), "json");
+  assert.equal(prop(link(), "href"), apiHref("export", { format: "json", include_hashes: 1 }));
+  assert.match(all(root), /Download export/);
+});
+
+test("data: backups table with localized date, size, reason and an apiHref download link", async () => {
+  const root = await mount("data");
+  const row = findAll(root, (n) => n.localName === "tr").find((r) => r.textContent.includes("auth-20261102T100000Z.db"));
+  assert.ok(row.textContent.includes(formatDateTime(Date.parse("2026-11-02T10:00:00Z"), "en")));
+  assert.ok(row.textContent.includes("4 KiB"));
+  assert.ok(row.textContent.includes("manual"));
+  const download = findAll(row, (n) => n.localName === "a")[0];
+  assert.equal(prop(download, "href"), apiHref("backups/auth-20261102T100000Z.db"));
+  assert.ok(!prop(download, "href").startsWith("/"));
+  assert.equal(download.getAttribute("aria-label"), "Download backup auth-20261102T100000Z.db");
+  const wrapper = findAll(root, (n) => cls(n).includes("table-scroll"));
+  assert.ok(wrapper.length >= 1);
+  assert.ok(findAll(root, (n) => n.localName === "caption").some((c) => c.textContent.trim() === "Backups of the auth database"));
+  assert.equal(auditNames(root).length, 0);
+  assert.equal(auditTables(root).length, 0);
+});
+
+test("data: reasons map to words, an unknown reason is shown raw, a bad date reads as a dash", async () => {
+  const backups = [
+    { name: "a.db", size_bytes: 1, created: "not a date", reason: "reset-acls" },
+    { name: "b.db", size_bytes: 1, created: "2026-11-02T10:00:00Z", reason: "weird<b>" },
+  ];
+  await withFixtures({ "GET api/backups": { backups } }, async () => {
+    const root = await mount("data");
+    const rows = findAll(root, (n) => n.localName === "tr");
+    const a = rows.find((r) => r.textContent.includes("a.db"));
+    const b = rows.find((r) => r.textContent.includes("b.db"));
+    assert.ok(a.textContent.includes("ACLs reset"));
+    assert.deepEqual(findAll(a, (n) => n.localName === "td").map((n) => n.textContent.trim()).slice(1, 3), ["-", "1 B"]);
+    assert.ok(b.textContent.includes("weird<b>"));
+    assert.equal(findAll(root, (n) => n.localName === "b").length, 0);
+  });
+});
+
+test("data: Create backup now posts an empty body, toasts the name and reloads the list", async () => {
+  const backup = { backup: { name: "auth-20261103T090000Z-manual.db", size_bytes: 1, created: "2026-11-03T09:00:00Z", reason: "manual" } };
+  await withFixtures({ "POST api/backups": backup }, async () => {
+    await clearToasts();
+    const root = await mount("data");
+    const before = callsTo("GET", "api/backups").length;
+    await click(buttons(root, "Create backup now")[0]);
+    assert.deepEqual(callsTo("POST", "api/backups")[0].body, {});
+    assert.match(toastText(), /Backup auth-20261103T090000Z-manual\.db created/);
+    assert.equal(callsTo("GET", "api/backups").length, before + 1);
+  });
+});
+
+test("data: empty backups list shows the empty text", async () => {
+  await withFixtures({ "GET api/backups": { backups: [] } }, async () => {
+    assert.match(all(await mount("data")), /No backups yet\./);
+  });
+});
+
+test("data: reset needs the exact phrase (wrong and differently-cased stay disabled), then posts it", async () => {
+  const root = await mount("data");
+  assert.equal(findAll(root, (n) => n.localName === "button" && /^(Reset|Clear)/.test(n.textContent.trim())).length, 3);
+  await click(buttons(root, "Reset ACLs")[0]);
+  const phrase = () => findAll(root, (n) => n.localName === "input" && /-phrase$/.test(n.getAttribute("id") || ""))[0];
+  const confirm = () => buttons(root, "Execute")[0];
+  assert.ok(root.textContent.includes('Type "reset acls" to confirm'));
+  assert.ok(prop(confirm(), "disabled"));
+  await type(phrase(), "reset acl");
+  assert.ok(prop(confirm(), "disabled"));
+  await type(phrase(), "Reset ACLs");
+  assert.ok(prop(confirm(), "disabled"));
+  await type(phrase(), RESET_PHRASES.acls);
+  assert.ok(!prop(confirm(), "disabled"));
+  await click(confirm());
+  const sent = callsTo("POST", "api/reset/acls");
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].body, { confirm: "reset acls" });
+});
+
+test("data: cache and everything use their own phrases; the toast names deleted messages and attachments", async () => {
+  await withFixtures(
+    {
+      "POST api/reset/cache": { done: true, messages_deleted: 1, attachments_deleted: 12 },
+      "POST api/reset/everything": { done: true },
+    },
+    async () => {
+      await clearToasts();
+      const root = await mount("data");
+      const phrase = () => findAll(root, (n) => n.localName === "input" && /-phrase$/.test(n.getAttribute("id") || ""))[0];
+      await click(buttons(root, "Clear message cache")[0]);
+      await type(phrase(), RESET_PHRASES.cache);
+      await click(buttons(root, "Execute")[0]);
+      assert.deepEqual(callsTo("POST", "api/reset/cache")[0].body, { confirm: "clear cache" });
+      assert.match(toastText(), /Clear message cache done: 1 message, 12 attachments/);
+      await click(buttons(root, "Reset everything incl. users")[0]);
+      await type(phrase(), RESET_PHRASES.everything);
+      await click(buttons(root, "Execute")[0]);
+      assert.deepEqual(callsTo("POST", "api/reset/everything")[0].body, { confirm: "reset everything" });
+      assert.match(toastText(), /Reset everything incl\. users done(?!:)/);
+    },
+  );
+});
+
+test("data: a failing reset keeps the dialog open with the localized error", async () => {
+  await withFixtures({}, async () => {
+    failures["POST api/reset/acls"] = { status: 409, error: "locked", message: "hidden detail" };
+    const root = await mount("data");
+    await click(buttons(root, "Reset ACLs")[0]);
+    const input = findAll(root, (n) => n.localName === "input" && /-phrase$/.test(n.getAttribute("id") || ""))[0];
+    await type(input, RESET_PHRASES.acls);
+    await click(buttons(root, "Execute")[0]);
+    assert.equal(buttons(root, "Execute").length, 1, "dialog stays open");
+    assert.ok(alerts(root).some((t) => t.includes("The ntfy auth database is locked")));
+    assert.ok(!all(root).includes("hidden detail"));
+  });
+});
+
+test("data: German mount has no English literal, also with a reset dialog open", async () => {
+  const root = await mount("data", {}, { lang: "de" });
+  assertGerman(root, "data.");
+  assert.ok(findAll(root, (n) => n.localName === "caption").some((c) => c.textContent.includes("Backups der Auth-Datenbank")));
+  assert.ok(all(root).includes(formatDateTime(Date.parse("2026-11-02T10:00:00Z"), "de")));
+  assert.match(all(root), /manuell/);
+  await click(buttons(root, "ACLs zurücksetzen")[0]);
+  assertGerman(root, "data.");
+  assert.equal(auditNames(root).length, 0);
+  assert.equal(auditTables(root).length, 0);
+});
+
 // Preact/toast timers can outlive the tests; end the worker once the results are reported.
 test.after(() => {
   setTimeout(() => process.exit(process.exitCode ?? 0), 300).unref();

@@ -1,79 +1,92 @@
-// Export, backups and the guarded reset actions (D-09, D-11, D-14, D-17).
-import { html, useState, useAsync, toast, ConfirmDialog, ErrorNote, Loading } from "../lib/ui.mjs";
-import { get, post, buildUrl } from "../lib/api.mjs";
-import { RESET_PHRASES, fmtBytes } from "../lib/model.mjs";
+// Export, backups and the guarded reset actions. Texts come from i18n; download links are built with apiHref.
+import { html, useState, useAsync, toast, ConfirmDialog, Loading, Field } from "../vendor/admin-ui/ui.mjs";
+import { get, post } from "../vendor/admin-ui/api.mjs";
+import { apiHref } from "../vendor/admin-ui/ingress.mjs";
+import { useT, useLang, tp, tError } from "../vendor/admin-ui/i18n.mjs";
+import { formatBytes, formatDateTime, formatNumber } from "../vendor/admin-ui/format.mjs";
+import { ErrorNote, ScrollTable } from "../components.mjs";
+import { RESET_PHRASES } from "../lib/model.mjs";
 
-export const meta = { id: "data", title: "Export & backups" };
+export const meta = { id: "data", titleKey: "view.data" };
 
-const msg = (e) => (e && e.message) || String(e);
-
-const RESETS = [
-  {
-    kind: "acls",
-    title: "Reset ACLs",
-    text: "Removes all explicit access rules. Users and tokens stay.",
-  },
-  {
-    kind: "cache",
-    title: "Clear message cache",
-    text: "Deletes cached messages and attachments. Users and rules stay.",
-  },
-  {
-    kind: "everything",
-    title: "Reset everything incl. users",
-    text: "Removes all users, rules and tokens. The admin from the add-on options is recreated on the next start.",
-  },
-];
+const RESET_KINDS = ["acls", "cache", "everything"];
+const RESET_TITLES = {
+  acls: "data.reset_acls_title",
+  cache: "data.reset_cache_title",
+  everything: "data.reset_everything_title",
+};
+const RESET_TEXTS = {
+  acls: "data.reset_acls_text",
+  cache: "data.reset_cache_text",
+  everything: "data.reset_everything_text",
+};
+const REASON_KEYS = {
+  daily: "data.reason_daily",
+  manual: "data.reason_manual",
+  "user-delete": "data.reason_user_delete",
+  "role-change": "data.reason_role_change",
+  "reset-acls": "data.reason_reset_acls",
+  "clear-cache": "data.reason_clear_cache",
+  "reset-everything": "data.reason_reset_everything",
+};
 
 function Export() {
+  const tt = useT();
   const [format, setFormat] = useState("yaml");
   const [hashes, setHashes] = useState(false);
-  const href = buildUrl("export", { format, include_hashes: hashes ? 1 : 0 });
+  const href = apiHref("export", { format, include_hashes: hashes ? 1 : 0 });
   return html`<div class="card">
-    <h2>Export</h2>
+    <h2>${tt("data.export_title")}</h2>
     <div class="toolbar">
-      <select value=${format} onChange=${(e) => setFormat(e.target.value)}>
-        <option value="yaml">YAML</option>
-        <option value="json">JSON</option>
-      </select>
+      <${Field} id="data-format" label=${tt("data.format")}>
+        <select id="data-format" value=${format} onChange=${(ev) => setFormat(ev.target.value)}>
+          <option value="yaml">YAML</option>
+          <option value="json">JSON</option>
+        </select>
+      <//>
       <label>
-        <input type="checkbox" checked=${hashes} onChange=${(e) => setHashes(e.target.checked)} />
-        include password hashes
+        <input type="checkbox" checked=${hashes} onChange=${(ev) => setHashes(ev.target.checked)} />
+        ${tt("data.hashes")}
       </label>
-      <a class="btn" href=${href} download>Download export</a>
+      <a class="btn" href=${href} download="">${tt("data.download_export")}</a>
     </div>
-    ${hashes && html`<div class="notice">Password hashes are secrets. Store the file like a password.</div>`}
-    <div class="muted">Token values are never exported.</div>
+    ${hashes && html`<div class="notice info" role="alert">${tt("data.hashes_notice")}</div>`}
+    <div class="muted">${tt("data.tokens_hint")}</div>
   </div>`;
 }
 
 function Backups() {
+  const tt = useT();
+  const lang = useLang();
   const { data, error, loading, reload } = useAsync(() => get("backups"));
   const create = async () => {
     try {
       const res = await post("backups", { body: {} });
-      toast("ok", `Backup ${res.backup.name} created`);
+      toast("ok", tt("data.backup_created", { name: res.backup.name }));
       reload();
-    } catch (e) {
-      toast("error", msg(e));
+    } catch (err) {
+      toast("error", tError(err));
     }
   };
+  const reasonText = (reason) =>
+    Object.prototype.hasOwnProperty.call(REASON_KEYS, reason) ? tt(REASON_KEYS[reason]) : String(reason || "-");
   const list = (data && data.backups) || [];
   return html`<div class="card">
     <div class="toolbar">
-      <h2>Backups</h2>
+      <h2>${tt("data.backups_title")}</h2>
       <span class="spacer"></span>
-      <button class="btn small" type="button" onClick=${create}>Create backup now</button>
+      <button class="btn small" type="button" onClick=${create}>${tt("data.backup_now")}</button>
     </div>
-    ${loading && !data && html`<${Loading} />`} ${error && html`<${ErrorNote} error=${error} />`}
-    <table class="data">
+    ${loading && !data && html`<${Loading} />`}
+    <${ErrorNote} error=${error} onRetry=${reload} />
+    <${ScrollTable} caption=${tt("data.backups_caption")}>
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Created</th>
-          <th>Size</th>
-          <th>Reason</th>
-          <th></th>
+          <th scope="col">${tt("data.col_name")}</th>
+          <th scope="col">${tt("data.col_created")}</th>
+          <th scope="col">${tt("data.col_size")}</th>
+          <th scope="col">${tt("data.col_reason")}</th>
+          <th scope="col"><span class="sr-only">${tt("data.col_actions")}</span></th>
         </tr>
       </thead>
       <tbody>
@@ -81,54 +94,70 @@ function Backups() {
           (b) =>
             html`<tr key=${b.name}>
               <td class="mono">${b.name}</td>
-              <td>${b.created}</td>
-              <td>${fmtBytes(b.size_bytes)}</td>
-              <td>${b.reason}</td>
+              <td>${formatDateTime(Date.parse(b.created), lang)}</td>
+              <td>${formatBytes(b.size_bytes, lang)}</td>
+              <td>${reasonText(b.reason)}</td>
               <td class="actions">
-                <a class="btn small secondary" href=${buildUrl(`backups/${b.name}`)} download>Download</a>
+                <a
+                  class="btn small secondary"
+                  href=${apiHref(`backups/${b.name}`)}
+                  aria-label=${tt("data.download_aria", { name: b.name })}
+                  download=""
+                >
+                  ${tt("data.download")}
+                </a>
               </td>
             </tr>`,
         )}
       </tbody>
-    </table>
-    ${data && list.length === 0 && html`<div class="muted">No backups yet.</div>`}
+    <//>
+    ${data && list.length === 0 && html`<div class="muted">${tt("data.backups_empty")}</div>`}
   </div>`;
 }
 
 function Danger() {
+  const tt = useT();
+  const lang = useLang();
   const [pending, setPending] = useState(null);
+  // A thrown error keeps the confirm dialog open and shows the localized code text.
   const run = async () => {
-    try {
-      const res = await post(`reset/${pending.kind}`, { body: { confirm: RESET_PHRASES[pending.kind] } });
-      const extra = [];
-      if (res.messages_deleted !== undefined) extra.push(`${res.messages_deleted} messages`);
-      if (res.attachments_deleted !== undefined) extra.push(`${res.attachments_deleted} attachments`);
-      toast("ok", `${pending.title} done${extra.length ? `: ${extra.join(", ")}` : ""}`);
-    } catch (e) {
-      toast("error", msg(e));
+    const res = await post(`reset/${pending}`, { body: { confirm: RESET_PHRASES[pending] } });
+    const counts = [];
+    if (res.messages_deleted !== undefined) {
+      counts.push(tp("data.deleted_messages", res.messages_deleted, { n: formatNumber(res.messages_deleted, lang) }));
     }
+    if (res.attachments_deleted !== undefined) {
+      counts.push(
+        tp("data.deleted_attachments", res.attachments_deleted, { n: formatNumber(res.attachments_deleted, lang) }),
+      );
+    }
+    const title = tt(RESET_TITLES[pending]);
+    toast(
+      "ok",
+      counts.length ? tt("data.reset_done_counts", { title, counts: counts.join(", ") }) : tt("data.reset_done", { title }),
+    );
     setPending(null);
   };
   return html`<div class="card danger-zone">
-    <h2>Danger zone</h2>
-    <div class="muted">Each action writes an auth.db backup first.</div>
-    ${RESETS.map(
-      (r) =>
-        html`<div key=${r.kind} class="danger-row">
+    <h2>${tt("data.danger_title")}</h2>
+    <div class="muted">${tt("data.danger_hint")}</div>
+    ${RESET_KINDS.map(
+      (kind) =>
+        html`<div key=${kind} class="danger-row">
           <div>
-            <strong>${r.title}</strong>
-            <div class="muted">${r.text}</div>
+            <strong>${tt(RESET_TITLES[kind])}</strong>
+            <div class="muted">${tt(RESET_TEXTS[kind])}</div>
           </div>
-          <button class="btn danger" type="button" onClick=${() => setPending(r)}>${r.title}</button>
+          <button class="btn danger" type="button" onClick=${() => setPending(kind)}>${tt(RESET_TITLES[kind])}</button>
         </div>`,
     )}
     ${pending &&
     html`<${ConfirmDialog}
-      title=${pending.title}
+      title=${tt(RESET_TITLES[pending])}
       danger=${true}
-      message=${pending.text}
-      expected=${RESET_PHRASES[pending.kind]}
-      confirmLabel="Execute"
+      message=${tt(RESET_TEXTS[pending])}
+      expected=${RESET_PHRASES[pending]}
+      confirmLabel=${tt("data.execute")}
       onCancel=${() => setPending(null)}
       onConfirm=${run}
     />`}
