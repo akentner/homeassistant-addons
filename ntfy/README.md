@@ -17,6 +17,7 @@ the Home Assistant network (`72a005f5-ntfy:8000`); the GUI is not reachable from
 - Baseline users from the options (same fields as the old "ntfy Server" add-on), applied additively and never deleted
 - Origin markers (`gui`, `options`) for users, rules and tokens
 - Effective-rights lookup, random topic generator, health page with test publish
+- German and English interface with a language switch, light and dark theme, built on the shared `admin-ui` design
 - Backups of `auth.db`, reset actions with typed confirmation, state export (schema 1)
 - Bridge network, ntfy on a fixed container port, no `host_network`
 
@@ -37,7 +38,8 @@ all options, the migration from the old add-on and the behaviour of baseline ent
 ## Credits
 
 Upstream project: [ntfy][ntfy] by Philipp C. Heckel, licensed under Apache-2.0 and GPLv2. The icon comes from the
-upstream repository. This repository does not bundle ntfy source; the release binary is downloaded at build time.
+upstream repository. This repository does not bundle ntfy source; the release binary is downloaded at build time. The
+GUI uses the shared `admin-ui` library of this repository.
 
 [docs]: DOCS.md
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
