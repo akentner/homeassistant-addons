@@ -273,13 +273,137 @@ test("users view: a German mount has no English literal and no key placeholder, 
   assert.match(all(root), /Abbrechen/);
 });
 
-// ---------------------------------------------------------------- acl (still the old view until its task lands)
+// ---------------------------------------------------------------- acl
 
-test("acl view renders rules", async () => {
-  const text = all(await mount("acl"));
-  assert.match(text, /alerts/);
-  assert.match(text, /news-\*/);
-  assert.match(text, /everyone/);
+const aclRows = (root) => byTag(root, "tbody")[0] && byTag(byTag(root, "tbody")[0], "tr");
+const selects = (root) => byTag(root, "select");
+
+test("acl view: meta, scrollable table with caption, scopes and a uniquely named permission select per row", async () => {
+  const mod = await import(new URL("views/acl.mjs", STATIC));
+  assert.deepEqual(mod.meta, { id: "acl", titleKey: "view.acl" });
+  const root = await mount("acl");
+  assert.ok(findAll(root, (n) => cls(n).includes("table-scroll")).length === 1);
+  const caption = byTag(root, "caption")[0];
+  assert.ok(caption && cls(caption).includes("sr-only"));
+  assert.ok(byTag(root, "th").every((th) => th.getAttribute("scope") === "col"));
+  assert.equal(byTag(root, "th").length, 5);
+  const rowSelects = selects(byTag(root, "table")[0]);
+  assert.equal(rowSelects.length, 2);
+  const names = rowSelects.map((n) => n.getAttribute("aria-label"));
+  assert.equal(new Set(names).size, 2);
+  assert.ok(names.some((n) => n.includes("alerts") && n.includes(ALICE)));
+  assert.ok(byTag(root, "tr").some((r) => r.textContent.includes("news-*") && r.textContent.includes("GUI")));
+  assert.deepEqual(auditNames(root), []);
+  assert.deepEqual(auditTables(root), []);
+});
+
+test("acl view: hostile user and topic names stay text", async () => {
+  await withData(
+    { "GET api/acl": { rules: [{ user: ALICE, topic: "<img src=x>", permission: "ro", origin: "gui" }] } },
+    async () => {
+      const root = await mount("acl");
+      assert.ok(all(root).includes(ALICE) && all(root).includes("<img src=x>"));
+      assert.equal(findAll(root, (n) => n.localName === "b" || n.localName === "img").length, 0);
+    },
+  );
+});
+
+test("acl view: the add form is labelled and rejects an unknown user, a bad topic and a missing permission locally", async () => {
+  const root = await mount("acl");
+  const fields = findAll(root, (n) => n.localName === "label").map((l) => l.textContent.trim());
+  assert.ok(fields.includes("User") && fields.includes("Topic or pattern"));
+  const form = selects(root)[0];
+  const topic = inputs(root).find((n) => n.getAttribute("id") === "acl-add-topic");
+  assert.ok(form && topic);
+  const before = calls().length;
+  await click(btn(root, "Add"));
+  assert.ok(findAll(root, (n) => n.getAttribute && n.getAttribute("role") === "alert").some((n) => /Choose a user/.test(n.textContent)));
+  await choose(form, "everyone");
+  await type(topic, "bad topic!");
+  await click(btn(root, "Add"));
+  assert.match(all(root), /Invalid topic pattern/);
+  assert.equal(calls().length, before, "no request for invalid input");
+});
+
+test("acl view: a valid add sends PUT with exactly user, topic and permission, clears the topic and reloads", async () => {
+  await withData({ "PUT api/acl": { ok: true } }, async () => {
+    const root = await mount("acl");
+    const stack = await toasts();
+    await choose(selects(root)[0], "everyone");
+    const topic = inputs(root).find((n) => n.getAttribute("id") === "acl-add-topic");
+    await type(topic, "alerts-*");
+    await click(btn(root, "Add"));
+    const put = used("PUT", "api/acl")[0];
+    assert.deepEqual(Object.keys(put.body).sort(), ["permission", "topic", "user"]);
+    assert.deepEqual(put.body, { user: "everyone", topic: "alerts-*", permission: "rw" });
+    assert.match(stack.textContent, /everyone on alerts-\*: rw/);
+    assert.equal(prop(topic, "value"), "");
+    assert.equal(used("GET", "api/acl").length, 2, "rules reloaded");
+    assert.equal(used("GET", "api/users").length, 2, "users reloaded");
+  });
+});
+
+test("acl view: the filter narrows by user or topic, case-insensitive, and shows the empty text", async () => {
+  const root = await mount("acl");
+  const filter = inputs(root).find((n) => n.getAttribute("id") === "acl-filter");
+  assert.ok(filter);
+  assert.equal(aclRows(root).length, 2);
+  await type(filter, "NEWS");
+  assert.equal(aclRows(root).length, 1);
+  assert.ok(aclRows(root)[0].textContent.includes("news-*"));
+  await type(filter, "alice");
+  assert.equal(aclRows(root).length, 1);
+  await type(filter, "zzz");
+  assert.match(all(root), /No rules\./);
+});
+
+test("acl view: a row permission change sends PUT; a failing save toasts the localized code text", async () => {
+  await withData({ "PUT api/acl": { ok: true } }, async () => {
+    const root = await mount("acl");
+    const stack = await toasts();
+    const rowSelect = selects(byTag(root, "table")[0])[0];
+    await choose(rowSelect, "deny");
+    assert.deepEqual(used("PUT", "api/acl")[0].body, { user: "everyone", topic: "news-*", permission: "deny" });
+    failures["PUT api/acl"] = { status: 409, error: "conflict", message: "raw backend text" };
+    await choose(rowSelect, "ro");
+    delete failures["PUT api/acl"];
+    assert.match(stack.textContent, /The change conflicts with the current state/);
+    assert.ok(!stack.textContent.includes("raw backend text"));
+  });
+});
+
+test("acl view: delete asks first, keeps the dialog open on failure and sends user and topic as query", async () => {
+  await withData({ "DELETE api/acl": { ok: true } }, async () => {
+    const root = await mount("acl");
+    const stack = await toasts();
+    const delBtn = byTag(root, "button").find((b) => (b.getAttribute("aria-label") || "").includes("news-*"));
+    await click(delBtn);
+    const dialog = () => findAll(root, (n) => n.getAttribute && n.getAttribute("role") === "dialog")[0];
+    assert.ok(dialog().textContent.includes("news-*") && dialog().textContent.includes("everyone"));
+    assert.equal(used("DELETE", "api/acl").length, 0);
+    failures["DELETE api/acl"] = { status: 404, error: "not_found", message: "raw backend text" };
+    await click(findByText(dialog(), "button", "Delete")[0]);
+    delete failures["DELETE api/acl"];
+    assert.ok(dialog(), "dialog stays open");
+    assert.match(dialog().textContent, /Not found/);
+    assert.ok(!dialog().textContent.includes("raw backend text"));
+    await click(findByText(dialog(), "button", "Delete")[0]);
+    const call = calls().filter((c) => c.method === "DELETE").pop();
+    assert.equal(call.url, "api/acl?user=everyone&topic=news-%2A");
+    assert.equal(dialog(), undefined);
+    assert.match(stack.textContent, /Rule deleted/);
+  });
+});
+
+test("acl view: a German mount has no English literal and no key placeholder", async () => {
+  const root = await mount("acl", {}, { lang: "de" });
+  const text = all(root);
+  assert.match(text, /Regel hinzufügen/);
+  assert.match(text, /Admins haben immer vollen Zugriff/);
+  assert.ok(!ENGLISH_LEFTOVERS.test(text), text);
+  assert.ok(!/Add rule|Topic or pattern|User\b|Origin|Permission/.test(text), text);
+  noPlaceholder(text, "acl");
+  assert.deepEqual(auditNames(root), []);
 });
 
 test("matrix view has everyone column and a row per topic", async () => {
