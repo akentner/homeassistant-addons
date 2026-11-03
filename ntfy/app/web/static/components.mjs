@@ -49,9 +49,10 @@ export function OriginBadge({ origin }) {
   return html`<${Badge} kind=${known ? origin : "muted"}>${known ? tt(ORIGIN_KEYS[origin]) : String(origin || "?")}<//>`;
 }
 
-export function PermSelect({ value, onChange, includeNone, disabled, label }) {
+export function PermSelect({ id, value, onChange, includeNone, disabled, label }) {
   const tt = useT();
   return html`<select
+    id=${id || null}
     value=${value || ""}
     disabled=${disabled}
     aria-label=${label || tt("perm.label")}

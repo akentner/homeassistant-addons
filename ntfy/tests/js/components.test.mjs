@@ -52,6 +52,13 @@ test("PermSelect: includeNone adds none, the accessible name is the label prop o
   assert.equal(findAll(named, (n) => n.localName === "select")[0].getAttribute("aria-label"), "Rule for alice");
 });
 
+test("PermSelect: an id prop reaches the select element and no id is set without it", async () => {
+  const withId = await show(html`<${C.PermSelect} id="perm-x" value="rw" onChange=${() => {}} />`);
+  assert.equal(findAll(withId, (n) => n.localName === "select")[0].getAttribute("id"), "perm-x");
+  const without = await show(html`<${C.PermSelect} value="rw" onChange=${() => {}} />`);
+  assert.equal(findAll(without, (n) => n.localName === "select")[0].getAttribute("id"), null);
+});
+
 test("PermSelect follows a language switch", async () => {
   const root = await show(html`<${C.PermSelect} value="rw" onChange=${() => {}} />`);
   setLang("de");
