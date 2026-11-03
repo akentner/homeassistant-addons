@@ -437,7 +437,7 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 
 **Resume file:** .planning/phases/24-ntfy-add-on-admin-gui/24-CONTEXT.md
 
-**Stopped at:** Phase 24 context gathered
+**Stopped at:** Phase 24 executed and verified (UAT 7/9, 2 blocked on production routing / published image); Phase 27 planned, next
 
 Last session: 2026-11-01T21:43:18.207Z
 

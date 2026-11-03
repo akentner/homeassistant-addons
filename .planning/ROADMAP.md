@@ -291,17 +291,17 @@ Success criteria:
 Research: done via three spikes (`.planning/phases/24-ntfy-add-on-admin-gui/spikes/`); decisions in `24-CONTEXT.md`.
 
 Plans:
-- [ ] 24-01-PLAN.md — Wave 1: tracer, add-on skeleton and shared contract C1-C13
-- [ ] 24-02-PLAN.md — Wave 2: NtfyCli and AuthDb, fake ntfy for tests
-- [ ] 24-03-PLAN.md — Wave 2: origin sidecar, backups, export schema 1
-- [ ] 24-04-PLAN.md — Wave 2: vendored htm/Preact, frontend lib, CSS, JS tests
-- [ ] 24-05-PLAN.md — Wave 2: registration, icons, translations, docs incl. migration
-- [ ] 24-06-PLAN.md — Wave 3: accounts backend (users/ACLs, guardrails, role-change snapshot)
-- [ ] 24-07-PLAN.md — Wave 3: effective rights, tokens, topic generator
-- [ ] 24-08-PLAN.md — Wave 3: resets, cache clearing, test publish, health, export/backup API
-- [ ] 24-09-PLAN.md — Wave 3: baseline application at start
-- [ ] 24-10-PLAN.md — Wave 3: GUI shell and 7 views
-- [ ] 24-11-PLAN.md — Wave 4: registry/parity tests, Docker E2E against real ntfy, docs reconciliation
+- [x] 24-01-PLAN.md — Wave 1: tracer, add-on skeleton and shared contract C1-C13
+- [x] 24-02-PLAN.md — Wave 2: NtfyCli and AuthDb, fake ntfy for tests
+- [x] 24-03-PLAN.md — Wave 2: origin sidecar, backups, export schema 1
+- [x] 24-04-PLAN.md — Wave 2: vendored htm/Preact, frontend lib, CSS, JS tests
+- [x] 24-05-PLAN.md — Wave 2: registration, icons, translations, docs incl. migration
+- [x] 24-06-PLAN.md — Wave 3: accounts backend (users/ACLs, guardrails, role-change snapshot)
+- [x] 24-07-PLAN.md — Wave 3: effective rights, tokens, topic generator
+- [x] 24-08-PLAN.md — Wave 3: resets, cache clearing, test publish, health, export/backup API
+- [x] 24-09-PLAN.md — Wave 3: baseline application at start
+- [x] 24-10-PLAN.md — Wave 3: GUI shell and 7 views
+- [x] 24-11-PLAN.md — Wave 4: registry/parity tests, Docker E2E against real ntfy, docs reconciliation
 
 ### Phase 25: ntfy IaC API
 

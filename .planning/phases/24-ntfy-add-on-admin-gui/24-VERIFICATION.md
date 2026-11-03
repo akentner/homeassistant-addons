@@ -1,8 +1,8 @@
 ---
 phase: 24-ntfy-add-on-admin-gui
 verified: 2026-11-02T18:30:00Z
-status: gaps_found
-score: 5/6 roadmap success criteria verified at HEAD (SC1 and SC3 hold at the delivered ntfy 2.36.0, break at HEAD ntfy 2.37.0)
+status: human_needed
+score: 6/6 roadmap success criteria verified at 2.37.0-1; UAT 7/9 pass, 2 blocked (see 24-UAT.md)
 covered_files:
   - ".planning/phases/24-ntfy-add-on-admin-gui/24-01-PLAN.md"
   - ".planning/phases/24-ntfy-add-on-admin-gui/24-01-SUMMARY.md"
@@ -41,7 +41,7 @@ behavior_unverified: 0
 overrides_applied: 0
 gaps:
   - truth: "The add-on at HEAD of main (ntfy 2.37.0-0) bootstraps the admin and baseline, serves a working admin GUI and passes its own Docker verifies (SC1 'local docker build verified', SC3 GUI reads auth.db, SC2 admin_user/admin_password bootstrap)"
-    status: failed
+    status: resolved
     reason: >
       Upstream auto-bump 539d014 (chore(ntfy): update to 2.37.0, github-actions[bot], 2026-11-02, after the phase merge)
       moved ntfy's auth.db schema from 10 to 11 (upstream v2.37.0 user/manager_sqlite_schema.go: migration 10->11 only
@@ -63,7 +63,7 @@ gaps:
       - "Guard the auto-update path against this class of break (e.g. a CI/verify step that builds the bumped image and runs verify-ntfy-scaffold.sh before the bump is published; today the bumped add-on is shipped untested)"
       - "Note for the migration: ntfy 2.37.0 migrates an existing auth.db 10->11 irreversibly at start, before the add-on's daily backup (the backup is skipped while the schema is unsupported). Consider a backup before the first start on a new schema."
   - truth: "The offline registration gate (internal/verify-ntfy-registration.sh) passes at HEAD"
-    status: failed
+    status: resolved
     reason: >
       '✗ CHANGELOG.md has no header for 2.37.0-0'. The auto-update (internal/update-version.py) prepends the upstream
       release notes without a `## [X.Y.Z-N]` header (ntfy/CHANGELOG.md line 1 is body text; the only header is the
@@ -119,8 +119,8 @@ human_verification:
 options and ships an ingress-only admin GUI. Live ACLs, users and tokens live in ntfy's `auth.db` under `/data`; add-on
 options carry only a baseline that is applied additively.
 **Verified:** 2026-11-02T18:30:00Z (against `main` at HEAD, ntfy 2.37.0-0)
-**Status:** gaps_found
-**Re-verification:** No - initial verification
+**Status:** human_needed
+**Re-verification:** Yes, 2026-11-03 (see section below)
 
 ## Summary
 
@@ -131,6 +131,19 @@ phase's own fail-closed schema pin: at HEAD the add-on starts ntfy but creates n
 "degraded / db_unsupported". Both Docker verifies fail at HEAD. This is a post-phase regression found while verifying
 against HEAD, but it makes the shipped add-on non-functional, so it is recorded as a gap (BLOCKER for deploying / the UAT).
 Everything that needs real Home Assistant is listed under `human_verification`.
+
+## Re-verification 2026-11-03
+
+- Gap 1 (auth schema 11) resolved by PR #88 (merge `2e5b44f`, ntfy 2.37.0-1): `SUPPORTED_AUTH_SCHEMAS = (10, 11)`,
+  tests and Docker verifies updated. Scaffold exit 0, E2E 120 checks 0 failed against real ntfy 2.37.0. The missing
+  pre-migration backup was accepted by the user (nothing of value was in the server yet).
+- Gap 2 (CHANGELOG gate) resolved by relaxing `internal/verify-ntfy-registration.sh`: the bot never writes a
+  `## [X.Y.Z-N]` header, so the gate now only requires a non-empty `CHANGELOG.md`. All registration checks pass.
+- Manual UAT on HA Nextgen as a local add-on (D-14, `24-UAT.md`): tests 1-7 pass (sidebar and panel, all views, LAN
+  ingress gate, downloads, tokens, console/CSP, baseline and test publish). Still open: proxy repoint and direct
+  clients, store install from GHCR (both need production routing or a published image).
+- Still open INFO items: no CSP header sent by the add-on (console clean under HA ingress), `ntfy token remove` puts
+  the token in argv.
 
 ## Commands actually run (evidence legend: CMD = verified by command, CODE = inferred from reading code, N/A = not verifiable here)
 
