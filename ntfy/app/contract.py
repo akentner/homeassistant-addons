@@ -1,7 +1,8 @@
 """Shared contract of the ntfy add-on (plan 24-01, sections C1-C13).
 
 Single source for paths, options, error codes and mapping helpers. Every other module codes against this file; it
-imports nothing from the rest of the app (no ntfycli, no authdb) so that it stays importable everywhere.
+imports nothing from the rest of the app (no ntfycli, no authdb) except the vendored admin-ui skeleton package
+(app.web.admin_ui, stdlib only), so that it stays importable everywhere.
 """
 
 from __future__ import annotations
@@ -15,11 +16,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NamedTuple, NotRequired, Protocol, TypedDict
 
+# Re-exported unchanged: every ntfy module imports these names from app.contract
+from app.web.admin_ui.errors import ERROR_STATUS, ApiError, register_error_code  # noqa: F401
+from app.web.admin_ui.ingress import INGRESS_REMOTE  # noqa: F401
+
 # --- C1 ports, schema ----------------------------------------------------------------------------------------------
 
 NTFY_PORT = 8000
 GUI_PORT = 8099
-INGRESS_REMOTE = "172.30.32.2"
 # auth.db schema versions the SQL in authdb.py is audited against: 10 (ntfy 2.36) and 11 (ntfy 2.37 only adds a
 # `topic` table; the user, tier, user_access and user_token tables used here are unchanged)
 SUPPORTED_AUTH_SCHEMAS = (10, 11)
@@ -202,33 +206,11 @@ def load_options(path: Path | str) -> Options:
 
 # --- C8 API errors -------------------------------------------------------------------------------------------------
 
-ERROR_STATUS: dict[str, int] = {
-    "bad_request": 400,
-    "confirmation_required": 400,
-    "ingress_only": 403,
-    "not_found": 404,
-    "method_not_allowed": 405,
-    "conflict": 409,
-    "protected": 409,
-    "payload_too_large": 413,
-    "ntfy_error": 502,
-    "db_unavailable": 503,
-    "db_unsupported": 503,
-    "locked": 503,
-    "internal_error": 500,
-}
-
-
-class ApiError(Exception):
-    """An error with a stable machine code; the router renders it as {"error": code, "message": message}."""
-
-    def __init__(self, code: str, message: str = "", status: int | None = None) -> None:
-        if code not in ERROR_STATUS:
-            raise ValueError(f"unknown error code: {code}")
-        super().__init__(message or code)
-        self.code = code
-        self.message = message or code
-        self.status = status if status is not None else ERROR_STATUS[code]
+# The error table and class are the skeleton's; ntfy adds its four codes (the 13-code mapping of C8 stays stable).
+register_error_code("ntfy_error", 502)
+register_error_code("db_unavailable", 503)
+register_error_code("db_unsupported", 503)
+register_error_code("locked", 503)
 
 
 # --- C7 CLI error mapping (primitives only: this module must not import ntfycli) -----------------------------------
