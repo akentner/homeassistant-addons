@@ -1,53 +1,72 @@
-// Tools: effective-rights lookup and random topic generator with default ACL (D-17).
-import { html, useState, useAsync, Badge, CopyField, PermSelect, ErrorNote, Loading } from "../lib/ui.mjs";
-import { get, put } from "../lib/api.mjs";
-import { validTopic, describeEffective } from "../lib/model.mjs";
+// Tools: effective-rights lookup and random topic generator with default ACL. Texts come from i18n.
+import { html, useState, useAsync, Badge, CopyField, Field, Loading } from "../vendor/admin-ui/ui.mjs";
+import { get, put } from "../vendor/admin-ui/api.mjs";
+import { useT, tError } from "../vendor/admin-ui/i18n.mjs";
+import { ErrorNote, FormNotice, PermSelect } from "../components.mjs";
+import { validTopic, effectiveExplain } from "../lib/model.mjs";
 
-export const meta = { id: "tools", title: "Tools" };
+export const meta = { id: "tools", titleKey: "view.tools" };
 
-const msg = (e) => (e && e.message) || String(e);
+// effectiveExplain returns the kind; the texts live in the string tables (tools.effective.*).
+const EXPLAIN_KEYS = {
+  admin: "tools.effective.admin",
+  user_rule: "tools.effective.user_rule",
+  everyone_rule: "tools.effective.everyone_rule",
+  default: "tools.effective.default",
+};
 
 function Effective({ users, params }) {
+  const tt = useT();
   const [user, setUser] = useState((params && params.user) || "everyone");
   const [topic, setTopic] = useState((params && params.topic) || "");
   const [result, setResult] = useState(null);
-  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [apiError, setApiError] = useState(null);
   const lookup = async () => {
     setResult(null);
-    if (!validTopic(topic)) return setError("Enter a concrete topic name (no wildcard).");
-    setError("");
+    setApiError(null);
+    if (!validTopic(topic)) {
+      setNotice(tt("tools.topic_invalid"));
+      return;
+    }
+    setNotice("");
     try {
       setResult(await get("effective", { query: { user, topic } }));
-    } catch (e) {
-      setError(msg(e));
+    } catch (err) {
+      setApiError(err);
     }
   };
   const deciding = result && result.source && result.source.rule;
+  const explain = result ? effectiveExplain(result) : null;
+  const verdict = (allowed) =>
+    html`<${Badge} kind=${allowed ? "ok" : "error"}>${allowed ? tt("tools.allowed") : tt("tools.denied")}<//>`;
   return html`<div class="card">
-    <h2>Effective rights</h2>
+    <h2>${tt("tools.effective_title")}</h2>
     <div class="toolbar">
-      <select value=${user} onChange=${(e) => setUser(e.target.value)}>
-        ${users.map((n) => html`<option key=${n} value=${n}>${n}</option>`)}
-      </select>
-      <input type="text" placeholder="topic" value=${topic} onInput=${(e) => setTopic(e.target.value)} />
-      <button class="btn" type="button" onClick=${lookup}>Check</button>
+      <${Field} id="tools-user" label=${tt("tools.user")}>
+        <select id="tools-user" value=${user} onChange=${(ev) => setUser(ev.target.value)}>
+          ${users.map((name) => html`<option key=${name} value=${name}>${name}</option>`)}
+        </select>
+      <//>
+      <${Field} id="tools-topic" label=${tt("tools.topic")}>
+        <input id="tools-topic" type="text" value=${topic} onInput=${(ev) => setTopic(ev.target.value)} />
+      <//>
+      <button class="btn" type="button" onClick=${lookup}>${tt("tools.check")}</button>
     </div>
-    ${error && html`<div class="notice">${error}</div>`}
+    <${FormNotice}>${notice}<//>
+    <${ErrorNote} error=${apiError} />
     ${result &&
     html`<div>
-      <div>
-        read <${Badge} kind=${result.read ? "ok" : "error"}>${result.read ? "allowed" : "denied"}<//> write
-        <${Badge} kind=${result.write ? "ok" : "error"}>${result.write ? "allowed" : "denied"}<//>
-      </div>
-      <div>${describeEffective(result)}</div>
+      <div>${tt("tools.read")} ${verdict(result.read)} ${tt("tools.write")} ${verdict(result.write)}</div>
+      <div>${tt(EXPLAIN_KEYS[explain.kind], explain.params)}</div>
       ${(result.candidates || []).map(
-        (r, i) =>
+        (rule, i) =>
           html`<div key=${i} class="mono">
-            ${i + 1}. ${r.user} ${r.topic} ${r.permission}
+            ${i + 1}. ${rule.user} ${rule.topic} ${rule.permission}
             ${deciding &&
-            deciding.user === r.user &&
-            deciding.topic === r.topic &&
-            html`<${Badge} kind="ok">decides<//>`}
+            deciding.user === rule.user &&
+            deciding.topic === rule.topic &&
+            html`<${Badge} kind="ok">${tt("tools.decides")}<//>`}
           </div>`,
       )}
     </div>`}
@@ -55,67 +74,84 @@ function Effective({ users, params }) {
 }
 
 function Generator({ known }) {
+  const tt = useT();
   const [state, setState] = useState(null);
-  const [error, setError] = useState("");
+  const [apiError, setApiError] = useState(null);
   const [report, setReport] = useState(null);
   const generate = async () => {
     setReport(null);
     try {
       const res = await get("topics/suggest");
-      setState({ topic: res.topic, acl: (res.acl || []).map((a) => ({ ...a })) });
-      setError("");
-    } catch (e) {
-      setError(msg(e));
+      setState({ topic: res.topic, acl: (res.acl || []).map((rule) => ({ ...rule })) });
+      setApiError(null);
+    } catch (err) {
+      setApiError(err);
     }
   };
   const setEntry = (i, patch) =>
-    setState({ ...state, acl: state.acl.map((a, j) => (j === i ? { ...a, ...patch } : a)) });
+    setState({ ...state, acl: state.acl.map((rule, j) => (j === i ? { ...rule, ...patch } : rule)) });
   const apply = async () => {
     const lines = [];
     const skipped = [];
-    for (const a of state.acl) {
-      if (!known.includes(a.user)) {
-        skipped.push(a.user);
+    for (const rule of state.acl) {
+      if (!known.includes(rule.user)) {
+        skipped.push(rule.user);
         continue;
       }
       try {
-        await put("acl", { body: { user: a.user, topic: state.topic, permission: a.permission } });
-        lines.push(`${a.user}: ${a.permission} ok`);
-      } catch (e) {
-        lines.push(`${a.user}: error ${msg(e)}`);
+        await put("acl", { body: { user: rule.user, topic: state.topic, permission: rule.permission } });
+        lines.push({ user: rule.user, permission: rule.permission, error: null });
+      } catch (err) {
+        lines.push({ user: rule.user, permission: rule.permission, error: err });
       }
     }
     setReport({ lines, skipped });
   };
   return html`<div class="card">
-    <h2>Topic generator</h2>
-    <div class="toolbar"><button class="btn" type="button" onClick=${generate}>Generate</button></div>
-    ${error && html`<div class="notice">${error}</div>`}
+    <h2>${tt("tools.generator_title")}</h2>
+    <div class="toolbar"><button class="btn" type="button" onClick=${generate}>${tt("tools.generate")}</button></div>
+    <${ErrorNote} error=${apiError} />
     ${state &&
     html`<div>
-      <${CopyField} value=${state.topic} />
+      <${CopyField} value=${state.topic} label=${tt("tools.generated_topic")} />
       ${state.acl.map(
-        (a, i) =>
+        (rule, i) =>
           html`<div key=${i} class="toolbar">
-            <input type="text" value=${a.user} onInput=${(e) => setEntry(i, { user: e.target.value })} />
-            <${PermSelect} value=${a.permission} onChange=${(p) => setEntry(i, { permission: p })} />
+            <input
+              type="text"
+              aria-label=${tt("tools.rule_user", { n: i + 1 })}
+              value=${rule.user}
+              onInput=${(ev) => setEntry(i, { user: ev.target.value })}
+            />
+            <${PermSelect}
+              value=${rule.permission}
+              label=${tt("tools.rule_perm", { n: i + 1 })}
+              onChange=${(permission) => setEntry(i, { permission })}
+            />
           </div>`,
       )}
-      <button class="btn" type="button" onClick=${apply}>Apply</button>
+      <button class="btn" type="button" onClick=${apply}>${tt("tools.apply")}</button>
     </div>`}
     ${report &&
     html`<div>
-      ${report.lines.map((l, i) => html`<div key=${i}>${l}</div>`)}
+      ${report.lines.map(
+        (line, i) =>
+          html`<div key=${i}>
+            ${line.error
+              ? tt("tools.line_error", { user: line.user, error: tError(line.error) })
+              : tt("tools.line_ok", { user: line.user, permission: line.permission })}
+          </div>`,
+      )}
       ${report.skipped.length > 0 &&
-      html`<div class="notice info">Skipped unknown users: ${report.skipped.join(", ")}</div>`}
+      html`<div class="notice info">${tt("tools.skipped", { users: report.skipped.join(", ") })}</div>`}
     </div>`}
   </div>`;
 }
 
 export default function View({ params }) {
-  const { data, error, loading } = useAsync(() => get("users"));
+  const { data, error, loading, reload } = useAsync(() => get("users"));
   if (loading && !data) return html`<${Loading} />`;
-  if (error) return html`<${ErrorNote} error=${error} />`;
+  if (error) return html`<${ErrorNote} error=${error} onRetry=${reload} />`;
   const names = (data.users || []).map((u) => u.name);
   const users = names.includes("everyone") ? names : ["everyone", ...names];
   return html`<div>
