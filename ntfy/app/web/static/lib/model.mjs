@@ -125,3 +125,23 @@ export function describeEffective(eff) {
       return "no rule matches, default access applies";
   }
 }
+
+// ---- key-free logic for the views (additive; the views map kinds to i18n keys) ----
+
+const PROTECTION_KINDS = ["last_admin", "options_admin", "anonymous"];
+
+export function protectionKind(reason) {
+  return PROTECTION_KINDS.includes(reason) ? reason : "other";
+}
+
+const EFFECTIVE_KINDS = { admin: "admin", "user-rule": "user_rule", "everyone-rule": "everyone_rule" };
+
+export function effectiveExplain(eff) {
+  const src = eff && eff.source ? eff.source : {};
+  const kind = EFFECTIVE_KINDS[src.kind] || "default";
+  if (kind === "user_rule" || kind === "everyone_rule") {
+    const rule = src.rule || {};
+    return { kind, params: { user: rule.user, topic: rule.topic, permission: rule.permission } };
+  }
+  return { kind, params: {} };
+}

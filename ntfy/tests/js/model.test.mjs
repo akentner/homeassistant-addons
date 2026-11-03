@@ -88,3 +88,22 @@ test("describeEffective", () => {
   assert.match(m.describeEffective({ source: { kind: "everyone-rule", rule } }), /everyone rule/);
   assert.match(m.describeEffective({ source: { kind: "default", rule: null } }), /default access applies/);
 });
+
+test("protectionKind maps the protection reasons to kinds", () => {
+  assert.equal(m.protectionKind("last_admin"), "last_admin");
+  assert.equal(m.protectionKind("options_admin"), "options_admin");
+  assert.equal(m.protectionKind("anonymous"), "anonymous");
+  assert.equal(m.protectionKind("something_new"), "other");
+  assert.equal(m.protectionKind(null), "other");
+  assert.equal(m.protectionKind(undefined), "other");
+});
+
+test("effectiveExplain returns kind and params, never text", () => {
+  const rule = { user: "alice", topic: "alerts", permission: "rw" };
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "admin", rule: null } }), { kind: "admin", params: {} });
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "user-rule", rule } }), { kind: "user_rule", params: rule });
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "everyone-rule", rule } }), { kind: "everyone_rule", params: rule });
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "default", rule: null } }), { kind: "default", params: {} });
+  assert.deepEqual(m.effectiveExplain(null), { kind: "default", params: {} });
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "user-rule", rule: { ...rule, extra: 1 } } }).params, rule);
+});
