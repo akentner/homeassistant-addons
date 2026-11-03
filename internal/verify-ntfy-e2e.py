@@ -440,7 +440,7 @@ def s13_option_variants() -> None:
 
 def s14_gate() -> None:
     heading("14. Ingress gate")
-    for method, path in (("GET", "/api/health"), ("GET", "/api/users"), ("GET", "/static/app.mjs"), ("GET", "/"), ("GET", "/nope"), ("POST", "/api/users")):
+    for method, path in (("GET", "/api/health"), ("GET", "/api/users"), ("GET", "/static/app.mjs"), ("GET", "/static/vendor/admin-ui/ui.mjs"), ("GET", "/static/strings.en.mjs"), ("GET", "/"), ("GET", "/nope"), ("POST", "/api/users")):
         status, body = gui(method, path, ingress=False)
         check(f"{method} {path} without header is 403 ingress_only", status == 403 and isinstance(body, dict) and body.get("error") == "ingress_only", f"{status} {str(body)[:80]}")
 
