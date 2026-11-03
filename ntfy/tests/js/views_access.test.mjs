@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   findAll, findByText, prop, settle, mount, all, calls, fixtures, failures, setLang, doc, html, render, STATIC,
 } from "./harness.mjs";
-import { auditNames, auditTables } from "../../../admin-ui/tests/js/a11y_audit.mjs";
+import { auditNames, auditTables } from "./a11y_audit.mjs";
 
 const { Toasts } = await import(new URL("vendor/admin-ui/ui.mjs", STATIC));
 
