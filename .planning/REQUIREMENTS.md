@@ -143,9 +143,10 @@ import, timeouts. Phase 2+ deferred (see "Out of Scope").
       (`cat /data/bridge-token`), OpenTofu provider install (`make install-provider`), example `*.tf` file, every
       resource attribute with example values, every error code with remediation, troubleshooting section
 - [x] **OPS-05**: Bridge Dockerfile is multi-stage: `golang:1.25-alpine` builds a static binary, which is copied into
-      `ghcr.io/home-assistant/amd64-base:3.24`; image size target ≤ 60 MiB uncompressed, ≤ 30 MiB compressed _(revised
-      2026-08-31 from ≤ 30 MiB — HA base 3.24 alone is 49 MiB uncompressed; compressed size is ~22 MiB which is under
-      the original target; documented deviation in 09-01-SUMMARY + 09-04-SUMMARY)_
+      `ghcr.io/home-assistant/amd64-base:3.24`; image size target: the bridge adds ≤ 16 MiB on top of the HA base image
+      _(revised 2026-11-03 from ≤ 60 MiB absolute: the HA base image grew from 49 MiB to ~69 MiB uncompressed, so an
+      absolute cap broke without any bridge change; earlier revised 2026-08-31 from ≤ 30 MiB; compressed size is ~22 MiB;
+      documented deviation in 09-01-SUMMARY + 09-04-SUMMARY)_
 
 ---
 
