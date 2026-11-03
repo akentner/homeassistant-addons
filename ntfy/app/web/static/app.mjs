@@ -1,7 +1,6 @@
 // Shell: hash router, tabs, lazy view loader, health poll. Relative URLs only (page lives below an ingress path).
-import { html, render, useState, useEffect, Toasts, ErrorNote, Loading, Badge, usePoll } from "./lib/ui.mjs";
+import { html, render, useState, useEffect, Toasts, ErrorNote, Loading, Badge, usePoll, useErrorBoundary } from "./lib/ui.mjs";
 import { get } from "./lib/api.mjs";
-import { useErrorBoundary } from "./vendor/preact-htm.mjs";
 
 export const VIEWS = [
   { id: "users", title: "Users" },

@@ -5,7 +5,9 @@ import { install, findAll, findByText, prop, settle } from "./fakedom.mjs";
 
 const doc = install();
 const STATIC = new URL("../../app/web/static/", import.meta.url);
-const { html, render } = await import(new URL("vendor/preact-htm.mjs", STATIC));
+const { html, render } = await import(new URL("lib/ui.mjs", STATIC));
+const { setLang } = await import(new URL("vendor/admin-ui/i18n.mjs", STATIC));
+setLang("en");
 const { VIEWS } = await import(new URL("app.mjs", STATIC));
 const { RESET_PHRASES } = await import(new URL("lib/model.mjs", STATIC));
 
