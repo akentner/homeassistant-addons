@@ -13,6 +13,7 @@ import pytest
 from app.contract import ApiError
 from app.ntfycli import NtfyCliError
 from app.web import server as srv
+from app.web.admin_ui import DEFAULT_CSP, StaticFiles
 from app.web.server import Download, Request, Router, make_server
 
 INGRESS = {"X-Ingress-Path": "/api/hassio_ingress/abc"}
@@ -62,8 +63,8 @@ class Client:
         return status, (json.loads(data) if data else None)
 
 
-def start(router: Router, remote: str = "127.0.0.1") -> tuple[Any, Client]:
-    httpd = make_server(router, 0, ingress_remote=remote, host="127.0.0.1")
+def start(router: Router, remote: str = "127.0.0.1", **kwargs: Any) -> tuple[Any, Client]:
+    httpd = make_server(router, 0, ingress_remote=remote, host="127.0.0.1", **kwargs)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     return httpd, Client(httpd.server_address[1])
@@ -140,18 +141,73 @@ def test_exception_mapping(client: Client, capsys: pytest.CaptureFixture[str]) -
     assert "RuntimeError" in capsys.readouterr().out
 
 
-def test_static_whitelist(client: Client, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def stop(httpd: Any) -> None:
+    httpd.shutdown()
+    httpd.server_close()
+
+
+def test_static_whitelist(client: Client, tmp_path: Path) -> None:
     for path in ("/static/../app/contract.py", "/static/%2e%2e/x", "/static/..%2fcontract.py", "/static/.hidden.css",
                  "/static/nope.css", "/static/server.py"):
         assert client.call("GET", path, INGRESS)[0] == 404, path
-    # a symlink escaping STATIC_DIR and a .py file below it
+    # a symlink escaping the static root and a .py file below it
     static = tmp_path / "static"
     static.mkdir()
     (tmp_path / "secret.css").write_text("x")
     (static / "link.css").symlink_to(tmp_path / "secret.css")
     (static / "mod.py").write_text("x")
     (static / "ok.css").write_text("ok")
-    monkeypatch.setattr(srv, "STATIC_DIR", static)
-    assert client.call("GET", "/static/link.css", INGRESS)[0] == 404
-    assert client.call("GET", "/static/mod.py", INGRESS)[0] == 404
-    assert client.call("GET", "/static/ok.css", INGRESS)[0] == 200
+    httpd, custom = start(build_router(), static=StaticFiles(static))
+    try:
+        assert custom.call("GET", "/static/link.css", INGRESS)[0] == 404
+        assert custom.call("GET", "/static/mod.py", INGRESS)[0] == 404
+        assert custom.call("GET", "/static/ok.css", INGRESS)[0] == 200
+    finally:
+        stop(httpd)
+
+
+def test_default_static_root_follows_the_module_constant(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "ok.css").write_text("ok")
+    monkeypatch.setattr(srv, "STATIC_DIR", tmp_path)
+    httpd, cli = start(build_router())
+    try:
+        assert cli.call("GET", "/static/ok.css", INGRESS)[0] == 200
+        assert cli.call("GET", "/static/app.mjs", INGRESS)[0] == 404
+    finally:
+        stop(httpd)
+
+
+def test_csp_on_page_and_static_but_not_on_api(client: Client) -> None:
+    for path in ("/", "/static/app.mjs", "/static/app.css"):
+        _, resp, _ = client.call("GET", path, INGRESS)
+        assert resp.getheader("Content-Security-Policy") == DEFAULT_CSP, path
+    for path in ("/api/health", "/api/missing"):
+        _, resp, _ = client.call("GET", path, INGRESS)
+        assert resp.getheader("Content-Security-Policy") is None, path
+
+
+def test_security_headers_on_every_response(client: Client) -> None:
+    for path, headers in (("/", INGRESS), ("/static/app.mjs", INGRESS), ("/api/health", INGRESS),
+                          ("/api/missing", INGRESS), ("/api/health", None)):
+        _, resp, _ = client.call("GET", path, headers)
+        assert resp.getheader("X-Content-Type-Options") == "nosniff", path
+        assert resp.getheader("Referrer-Policy"), path
+        assert resp.getheader("X-Frame-Options") is None, path
+    assert client.call("GET", "/", INGRESS)[1].getheader("Cache-Control") == "no-cache"
+    assert client.call("GET", "/api/health", INGRESS)[1].getheader("Cache-Control") == "no-store"
+
+
+def test_csp_can_be_switched_off() -> None:
+    httpd, cli = start(build_router(), csp=None)
+    try:
+        for path in ("/", "/static/app.mjs"):
+            _, resp, _ = cli.call("GET", path, INGRESS)
+            assert resp.getheader("Content-Security-Policy") is None, path
+            assert resp.getheader("X-Content-Type-Options") == "nosniff"
+    finally:
+        stop(httpd)
+
+
+def test_adapter_keeps_the_public_names() -> None:
+    assert srv.STATIC_DIR.is_dir() and (srv.STATIC_DIR / "index.html").is_file()
+    assert (srv.Request, srv.Router, srv.Download) == (Request, Router, Download)
