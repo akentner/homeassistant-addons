@@ -1,0 +1,21 @@
+/* HAOS Monitor layout on top of vendor/admin-ui/base.css. Tokens only, no literal colours. */
+.hosts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); align-items: start; }
+.hosts > .host-card { margin: 0; min-width: 0; }
+.host-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.host-head h2 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
+.reasons { color: var(--err); font-weight: 600; }
+.host-card h3 { margin: 12px 0 2px; color: var(--mut); font-size: 13px; font-weight: 600; }
+.values { margin: 8px 0; }
+.values th { font-size: 13px; }
+.values td { text-align: right; font-variant-numeric: tabular-nums; }
+.values tr.bad th, .values tr.bad td { color: var(--err); font-weight: 600; }
+.values tr.bad th { box-shadow: inset 3px 0 0 var(--err); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 8px 0; padding: 0; list-style: none; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid var(--bd); border-radius: 999px; }
+.chip.up { color: var(--ok); }
+.chip.down { color: var(--err); border-color: var(--err); }
+.chip.unknown { color: var(--mut); }
+.key-line { margin: 8px 0 0; font-size: 12px; overflow-wrap: anywhere; word-break: break-all; }
+.key-line.bad { color: var(--err); font-weight: 600; }
+.log { margin: 4px 0; white-space: pre-wrap; word-break: break-word; }
+.log-muted { color: var(--mut); }

@@ -242,3 +242,38 @@ jobs:
 
       - name: Lib copies in sync and rules
         run: make check-admin-ui-sync check-admin-ui-rules
+
+  # Appended on purpose, like admin-ui and secrets-sync above (line-anchored zizmor deferrals).
+  haos-monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install test dependencies
+        run: python -m pip install 'pytest==9.1.1' 'pyyaml==6.0.3'
+
+      - name: Front end tests (node)
+        run: node --test haos-monitor/tests/js/*.test.mjs
+
+      - name: Add-on tests (pytest)
+        working-directory: haos-monitor
+        run: python -m pytest -q
+
+      - name: Lib copies in sync and rules
+        run: make check-admin-ui-sync check-admin-ui-rules
