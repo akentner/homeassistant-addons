@@ -58,8 +58,8 @@ for k in repository version_pattern version_strip; do
 done
 [ "$(yget "${ADDON_DIR}/config.yaml" options.listen_port)" = "null" ] || fail "config.yaml has a listen_port option"
 [ "$(yget "${ADDON_DIR}/config.yaml" host_network)" = "False" ] || fail "host_network must be false"
-version="$(yget "${ADDON_DIR}/config.yaml" version)"
-grep -q "^## \[${version}\]" "${ADDON_DIR}/CHANGELOG.md" || fail "CHANGELOG.md has no header for ${version}"
+# The auto-update bot prepends the upstream release notes without a version header, so only require a non-empty file
+[ -s "${ADDON_DIR}/CHANGELOG.md" ] || fail "CHANGELOG.md is missing or empty"
 build_version="$(yget "${ADDON_DIR}/build.yaml" args.VERSION)"
 grep -q "^\[release-shield\]:.*version-v${build_version}-" "${ADDON_DIR}/README.md" \
     || fail "README release-shield does not match build.yaml version ${build_version}"
