@@ -279,6 +279,166 @@ test("tools: German mount has no English literal, also after a lookup", async ()
   });
 });
 
+// ---- tokens ----
+
+test("tokens: no token value before reveal, once after, gone after hide", async () => {
+  const root = await mount("tokens");
+  assert.match(all(root), /tk_abcde/);
+  assert.match(all(root), /phone/);
+  assert.ok(!/tk_[a-z0-9]{29}/.test(all(root)));
+  assert.ok(!valuesOf(root).some((v) => /tk_[a-z0-9]{29}/.test(v)));
+  await click(buttons(root, "Reveal")[0]);
+  assert.equal(valuesOf(root).filter((v) => v === TOKEN_VALUE).length, 1);
+  assert.ok(!all(root).includes(TOKEN_VALUE), "the value lives in the input only, not in text");
+  assert.ok(byLabel(root, "Value of token tk_abcde"), "labelled CopyField");
+  assert.ok(callsTo("POST", "api/tokens/reveal").some((c) => c.body.id === "tk_abcde" && c.body.user === "<b>alice</b>"));
+  await click(buttons(root, "Hide")[0]);
+  assert.equal(valuesOf(root).filter((v) => v === TOKEN_VALUE).length, 0);
+  assert.ok(!all(root).includes(TOKEN_VALUE));
+  assert.ok(!/tk_[a-z0-9]{29}/.test(all(root)));
+});
+
+test("tokens: a failing reveal toasts the localized error and leaks no value", async () => {
+  await withFixtures({}, async () => {
+    await clearToasts();
+    failures["POST api/tokens/reveal"] = { status: 404, error: "not_found", message: "hidden detail" };
+    const root = await mount("tokens");
+    await click(buttons(root, "Reveal")[0]);
+    assert.match(toastText(), /Not found/);
+    assert.ok(!toastText().includes("hidden detail"));
+    assert.ok(!valuesOf(root).includes(TOKEN_VALUE));
+  });
+});
+
+test("tokens: table has caption, th scope and scroll wrapper; hostile text stays text; audits are clean", async () => {
+  const root = await mount("tokens");
+  assert.equal(findAll(root, (n) => cls(n).includes("table-scroll") && findAll(n, (c) => c.localName === "table").length === 1).length, 1);
+  const caption = findAll(root, (n) => n.localName === "caption")[0];
+  assert.equal(caption.textContent.trim(), "Access tokens");
+  assert.ok(cls(caption).includes("sr-only"));
+  const heads = findAll(root, (n) => n.localName === "th");
+  assert.equal(heads.length, 7);
+  assert.ok(heads.every((th) => th.getAttribute("scope") === "col"));
+  assert.ok(all(root).includes("<b>alice</b>"));
+  assert.equal(findAll(root, (n) => n.localName === "b").length, 0);
+  assert.equal(auditNames(root).length, 0);
+  assert.equal(auditTables(root).length, 0);
+});
+
+test("tokens: expiry and state badge, relative last use with an approximation note, origin badge", async () => {
+  const soon = new Date(Date.now() + 86_400_000 * 5).toISOString();
+  const past = new Date(Date.now() - 86_400_000 * 5).toISOString();
+  const tokens = [
+    { id: "tk_aaaaa", user: "<b>alice</b>", prefix: "tk_aaaaa", label: "a", expires: 0, expires_at: null, last_access: 0, last_origin: "", origin: "gui" },
+    { id: "tk_bbbbb", user: "<b>alice</b>", prefix: "tk_bbbbb", label: "<i>b</i>", expires: 1, expires_at: soon, last_access: Math.floor(Date.now() / 1000) - 7200, last_origin: "", origin: "iac" },
+    { id: "tk_ccccc", user: "<b>alice</b>", prefix: "tk_ccccc", label: "c", expires: 1, expires_at: past, last_access: 0, last_origin: "", origin: "options" },
+  ];
+  await withFixtures({ "GET api/tokens": { tokens } }, async () => {
+    const root = await mount("tokens");
+    const rows = findAll(root, (n) => n.localName === "tr").slice(1);
+    assert.equal(rows.length, 3);
+    assert.deepEqual(badges(rows[0]).slice(0, 2), ["never", "GUI"]);
+    assert.deepEqual(badges(rows[1]).slice(0, 2), ["active", "IaC"]);
+    assert.deepEqual(badges(rows[2]).slice(0, 2), ["expired", "Options"]);
+    assert.match(rows[2].textContent, /expired /);
+    assert.match(rows[1].textContent, /2 hours ago/);
+    assert.ok(findAll(rows[1], (n) => n.localName === "td").some((td) => td.getAttribute("title") === "ntfy updates this value lazily, so it is approximate"));
+    assert.equal(findAll(root, (n) => n.localName === "i").length, 0);
+  });
+});
+
+test("tokens: the filter is labelled, starts at params.user and re-queries with the user", async () => {
+  const root = await mount("tokens", { user: "<b>alice</b>" });
+  const filter = byId(root, "tokens-filter");
+  assert.equal(filter.value, "<b>alice</b>");
+  assert.ok(callsTo("GET", "api/tokens").some((c) => c.url.includes("user=")));
+  await choose(filter, "");
+  assert.ok(callsTo("GET", "api/tokens").some((c) => !c.url.includes("user=")));
+});
+
+test("tokens: empty state when no tokens exist", async () => {
+  await withFixtures({ "GET api/tokens": { tokens: [] } }, async () => {
+    assert.match(all(await mount("tokens")), /No tokens\./);
+  });
+});
+
+test("tokens create: validation shows an alert and sends nothing", async () => {
+  const root = await mount("tokens");
+  await click(buttons(root, "Create token")[0]);
+  assert.equal(findAll(root, (n) => n.getAttribute("role") === "dialog").length, 1);
+  await click(buttons(root, "Create")[0]);
+  assert.deepEqual(alerts(root), ["Choose a user."]);
+  await choose(byId(root, "token-user"), "<b>alice</b>");
+  await type(byId(root, "token-label"), "bad\u0001label");
+  await click(buttons(root, "Create")[0]);
+  assert.deepEqual(alerts(root), ["Label too long or contains control characters."]);
+  await type(byId(root, "token-label"), "ok");
+  await choose(byId(root, "token-expires"), "custom");
+  await type(byId(root, "token-custom"), "soon");
+  await click(buttons(root, "Create")[0]);
+  assert.deepEqual(alerts(root), ["Duration must look like 30m, 12h or 7d."]);
+  assert.equal(callsTo("POST", "api/tokens").length, 0);
+  const options = findAll(byId(root, "token-expires"), (n) => n.localName === "option").map((n) => n.textContent.trim());
+  assert.deepEqual(options, ["never", "1 hour", "1 day", "7 days", "30 days", "90 days", "Custom…"]);
+});
+
+test("tokens create: a valid form posts user and label plus expires only when set; the value is shown once", async () => {
+  const created = { token: { value: TOKEN_VALUE, id: "tk_new", user: "<b>alice</b>" } };
+  await withFixtures({ "POST api/tokens": created }, async () => {
+    await clearToasts();
+    const root = await mount("tokens");
+    await click(buttons(root, "Create token")[0]);
+    await choose(byId(root, "token-user"), "<b>alice</b>");
+    await type(byId(root, "token-label"), "laptop");
+    await click(buttons(root, "Create")[0]);
+    assert.deepEqual(callsTo("POST", "api/tokens")[0].body, { user: "<b>alice</b>", label: "laptop" });
+    assert.equal(valuesOf(root).filter((v) => v === TOKEN_VALUE).length, 1);
+    assert.ok(byLabel(root, "New token value"));
+    assert.ok(!toastText().includes(TOKEN_VALUE));
+    await click(buttons(root, "Done")[0]);
+    assert.equal(valuesOf(root).filter((v) => v === TOKEN_VALUE).length, 0);
+    assert.ok(!/tk_[a-z0-9]{29}/.test(all(root)));
+    assert.equal(findAll(root, (n) => n.getAttribute("role") === "dialog").length, 0);
+
+    await click(buttons(root, "Create token")[0]);
+    await choose(byId(root, "token-user"), "<b>alice</b>");
+    await choose(byId(root, "token-expires"), "7d");
+    await click(buttons(root, "Create")[0]);
+    assert.deepEqual(callsTo("POST", "api/tokens")[1].body, { user: "<b>alice</b>", label: "", expires: "7d" });
+  });
+});
+
+test("tokens revoke: danger confirmation names prefix and user, DELETE carries user and id, failure keeps it open", async () => {
+  await withFixtures({ "DELETE api/tokens": { ok: true } }, async () => {
+    await clearToasts();
+    failures["DELETE api/tokens"] = { status: 409, error: "locked", message: "hidden detail" };
+    const root = await mount("tokens");
+    await click(buttons(root, "Revoke")[0]);
+    assert.ok(all(root).includes("Revoke the token tk_abcde… of <b>alice</b>?"));
+    assert.ok(cls(buttons(root, "Revoke").pop()).includes("danger"));
+    assert.equal(callsTo("DELETE", "api/tokens").length, 0);
+    await click(buttons(root, "Revoke").pop());
+    assert.ok(alerts(root).some((t) => t.includes("The ntfy auth database is locked")));
+    assert.ok(!all(root).includes("hidden detail"));
+    assert.ok(all(root).includes("Revoke the token"), "dialog stays open");
+    delete failures["DELETE api/tokens"];
+    await click(buttons(root, "Revoke").pop());
+    const sent = callsTo("DELETE", "api/tokens").pop();
+    assert.ok(sent.url.includes("id=tk_abcde") && sent.url.includes("user="));
+    assert.match(toastText(), /Token revoked/);
+    assert.ok(!all(root).includes("Revoke the token"), "dialog closed");
+  });
+});
+
+test("tokens: German mount has no English literal, also with the create dialog open", async () => {
+  const root = await mount("tokens", {}, { lang: "de" });
+  await click(buttons(root, "Token erstellen")[0]);
+  assertGerman(root, "tokens.");
+  assert.match(all(root), /Zuletzt genutzt \(ca\.\)/);
+  assert.equal(auditNames(root).length, 0);
+  assert.equal(auditTables(root).length, 0);
+});
+
 // Preact/toast timers can outlive the tests; end the worker once the results are reported.
 test.after(() => {
   setTimeout(() => process.exit(process.exitCode ?? 0), 300).unref();
