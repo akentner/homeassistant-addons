@@ -56,6 +56,11 @@ old add-on.
   edited in the GUI has the origin `gui` and is left alone. An empty `topic` creates only the user.
 - Entries removed from the options are not deleted. Their origin becomes `gui` at the next start.
 - A baseline entry that names `admin_user` is ignored with a warning.
+- A password that is empty, an unresolved `!secret` reference, equal to the username or shorter than 8 characters is
+  never used: the user (or the admin) is not created, a warning in the add-on log names the user and the reason, and the
+  entry's rules wait until the option holds a real password. The same check keeps `baseline_overwrite_passwords` from
+  setting such a password on an existing user. Typical cause: an option that points to the `*_username` secret instead
+  of the `*_password` secret.
 - The admin from `admin_user` and `admin_password` is created only when missing. A password changed in the GUI is never
   overwritten, and `baseline_overwrite_passwords` does not affect the admin.
 - Origins are kept in the sidecar file `/data/origins.json`. `gui` and `options` are written by this add-on, `iac` is
@@ -196,6 +201,10 @@ Moving `auth.db` by hand stays possible, but is not supported. When the web UI i
 - **Database locked**: ntfy and the GUI share the database. Writes are serialized and retried. If the problem stays,
   restart the add-on.
 - **No admin**: `admin_password` is empty. Set it and restart.
+- **A user is missing after the first start**: look for `user not created, password ...` in the add-on log. The password
+  option was empty, an unresolved `!secret`, equal to the username or too short. Fix the option (check that it uses the
+  `*_password` secret) and restart; the user is then created. An account that already exists with a wrong password needs
+  `baseline_overwrite_passwords: true` for one start, or a password change in the GUI.
 - **Blank or unstyled page**: the Content-Security-Policy may block a resource. Look at the browser console for a CSP
   message. For diagnosis only, the container environment variable `NTFY_GUI_CSP=off` removes the policy. It is not an
   add-on option and must never stay set permanently. Valid values are `strict` (default) and `off`.

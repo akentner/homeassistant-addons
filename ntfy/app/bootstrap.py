@@ -10,6 +10,7 @@ from app import baseline
 from app.context import Context, build_context
 from app.contract import ApiError
 from app.ntfycli import NtfyCliError
+from app.passwords import password_problem
 
 
 @dataclass
@@ -44,6 +45,9 @@ def ensure_admin(ctx: Context) -> list[str]:
         existing = set()  # missing or unreadable auth.db counts as no users
     if options.admin_user in existing:
         return []
+    problem = password_problem(options.admin_user, options.admin_password)
+    if problem:
+        raise ValueError(f"admin user {options.admin_user} not created, {problem} (set a real admin_password)")
     try:
         ctx.cli.user_add(options.admin_user, options.admin_password, role="admin")
     except NtfyCliError as exc:

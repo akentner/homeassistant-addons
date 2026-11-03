@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from app.context import Context
 from app.contract import ApiError
 from app.ntfycli import NtfyCliError
+from app.passwords import password_problem
 
 
 @dataclass
@@ -64,7 +65,11 @@ def apply_baseline(ctx: Context) -> BaselineReport:
 def _apply_entry(ctx, report, entry, roles, rules, named_rules) -> None:
     name = entry.username
     existed = name in roles
+    problem = password_problem(name, entry.password)
     if not existed:
+        if problem:
+            # never create an account with a placeholder password; the entry and its rules wait for a real value
+            raise ValueError(f"user not created, {problem} (set a real password in the options)")
         try:
             ctx.cli.user_add(name, entry.password, role="user")
         except NtfyCliError as exc:
@@ -81,9 +86,12 @@ def _apply_entry(ctx, report, entry, roles, rules, named_rules) -> None:
         _warn(report, f"user {name} has the admin role: baseline gets no rules and no password reset")
         return
     if existed and options_overwrite(ctx):
-        ctx.cli.user_change_pass(name, entry.password)
-        report.passwords_reset.append(name)
-        _log(f"password of user {name} set again (baseline_overwrite_passwords)")
+        if problem:
+            _warn(report, f"password of user {name} not reset, {problem}")
+        else:
+            ctx.cli.user_change_pass(name, entry.password)
+            report.passwords_reset.append(name)
+            _log(f"password of user {name} set again (baseline_overwrite_passwords)")
     if not entry.topic:
         return
     permission = "rw" if entry.write_access else "ro"

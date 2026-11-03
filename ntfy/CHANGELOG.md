@@ -55,6 +55,17 @@ All notable changes to the **ntfy** add-on are documented in this file. The form
 [Keep a Changelog](https://keepachangelog.com/). The add-on version follows upstream ntfy; a change that only touches
 the add-on (GUI, options, docs) bumps the subpatch (`-N`).
 
+## [2.37.0-3] - 2026-11-03
+
+### Fixed
+
+- The add-on no longer creates the admin or a baseline user with a placeholder password. An empty value, an unresolved
+  `!secret` reference, a password equal to the username (for example when an option points to the `*_username` secret
+  instead of the `*_password` secret) or a password shorter than 8 characters is refused: the account is not created, a
+  clear warning names the user and the reason (never the value), and the other entries are applied as usual
+- With `baseline_overwrite_passwords: true` the same check applies: an invalid baseline password is never set on an
+  existing user
+
 ## [2.37.0-2] - 2026-11-03
 
 ### Changed
