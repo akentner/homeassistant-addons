@@ -107,12 +107,23 @@ None.
 None (verify scripts only; the existing sentinel-password checks for server.yml, logs and PID 1 cmdline ran
 unchanged and passed, T-27-21).
 
-## Task 3 UAT: pending
+## Task 3 UAT: pass
 
-Task 3 (human UAT of the migrated panel in real Home Assistant ingress, per the plan's `how-to-verify`) was not run
-by this executor and is handled by the parent session. To be filled with pass or fail per area (look, language, views,
-errors, CSP header present and zero violations, HA integration, card), plus HA core version, browser or app and access
-path. Record no tokens, host names or user names.
+Date 2026-11-03. Deployed as a local add-on from the branch build (D-14, nothing published): `local_ntfy` updated from
+2.36.0-0 to 2.37.0-2 on HA Nextgen, built locally by the Supervisor; ntfy migrated an existing auth.db from schema 10 to
+11 at start without errors. Access path: HA sidebar panel (ingress).
+
+| Area | Result |
+|------|--------|
+| Look (light and dark, new look accepted, D-09) | pass |
+| Narrow width (tabs and tables scroll, nothing cut off) | pass |
+| Language switch (de/en without reload, persists, no raw keys) | pass |
+| All seven views, reload keeps the tab | pass |
+| CSP header on page and static files, none on API, zero console violations | pass |
+| Function (test publish, token create/copy/revoke, download) | pass |
+
+The user confirmed "pass" for the checklist as a whole; per-area granularity above follows the checklist that was
+presented. HA core version and browser/app were not recorded by the user. No tokens, host names or user names recorded.
 
 ## Self-Check: PASSED
 
