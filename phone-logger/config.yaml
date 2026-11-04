@@ -1,6 +1,6 @@
 name: "Phone Logger"
 description: "Phone logging and adapter integration for Home Assistant. Based on https://github.com/akentner/phone-logger."
-version: "1.0.6-0"
+version: "1.0.6-1"
 slug: "phone-logger"
 init: false
 ingress: true
@@ -13,7 +13,7 @@ startup: "application"
 boot: "auto"
 host_network: false
 map:
-  - type: addon_config
+  - type: app_config
     read_only: false
     path: /addon_config
 options:

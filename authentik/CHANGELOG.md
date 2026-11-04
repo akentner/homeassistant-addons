@@ -1,3 +1,7 @@
+## Add-on 2026.8.5-1 - 2026-11-04
+
+- Use current Supervisor mapping types while preserving container paths and access modes.
+
 See https://docs.goauthentik.io/docs/releases/2026.8#fixed-in-202685
 
 ## What's Changed

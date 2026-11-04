@@ -84,3 +84,10 @@ log for the generated credentials.
 
 Back up the entire HA add-on storage directory (accessible via _Supervisor → Add-ons → Authentik → Backups_) or use the
 standard HA backup functionality, which includes add-on data.
+
+## Supervisor folder mappings
+
+This add-on uses current Supervisor mapping types with explicit paths where necessary. Container paths and access modes
+remain unchanged when upgrading from the legacy mapping names.
+
+The public app configuration remains available at `/addon_config` inside this container.

@@ -6,6 +6,10 @@ All notable changes to the **Coding Assistants** add-on are documented in this f
 
 This add-on has no upstream — every entry below is hand-written by the maintainers.
 
+## Add-on 1.1.0-1 - 2026-11-04
+
+- Use current Supervisor mapping types while preserving container paths and access modes.
+
 ## [Unreleased]
 
 ### Added

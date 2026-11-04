@@ -1,3 +1,7 @@
+## Add-on 5.38.0-1 - 2026-11-04
+
+- Use current Supervisor mapping types while preserving container paths and access modes.
+
 ## What's Changed
 
 - feat(alerting): add Resend alerting provider by @geffersonFerraz in https://github.com/TwiN/gatus/pull/1830

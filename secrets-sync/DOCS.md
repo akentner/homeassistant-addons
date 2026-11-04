@@ -376,3 +376,12 @@ endpoints:
 
 `[STATUS] == 200` already covers `status == ok` and not stale (503 otherwise). `age_seconds < 900` additionally alerts
 when syncing stalls for three default intervals. Add `[BODY].items > 0` to alert on an empty vault.
+
+## Supervisor folder mappings
+
+This add-on uses current Supervisor mapping types with explicit paths where necessary. Container paths and access modes
+remain unchanged when upgrading from the legacy mapping names.
+
+The public app configuration remains available at `/addon_config` inside this container. Home Assistant configuration
+remains at `/config` (read-write), and all public app configurations remain at `/addon_configs` (read-only). The
+mappings are independent; AGE and SSH key paths remain unchanged.

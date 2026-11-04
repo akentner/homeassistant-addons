@@ -1,6 +1,6 @@
 name: "LiteLLM"
 description: "OpenAI-compatible API gateway with bundled PostgreSQL — virtual keys, spend tracking, model routing."
-version: "1.108.0-0"
+version: "1.108.0-1"
 slug: "litellm"
 init: false
 arch:
@@ -18,7 +18,7 @@ ports:
 ports_description:
   4000/tcp: "OpenAI-compatible API (HTTP) — direct port for LAN/Tailscale clients"
 map:
-  - type: addon_config
+  - type: app_config
     read_only: false
     path: /addon_config
   - type: backup

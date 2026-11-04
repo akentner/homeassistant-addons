@@ -544,3 +544,11 @@ tmux prefix `Ctrl-a` nor its bindings were ported; herdr runs with its own defau
 - A tmux session that was running during the update ends with the add-on restart; nothing is carried over.
 - An own `~/.tmux.conf` is ignored. Custom herdr settings go into `/data/.config/herdr/config.toml`, see
   [herdr](#herdr).
+
+## Supervisor folder mappings
+
+This add-on uses current Supervisor mapping types with explicit paths where necessary. Container paths and access modes
+remain unchanged when upgrading from the legacy mapping names.
+
+Local app sources remain at `/addons`, public app configurations at `/addon_configs`, and HA configuration at
+`/homeassistant`, with the existing read-write access.
