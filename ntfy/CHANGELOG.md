@@ -1,3 +1,7 @@
+## Changelog
+
+- 05109571fd0931affb6f92b17bbfd62c4d2ea68a Merge pull request #2169 from binwiederhier/release-2380
+
 This release fixes a database slowdown in v2.37.0 when using `visitor-subscriber-rate-limiting` with a user database:
 the subscriber activity of UnifiedPush topics was written far too often.
 
