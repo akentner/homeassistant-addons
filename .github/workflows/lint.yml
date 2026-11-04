@@ -197,7 +197,7 @@ jobs:
           node-version: '22'
 
       - name: Install test dependencies
-        run: python -m pip install 'pytest==9.1.1' 'pyyaml==6.0.3'
+        run: python -m pip install 'pytest==9.1.1' 'pyyaml==6.0.3' 'jinja2==3.1.6'
 
       - name: Lib unit tests (node)
         run: node --test admin-ui/tests/js/*.test.mjs
@@ -206,8 +206,16 @@ jobs:
         run: python -m pytest admin-ui/tests -q
 
       - name: Lib copies in sync
-        run: make check-admin-ui-sync
+        run: make check-admin-ui-sync STRICT=yes
 
+      - name: ntfy consumer tests
+        run: python -m pytest ntfy/tests -q
+
+      - name: Secrets Sync consumer web tests
+        run: python -m pytest secrets-sync/tests/web -q
+
+      - name: HAOS Monitor consumer tests
+        run: python -m pytest haos-monitor/tests -q
   # Appended on purpose, like admin-ui above (line-anchored zizmor deferrals).
   secrets-sync:
     runs-on: ubuntu-latest

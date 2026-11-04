@@ -444,6 +444,7 @@ export default function Spike({ ha = {} }) {
     { key: "state", titleKey: "demo.spike.col.state", render: (r) => (r.value ? tt("demo.spike.parsed") : tt("demo.spike.unparsed")) },
   ];
   const varRows = THEME_WHITELIST.map((w) => ({ key: w.key, ha: w.ha, value: colorOf((syncStatus.raw || {})[w.key]) }));
+  varRows.push({ key: "header-height", ha: "--header-height", value: syncStatus.headerHeight || null });
   const logColumns = [
     { key: "at", titleKey: "demo.spike.col.time", render: (r) => formatDateTime(r.at, lang) },
     { key: "status", titleKey: "demo.spike.col.status" },

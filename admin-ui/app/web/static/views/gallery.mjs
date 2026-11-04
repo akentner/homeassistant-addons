@@ -51,6 +51,7 @@ export default function Gallery() {
   const [modalOpen, setModalOpen] = useState(false);
   const [confirmKind, setConfirmKind] = useState(null);
   const [tab, setTab] = useState("one");
+  const [expanded, setExpanded] = useState(false);
   const [knownError, setKnownError] = useState(false);
 
   const columns = [
@@ -132,6 +133,20 @@ export default function Gallery() {
     <//>
 
     <${Section} title=${tt("demo.gallery.table.title")}>
+      <div class="table-scroll"><table class="data">
+        <caption class="sr-only">${tt("demo.gallery.table.caption")}</caption>
+        <thead><tr><th scope="col">${tt("demo.gallery.col.name")}</th><th scope="col">${tt("demo.gallery.table.actions")}</th></tr></thead>
+        <tbody>
+          <tr><td>${tt("demo.gallery.table.plain")}</td><td></td></tr>
+          <tr><td>${tt("demo.gallery.table.interactive")}</td><td class="actions">
+            <button class="btn small secondary" type="button" aria-expanded=${expanded ? "true" : "false"} onClick=${() => setExpanded(!expanded)}>${tt("demo.gallery.table.expand")}</button>
+            <button class="btn small secondary" type="button" disabled>${tt("btn.delete")}</button>
+          </td></tr>
+        </tbody>
+      </table></div>
+      ${expanded && html`<section class="card"><h2>${tt("demo.gallery.table.details")}</h2>
+        <${DataTable} columns=${columns} rows=${SAMPLE_ROWS} rowKey="id" caption=${tt("demo.gallery.table.caption")} />
+      </section>`}
       <${DataTable} columns=${columns} rows=${SAMPLE_ROWS} rowKey="id" caption=${tt("demo.gallery.table.caption")} />
     <//>
 

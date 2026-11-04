@@ -18,7 +18,7 @@ SECTIONS = [
     "Distribution",
     "HA integration",
     "Live spike results",
-    "Migration paths",
+    "Consumer integration",
     "Security notes",
     "Follow-up",
 ]

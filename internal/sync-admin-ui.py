@@ -12,6 +12,7 @@ source state. Usage:
     sync-admin-ui.py                  refresh admin-ui/lib.lock only
     sync-admin-ui.py --addon NAME     copy to that consumer (repeatable, creates it), refresh the lock
     sync-admin-ui.py --all            copy to every discovered consumer, refresh the lock
+    sync-admin-ui.py --release X.Y.Z  advance the lib version, sync all consumers and strictly check
     sync-admin-ui.py --check [--strict]   verify lock, copies and versions
 
 Exit codes: 0 ok (warnings allowed), 1 drift, 2 usage or IO error. Stdlib only; never touches git or the network.
@@ -255,22 +256,53 @@ def do_check(root: Path, strict: bool) -> int:
     return 1 if fails else 0
 
 
+def release(root: Path, version: str) -> int:
+    """Prepare a monorepo library release; no tags, commits, manifest bumps or network access."""
+    if not re.fullmatch(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)", version):
+        raise SyncError(f"invalid release version: {version!r}")
+    current, lib_hash, skeleton_hash = source_state(root)
+    if vkey(version) < vkey(current):
+        raise SyncError(f"release {version} is older than current lib {current}")
+    if version == current:
+        lock = root / LOCK
+        if not lock.is_file() or lock.read_text(encoding="utf-8") != lock_text(current, lib_hash, skeleton_hash):
+            raise SyncError("source changed: release a newer lib version instead of reusing this version")
+    # Validate every target before changing VERSION and never downgrade a consumer.
+    for name in discover_consumers(root):
+        addon = validate_name(root, name)
+        for rel in (LIB_DST, SKELETON_DST):
+            if (addon / rel).is_symlink():
+                raise SyncError(f"symlink not allowed: {addon / rel}")
+        dst = addon / LIB_DST
+        if dst.exists() and vkey(read_version(dst)) > vkey(version):
+            raise SyncError(f"consumer {name} is newer than release {version}")
+    if version != current:
+        write_text(root / LIB_SRC / VERSION_FILE, version + "\n")
+    do_sync(root, [], True)
+    return do_check(root, True)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent, help="repository root")
     parser.add_argument("--check", action="store_true", help="verify lock, copies and versions")
     parser.add_argument("--strict", action="store_true", help="with --check: a consumer behind the source fails")
+    parser.add_argument("--release", metavar="X.Y.Z", help="prepare a lib release and sync all consumers")
     parser.add_argument("--all", action="store_true", help="copy to every discovered consumer")
     parser.add_argument("--addon", action="append", default=[], metavar="NAME", help="copy to this consumer")
     args = parser.parse_args(argv)
     root: Path = args.root
     try:
+        if args.release is not None and (args.check or args.strict or args.addon or args.all):
+            raise SyncError("--release cannot be combined with sync/check options")
         if args.check and (args.addon or args.all):
             raise SyncError("--check cannot be combined with --addon or --all")
         if args.strict and not args.check:
             raise SyncError("--strict requires --check")
         if not root.is_dir():
             raise SyncError(f"root is not a directory: {root}")
+        if args.release is not None:
+            return release(root, args.release)
         if args.check:
             return do_check(root, args.strict)
         return do_sync(root, args.addon, args.all)

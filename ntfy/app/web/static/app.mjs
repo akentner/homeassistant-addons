@@ -13,7 +13,7 @@ import en from "./strings.en.mjs";
 registerStrings({ de, en });
 
 export const VIEWS = [
-  { id: "users", titleKey: "view.users" },
+  { id: "users", titleKey: "view.users", icon: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2h14M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8m11 18v-2a6 6 0 0 0-3-5.2V21h3M16 3v8a4 4 0 0 0 0-8Z" },
   { id: "acl", titleKey: "view.acl" },
   { id: "matrix", titleKey: "view.matrix" },
   { id: "tokens", titleKey: "view.tokens" },

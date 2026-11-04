@@ -1,7 +1,7 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions verify-update-version-tag-timing update-version validate-dockerfiles docker-build-check build-addon release install-provider verify-install-provider verify-images verify-images-self-test sync-admin-ui check-admin-ui-sync check-admin-ui-rules test-admin-ui test-ntfy
+.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions verify-update-version-tag-timing update-version validate-dockerfiles docker-build-check build-addon release install-provider verify-install-provider verify-images verify-images-self-test sync-admin-ui release-admin-ui-lib test-admin-ui-consumers check-admin-ui-sync check-admin-ui-rules test-admin-ui test-ntfy
 
 # Default target
 help: ## Show this help message
@@ -110,6 +110,11 @@ validate-versions: ## Validate add-on versioning consistency
 sync-admin-ui: ## Copy the admin-ui lib to consumers (ADDON=<name> for one, default all) and refresh admin-ui/lib.lock
 	python3 internal/sync-admin-ui.py $(if $(ADDON),--addon $(ADDON),--all)
 
+release-admin-ui-lib: ## Prepare a lib release, sync all consumers and test (VERSION=X.Y.Z)
+	@test -n "$(VERSION)" || { echo "Usage: make release-admin-ui-lib VERSION=X.Y.Z"; exit 1; }
+	python3 internal/sync-admin-ui.py --release "$(VERSION)"
+	$(MAKE) check-admin-ui-rules test-admin-ui test-admin-ui-consumers
+
 check-admin-ui-sync: ## Check admin-ui lib copies and lock for drift (STRICT=yes: behind consumers fail)
 	python3 internal/sync-admin-ui.py --check $(if $(filter yes,$(STRICT)),--strict,)
 
@@ -119,6 +124,11 @@ check-admin-ui-rules: ## Scan admin-ui front ends against the static blueprint r
 test-admin-ui: ## Run the admin-ui Node and pytest suites
 	node --test admin-ui/tests/js/*.test.mjs
 	uv run --with pytest --with pyyaml python3 -m pytest admin-ui/tests -q
+
+test-admin-ui-consumers: ## Test each consumer separately (their Python app packages share a name)
+	uv run --with pytest --with pyyaml python3 -m pytest ntfy/tests -q
+	uv run --with pytest --with pyyaml --with jinja2 python3 -m pytest secrets-sync/tests/web -q
+	uv run --with pytest --with pyyaml python3 -m pytest haos-monitor/tests -q
 
 test-ntfy: ## Run the ntfy Node and pytest suites
 	node --test ntfy/tests/js/*.test.mjs

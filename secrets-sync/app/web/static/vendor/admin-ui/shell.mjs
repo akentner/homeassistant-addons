@@ -62,12 +62,21 @@ const DEFAULT_ICON = "./icon";
 // An absolute path on the HA origin ("/config/app/<slug>/info"): no scheme, no protocol-relative form.
 const isInfoPath = (path) => typeof path === "string" && /^\/[A-Za-z0-9._~\-/]{1,200}$/.test(path) && !path.startsWith("//");
 const NAV_MODES = ["topbar", "tabs"];
+const MENU_PATH = "M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z";
+const INFO_PATH = "M11 17h2v-6h-2v6m0-8h2V7h-2v2m1-7a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z";
 let menuSeq = 0;
 
 // Collapse the inline navigation into the burger menu when it does not fit its slot (a zero-width slot collapses too).
 // Unknown sizes never collapse.
 export const needsBurger = (needed, available) =>
   Number.isFinite(needed) && Number.isFinite(available) && needed > 0 && available >= 0 && needed > available;
+
+// Optional trusted SVG path data, e.g. an MDI path. Labels remain visible; icons are decorative.
+function NavIcon({ path }) {
+  return typeof path === "string" && path.trim()
+    ? html`<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d=${path} /></svg>`
+    : null;
+}
 
 const viewTitle = (tt, view) => (view.titleKey ? tt(view.titleKey) : view.title);
 const inside = (root, node) => {
@@ -100,7 +109,7 @@ function TopbarNav({ views, activeId, label, kiosk, info, onCollapse }) {
   const [collapsed, setCollapsed] = useState(false);
   const [open, setOpen] = useState(false);
   const titles = views.map((v) => viewTitle(tt, v));
-  const sig = `${lang}\n${titles.join("\n")}`;
+  const sig = `${lang}\n${titles.join("\n")}\n${views.map((v) => v.icon || "").join("\n")}`;
 
   const measure = () => {
     const box = wrap.current;
@@ -163,7 +172,7 @@ function TopbarNav({ views, activeId, label, kiosk, info, onCollapse }) {
         aria-current=${view.id === activeId ? "page" : null}
         onClick=${() => setOpen(false)}
       >
-        ${titles[i]}
+        ${view.icon && html`<${NavIcon} path=${view.icon} />`}${titles[i]}
       </a>`,
     );
   // In kiosk mode the host's own sidebar button is on screen: the nav trigger then shows the current view so the two
@@ -185,7 +194,7 @@ function TopbarNav({ views, activeId, label, kiosk, info, onCollapse }) {
       aria-controls=${menuId.current}
       onClick=${() => setOpen(!open)}
     >
-      ${kiosk && active ? `${active} ▾` : "☰"}
+      ${kiosk && active ? `${active} ▾` : html`<${NavIcon} path=${MENU_PATH} />`}
     </button>`}
     ${collapsed &&
     open &&
@@ -265,7 +274,7 @@ export function Topbar({ title, iconSrc, status, bridge, children, views, active
     <header class=${`topbar${inBar ? " topbar-nav" : ""}`}>
       ${kiosk &&
       html`<button class="menu-btn" type="button" aria-label=${tt("btn.menu")} onClick=${() => bridge.toggleMenu()}>
-        ☰
+        <${NavIcon} path=${MENU_PATH} />
       </button>`}
       ${icon &&
       iconOk &&
@@ -274,7 +283,7 @@ export function Topbar({ title, iconSrc, status, bridge, children, views, active
       ${inBar && html`<${TopbarNav} views=${list} activeId=${activeId} label=${navLabel} kiosk=${kiosk} info=${info} onCollapse=${setNavCollapsed} />`}
       ${info &&
       !(inBar && navCollapsed) &&
-      html`<a class="info-btn" href=${info.href} target=${info.target} rel=${info.rel} aria-label=${tt("nav.info")} title=${tt("nav.info")} onClick=${info.onClick}>ⓘ</a>`}
+      html`<a class="info-btn" href=${info.href} target=${info.target} rel=${info.rel} aria-label=${tt("nav.info")} title=${tt("nav.info")} onClick=${info.onClick}><${NavIcon} path=${INFO_PATH} /></a>`}
       ${status && html`<${Badge} kind=${status.kind}>${status.text}<//>`}
       ${children && html`<span class="topbar-extra">${children}</span>`}
       <${LangSwitch} />
@@ -283,7 +292,7 @@ export function Topbar({ title, iconSrc, status, bridge, children, views, active
   </div>`;
 }
 
-// views: [{id, title | titleKey}]; links are fixed "#/<id>" routes.
+// views: [{id, title | titleKey, icon? (SVG path data)}]; links are fixed "#/<id>" routes.
 export function TabNav({ views, activeId, label }) {
   const tt = useT();
   return html`<nav class="tabs" aria-label=${label || tt("nav.label")}>
@@ -294,7 +303,7 @@ export function TabNav({ views, activeId, label }) {
         href=${`#/${view.id}`}
         aria-current=${view.id === activeId ? "page" : null}
       >
-        ${view.titleKey ? tt(view.titleKey) : view.title}
+        ${view.icon && html`<${NavIcon} path=${view.icon} />`}${view.titleKey ? tt(view.titleKey) : view.title}
       </a>`,
     )}
   </nav>`;

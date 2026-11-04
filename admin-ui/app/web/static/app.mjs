@@ -24,7 +24,7 @@ import en from "./strings.en.mjs";
 registerStrings({ de, en });
 
 export const VIEWS = [
-  { id: "gallery", titleKey: "demo.nav.gallery" },
+  { id: "gallery", titleKey: "demo.nav.gallery", icon: "M3 3h7v7H3V3m11 0h7v7h-7V3M3 14h7v7H3v-7m11 0h7v7h-7v-7Z" },
   { id: "tokens", titleKey: "demo.nav.tokens" },
   { id: "language", titleKey: "demo.nav.language" },
   { id: "crud", titleKey: "demo.nav.crud" },

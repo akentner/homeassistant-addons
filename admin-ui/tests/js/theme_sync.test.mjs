@@ -38,7 +38,7 @@ function makeRoot() {
   };
 }
 
-function makeEnv({ vars = LIGHT, embedded = true, throwDoc = false, noObserver = false } = {}) {
+function makeEnv({ vars = LIGHT, embedded = true, throwDoc = false, noObserver = false, hostVars = null } = {}) {
   const env = { vars: { ...vars }, observers: [], intervals: [], winListeners: {}, docListeners: {} };
   class MO {
     constructor(cb) {
@@ -57,14 +57,15 @@ function makeEnv({ vars = LIGHT, embedded = true, throwDoc = false, noObserver =
     }
   }
   const docEl = { id: "parent-root" };
+  const host = { id: "ha-host" };
   const parent = {
-    getComputedStyle: () => ({ getPropertyValue: (name) => env.vars[name] ?? "" }),
+    getComputedStyle: (el) => ({ getPropertyValue: (name) => (el === host ? hostVars?.[name] : env.vars[name]) ?? "" }),
     MutationObserver: noObserver ? undefined : MO,
   };
   Object.defineProperty(parent, "document", {
     get() {
       if (throwDoc) throw new Error("SecurityError");
-      return { documentElement: docEl };
+      return { documentElement: docEl, querySelector: () => hostVars ? host : null };
     },
   });
   const reg = (store) => ({
@@ -261,7 +262,7 @@ test("a changed parent value rewrites only the changed properties", () => {
   env.vars["--card-background-color"] = "#202020";
   env.observers[0].cb();
   assert.equal(env.root.props.get("--sync-card"), "#202020");
-  assert.equal(env.sync.status().counters.apply, before + 1);
+  assert.equal(env.sync.status().counters.apply, before + 2);
 });
 
 test("focus and visibilitychange trigger a refresh and are removed on dispose", () => {
@@ -338,4 +339,154 @@ test("data-theme set by someone else is left alone when sync never set it", () =
   env.sync.start();
   env.sync.dispose();
   assert.equal(env.root.attrs.get("data-theme"), "dark");
+});
+
+
+test("header height follows the parent and is removed on invalid input or disposal", () => {
+  const env = makeEnv({ vars: { ...LIGHT, "--header-height": " 56px " } });
+  env.sync.start();
+  assert.equal(env.root.props.get("--sync-header-height"), "56px");
+  assert.equal(env.sync.status().headerHeight, "56px");
+  env.vars["--header-height"] = "64.5px";
+  env.intervals[0].fn();
+  assert.equal(env.root.props.get("--sync-header-height"), "64.5px");
+  for (const value of ["", "0px", "31px", "129px", "-56px", "56", "4rem", "calc(56px)", "56px; color:red", "Infinitypx"]) {
+    env.vars["--header-height"] = value;
+    env.sync.refresh();
+    assert.equal(env.root.props.has("--sync-header-height"), false, value);
+    assert.equal(env.sync.status().headerHeight, null, value);
+  }
+  env.vars["--header-height"] = "56px";
+  env.sync.refresh();
+  env.sync.dispose();
+  assert.equal(env.root.props.has("--sync-header-height"), false);
+});
+
+test("header height prefers the HA host and falls back to the document root", () => {
+  const hostVars = { "--header-height": "60px" };
+  const env = makeEnv({ vars: { ...LIGHT, "--header-height": "56px" }, hostVars });
+  env.sync.start();
+  assert.equal(env.root.props.get("--sync-header-height"), "60px");
+  hostVars["--header-height"] = "";
+  env.sync.refresh();
+  assert.equal(env.root.props.get("--sync-header-height"), "56px");
+});
+
+test("header height is independent of unsupported parent colours", () => {
+  const env = makeEnv({ vars: { ...LIGHT, "--primary-background-color": "invalid", "--header-height": "56px" } });
+  env.sync.start();
+  assert.equal(env.root.props.get("--sync-header-height"), "56px");
+  assert.equal(env.sync.status().headerHeight, "56px");
+  assert.equal(env.root.props.has("--sync-bg"), false);
+});
+
+test("missing or inaccessible parent uses the header height fallback", () => {
+  for (const options of [{ embedded: false }, { throwDoc: true }, {}]) {
+    const env = makeEnv(options);
+    env.sync.start();
+    assert.equal(env.root.props.has("--sync-header-height"), false);
+    assert.equal(env.sync.status().headerHeight, null);
+  }
+});
+
+
+test("Nextgen theme accepts high-contrast translucent text and applies the accent", () => {
+  const env = makeEnv({ vars: {
+    "--primary-background-color": "#02060b",
+    "--card-background-color": "#02060b",
+    "--primary-text-color": "rgba(234, 235, 238, 0.98)",
+    "--divider-color": "rgba(90, 111, 128, 0.28)",
+    "--primary-color": "#7aa2be",
+    "--header-height": "56px",
+  } });
+  env.sync.start();
+  assert.equal(env.sync.status().surface, true);
+  assert.equal(env.sync.status().accent, true);
+  assert.deepEqual(env.sync.status().skipped, []);
+  assert.equal(env.root.props.get("--sync-fg"), "rgba(234, 235, 238, 0.98)");
+  assert.equal(env.root.props.get("--sync-bg"), "#02060b");
+  assert.equal(env.root.props.get("--sync-card"), "#02060b");
+  assert.equal(env.root.props.get("--sync-bd"), "rgba(90, 111, 128, 0.28)");
+  assert.equal(env.root.props.get("--sync-acc"), "#7aa2be");
+  assert.ok(env.root.props.get("--sync-on-acc"));
+});
+
+test("transparent text must pass contrast after compositing, not from RGB channels alone", () => {
+  const env = makeEnv({ vars: { ...DARK, "--primary-text-color": "rgba(255, 255, 255, 0.1)" } });
+  env.sync.start();
+  assert.equal(env.sync.status().surface, false);
+  assert.equal(env.root.props.has("--sync-fg"), false);
+});
+
+test("translucent card contrast is evaluated on the page background", () => {
+  const env = makeEnv({ vars: { ...DARK, "--card-background-color": "rgba(255, 255, 255, 0.02)" } });
+  env.sync.start();
+  assert.equal(env.sync.status().surface, true);
+  assert.equal(env.root.props.get("--sync-card"), "rgba(255, 255, 255, 0.02)");
+  env.vars["--card-background-color"] = "rgba(255, 255, 255, 0.9)";
+  env.sync.refresh();
+  assert.equal(env.sync.status().surface, false);
+});
+
+
+test("HA card background takes precedence without recolouring the toolbar surface", () => {
+  const env = makeEnv({ vars: DARK, hostVars: { "--ha-card-background": "rgba(20, 30, 40, 0.9)", "--ha-card-border-radius": "16px", "--ha-card-box-shadow": "0px 2px 8px rgba(0,0,0,0.3), inset 0 0 1px #fff" } });
+  env.sync.start();
+  assert.equal(env.root.props.get("--sync-card"), "#1c1c1c");
+  assert.equal(env.root.props.get("--sync-ha-card-background"), "rgba(20, 30, 40, 0.9)");
+  assert.equal(env.root.props.get("--sync-card-radius"), "16px");
+  assert.equal(env.root.props.get("--sync-card-shadow"), "0px 2px 8px rgba(0, 0, 0, 0.3), inset 0px 0px 1px #ffffff");
+  const state = env.sync.status();
+  assert.equal(state.cardStyle.radius, "16px");
+  state.cardStyle.radius = "999px";
+  assert.equal(env.sync.status().cardStyle.radius, "16px");
+  env.sync.dispose();
+  assert.equal(env.root.props.size, 0);
+});
+
+test("card settings update, support zero and none, and reset when removed", () => {
+  const env = makeEnv({ vars: { ...DARK, "--ha-border-radius-lg": "12px", "--ha-card-box-shadow": "none" } });
+  env.sync.start();
+  assert.equal(env.root.props.get("--sync-card-radius"), "12px");
+  assert.equal(env.root.props.get("--sync-card-shadow"), "none");
+  assert.equal(env.root.props.get("--sync-ha-card-background"), "#1c1c1c");
+  env.vars["--ha-card-border-radius"] = "0";
+  env.sync.refresh();
+  assert.equal(env.root.props.get("--sync-card-radius"), "0px");
+  delete env.vars["--ha-card-border-radius"];
+  delete env.vars["--ha-border-radius-lg"];
+  delete env.vars["--ha-card-box-shadow"];
+  env.sync.refresh();
+  assert.equal(env.root.props.has("--sync-card-radius"), false);
+  assert.equal(env.root.props.has("--sync-card-shadow"), false);
+});
+
+test("unsafe or invalid card values never reach CSS and card contrast is checked", () => {
+  for (const value of ["url(https://evil)", "0px; color:red", "var(--evil)", "-1px", "999px"]) {
+    const env = makeEnv({ vars: { ...DARK, "--ha-card-border-radius": value, "--ha-card-box-shadow": value } });
+    env.sync.start();
+    assert.equal(env.root.props.has("--sync-card-radius"), false, value);
+    assert.equal(env.root.props.has("--sync-card-shadow"), false, value);
+  }
+  const env = makeEnv({ vars: { ...DARK, "--ha-card-background": "#ffffff" } });
+  env.sync.start();
+  assert.equal(env.root.props.has("--sync-ha-card-background"), false);
+  assert.equal(env.sync.status().cardStyle.background, null);
+});
+
+
+test("Frosted Glass transparent card background is accepted and preserves its diagnostic input", () => {
+  const env = makeEnv({ vars: { ...DARK, "--ha-card-background": "transparent" } });
+  env.sync.start();
+  assert.equal(env.root.props.get("--sync-ha-card-background"), "rgba(0, 0, 0, 0)");
+  assert.equal(env.sync.status().cardStyle.backgroundInput, "transparent");
+  assert.equal(env.sync.status().cardStyle.backgroundReason, null);
+  env.vars["--ha-card-background"] = "linear-gradient(red, blue)";
+  env.sync.refresh();
+  assert.equal(env.root.props.has("--sync-ha-card-background"), false);
+  assert.equal(env.sync.status().cardStyle.backgroundInput, "linear-gradient(red, blue)");
+  assert.equal(env.sync.status().cardStyle.backgroundReason, "invalid");
+  env.vars["--ha-card-background"] = "#ffffff";
+  env.sync.refresh();
+  assert.equal(env.sync.status().cardStyle.backgroundReason, "contrast");
 });

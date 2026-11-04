@@ -8,13 +8,71 @@
 // Deliberately NOT synced: chip, hover, mut, ok, warn, err. They form text-on-fill pairs whose
 // counterpart HA does not expose, so the own, contrast-validated defaults stay.
 //
-// Safety: nothing from the parent is written as-is. Values are parsed to numbers and
-// re-serialised by serializeColor (#rrggbb or rgba()), so a hostile value cannot inject CSS.
-// This module writes no log output.
+// Safety: nothing from the parent is written as-is. Colours are parsed to numbers and
+// re-serialised by serializeColor (#rrggbb or rgba()); header height uses a strict pixel parser.
+// Header height, card radius and shadows have bounded parsers. This module writes no log output.
 import { parseColor, serializeColor, isDarkColor, contrastRatio, pickOnColor } from "./color.mjs";
 
 const MIN_CONTRAST = 4.5;
 const ON_ACC = "--sync-on-acc";
+const HEADER_HEIGHT = "--sync-header-height";
+
+// A bounded CSS-pixel length, never arbitrary CSS from the parent. Missing/invalid values use the CSS fallback.
+function headerHeight(value) {
+  const text = String(value || "").trim();
+  if (!/^\d+(?:\.\d{1,3})?px$/.test(text)) return null;
+  const px = Number(text.slice(0, -2));
+  return px >= 32 && px <= 128 ? `${px}px` : null;
+}
+
+function cardBackground(value) {
+  return String(value).trim().toLowerCase() === "transparent"
+    ? { r: 0, g: 0, b: 0, a: 0 }
+    : parseColor(value);
+}
+
+function cardRadius(value) {
+  const parts = String(value || "").trim().split(/\s+/);
+  if (parts.length > 4) return null;
+  const parsed = parts.map((part) => {
+    if (part === "0") return "0px";
+    if (!/^\d+(?:\.\d{1,3})?(px|%)$/.test(part)) return null;
+    const number = parseFloat(part);
+    return number <= (part.endsWith("%") ? 100 : 256) ? part : null;
+  });
+  return parsed.every((part) => part !== null) ? parsed.join(" ") : null;
+}
+
+function cardShadow(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (text === "none") return "none";
+  if (!text || text.length > 1024) return null;
+  const layers = text.split(/,(?![^()]*\))/);
+  if (layers.length > 8) return null;
+  const result = [];
+  for (const layer of layers) {
+    const tokens = layer.trim().match(/rgba?\([^)]*\)|[^\s]+/g) || [];
+    const lengths = [];
+    let color = null, inset = false;
+    for (const token of tokens) {
+      if (token === "inset" && !inset) { inset = true; continue; }
+      const parsed = parseColor(token);
+      const named = { black: "#000000", white: "#ffffff", transparent: "rgba(0, 0, 0, 0)", currentcolor: "currentcolor" };
+      if (parsed || Object.hasOwn(named, token)) {
+        if (color !== null) return null;
+        color = parsed ? serializeColor(parsed) : named[token];
+        continue;
+      }
+      if (token !== "0" && !/^-?(?:\d+(?:\.\d{1,3})?|\.\d{1,3})px$/.test(token)) return null;
+      const n = parseFloat(token);
+      if (Math.abs(n) > 512) return null;
+      lengths.push(n);
+    }
+    if (lengths.length < 2 || lengths.length > 4 || (lengths.length > 2 && lengths[2] < 0)) return null;
+    result.push([...(inset ? ["inset"] : []), ...lengths.map((n) => `${n}px`), color || "currentcolor"].join(" "));
+  }
+  return result.join(", ");
+}
 
 export const THEME_WHITELIST = Object.freeze(
   [
@@ -27,6 +85,16 @@ export const THEME_WHITELIST = Object.freeze(
 );
 
 const opaque = (c) => c !== null && c.a === 1;
+
+// Composite in sRGB for contrast checks; retain the original RGBA value when applying the theme.
+function over(color, background) {
+  return {
+    r: color.r * color.a + background.r * (1 - color.a),
+    g: color.g * color.a + background.g * (1 - color.a),
+    b: color.b * color.a + background.b * (1 - color.a),
+    a: 1,
+  };
+}
 
 export function createThemeSync(options = {}) {
   const { win, pollMs = 3000 } = options;
@@ -49,6 +117,8 @@ export function createThemeSync(options = {}) {
       active: false,
       reason,
       mode: null,
+      headerHeight: null,
+      cardStyle: { background: null, backgroundInput: null, backgroundReason: "missing", radius: null, shadow: null },
       surface: false,
       accent: false,
       skipped: [],
@@ -104,29 +174,37 @@ export function createThemeSync(options = {}) {
     if (!parent || parent === win) return { reason: "not_embedded" };
     try {
       const style = parent.getComputedStyle(parent.document.documentElement);
+      const host = parent.document.querySelector?.("home-assistant");
+      const hostStyle = host ? parent.getComputedStyle(host) : null;
+      const read = (name) => String(hostStyle?.getPropertyValue(name) || style.getPropertyValue(name) || "").trim();
       const values = {};
-      for (const entry of THEME_WHITELIST) {
-        values[entry.key] = String(style.getPropertyValue(entry.ha)).trim();
-      }
-      return { values };
+      for (const entry of THEME_WHITELIST) values[entry.key] = read(entry.ha);
+      const background = read("--ha-card-background") || read("--card-background-color");
+      return {
+        values,
+        cardBackgroundInput: background.slice(0, 1024),
+        headerHeight: headerHeight(read("--header-height")),
+        cardBackground: cardBackground(background),
+        cardRadius: cardRadius(read("--ha-card-border-radius") || read("--ha-border-radius-lg")),
+        cardShadow: cardShadow(read("--ha-card-box-shadow")),
+      };
     } catch {
       return { reason: "parent_inaccessible" };
     }
   }
 
   function evaluate(colors) {
-    const { bg, card, fg, bd, acc } = colors;
+    const { bg, card, fg, bd, acc, haCard } = colors;
     const skipped = [];
     const wanted = new Map();
+    const cardFill = bg && card ? over(card, bg) : null;
     const surface =
       bg !== null &&
       card !== null &&
       fg !== null &&
       bd !== null &&
-      opaque(card) &&
-      opaque(fg) &&
-      contrastRatio(fg, bg) >= MIN_CONTRAST &&
-      contrastRatio(fg, card) >= MIN_CONTRAST;
+      contrastRatio(over(fg, bg), bg) >= MIN_CONTRAST &&
+      contrastRatio(over(fg, cardFill), cardFill) >= MIN_CONTRAST;
     if (surface) {
       wanted.set("--sync-bg", serializeColor(bg));
       wanted.set("--sync-card", serializeColor(card));
@@ -135,13 +213,18 @@ export function createThemeSync(options = {}) {
     } else {
       skipped.push("surface");
     }
+    const haCardFill = surface && haCard ? over(haCard, bg) : null;
+    const cardBackground = haCardFill && contrastRatio(over(fg, haCardFill), haCardFill) >= MIN_CONTRAST
+      ? serializeColor(haCard) : null;
+    if (cardBackground) wanted.set("--sync-ha-card-background", cardBackground);
     let accent = false;
     if (surface) {
       const onAcc = acc !== null && opaque(acc) ? parseColor(pickOnColor(acc)) : null;
       accent =
         onAcc !== null &&
         contrastRatio(acc, bg) >= MIN_CONTRAST &&
-        contrastRatio(acc, card) >= MIN_CONTRAST &&
+        contrastRatio(acc, cardFill) >= MIN_CONTRAST &&
+        (!cardBackground || contrastRatio(acc, haCardFill) >= MIN_CONTRAST) &&
         contrastRatio(onAcc, acc) >= MIN_CONTRAST;
       if (accent) {
         wanted.set("--sync-acc", serializeColor(acc));
@@ -149,7 +232,7 @@ export function createThemeSync(options = {}) {
       }
     }
     if (!accent) skipped.push("accent");
-    return { surface, accent, skipped, wanted };
+    return { surface, accent, skipped, wanted, cardBackground };
   }
 
   function run() {
@@ -164,17 +247,28 @@ export function createThemeSync(options = {}) {
     const raw = Object.fromEntries(THEME_WHITELIST.map((w) => [w.key, serializeColor(colors[w.key])]));
     if (!opaque(colors.bg)) {
       clearWritten();
-      state = { ...freshState("unparseable_background"), raw };
+      if (read.headerHeight) writeProps(new Map([[HEADER_HEIGHT, read.headerHeight]]));
+      state = { ...freshState("unparseable_background"), headerHeight: read.headerHeight, raw };
       return;
     }
     const mode = isDarkColor(colors.bg) ? "dark" : "light";
-    const result = evaluate(colors);
+    const result = evaluate({ ...colors, haCard: read.cardBackground });
+    if (read.cardRadius) result.wanted.set("--sync-card-radius", read.cardRadius);
+    if (read.cardShadow) result.wanted.set("--sync-card-shadow", read.cardShadow);
+    if (read.headerHeight) result.wanted.set(HEADER_HEIGHT, read.headerHeight);
     writeTheme(mode);
     writeProps(result.wanted);
     state = {
       active: true,
       reason: "ok",
       mode,
+      headerHeight: read.headerHeight,
+      cardStyle: {
+        background: result.cardBackground,
+        backgroundInput: read.cardBackgroundInput,
+        backgroundReason: result.cardBackground ? null : !read.cardBackgroundInput ? "missing" : !read.cardBackground ? "invalid" : "contrast",
+        radius: read.cardRadius, shadow: read.cardShadow,
+      },
       surface: result.surface,
       accent: result.accent,
       skipped: result.skipped,
@@ -185,6 +279,7 @@ export function createThemeSync(options = {}) {
 
   const snapshot = () => ({
     ...state,
+    cardStyle: { ...state.cardStyle },
     skipped: [...state.skipped],
     raw: { ...state.raw },
     counters: { ...counters },
