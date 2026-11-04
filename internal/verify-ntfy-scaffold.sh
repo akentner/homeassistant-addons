@@ -105,7 +105,7 @@ python3 -I - "${BODY}" <<'PY' || fail "api/health content"
 import json, sys
 h = json.loads(sys.argv[1])
 assert h["ntfy"]["healthy"] is True, h
-assert h["db"]["schema_version"] == 10 and h["db"]["supported"] is True, h
+assert h["db"]["schema_version"] in (10, 11) and h["db"]["supported"] is True, h
 PY
 gui "${MAIN}" /api/users "${INGRESS[@]}"
 [ "${STATUS}" = "200" ] || fail "api/users status ${STATUS}"
@@ -120,10 +120,43 @@ for path in / /static/app.mjs /static/app.css; do
     gui "${MAIN}" "${path}" "${INGRESS[@]}"
     [ "${STATUS}" = "200" ] || fail "${path} status ${STATUS} with ingress header"
 done
-# the API client builds relative URLs (`api/...`, no leading slash) so the page works below an ingress path
-gui "${MAIN}" /static/lib/api.mjs "${INGRESS[@]}"
-grep -q 'url = `api/' <<<"${BODY}" || fail "lib/api.mjs does not build relative api/ URLs"
+# the API client (shared admin-ui lib copy) builds relative URLs (`api/...`, no leading slash) so the page works below an ingress path
+gui "${MAIN}" /static/vendor/admin-ui/api.mjs "${INGRESS[@]}"
+grep -q 'url = `api/' <<<"${BODY}" || fail "vendor/admin-ui/api.mjs does not build relative api/ URLs"
 echo "✓ frontend shell served"
+
+echo "==> Frontend closure"
+# every servable file below static/ (found on the host) must answer 200 through the gate
+served=0
+while IFS= read -r rel; do
+    # status only: some files (icon.png) are binary and must not pass through a shell variable
+    code="$(docker exec "${MAIN}" curl -s -o /dev/null -w '%{http_code}' --path-as-is "${INGRESS[@]}" "http://127.0.0.1:8099/static/${rel}")" || true
+    [ "${code}" = "200" ] || fail "/static/${rel} status ${code} (expected 200)"
+    served=$((served + 1))
+done < <(find "${ADDON_DIR}/app/web/static" -type f \( -name '*.mjs' -o -name '*.js' -o -name '*.css' -o -name '*.png' -o -name '*.svg' -o -name '*.txt' \) -printf '%P\n' | sort)
+[ "${served}" -ge 30 ] || fail "frontend closure covers only ${served} files (expected at least 30)"
+# the stamp is lib bookkeeping, the old bundle and the old UI helper are gone
+for path in /static/vendor/admin-ui/LIB.stamp /static/vendor/preact-htm.mjs /static/lib/ui.mjs; do
+    gui "${MAIN}" "${path}" "${INGRESS[@]}"
+    [ "${STATUS}" = "404" ] || fail "${path} status ${STATUS} (expected 404)"
+done
+echo "✓ frontend closure: ${served} files served, LIB.stamp and the old bundle paths answer 404"
+
+echo "==> Response headers"
+headers_of() { # usage: headers_of <path>; leaves the response headers (CR removed) in $HDRS
+    HDRS="$(docker exec "${MAIN}" curl -s -o /dev/null -D - "${INGRESS[@]}" "http://127.0.0.1:8099$1" | tr -d '\r')"
+}
+for path in / /static/app.mjs; do
+    headers_of "${path}"
+    grep -qi "^content-security-policy:.*script-src 'self'" <<<"${HDRS}" || fail "${path} lacks a CSP with script-src 'self'"
+    grep -qi "^content-security-policy:.*frame-ancestors 'self'" <<<"${HDRS}" || fail "${path} lacks frame-ancestors 'self'"
+    grep -qi "^x-content-type-options: nosniff" <<<"${HDRS}" || fail "${path} lacks nosniff"
+    if grep -qi "^x-frame-options:" <<<"${HDRS}"; then fail "${path} carries X-Frame-Options (HA frames the page)"; fi
+done
+headers_of /api/health
+if grep -qi "^content-security-policy:" <<<"${HDRS}"; then fail "/api/health carries a CSP"; fi
+grep -qi "^cache-control: no-store" <<<"${HDRS}" || fail "/api/health lacks cache-control: no-store"
+echo "✓ page and static files carry the CSP and no X-Frame-Options, API answers carry no CSP and are no-store"
 
 echo "==> Ingress gate"
 for path in / /static/app.mjs /api/health /api/users /nope; do

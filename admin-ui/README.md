@@ -11,7 +11,8 @@ ingress and no port is published: the server answers only to the Supervisor ingr
 components, API client, themes) and the server skeleton are copied into other add-ons; the rules and the lib reference
 live in [DOCS.md][docs].
 
-It is a blueprint and a demo, not a production tool. All data shown is fake and lives in memory only.
+It is marked experimental (`stage: experimental`): a blueprint and a demo, not for production use. All data shown is
+fake and lives in memory only.
 
 ## Features
 

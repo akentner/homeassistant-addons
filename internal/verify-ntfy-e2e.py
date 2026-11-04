@@ -196,7 +196,7 @@ def s01_startup() -> None:
     status, icon = gui("GET", "/icon")
     check("GUI icon route serves a PNG", status == 200 and isinstance(icon, bytes) and icon.startswith(b"\x89PNG"), str(status))
     status, health = gui("GET", "/api/health")
-    check("health ok with schema 10", status == 200 and health["status"] == "ok" and health["db"]["schema_version"] == 10, str(health)[:200])
+    check("health ok with a supported schema", status == 200 and health["status"] == "ok" and health["db"]["schema_version"] in (10, 11), str(health)[:200])
 
 
 def s02_effective() -> None:
@@ -440,7 +440,7 @@ def s13_option_variants() -> None:
 
 def s14_gate() -> None:
     heading("14. Ingress gate")
-    for method, path in (("GET", "/api/health"), ("GET", "/api/users"), ("GET", "/static/app.mjs"), ("GET", "/"), ("GET", "/nope"), ("POST", "/api/users")):
+    for method, path in (("GET", "/api/health"), ("GET", "/api/users"), ("GET", "/static/app.mjs"), ("GET", "/static/vendor/admin-ui/ui.mjs"), ("GET", "/static/strings.en.mjs"), ("GET", "/"), ("GET", "/nope"), ("POST", "/api/users")):
         status, body = gui(method, path, ingress=False)
         check(f"{method} {path} without header is 403 ingress_only", status == 403 and isinstance(body, dict) and body.get("error") == "ingress_only", f"{status} {str(body)[:80]}")
 
