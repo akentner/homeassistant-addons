@@ -69,13 +69,13 @@ All notable changes to the **ntfy** add-on are documented in this file. The form
 [Keep a Changelog](https://keepachangelog.com/). The add-on version follows upstream ntfy; a change that only touches
 the add-on (GUI, options, docs) bumps the subpatch (`-N`).
 
-## [2.37.1-1] - 2026-11-04
+## [2.37.2-1] - 2026-11-04
 
 ### Changed
 
 - Use shared admin-ui lib 0.7.0: HA-style navigation and consistent minimum table row heights
 - Fix overlapping badges in expanded user details and preserve table layout for action cells
-- Keep the upstream binary at the deployed 2.37.1 version
+- Use upstream ntfy 2.37.2
 
 ## [2.37.0-2] - 2026-11-03
 
