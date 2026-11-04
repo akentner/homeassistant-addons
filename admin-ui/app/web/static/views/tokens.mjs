@@ -3,6 +3,7 @@
 import { html, useEffect, useRef, useState, Badge, DataTable } from "../lib/ui.mjs";
 import { useLang, useT } from "../lib/i18n.mjs";
 import { formatNumber } from "../lib/format.mjs";
+import { THEME_WHITELIST } from "../lib/theme-sync.mjs";
 import { contrastRatio, parseColor } from "../lib/color.mjs";
 
 export const meta = { id: "tokens", titleKey: "demo.nav.tokens" };
@@ -109,14 +110,59 @@ function pageTheme() {
   return "-";
 }
 
+function readSyncValue(name) {
+  try {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "-";
+  } catch {
+    return "-";
+  }
+}
+
 export default function Tokens({ ha }) {
   const tt = useT();
-  const syncStatus = ha && ha.sync && typeof ha.sync.status === "function" ? ha.sync.status() : null;
+  const sync = ha && ha.sync;
+  const readStatus = () => sync && typeof sync.status === "function" ? sync.status() : null;
+  const [syncStatus, setSyncStatus] = useState(readStatus);
+  useEffect(() => {
+    const refresh = () => setSyncStatus(readStatus());
+    refresh();
+    return sync && typeof sync.subscribe === "function" ? sync.subscribe(refresh) : undefined;
+  }, [sync]);
+  const sourceStatus = (applied) => applied ? tt("demo.tokens.applied") : tt("demo.tokens.fallback");
+  const syncRows = THEME_WHITELIST.map((entry) => ({
+    id: entry.key, source: entry.ha, target: entry.sync,
+    value: syncStatus?.raw?.[entry.key] || "-",
+    state: sourceStatus(Boolean(syncStatus?.[entry.group])),
+  }));
+  syncRows.push({ id: "header-height", source: "--header-height", target: "--sync-header-height",
+    value: syncStatus?.headerHeight || "56px", state: sourceStatus(Boolean(syncStatus?.headerHeight)) });
+  syncRows.push({ id: "on-acc", source: tt("demo.tokens.derived"), target: "--sync-on-acc",
+    value: readSyncValue("--sync-on-acc"), state: sourceStatus(Boolean(syncStatus?.accent)) });
+  const cards = syncStatus?.cardStyle || {};
+  const reasonKeys = { missing: "demo.tokens.card_missing", invalid: "demo.tokens.card_invalid", contrast: "demo.tokens.card_contrast" };
+  for (const entry of [
+    { id: "card-background", source: "--ha-card-background → --card-background-color", target: "--sync-ha-card-background", value: cards.background, input: cards.backgroundInput, fallback: syncStatus?.raw?.card || "-", reason: cards.backgroundReason },
+    { id: "card-radius", source: "--ha-card-border-radius → --ha-border-radius-lg", target: "--sync-card-radius", value: cards.radius, fallback: "8px" },
+    { id: "card-shadow", source: "--ha-card-box-shadow", target: "--sync-card-shadow", value: cards.shadow, fallback: "none" },
+  ]) syncRows.push({ ...entry, value: entry.input || entry.value || entry.fallback,
+    state: entry.reason && reasonKeys[entry.reason] ? `${sourceStatus(false)}: ${tt(reasonKeys[entry.reason])}`
+      : sourceStatus(entry.value !== null && entry.value !== undefined) });
+  const syncColumns = [
+    { key: "source", titleKey: "demo.tokens.source" },
+    { key: "target", titleKey: "demo.tokens.target" },
+    { key: "value", titleKey: "demo.tokens.value" },
+    { key: "state", titleKey: "demo.tokens.col.verdict" },
+  ];
   const syncText = syncStatus && syncStatus.active ? syncStatus.mode || "-" : tt("demo.tokens.sync_off");
   return html`<div>
     <p class="muted">
       ${tt("demo.tokens.page_theme", { theme: pageTheme() })} · ${tt("demo.tokens.sync_status", { state: syncText })}
     </p>
+    <section class="section card">
+      <h2>${tt("demo.tokens.live_sync")}</h2>
+      <p class="muted">${tt("demo.tokens.live_sync_hint")}</p>
+      <div class="table-scroll"><${DataTable} columns=${syncColumns} rows=${syncRows} rowKey="id" caption=${tt("demo.tokens.live_sync")} /></div>
+    </section>
     <div class="grid">${THEMES.map((theme) => html`<${ThemePanel} key=${theme} theme=${theme} />`)}</div>
   </div>`;
 }

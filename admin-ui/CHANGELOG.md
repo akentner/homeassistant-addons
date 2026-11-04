@@ -4,6 +4,17 @@ All notable changes to the **Admin UI Blueprint** add-on are documented in this 
 [Keep a Changelog](https://keepachangelog.com/). This is our own code without an upstream project: the version is bumped
 manually with `make update-version`.
 
+## [0.2.0-0] - 2026-11-04
+
+### Changed
+
+- Shared lib 0.7.0: HA-style parent-synced topbar (56 px fallback), 48 px navigation targets, active underlines and
+  optional decorative SVG icons
+- Data tables use 52 px body rows and 56 px headers, growing for multiline content
+- Keep action cells in the table layout and space expanded detail cards; badges now contribute to line height
+- Gallery includes rows with/without actions and expandable details
+- Include the public health/status route support required by migrated consumers
+
 ## [0.1.0-5] - 2026-11-02
 
 ### Fixed

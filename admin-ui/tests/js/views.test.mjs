@@ -318,7 +318,7 @@ test("gallery: every component section and all badge kinds render", async () => 
     assert.ok(findAll(root, (n) => n.localName === "span" && n.className === `badge ${kind}`).length >= 1, kind);
   }
   assert.equal(roleOf(root, "status").length >= 1, true);
-  assert.equal(findAll(root, (n) => n.localName === "table").length, 1);
+  assert.equal(findAll(root, (n) => n.localName === "table").length, 2);
   assert.equal(auditNames(root).length, 0);
   assert.equal(auditTables(root).length, 0);
 });
@@ -751,4 +751,66 @@ test("the topbar shows the info link once api/health reports the slug, and recor
   healthPayload = { status: "ok", addon_version: "0.1.0-4", lib_version: "0.3.0" };
   const { root: plain } = await mountApp();
   assert.equal(findAll(plain, (n) => n.localName === "a" && n.className.split(" ").includes("info-btn")).length, 0);
+});
+
+
+test("gallery: expanded table details remain a separate card and can be closed", async () => {
+  const root = await mountView("gallery");
+  const button = await click(root, "button", "Toggle details");
+  assert.equal(button.getAttribute("aria-expanded"), "true");
+  assert.equal(findAll(root, (n) => n.localName === "table").length, 3);
+  assert.equal(findByText(root, "h2", "Expanded details").length, 1);
+  assert.equal(auditTables(root).length, 0);
+  await click(root, "button", "Toggle details");
+  assert.equal(button.getAttribute("aria-expanded"), "false");
+  assert.equal(findAll(root, (n) => n.localName === "table").length, 2);
+});
+
+
+test("tokens: parent tokens and header height update live and show fallback", async () => {
+  const ha = makeHa({ active: true, mode: "dark", surface: true, headerHeight: "60px", raw: { bg: "#111111" } });
+  const root = await mountView("tokens", { ha });
+  assert.ok(root.textContent.includes("--sync-header-height"));
+  assert.ok(root.textContent.includes("--primary-background-color"));
+  assert.ok(root.textContent.includes("--sync-on-acc"));
+  assert.ok(root.textContent.includes("60px"));
+  ha.setStatus({ active: true, mode: "light", headerHeight: "64px" });
+  await settle();
+  assert.ok(root.textContent.includes("64px"));
+  assert.ok(!root.textContent.includes("60px"));
+  ha.setStatus({ active: false, headerHeight: null });
+  await settle();
+  const row = findAll(root, (n) => n.localName === "tr").find((n) => n.textContent.includes("--sync-header-height"));
+  assert.ok(row.textContent.includes("56px"));
+  assert.ok(row.textContent.includes("Fallback"));
+  assert.equal(auditTables(root).length, 0);
+});
+
+
+test("tokens: HA card background, radius and shadow show applied and fallback values", async () => {
+  const ha = makeHa({ cardStyle: { background: "#121212", radius: "16px", shadow: "none" } });
+  const root = await mountView("tokens", { ha });
+  for (const token of ["--sync-ha-card-background", "--sync-card-radius", "--sync-card-shadow"]) {
+    const row = findAll(root, (n) => n.localName === "tr").find((n) => n.textContent.includes(token));
+    assert.ok(row.textContent.includes("Applied"), token);
+  }
+  assert.ok(root.textContent.includes("16px"));
+  ha.setStatus({ cardStyle: { background: null, radius: null, shadow: null } });
+  await settle();
+  const row = findAll(root, (n) => n.localName === "tr").find((n) => n.textContent.includes("--sync-card-radius"));
+  assert.ok(row.textContent.includes("8px"));
+  assert.ok(row.textContent.includes("Fallback"));
+});
+
+
+test("tokens: card diagnostics show actual parent input and explain rejection", async () => {
+  const ha = makeHa({ cardStyle: { background: "rgba(0, 0, 0, 0)", backgroundInput: "transparent", backgroundReason: null } });
+  const root = await mountView("tokens", { ha });
+  const cardRow = () => findAll(root, (n) => n.localName === "tr").find((n) => n.textContent.includes("--sync-ha-card-background"));
+  assert.ok(cardRow().textContent.includes("transparent"));
+  assert.ok(cardRow().textContent.includes("Applied"));
+  ha.setStatus({ cardStyle: { background: null, backgroundInput: "linear-gradient(red, blue)", backgroundReason: "invalid" } });
+  await settle();
+  assert.ok(cardRow().textContent.includes("linear-gradient(red, blue)"));
+  assert.ok(cardRow().textContent.includes("Fallback: unsupported colour value"));
 });

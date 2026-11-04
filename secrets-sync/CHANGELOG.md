@@ -3,6 +3,24 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.7.1-0] - 2026-11-04
+
+### Changed
+
+- Use admin-ui lib 0.7.0 with HA-style navigation, optional icons and consistent minimum table row heights
+- Fix overlapping badge lines and preserve table layout in action cells
+
+## [0.7.0-0] - 2026-11-02
+
+- Change: the web UI is rebuilt on the shared admin-ui library (Preact/htm, lib 0.5.0) and the server runs on its
+  skeleton. Same pages and data; the look changes slightly (the library fixes colour contrast), the language follows the
+  browser and can be switched, and the tab hash is now `#/keys` (old `#keys` links still work).
+- Change: "Apply anyway" now asks to type `remove` (`entfernen` in German) instead of a browser confirm dialog.
+- Unchanged contracts: `api/status.json`, `api/health` (200/503), `POST api/sync` (202, 429, `?force=1`) and
+  `POST api/preview`. `api/health` and `api/status.json` stay reachable on the optional TCP port without Ingress;
+  everything else, including unknown paths, is Ingress only. Error responses additionally carry a `message` field.
+- CI: front end and add-on tests run in the lint workflow (job `secrets-sync`).
+
 ## [0.6.0-0] - 2026-11-01
 
 - Feature: after a sync that adds or removes key names, the add-on makes the Supervisor re-read `secrets.yaml`, so

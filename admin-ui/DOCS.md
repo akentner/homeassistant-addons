@@ -12,8 +12,9 @@ apply). Its image is built and published by CI like the others (`image:` key). T
 image only, 3-file version sync via `make update-version`, and a local `docker build` before every commit that touches
 the Dockerfile. Version bumps are manual.
 
-One rule is added: the lib and the Python skeleton are copied into consumer add-ons only by `make sync-admin-ui`.
-Consumer copies are never edited by hand, and the sources change only in this add-on.
+One rule is added: the lib and the Python skeleton are copied into consumer add-ons only by `make sync-admin-ui` or
+`make release-admin-ui-lib` (both use the same sync script). Consumer copies are never edited by hand, and the sources
+change only in this add-on.
 
 ## Rules
 
@@ -136,7 +137,7 @@ For a new or migrating add-on:
 ## Distribution
 
 The lib is distributed by copy because the Docker build context is the add-on directory. A consumer pulls a new lib
-version deliberately: sync, then bump its own version.
+version through the shared lib-release command; each add-on keeps its own release version.
 
 - `LIB.stamp` in every consumer copy has two lines: `version <X.Y.Z>` and `sha256 <tree hash>`. The tree hash covers the
   sorted relative paths and the file hashes, and skips the stamp itself, `__pycache__` and `*.pyc`.
@@ -146,6 +147,23 @@ version deliberately: sync, then bump its own version.
 - `make check-admin-ui-rules` runs the static rules scanner and `make test-admin-ui` the node and pytest suites. Both
   checks are members of `make check-all` and run as path-scoped pre-commit hooks, so the same commands run locally, in
   pre-commit and in CI.
+
+### Shared library release
+
+Run `make release-admin-ui-lib VERSION=X.Y.Z` after finishing the source changes. This updates the independent browser
+lib `VERSION`, synchronises the library and Python skeleton into every registered consumer, refreshes all stamps and the
+lock, and checks strict consistency. It then runs the blueprint rules, library tests and the ntfy, Secrets Sync web and
+HAOS Monitor consumer tests, each in a separate Python process. New consumers register once with
+`make sync-admin-ui ADDON=<name>` and are discovered automatically afterwards.
+
+The release version must be SemVer without an add-on subpatch. Downgrades and reusing a version with changed sources
+fail; repeating an unchanged release is safe. Commit the library sources, lock and consumer copies together. CI uses
+`make check-admin-ui-sync STRICT=yes` and runs the consumer tests, so a consumer behind the source fails the build.
+
+This prepares the monorepo update locally; it does not publish a release or deploy an app. Before shipping consumer
+images, bump each affected add-on with `make update-version` according to its release policy. The library version is
+independent of the demo add-on version and of upstream binaries such as ntfy. Renovate is not needed for these local
+copies; external repositories would require a published dependency and a versioned download step first.
 
 | Situation of a consumer copy                    | Check result             |
 | ----------------------------------------------- | ------------------------ |
@@ -197,7 +215,8 @@ focus and visibility changes.
 page origin, and every field is validated. It also posts `toggle-menu` for the menu button of the own bar and `navigate`
 for a validated single-slash path.
 
-The own 56px bar stays. To avoid a second bar, the kiosk policy asks HA to hide its bar only when HA would draw one:
+The own bar stays (HA parent header height, falling back to 56 px). To avoid a second bar, the kiosk policy asks HA to
+hide its bar only when HA would draw one:
 
 - Policy `narrow` (default): kiosk is requested from `narrow` transitions only. On a docked desktop sidebar it is never
   requested, because kiosk turns that sidebar into a modal drawer for as long as the page is open.
@@ -330,29 +349,16 @@ user agent. The result block marks each source as `auto`, `manual` or `not_recor
 detected: Home Assistant only knows it as a build-time constant, so type it in from Settings, About. A typed value
 overrides a detected one, and nothing is guessed.
 
-## Migration paths
+## Consumer integration
 
-None of these is executed in this phase (D-07); they are the planned follow-up phases.
+The ntfy, secrets-sync and haos-monitor migration implementations are included in this branch. All three consume lib
+0.7.0 from `vendor/admin-ui/` and the Python skeleton from `app.web.admin_ui`, maintained with `make sync-admin-ui`.
+ntfy keeps its domain components and seven views; Secrets Sync uses Preact views and preserves its public health/status
+routes; HAOS Monitor serves its ingress GUI on internal port 8100 while retaining machine endpoints on port 8099.
+Deploying the HAOS Monitor migration requires its updated image and add-on manifest together.
 
-### ntfy
-
-ntfy has its own `lib/api.mjs`, `lib/ui.mjs`, `lib/model.mjs`, `app.css`, `vendor/` and tests that duplicate the lib.
-Steps: drop the duplicates, run `make sync-admin-ui ADDON=ntfy`, replace the English literals by strings with a German
-and an English file, and keep only the ntfy-specific model and views. The look changes slightly because the lib tokens
-fix the contrast of the old colours. Its frontend tests move into CI as part of that phase.
-
-### secrets-sync
-
-`secrets-sync` is a stdlib server with a vanilla-JS GUI of about 540 lines that uses `window.confirm()`. The end state
-is a full rewrite on Preact/htm with the lib `ConfirmDialog` (type-to-confirm) instead of `confirm`, the skeleton for
-the server, strings in two languages and its tests in CI. Risk: the rewrite is larger than a copy and needs its tests
-ported first.
-
-### haos-monitor
-
-`haos-monitor` is a busybox/CGI GUI. The end state is a rebuild on the blueprint stack, a Python server plus Preact.
-That phase also decides whether it gets the ingress gate. It is also missing from `internal/base-image-config.yaml`,
-which is noted as follow-up only.
+The skeleton supports explicitly public routes for machine health/status checks. Routes are ingress-only by default;
+consumer APIs and static UI assets retain the ingress gate. Tests cover the public-route exceptions.
 
 ## Security notes
 
@@ -365,9 +371,6 @@ which is noted as follow-up only.
 
 ## Follow-up
 
-- ntfy switch-over to the lib.
-- secrets-sync rewrite on Preact/htm.
-- haos-monitor rebuild on the blueprint stack.
 - Run the ntfy and secrets-sync frontend tests in CI.
 - Add `haos-monitor` to `internal/base-image-config.yaml`.
 - Re-run the live spike for every HA release.
@@ -384,3 +387,46 @@ which is noted as follow-up only.
   `internal/check-admin-ui-rules.py` for `toLocale*`, `toFixed` and `Intl.*` outside `lib/format.mjs`; allow list:
   `lib/color.mjs` (CSS alpha), the result block in `spike.mjs` (`generatedAt` and counters are machine readable) and
   `Intl.PluralRules` in `lib/i18n.mjs`. After that R-07 could become `enforced`.
+
+## HA navigation and table layout
+
+The Tokens demo includes a live sync table showing HA variables, their library targets, validated values and whether
+they are applied or use a fallback. It includes the derived accent text colour and the header height (56 px fallback).
+The table subscribes to theme-sync changes; the Spike variable table also includes `--header-height`.
+
+The topbar must **match the HA parent's `--header-height`, including its bottom border**, with **56 CSS px as the
+fallback**. The existing theme sync reads the value from the `home-assistant` host, falling back to the parent document
+root. It accepts only pixel lengths from 32 to 128 px; missing, inaccessible or invalid values remove the override.
+Height sync is independent of colour validation and follows the same polling/events and cleanup as theme sync.
+`status().headerHeight` reports the accepted length or `null` when using the fallback. This applies to desktop and
+mobile, with inline or collapsed navigation. Contents must not enlarge the bar. Safe-area padding and an optional
+separate tab bar sit outside its height. CSS and theme-sync tests enforce this rule.
+
+`Topbar` and `TabNav` accept an optional `icon` on each view: an SVG path string in a 24 × 24 view box (for example an
+MDI path). Icons inherit the text colour, are decorative and keep the translated link label visible. Omit `icon` for
+text-only navigation. Active navigation uses the accent underline; overflow still folds into the accessible menu.
+
+Data-table headers are at least 56 px high and body cells at least 52 px. These are minimums: wrapped text and expanded
+content can grow. Keep actions in `td.actions` (the lib preserves its table-cell display); use `.actions` containers for
+flex layouts outside cells. Put wide tables in `.table-scroll` and expanded details in a following `.card` to get
+consistent separation. The gallery includes rows with and without actions plus expandable details for comparison.
+
+Theme-sync contrast checks composite translucent text over the page and card backgrounds, and translucent cards over the
+page background. Valid RGBA values are preserved when applied. The page background must remain opaque so its contrast
+can be determined; text and accent still need at least 4.5:1 contrast on both surfaces.
+
+### HA card appearance
+
+Cards use `--ha-card-background` (falling back to `--card-background-color`), `--ha-card-border-radius` (falling back to
+`--ha-border-radius-lg`) and `--ha-card-box-shadow` from the parent HA host or document root. They map to
+`--sync-ha-card-background`, `--sync-card-radius` and `--sync-card-shadow`, respectively. Card-only styles do not change
+the toolbar or dialogs. The Tokens view shows each value and its applied/fallback state, updating with theme sync.
+
+Card backgrounds retain the text contrast check. Radius accepts one to four nonnegative pixel or percentage lengths;
+shadows accept `none` or up to eight layers of bounded pixel lengths, optional `inset`, and parsed colours. Arbitrary
+CSS functions and declarations are rejected. Invalid or removed overrides restore the library defaults (8 px radius, no
+shadow and the regular card surface). Isolated light/dark demo panels keep their own appearance.
+
+`transparent` is accepted as a fully transparent card background and evaluated over the page background. The Tokens view
+displays the original parent card-background input; a rejected value is labelled as missing, unsupported or insufficient
+contrast instead of silently displaying the regular surface colour.

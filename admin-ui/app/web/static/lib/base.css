@@ -79,6 +79,9 @@
 
 /* A nested panel that shows the true tokens even while theme-sync is active. */
 .theme-isolated {
+  --sync-ha-card-background: initial;
+  --sync-card-radius: initial;
+  --sync-card-shadow: initial;
   --sync-bg: initial;
   --sync-card: initial;
   --sync-fg: initial;
@@ -108,30 +111,35 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
    stays below modal (100) and toasts (200) and above page content, so the burger menu overlays the page. */
 .shell-head { position: sticky; top: 0; z-index: 50; padding-top: var(--safe-top, 0px); background: var(--card); }
 .topbar {
-  position: relative; display: flex; align-items: center; gap: 12px; height: 56px;
+  position: relative; display: flex; align-items: center; gap: 12px; height: var(--sync-header-height, 56px); min-height: var(--sync-header-height, 56px);
   padding: 0 max(16px, var(--safe-right, 0px)) 0 max(16px, var(--safe-left, 0px)); background: var(--card);
   border-bottom: 1px solid var(--bd);
 }
 .topbar > * { min-width: 0; }
-.topbar h1 { flex: 0 1 auto; margin: 0; overflow: hidden; font-size: 18px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.topbar h1 { flex: 0 1 auto; margin: 0; overflow: hidden; font-size: 20px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .topbar > .brand-icon, .topbar > .menu-btn, .topbar > .info-btn, .topbar > .badge { flex: none; }
 .topbar-extra { display: contents; }
 .brand-icon { border-radius: 6px; }
 .menu-btn, .info-btn {
-  display: inline-flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; padding: 0;
-  border: 0; border-radius: 6px; background: transparent; color: var(--fg); font: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; min-width: 48px; min-height: 48px; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; color: var(--fg); font: inherit; cursor: pointer;
 }
+.topbar .menu-btn, .topbar .info-btn { min-height: min(48px, calc(var(--sync-header-height, 56px) - 1px)); }
 .menu-btn:hover, .info-btn:hover { background: var(--hover); }
 .info-btn { text-decoration: none; }
-.topnav { display: flex; flex: 1 1 0; align-items: center; min-width: 40px; }
-.topnav-slot { position: relative; flex: 1 1 0; min-width: 0; overflow: hidden; }
-.topnav-inline { display: flex; gap: 4px; width: max-content; margin: 0 auto; }
+.topnav { height: 100%; display: flex; flex: 1 1 0; align-items: center; min-width: 40px; }
+.topnav-slot { height: 100%; position: relative; flex: 1 1 0; min-width: 0; overflow: hidden; }
+.topnav-inline { height: 100%; display: flex; gap: 0; width: max-content; margin: 0 auto; }
 .topnav-inline.is-collapsed { position: absolute; visibility: hidden; pointer-events: none; }
 .topnav-link, .topnav-menu-link {
-  padding: 8px 12px; border-radius: 6px; color: var(--mut); text-decoration: none; white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px;
+  padding: 0 16px; color: var(--mut); text-decoration: none; white-space: nowrap; font-weight: 500;
 }
 .topnav-link:hover, .topnav-menu-link:hover { color: var(--fg); background: var(--hover); }
-.topnav-link.active, .topnav-menu-link.active { color: var(--acc); font-weight: 600; }
+.topnav-link { min-height: 0; border-bottom: 2px solid transparent; }
+.topnav-link.active { color: var(--acc); border-bottom-color: var(--acc); }
+.topnav-menu-link.active { color: var(--acc); background: var(--hover); }
+.nav-icon { width: 24px; height: 24px; flex: none; fill: currentColor; }
 .nav-burger { order: -1; padding: 0 8px; }
 .nav-burger.with-title { max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topnav-menu {
@@ -139,39 +147,42 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
   min-width: 200px; max-width: calc(100vw - 16px); padding: 4px; background: var(--card); border: 1px solid var(--bd);
   border-radius: 8px; box-shadow: var(--shadow);
 }
-.topnav-menu-link { white-space: normal; }
+.topnav-menu-link { justify-content: flex-start; white-space: normal; border-radius: 4px; }
 .lang-switch {
   padding: 2px 6px; border: 1px solid var(--bd); border-radius: 6px; background: var(--card); color: var(--fg);
   font: inherit; font-size: 12px;
 }
 .tabs, .tablist {
-  display: flex; gap: 4px; padding: 0 16px; background: var(--card); border-bottom: 1px solid var(--bd);
+  display: flex; gap: 0; padding: 0 16px; background: var(--card); border-bottom: 1px solid var(--bd);
   overflow-x: auto;
 }
 .tab {
-  padding: 10px 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--mut);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px;
+  padding: 0 24px; text-decoration: none; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--mut);
   font: inherit; cursor: pointer; white-space: nowrap;
 }
+a.tab, a.tab:hover, a.tab:focus-visible { text-decoration: none; }
 .tab:hover { color: var(--fg); }
-.tab.active, .tab[aria-selected="true"] { color: var(--acc); border-bottom-color: var(--acc); font-weight: 600; }
+.tab.active, .tab[aria-selected="true"] { color: var(--acc); border-bottom-color: var(--acc); font-weight: 500; }
 .tabpanel { padding: 16px 0; }
 
 /* cards, grid, tables */
-.card { background: var(--card); border: 1px solid var(--bd); border-radius: 8px; padding: 12px 16px; margin: 0 0 12px; }
+.card { background: var(--sync-ha-card-background, var(--card)); border: 1px solid var(--bd); border-radius: var(--sync-card-radius, 8px); box-shadow: var(--sync-card-shadow, none); padding: 12px 16px; margin: 0 0 12px; }
 .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
 .toolbar .spacer, .spacer { flex: 1; }
+.table-scroll { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; }
 table.data { font-size: 13px; }
-table.data th, table.data td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--bd); vertical-align: middle; }
-table.data th { color: var(--mut); font-weight: 500; font-size: 12px; white-space: nowrap; }
+table.data th, table.data td { text-align: left; height: 52px; padding: 12px 16px; border-bottom: 1px solid var(--bd); vertical-align: middle; }
+table.data th { height: 56px; color: var(--mut); font-weight: 500; font-size: 12px; white-space: nowrap; }
 table.data tbody tr:hover { background: var(--hover); }
 table.data td.actions { text-align: right; white-space: nowrap; }
 th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--bd); }
 th { color: var(--mut); font-weight: 500; font-size: 12px; }
 
 /* badges */
-.badge { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--bd); background: var(--chip); font-size: 12px; white-space: nowrap; }
+.badge { display: inline-flex; align-items: center; vertical-align: middle; min-height: 24px; line-height: 20px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--bd); background: var(--chip); font-size: 12px; white-space: nowrap; }
 .badge.ok { color: var(--ok); border-color: var(--ok); }
 .badge.warn, .badge.degraded { color: var(--warn); border-color: var(--warn); }
 .badge.error { color: var(--err); border-color: var(--err); }
@@ -183,6 +194,7 @@ th { color: var(--mut); font-weight: 500; font-size: 12px; }
   display: inline-block; padding: 6px 14px; border: 1px solid var(--acc); border-radius: 6px; background: var(--acc);
   color: var(--on-acc); font: inherit; cursor: pointer;
 }
+a.btn, a.btn:hover, a.btn:focus-visible { text-decoration: none; }
 .btn:hover:not(:disabled) { filter: brightness(1.1); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn.secondary { background: transparent; color: var(--fg); border-color: var(--bd); }
@@ -195,7 +207,12 @@ input[type="text"], input[type="password"], input[type="number"], select, textar
 :focus-visible, .btn:focus-visible, .tab:focus-visible, .menu-btn:focus-visible, .info-btn:focus-visible, .topnav-link:focus-visible, .topnav-menu-link:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
 .form-row { display: flex; flex-direction: column; gap: 4px; margin: 0 0 12px; }
 .form-row label { color: var(--mut); font-size: 12px; }
-.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+/* A cell must retain table layout: flex on td breaks row height and its bottom border. */
+table.data td.actions { display: table-cell; margin-top: 0; }
+table.data td.actions > .btn + .btn { margin-inline-start: 8px; }
+/* Separate an expanded detail card from the table above it, including tall/multiline content. */
+.table-scroll + .card, table.data + .card { margin-top: 16px; }
 .copy-field { display: inline-flex; gap: 6px; align-items: center; }
 .copy-field input { min-width: 220px; }
 

@@ -1,23 +1,14 @@
-// ACL rules view: filterable table, inline permission change, add and delete (D-17).
-import {
-  html,
-  useState,
-  useAsync,
-  toast,
-  ConfirmDialog,
-  OriginBadge,
-  PermSelect,
-  ErrorNote,
-  Loading,
-} from "../lib/ui.mjs";
-import { get, put, del } from "../lib/api.mjs";
+// ACL rules view: filterable table, inline permission change, add and delete. Built on the admin-ui lib.
+import { html, useState, useAsync, toast, ConfirmDialog, Loading, Field } from "../vendor/admin-ui/ui.mjs";
+import { get, put, del } from "../vendor/admin-ui/api.mjs";
+import { useT, tError } from "../vendor/admin-ui/i18n.mjs";
+import { OriginBadge, PermSelect, ScrollTable, FormNotice, ErrorNote } from "../components.mjs";
 import { sortRules, validTopicPattern, PERMISSIONS } from "../lib/model.mjs";
 
-export const meta = { id: "acl", title: "ACL rules" };
-
-const msg = (e) => (e && e.message) || String(e);
+export const meta = { id: "acl", titleKey: "view.acl" };
 
 export default function View() {
+  const tt = useT();
   const rulesQ = useAsync(() => get("acl"));
   const usersQ = useAsync(() => get("users"));
   const [filter, setFilter] = useState("");
@@ -32,72 +23,94 @@ export default function View() {
   const rules = sortRules(rulesQ.data.rules || []).filter(
     (r) => !f || r.user.toLowerCase().includes(f) || r.topic.toLowerCase().includes(f),
   );
+  const reloadAll = () => {
+    rulesQ.reload();
+    usersQ.reload();
+  };
+  // Returns true on success; failures are toasted with the localized code text.
   const save = async (user, topic, permission) => {
     try {
       await put("acl", { body: { user, topic, permission } });
-      toast("ok", `${user} on ${topic}: ${permission}`);
-      rulesQ.reload();
-      usersQ.reload();
+      toast("ok", tt("acl.saved", { user, topic, permission }));
+      reloadAll();
+      return true;
     } catch (e) {
-      toast("error", msg(e));
+      toast("error", tError(e));
+      return false;
     }
   };
   const add = async () => {
-    if (!targets.includes(form.user)) return setFormError("Choose a user.");
-    if (!validTopicPattern(form.topic)) return setFormError("Invalid topic pattern (letters, digits, _ - and *).");
-    if (!PERMISSIONS.includes(form.permission)) return setFormError("Choose a permission.");
+    if (!targets.includes(form.user)) return setFormError(tt("acl.err.user"));
+    if (!validTopicPattern(form.topic)) return setFormError(tt("acl.err.topic"));
+    if (!PERMISSIONS.includes(form.permission)) return setFormError(tt("acl.err.permission"));
     setFormError("");
-    await save(form.user, form.topic, form.permission);
-    setForm({ ...form, topic: "" });
+    if (await save(form.user, form.topic, form.permission)) setForm({ ...form, topic: "" });
   };
+  // Throws on API errors so the confirmation dialog shows them.
   const remove = async (r) => {
-    try {
-      await del("acl", { query: { user: r.user, topic: r.topic } });
-      toast("ok", "Rule deleted");
-      setPending(null);
-      rulesQ.reload();
-      usersQ.reload();
-    } catch (e) {
-      toast("error", msg(e));
-    }
+    await del("acl", { query: { user: r.user, topic: r.topic } });
+    toast("ok", tt("acl.delete.done"));
+    setPending(null);
+    reloadAll();
   };
   return html`<div>
     <div class="card">
-      <h2>Add rule</h2>
+      <h2>${tt("acl.add.title")}</h2>
       <div class="toolbar">
-        <select value=${form.user} onChange=${(e) => setForm({ ...form, user: e.target.value })}>
-          <option value="">user…</option>
-          ${targets.map((n) => html`<option key=${n} value=${n}>${n}</option>`)}
-        </select>
-        <input
-          type="text"
-          placeholder="topic or pattern"
-          value=${form.topic}
-          onInput=${(e) => setForm({ ...form, topic: e.target.value })}
-        />
-        <${PermSelect} value=${form.permission} onChange=${(p) => setForm({ ...form, permission: p })} />
-        <button class="btn" type="button" onClick=${add}>Add</button>
+        <${Field} id="acl-add-user" label=${tt("acl.add.user")}>
+          <select
+            id="acl-add-user"
+            value=${form.user}
+            onChange=${(e) => setForm({ ...form, user: e.target.value })}
+          >
+            <option value="">${tt("acl.add.user_none")}</option>
+            ${targets.map((n) => html`<option key=${n} value=${n}>${n}</option>`)}
+          </select>
+        <//>
+        <${Field} id="acl-add-topic" label=${tt("acl.add.topic")}>
+          <input
+            id="acl-add-topic"
+            type="text"
+            value=${form.topic}
+            autocomplete="off"
+            onInput=${(e) => setForm({ ...form, topic: e.target.value })}
+          />
+        <//>
+        <div class="form-row">
+          <label>${tt("acl.add.permission")}</label>
+          <${PermSelect}
+            value=${form.permission}
+            label=${tt("acl.add.permission")}
+            onChange=${(p) => setForm({ ...form, permission: p })}
+          />
+        </div>
+        <button class="btn" type="button" onClick=${add}>${tt("acl.add.submit")}</button>
       </div>
-      <div class="muted">Use * as wildcard, for example <code>alerts-*</code>. Admins always have full access.</div>
-      ${formError && html`<div class="notice">${formError}</div>`}
+      <div class="muted">
+        ${tt("acl.hint_before")} <code>alerts-*</code>. ${tt("acl.hint_after")}
+      </div>
+      <${FormNotice}>${formError}<//>
     </div>
     <div class="toolbar">
-      <input
-        type="text"
-        placeholder="Filter by user or topic"
-        value=${filter}
-        onInput=${(e) => setFilter(e.target.value)}
-      />
+      <${Field} id="acl-filter" label=${tt("acl.filter")}>
+        <input
+          id="acl-filter"
+          type="text"
+          value=${filter}
+          autocomplete="off"
+          onInput=${(e) => setFilter(e.target.value)}
+        />
+      <//>
     </div>
     <div class="card">
-      <table class="data">
+      <${ScrollTable} caption=${tt("acl.caption")}>
         <thead>
           <tr>
-            <th>User</th>
-            <th>Topic</th>
-            <th>Permission</th>
-            <th>Origin</th>
-            <th></th>
+            <th scope="col">${tt("acl.col.user")}</th>
+            <th scope="col">${tt("acl.col.topic")}</th>
+            <th scope="col">${tt("acl.col.permission")}</th>
+            <th scope="col">${tt("acl.col.origin")}</th>
+            <th scope="col">${tt("acl.col.actions")}</th>
           </tr>
         </thead>
         <tbody>
@@ -106,23 +119,36 @@ export default function View() {
               html`<tr key=${r.user + "|" + r.topic}>
                 <td>${r.user}</td>
                 <td class="mono">${r.topic}</td>
-                <td><${PermSelect} value=${r.permission} onChange=${(p) => save(r.user, r.topic, p)} /></td>
+                <td>
+                  <${PermSelect}
+                    value=${r.permission}
+                    label=${tt("acl.aria.permission", { user: r.user, topic: r.topic })}
+                    onChange=${(p) => save(r.user, r.topic, p)}
+                  />
+                </td>
                 <td><${OriginBadge} origin=${r.origin} /></td>
                 <td class="actions">
-                  <button class="btn small danger" type="button" onClick=${() => setPending(r)}>Delete</button>
+                  <button
+                    class="btn small danger"
+                    type="button"
+                    aria-label=${tt("acl.aria.delete", { user: r.user, topic: r.topic })}
+                    onClick=${() => setPending(r)}
+                  >
+                    ${tt("btn.delete")}
+                  </button>
                 </td>
               </tr>`,
           )}
         </tbody>
-      </table>
-      ${rules.length === 0 && html`<div class="muted">No rules.</div>`}
+      <//>
+      ${rules.length === 0 && html`<div class="muted">${tt("acl.empty")}</div>`}
     </div>
     ${pending &&
     html`<${ConfirmDialog}
-      title="Delete rule"
+      title=${tt("acl.delete.title")}
       danger=${true}
-      confirmLabel="Delete"
-      message=${`Delete the rule for ${pending.user} on ${pending.topic}?`}
+      confirmLabel=${tt("btn.delete")}
+      message=${tt("acl.delete.message", { user: pending.user, topic: pending.topic })}
       onCancel=${() => setPending(null)}
       onConfirm=${() => remove(pending)}
     />`}

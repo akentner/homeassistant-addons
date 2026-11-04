@@ -11,6 +11,9 @@ import pytest
 import yaml
 
 from app import contract as c
+from app.web.admin_ui import errors as skeleton_errors
+from app.web.admin_ui import ingress as skeleton_ingress
+from app.web.admin_ui.errors import register_error_code
 from helpers.ntfy_db import make_auth_db
 
 CONFIG = Path(__file__).resolve().parents[1] / "config.yaml"
@@ -102,8 +105,48 @@ def test_routes_table() -> None:
 
 def test_api_error_status_and_unknown_code() -> None:
     assert c.ApiError("protected", "x").status == 409
+    assert c.ApiError("protected", "x", status=410).status == 410
     with pytest.raises(ValueError):
         c.ApiError("nope")
+
+
+def test_api_error_is_the_skeleton_class() -> None:
+    assert c.ApiError is skeleton_errors.ApiError
+    assert c.ERROR_STATUS is skeleton_errors.ERROR_STATUS
+
+
+def test_error_status_is_the_stable_c8_mapping() -> None:
+    # Literal on purpose: the API error codes and statuses are a stable contract and must not drift silently
+    assert c.ERROR_STATUS == {
+        "bad_request": 400,
+        "confirmation_required": 400,
+        "ingress_only": 403,
+        "not_found": 404,
+        "method_not_allowed": 405,
+        "conflict": 409,
+        "protected": 409,
+        "payload_too_large": 413,
+        "ntfy_error": 502,
+        "db_unavailable": 503,
+        "db_unsupported": 503,
+        "locked": 503,
+        "internal_error": 500,
+    }
+    assert c.ApiError("ntfy_error").status == 502
+    assert c.ApiError("locked").status == 503
+
+
+def test_error_code_registration_is_idempotent() -> None:
+    register_error_code("ntfy_error", 502)
+    register_error_code("locked", 503)
+    assert len(c.ERROR_STATUS) == 13
+    with pytest.raises(ValueError):
+        register_error_code("locked", 500)
+
+
+def test_ingress_remote_is_the_skeleton_constant() -> None:
+    assert c.INGRESS_REMOTE == "172.30.32.2"
+    assert c.INGRESS_REMOTE == skeleton_ingress.INGRESS_REMOTE
 
 
 def test_api_error_from_cli_covers_all_codes() -> None:

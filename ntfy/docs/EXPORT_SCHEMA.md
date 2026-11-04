@@ -6,26 +6,26 @@ it. Decision D-09 fixed this schema.
 
 ## Fields
 
-| Path                         | Type           | Description                                                  |
-| ---------------------------- | -------------- | ------------------------------------------------------------ |
-| `schema`                     | integer        | Schema version, currently `1`                                |
-| `generated_at`               | string         | Export time, ISO 8601 UTC (`2026-11-02T10:00:00Z`)           |
-| `source.addon`               | string         | Always `ntfy`                                                |
-| `source.auth_schema`         | integer        | Schema version of ntfy's `auth.db` (currently `10`)          |
-| `server.auth_default_access` | string         | Option `auth_default_access` (for example `deny-all`)        |
-| `users[].name`               | string         | User name; the anonymous user is never listed here           |
-| `users[].role`               | string         | `user` or `admin`                                            |
-| `users[].tier`               | string or null | ntfy tier code, `null` when none                             |
-| `users[].origin`             | string         | `gui`, `options` or `iac`                                    |
-| `users[].password_hash`      | string         | bcrypt hash; present only when exported with password hashes |
-| `acl[].user`                 | string         | User name, or `everyone` for the anonymous user              |
-| `acl[].topic`                | string         | Topic or pattern with `*` wildcards                          |
-| `acl[].permission`           | string         | `rw`, `ro`, `wo` or `deny`                                   |
-| `acl[].origin`               | string         | `gui`, `options` or `iac`                                    |
-| `tokens[].user`              | string         | Owner of the token                                           |
-| `tokens[].label`             | string         | Token label (may be empty)                                   |
-| `tokens[].expires`           | string or null | Expiry, ISO 8601 UTC, `null` for no expiry                   |
-| `tokens[].origin`            | string         | `gui`, `options` or `iac`                                    |
+| Path                         | Type           | Description                                                                  |
+| ---------------------------- | -------------- | ---------------------------------------------------------------------------- |
+| `schema`                     | integer        | Schema version, currently `1`                                                |
+| `generated_at`               | string         | Export time, ISO 8601 UTC (`2026-11-02T10:00:00Z`)                           |
+| `source.addon`               | string         | Always `ntfy`                                                                |
+| `source.auth_schema`         | integer        | Schema version of ntfy's `auth.db` (`10` or `11`, as read from the database) |
+| `server.auth_default_access` | string         | Option `auth_default_access` (for example `deny-all`)                        |
+| `users[].name`               | string         | User name; the anonymous user is never listed here                           |
+| `users[].role`               | string         | `user` or `admin`                                                            |
+| `users[].tier`               | string or null | ntfy tier code, `null` when none                                             |
+| `users[].origin`             | string         | `gui`, `options` or `iac`                                                    |
+| `users[].password_hash`      | string         | bcrypt hash; present only when exported with password hashes                 |
+| `acl[].user`                 | string         | User name, or `everyone` for the anonymous user                              |
+| `acl[].topic`                | string         | Topic or pattern with `*` wildcards                                          |
+| `acl[].permission`           | string         | `rw`, `ro`, `wo` or `deny`                                                   |
+| `acl[].origin`               | string         | `gui`, `options` or `iac`                                                    |
+| `tokens[].user`              | string         | Owner of the token                                                           |
+| `tokens[].label`             | string         | Token label (may be empty)                                                   |
+| `tokens[].expires`           | string or null | Expiry, ISO 8601 UTC, `null` for no expiry                                   |
+| `tokens[].origin`            | string         | `gui`, `options` or `iac`                                                    |
 
 Origins without a record in the sidecar (for example objects created with the ntfy CLI) are reported as `gui`.
 

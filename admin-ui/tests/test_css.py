@@ -226,7 +226,7 @@ def test_component_button_colours_use_tokens(blocks: list[tuple[str, str, str]])
 
 
 def test_a11y_focus_visible_rule(blocks: list[tuple[str, str, str]], css: str) -> None:
-    rule = next((b for b in blocks if ":focus-visible" in b[1]), None)
+    rule = next((b for b in blocks if ":focus-visible" in b[1] and "outline" in parse_decls(b[2])), None)
     assert rule is not None
     decls = parse_decls(rule[2])
     assert decls["outline"].startswith("2px solid var(--acc)")
@@ -242,7 +242,7 @@ def test_a11y_reduced_motion_and_small_screen(blocks: list[tuple[str, str, str]]
 
 
 def test_component_topbar_height_and_selected_tab(blocks: list[tuple[str, str, str]]) -> None:
-    assert find_decls(blocks, ".topbar")["height"] == "56px"
+    assert find_decls(blocks, ".topbar")["height"] == "var(--sync-header-height, 56px)"
     assert '.tab[aria-selected="true"]' in all_selectors(blocks)
 
 
@@ -252,7 +252,11 @@ def small_screen_decls(blocks: list[tuple[str, str, str]], selector: str) -> dic
 
 def test_topbar_stays_one_compact_row_that_can_shrink(blocks: list[tuple[str, str, str]]) -> None:
     bar = find_decls(blocks, ".topbar")
-    assert bar["height"] == "56px"  # compact sticky head: never wraps into a taller multi-row bar
+    assert bar["height"] == bar["min-height"] == "var(--sync-header-height, 56px)"  # includes bottom border, matching HA div.menu
+    for selector in (".topnav", ".topnav-slot", ".topnav-inline"):
+        assert find_decls(blocks, selector)["height"] == "100%"
+    assert find_decls(blocks, ".topnav-link")["min-height"] == "0"
+    assert find_decls(blocks, "*")["box-sizing"] == "border-box"
     assert "flex-wrap" not in bar or bar["flex-wrap"] == "nowrap"
     assert find_decls(blocks, ".topbar > *")["min-width"] == "0"
     h1 = find_decls(blocks, ".topbar h1")
@@ -308,7 +312,7 @@ def test_hygiene_hex_only_inside_token_blocks(blocks: list[tuple[str, str, str]]
 
 def test_hygiene_only_declared_tokens_referenced(css: str, themes: dict[str, dict[str, str]]) -> None:
     declared = {k for k in themes["light"] if k.startswith("--")}
-    sync = {f"--sync-{n}" for n in SYNCED}
+    sync = {f"--sync-{n}" for n in SYNCED} | {"--sync-header-height", "--sync-ha-card-background", "--sync-card-radius", "--sync-card-shadow"}
     for m in re.finditer(r"var\((--[a-z-]+)", css):
         name = m.group(1)
         # --safe-* are layout variables set per element from the bridge insets, not theme tokens
@@ -318,3 +322,29 @@ def test_hygiene_only_declared_tokens_referenced(css: str, themes: dict[str, dic
 def test_hygiene_file_ends_with_single_newline() -> None:
     raw = CSS_PATH.read_bytes()
     assert raw.endswith(b"\n") and not raw.endswith(b"\n\n")
+
+
+def test_table_cells_keep_layout_and_minimum_height(css: str) -> None:
+    rules = {selector: parse_decls(body) for _, selector, body in parse_blocks(css)}
+    cells = rules["table.data th, table.data td"]
+    assert cells["height"] == "52px"
+    assert rules["table.data th"]["height"] == "56px"
+    assert rules["table.data td.actions"]["display"] == "table-cell"
+    assert rules["table.data td.actions"]["margin-top"] == "0"
+    assert rules[".table-scroll + .card, table.data + .card"]["margin-top"] == "16px"
+
+
+def test_badges_contribute_to_line_height(css: str) -> None:
+    rules = {selector: parse_decls(body) for _, selector, body in parse_blocks(css)}
+    assert rules[".badge"]["display"] == "inline-flex"
+    assert rules[".badge"]["vertical-align"] == "middle"
+
+
+def test_cards_use_separate_ha_appearance_tokens(blocks: list[tuple[str, str, str]]) -> None:
+    card = find_decls(blocks, ".card")
+    assert card["background"] == "var(--sync-ha-card-background, var(--card))"
+    assert card["border-radius"] == "var(--sync-card-radius, 8px)"
+    assert card["box-shadow"] == "var(--sync-card-shadow, none)"
+    isolated = find_decls(blocks, ".theme-isolated")
+    for name in ("--sync-ha-card-background", "--sync-card-radius", "--sync-card-shadow"):
+        assert isolated[name] == "initial"

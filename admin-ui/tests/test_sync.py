@@ -281,3 +281,69 @@ def test_copied_skeleton_imports_as_consumer_package(repo: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "403"
+
+
+def test_release_advances_version_and_syncs_every_consumer(repo: Path) -> None:
+    assert run(repo, "--addon", "fakeaddon", "--addon", "otheraddon").returncode == 0
+    major = int((repo / LIB / "VERSION").read_text().split(".")[0]) + 1
+    version = f"{major}.0.0"
+    result = run(repo, "--release", version)
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert (repo / LIB / "VERSION").read_text() == version + "\n"
+    for name in ("fakeaddon", "otheraddon"):
+        assert (repo / name / LIB_COPY / "VERSION").read_text() == version + "\n"
+        assert (repo / name / SKELETON_COPY / "LIB.stamp").read_text().startswith(f"version {version}\n")
+        assert (repo / name / "config.yaml").read_text() == "name: x\n"
+    assert run(repo, "--check", "--strict").returncode == 0
+    # Repeating the same release does not change a stamp or publish anything.
+    lock = (repo / "admin-ui/lib.lock").read_bytes()
+    assert run(repo, "--release", version).returncode == 0
+    assert (repo / "admin-ui/lib.lock").read_bytes() == lock
+
+
+@pytest.mark.parametrize("version", ["", "0.0.0", "1.2", "v1.2.3", "01.2.3", "1.2.3; exit", "1.2.3-1"])
+def test_release_rejects_old_or_invalid_versions_without_mutation(repo: Path, version: str) -> None:
+    before = (repo / LIB / "VERSION").read_bytes()
+    result = run(repo, "--release", version)
+    assert result.returncode == 2
+    assert (repo / LIB / "VERSION").read_bytes() == before
+    assert not (repo / "admin-ui/lib.lock").exists()
+
+
+def test_release_requires_new_version_for_changed_sources(repo: Path) -> None:
+    assert run(repo, "--addon", "fakeaddon").returncode == 0
+    version = (repo / LIB / "VERSION").read_text().strip()
+    lock = (repo / "admin-ui/lib.lock").read_bytes()
+    (repo / LIB / "ui.mjs").write_text("// changed source\n")
+    result = run(repo, "--release", version)
+    assert result.returncode == 2
+    assert "newer lib version" in result.stderr
+    assert (repo / "admin-ui/lib.lock").read_bytes() == lock
+
+
+def test_release_does_not_downgrade_consumers(repo: Path) -> None:
+    assert run(repo, "--addon", "fakeaddon").returncode == 0
+    (repo / "fakeaddon" / LIB_COPY / "VERSION").write_text("9999.0.0\n")
+    before = (repo / LIB / "VERSION").read_bytes()
+    result = run(repo, "--release", "9998.0.0")
+    assert result.returncode == 2
+    assert "consumer fakeaddon is newer" in result.stderr
+    assert (repo / LIB / "VERSION").read_bytes() == before
+
+
+@pytest.mark.parametrize("args", [("--all",), ("--addon", "fakeaddon"), ("--check",), ("--strict",)])
+def test_release_rejects_conflicting_options(repo: Path, args: tuple[str, ...]) -> None:
+    assert run(repo, "--release", "9999.0.0", *args).returncode == 2
+
+
+def test_release_validates_all_destinations_before_changing_version(repo: Path) -> None:
+    assert run(repo, "--addon", "fakeaddon").returncode == 0
+    dst = repo / "fakeaddon" / SKELETON_COPY
+    backup = dst.with_name("skeleton.backup")
+    dst.rename(backup)
+    dst.symlink_to(backup, target_is_directory=True)
+    before = (repo / LIB / "VERSION").read_bytes()
+    result = run(repo, "--release", "9999.0.0")
+    assert result.returncode == 2
+    assert "symlink not allowed" in result.stderr
+    assert (repo / LIB / "VERSION").read_bytes() == before

@@ -15,10 +15,14 @@ HASH = "$2a$10$" + "x" * 53
 
 
 class FakeReader:
-    def __init__(self, users=None, acl=None, tokens=None) -> None:
+    def __init__(self, users=None, acl=None, tokens=None, schema_version: int = 10) -> None:
+        self._schema_version = schema_version
         self._users = users if users is not None else default_users()
         self._acl = acl if acl is not None else default_acl()
         self._tokens = tokens if tokens is not None else default_tokens()
+
+    def check_schema(self):
+        return {"version": self._schema_version, "supported": True, "error": None}
 
     def list_users(self, include_hash: bool = False):
         rows = []
@@ -73,6 +77,7 @@ def test_top_level_keys_and_header(tmp_path):
     assert doc["schema"] == 1 and type(doc["schema"]) is int
     assert doc["generated_at"] == iso_utc(NOW)
     assert doc["source"] == {"addon": "ntfy", "auth_schema": 10}
+    assert export(tmp_path, FakeReader(schema_version=11))["source"]["auth_schema"] == 11
     assert doc["server"] == {"auth_default_access": "deny-all"}
 
 

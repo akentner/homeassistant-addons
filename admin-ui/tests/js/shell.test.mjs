@@ -716,3 +716,21 @@ test("info link appears when the bridge starts to answer", async () => {
     assert.equal(infoLinks(root).length, 1);
   });
 });
+
+
+test("optional navigation SVG paths are decorative in tabs and inline navigation", async () => {
+  const path = "M3 3h18v18H3z";
+  const views = [{ id: "one", title: "One", icon: path }, { id: "two", title: "Two" }];
+  for (const nav of ["tabs", "topbar"]) {
+    const root = await mount(html`<${Topbar} title="Demo" iconSrc=${null} views=${views} activeId="one" nav=${nav} />`);
+    const icons = byClass(root, "nav-icon");
+    assert.equal(icons.length, 1);
+    assert.equal(prop(icons[0], "aria-hidden"), "true");
+    assert.equal(prop(tag(icons[0], "path")[0], "d"), path);
+    const links = tag(root, "a");
+    assert.equal(links.length, 2);
+    assert.equal(prop(links[0], "aria-current"), "page");
+    assert.ok(findByText(root, "One"));
+    render(null, root);
+  }
+});

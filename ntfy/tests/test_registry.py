@@ -23,10 +23,11 @@ STATIC = Path(__file__).resolve().parents[1] / "app" / "web" / "static"
 JS_TESTS = Path(__file__).resolve().parent / "js"
 HELPER_METHODS = {"get": "GET", "post": "POST", "put": "PUT", "patch": "PATCH", "del": "DELETE"}
 
-# helper("literal" ...), also template literals; request("METHOD", "literal"); buildUrl(...) is a GET download link
+# helper("literal" ...), also template literals; request("METHOD", "literal"); buildUrl(...) / apiHref(...) is a GET
+# download link
 CALL_RE = re.compile(r"(?<![\w.])(get|post|put|patch|del)\(\s*([\"'`])((?:(?!\2)[^\\])*)\2")
 REQUEST_RE = re.compile(r"(?<![\w.])request\(\s*[\"']([A-Z]+)[\"']\s*,\s*([\"'`])((?:(?!\2)[^\\])*)\2")
-BUILDURL_RE = re.compile(r"(?<![\w.])buildUrl\(\s*([\"'`])((?:(?!\1)[^\\])*)\1")
+BUILDURL_RE = re.compile(r"(?<![\w.])(?:buildUrl|apiHref)\(\s*([\"'`])((?:(?!\1)[^\\])*)\1")
 
 
 _CTX: list = []
@@ -140,3 +141,28 @@ def test_js_topic_match_equals_python_for_cross_product() -> None:
     ).stdout
     for pattern, topic, js_result in json.loads(out):
         assert contract.topic_match(pattern, topic) is js_result, (pattern, topic)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_error_codes_have_strings() -> None:
+    """Every backend error code has errors.<code> in the union of the lib and ntfy tables, in both languages."""
+    base = STATIC.as_uri()
+    script = (
+        "const out = {};"
+        "for (const lang of ['de', 'en']) {"
+        f"  const lib = (await import('{base}/vendor/admin-ui/strings.' + lang + '.mjs')).default;"
+        f"  const own = (await import('{base}/strings.' + lang + '.mjs')).default;"
+        "  out[lang] = Object.keys({ ...lib, ...own });"
+        "}"
+        "console.log(JSON.stringify(out));"
+    )
+    proc = subprocess.run(
+        ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30, check=False
+    )
+    assert proc.returncode == 0, proc.stderr
+    keys = {lang: set(values) for lang, values in json.loads(proc.stdout).items()}
+    assert keys["en"] and keys["de"]
+    missing = {
+        lang: sorted(c for c in contract.ERROR_STATUS if f"errors.{c}" not in keys[lang]) for lang in ("de", "en")
+    }
+    assert missing == {"de": [], "en": []}

@@ -3,6 +3,28 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.7.1-0] - 2026-11-04
+
+### Changed
+
+- Use admin-ui lib 0.7.0 with HA-style navigation, optional icons and consistent minimum table row heights
+- Fix overlapping badge lines and preserve table layout in action cells
+
+## [0.7.0] - 2026-11-02
+
+- Change: the status page is rebuilt on the shared admin-ui blueprint (Preact, German and English, light and dark theme,
+  HA theme when embedded). One card per host with the same information as before: verdict and reasons, all values with
+  violated thresholds highlighted, port chips, the SSH key line, blocked tasks, the last kernel error and the last 10
+  incident lines. It still refreshes every 10 seconds and has a Reload button.
+- Change: the page is served by a small Python server behind the ingress gate on the internal port 8100 and is no longer
+  reachable on the optional published port 8099, where it was unauthenticated. `python3` is added to the image.
+- Change: a port without probe data now shows as unknown instead of down, and the uptime line uses localized relative
+  time (for example "5 days ago").
+- Unchanged contracts: `/api/status.json`, `/cgi-bin/status`, `/api/metrics.txt`, `/cgi-bin/metrics`, `/api/hosts.json`
+  and `/api/incidents.json` stay on port 8099 exactly as before, so Gatus and Prometheus configurations keep working.
+  The port settings, options and MQTT entities are unchanged.
+- CI: front end and add-on tests run in the lint workflow (job `haos-monitor`).
+
 ## [0.6.1-1] - 2026-10-31
 
 - Show the SHA256 fingerprint and type of each host's SSH key on the status page, in `/api/status.json` (`key_fp`,
