@@ -236,3 +236,10 @@ curl -s -X POST http://localhost:8080/api/v1/endpoints/Gateway%20L2/results \
 ```
 
 [alerting-docs]: https://github.com/TwiN/gatus#alerting
+
+## Supervisor folder mappings
+
+This add-on uses current Supervisor mapping types with explicit paths where necessary. Container paths and access modes
+remain unchanged when upgrading from the legacy mapping names.
+
+The public app configuration remains available at `/addon_config` inside this container.

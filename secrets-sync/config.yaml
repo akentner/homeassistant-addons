@@ -1,6 +1,6 @@
 name: "Secrets Sync"
 description: "Syncs secrets from Bitwarden or SOPS into /config/secrets.yaml and optional files"
-version: "0.7.0-0"
+version: "0.7.0-1"
 slug: "secrets_sync"
 init: false
 arch:
@@ -19,9 +19,15 @@ ports:
 ports_description:
   8099/tcp: "Health (/api/health) and status JSON (/api/status.json), optional"
 map:
-  - config:rw
-  - addon_config:rw
-  - all_addon_configs:ro
+  - type: homeassistant_config
+    path: /config
+    read_only: false
+  - type: app_config
+    path: /addon_config
+    read_only: false
+  - type: all_app_configs
+    path: /addon_configs
+    read_only: true
 options:
   providers:
     - "bitwarden"
@@ -72,5 +78,11 @@ schema:
     key_style: "list(legacy)"
     notes_dir: "str"
   sops:
+    source: "list(file|git)?"
     file: "str"
     flatten_separator: "str"
+    git_url: "str?"
+    git_branch: "str?"
+    git_path: "str?"
+    git_username: "str?"
+    git_token: "password?"

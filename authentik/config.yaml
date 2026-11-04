@@ -1,6 +1,6 @@
 name: "Authentik"
 description: "Open-source Identity Provider — SSO, OAuth2, LDAP and more"
-version: "2026.8.5-0"
+version: "2026.8.5-1"
 slug: "authentik"
 init: false
 arch:
@@ -15,7 +15,7 @@ ports:
 ports_description:
   9000/tcp: "Authentik web interface (HTTP)"
 map:
-  - type: addon_config
+  - type: app_config
     read_only: false
     path: /addon_config
 

@@ -1,6 +1,6 @@
 name: "Gatus"
 description: "Automated status and uptime monitoring with a beautiful dashboard"
-version: "5.38.0-0"
+version: "5.38.0-1"
 slug: "gatus"
 init: false
 arch:
@@ -22,7 +22,7 @@ ingress_port: 8099
 panel_icon: "mdi:check-network"
 panel_title: "Gatus"
 map:
-  - type: addon_config
+  - type: app_config
     read_only: false
     path: /addon_config
 

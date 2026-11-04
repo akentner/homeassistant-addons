@@ -1,3 +1,7 @@
+## Add-on 1.1.0-24 - 2026-11-04
+
+- Use current Supervisor mapping types while preserving container paths and access modes.
+
 ## Bug Fixes
 
 - enhancement of isExternal ([#2093](https://github.com/docsifyjs/docsify/issues/2093))

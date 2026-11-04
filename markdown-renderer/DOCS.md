@@ -248,3 +248,10 @@ kroki_url: https://kroki.io
 - PlantUML, GraphViz, BlockDiag, D2, and 20+ other diagram formats are rendered via Kroki. Configure `kroki_url` in the
   add-on options (default `https://kroki.io`, the public web service). If Kroki is unreachable for a specific diagram
   the original code block remains visible.
+
+## Supervisor folder mappings
+
+This add-on uses current Supervisor mapping types with explicit paths where necessary. Container paths and access modes
+remain unchanged when upgrading from the legacy mapping names.
+
+Home Assistant configuration remains at `/config` with read-write access.

@@ -1,3 +1,7 @@
+## Add-on 1.108.0-1 - 2026-11-04
+
+- Use current Supervisor mapping types while preserving container paths and access modes.
+
 ## Verify Docker Image Signature
 
 All LiteLLM Docker images are signed with [cosign](https://docs.sigstore.dev/cosign/overview/). This release is signed

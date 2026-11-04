@@ -279,3 +279,6 @@ jobs:
 
       - name: Blueprint rules
         run: make check-admin-ui-rules
+
+      - name: Manifest and option migration regression tests
+        run: python -m unittest discover -s internal/tests -p 'test_*.py' -v

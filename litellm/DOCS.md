@@ -278,3 +278,20 @@ document the result here.
 
 [litellm]: https://github.com/BerriAI/litellm
 [litellm-env]: https://docs.litellm.ai/docs/proxy/env_vars
+
+## Supervisor folder mappings
+
+This add-on uses current Supervisor mapping types with explicit paths where necessary. Container paths and access modes
+remain unchanged when upgrading from the legacy mapping names.
+
+The public app configuration remains available at `/addon_config` inside this container.
+
+### Cleaning obsolete model/provider options
+
+If the Supervisor reports unknown `models` or `providers` options after upgrading, these are leftovers from the old
+configuration UI. Models are managed in LiteLLM's database; do not add these unused fields back to the schema.
+
+Run `internal/cleanup-litellm-options.py` inside an authorized SSH app for a dry-run. With `--apply`, it backs up the
+complete options to `/data/supervisor-manifest-fixes/` (directory 0700, file 0600), removes only schema-absent `models`
+and `providers`, then verifies all remaining values are unchanged. It requires LiteLLM to already be stopped and never
+starts or stops it. Keep the backup protected: it can contain credentials. No option values are logged.

@@ -93,3 +93,10 @@ ingress_port: 8080
 log_level: "INFO"
 timezone: "Europe/Berlin"
 ```
+
+## Supervisor folder mappings
+
+This add-on uses current Supervisor mapping types with explicit paths where necessary. Container paths and access modes
+remain unchanged when upgrading from the legacy mapping names.
+
+The public app configuration remains available at `/addon_config` inside this container.

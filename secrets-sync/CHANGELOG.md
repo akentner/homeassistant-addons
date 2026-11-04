@@ -3,6 +3,11 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## Add-on 0.7.0-1 - 2026-11-04
+
+- Use current Supervisor mapping types while preserving container paths and access modes. Complete the SOPS file/Git
+  option schema, including the password field for the Git token.
+
 ## [0.7.0-0] - 2026-11-02
 
 - Change: the web UI is rebuilt on the shared admin-ui library (Preact/htm, lib 0.5.0) and the server runs on its

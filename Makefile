@@ -1,7 +1,7 @@
 # Makefile for Home Assistant Add-ons Repository
 # Provides convenient commands for development and maintenance
 
-.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions verify-update-version-tag-timing update-version validate-dockerfiles docker-build-check build-addon release install-provider verify-install-provider verify-images verify-images-self-test sync-admin-ui check-admin-ui-sync check-admin-ui-rules test-admin-ui test-ntfy
+.PHONY: help init install-hooks lint test clean format fix lint-markdown lint-markdown-fix check-all validate-versions verify-update-version-tag-timing update-version validate-dockerfiles docker-build-check build-addon release install-provider verify-install-provider verify-images verify-images-self-test sync-admin-ui check-admin-ui-sync check-admin-ui-rules test-admin-ui test-ntfy test-addon-config
 
 # Default target
 help: ## Show this help message
@@ -102,6 +102,9 @@ validate-addons: ## Validate add-on configurations
 			echo "✅ $${addon_dir} validation passed"; \
 		fi; \
 	done
+
+test-addon-config: ## Test Supervisor mapping and options-schema validation
+	uv run --with pyyaml python3 -m unittest discover -s internal/tests -p 'test_*.py' -v
 
 validate-versions: ## Validate add-on versioning consistency
 	@echo "🔍 Validating add-on versions..."

@@ -21,15 +21,83 @@ VALID_ARCH = {"aarch64", "amd64", "armhf", "armv7", "i386"}
 VALID_STARTUP = {"application", "initialize", "system", "once", "services"}
 VALID_BOOT = {"auto", "manual", "manual_only"}
 VALID_MAP_TYPES = {
-    "addon_config",
-    "app_config",
-    "backup",
-    "config",
-    "data",
-    "media",
-    "share",
-    "ssl",
+    "app_config", "all_app_configs", "homeassistant_config", "local_apps",
+    "backup", "data", "media", "share", "ssl",
 }
+LEGACY_MAP_TYPES = {
+    "addon_config": "app_config", "all_addon_configs": "all_app_configs",
+    "addons": "local_apps", "config": "homeassistant_config",
+}
+DEFAULT_MAP_PATHS = {
+    "app_config": "/config", "all_app_configs": "/app_configs", "homeassistant_config": "/homeassistant",
+    "local_apps": "/local_apps", "addon_config": "/config", "all_addon_configs": "/addon_configs",
+    "addons": "/addons", "config": "/config",
+}
+
+
+def validate_maps(entries: object) -> list[str]:
+    """Reject deprecated/conflicting mounts and validate both Supervisor mapping syntaxes."""
+    if not isinstance(entries, list):
+        return ["'map' must be a list"]
+    errors, types, targets = [], set(), set()
+    for entry in entries:
+        target = None
+        if isinstance(entry, str):
+            parts = entry.split(":")
+            kind = parts[0]
+            if len(parts) > 2 or (len(parts) == 2 and parts[1] not in {"rw", "ro"}):
+                errors.append("map entry has invalid access mode")
+        elif isinstance(entry, dict):
+            kind = entry.get("type")
+            if "read_only" in entry and not isinstance(entry["read_only"], bool):
+                errors.append("map read_only must be a boolean")
+            if "path" in entry:
+                target = entry["path"]
+                if not isinstance(target, str) or not target.startswith("/") or target == "/" or ".." in target.split("/"):
+                    errors.append("map path must be an absolute, non-root path without parent traversal")
+                    target = None
+        else:
+            errors.append("map entry must be a string or an object")
+            continue
+        if not isinstance(kind, str) or kind not in VALID_MAP_TYPES | LEGACY_MAP_TYPES.keys():
+            errors.append("map entry type is missing or invalid")
+            continue
+        if kind in types:
+            errors.append(f"duplicate map type '{kind}'")
+        types.add(kind)
+        if kind in LEGACY_MAP_TYPES:
+            errors.append(f"deprecated map type '{kind}'; use '{LEGACY_MAP_TYPES[kind]}' with an explicit path if needed")
+        target = target or DEFAULT_MAP_PATHS.get(kind, f"/{kind}")
+        target = str(Path(target))
+        if target in targets:
+            errors.append(f"duplicate map destination '{target}'")
+        targets.add(target)
+    if "config" in types and types & {"homeassistant_config", "app_config", "addon_config"}:
+        errors.append("incompatible map types: config overrides application/homeassistant configuration mounts")
+    for legacy, modern in LEGACY_MAP_TYPES.items():
+        if legacy != "config" and {legacy, modern} <= types:
+            errors.append(f"incompatible map types: '{legacy}' and '{modern}'")
+    return errors
+
+
+def validate_option_keys(options: object, schema: object, prefix: str = "options") -> list[str]:
+    """Check default key coverage without printing values; schema:false is explicitly open."""
+    if schema is False:
+        return []
+    errors = []
+    if isinstance(options, dict) and options and schema is None:
+        return [f"{prefix}: defaults require a declared schema or explicit schema:false"]
+    if isinstance(options, dict) and isinstance(schema, dict):
+        for key, value in options.items():
+            if key not in schema:
+                errors.append(f"{prefix}.{key}: default option missing from schema")
+            else:
+                errors.extend(validate_option_keys(value, schema[key], f"{prefix}.{key}"))
+    elif isinstance(options, list) and isinstance(schema, list) and len(schema) == 1:
+        for index, value in enumerate(options):
+            errors.extend(validate_option_keys(value, schema[0], f"{prefix}[{index}]"))
+    return errors
+
 REQUIRED_FIELDS = {"name", "version", "slug", "description", "arch", "startup", "boot"}
 
 
@@ -79,17 +147,9 @@ def validate_config(path: Path) -> list[str]:
                     f"got {type(value).__name__} '{value}'"
                 )
 
-    # map: each entry must have a valid 'type'
-    map_entries = config.get("map")
-    if isinstance(map_entries, list):
-        for entry in map_entries:
-            if isinstance(entry, dict):
-                map_type = entry.get("type")
-                if map_type is not None and map_type not in VALID_MAP_TYPES:
-                    errors.append(
-                        f"{path}: map entry type '{map_type}' is not valid "
-                        f"(valid: {sorted(VALID_MAP_TYPES)})"
-                    )
+    if "map" in config:
+        errors.extend(f"{path}: {error}" for error in validate_maps(config["map"]))
+    errors.extend(f"{path}: {error}" for error in validate_option_keys(config.get("options"), config.get("schema")))
 
     return errors
 
