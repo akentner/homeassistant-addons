@@ -1,6 +1,6 @@
 name: "ntfy"
 description: "Self-hosted push notification server (ntfy) with an ingress admin GUI for users, ACLs and tokens"
-version: "2.37.2-3"
+version: "2.37.2-4"
 slug: "ntfy"
 init: false
 arch:
