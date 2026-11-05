@@ -4,7 +4,16 @@ All notable changes to the **Admin UI Blueprint** add-on are documented in this 
 [Keep a Changelog](https://keepachangelog.com/). This is our own code without an upstream project: the version is bumped
 manually with `make update-version`.
 
-## [0.3.1-0] - 2026-11-05
+## [0.3.2-0] - 2026-11-05
+
+### Changed
+
+- The components page shows one component at a time, chosen in a sub-navigation (`#/gallery?c=<id>`). Each page has a
+  preview, a table of all options (name, type, default, description) and a code example
+- New component page for the `Topbar` with switches for `showLang`, `infoPath` and `version`; its code example follows
+  the switches
+
+- 2026-11-05
 
 ### Changed
 

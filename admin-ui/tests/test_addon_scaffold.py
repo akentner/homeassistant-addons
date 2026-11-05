@@ -14,7 +14,7 @@ import yaml
 
 ADDON_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = ADDON_DIR.parent
-EXPECTED_VERSION = "0.3.1"
+EXPECTED_VERSION = "0.3.2"
 
 
 def load_yaml(name: str) -> Any:

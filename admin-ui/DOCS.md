@@ -88,6 +88,10 @@ module imports inside `.mjs` files stay unversioned and rely on revalidation. `S
 `Clear-Site-Data`. A browser that cached a page heuristically before this change (for example the 0.6.x busybox page of
 haos-monitor) never asks the server again until that entry expires: a hard reload once clears it.
 
+The components page (`#/gallery`) has a sub-navigation (`#/gallery?c=<id>`) with one page per component: live preview,
+option table and code example. Its data lives in `app/web/static/views/gallery-docs.mjs`; keep it in step when a
+component gets an option.
+
 The demo API (`app/web/demo_api.py`) serves fake data for the gallery and the sample CRUD: `api/health`, `api/items`
 with create, update and a type-to-confirm delete, `api/fail/<code>` for error states, `api/slow`, `api/whoami` and
 `api/echo`.
