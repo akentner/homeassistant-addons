@@ -308,23 +308,83 @@ const click = async (root, tag, text) => {
 const roleOf = (root, role) => findAll(root, (n) => n.getAttribute && n.getAttribute("role") === role);
 
 // ---- gallery ----
-test("gallery: every component section and all badge kinds render", async () => {
-  const root = await mountView("gallery");
-  for (const heading of ["Badge", "Toast", "Modal", "Confirm dialog", "Copy field", "Data table", "Tabs", "Loading", "Error note", "Field"]) {
-    assert.equal(findByText(root, "h2", heading).length, 1, heading);
+const COMPONENT_TITLES = {
+  topbar: "Topbar", badge: "Badge", toast: "Toast", modal: "Modal", confirm: "Confirm dialog", copy: "Copy field",
+  table: "Data table", tabs: "Tabs", loading: "Loading", error: "Error note", field: "Field",
+};
+const gallery = (c, opts = {}) => mountView("gallery", { ...opts, params: { c } });
+
+test("gallery: sub-navigation lists every component, marks the active one, an unknown id falls back to the first", async () => {
+  const root = await gallery("toast");
+  const links = findAll(findAll(root, (n) => n.localName === "nav")[0], (n) => n.localName === "a");
+  assert.deepEqual(links.map((a) => a.getAttribute("href")), Object.keys(COMPONENT_TITLES).map((id) => `#/gallery?c=${id}`));
+  assert.deepEqual(links.filter((a) => a.getAttribute("aria-current") === "page").map((a) => a.textContent.trim()), ["Toast"]);
+  const fallback = await gallery("../../x");
+  assert.equal(findByText(fallback, "h2", "Topbar").length, 1);
+});
+
+test("gallery: every component has its page with preview, options and a code example", async () => {
+  for (const [id, title] of Object.entries(COMPONENT_TITLES)) {
+    const root = await gallery(id);
+    assert.equal(findByText(root, "h2", title).length, 1, title);
+    for (const h of ["Preview", "Options", "Usage"]) assert.equal(findByText(root, "h3", h).length, 1, `${id} ${h}`);
+    const code = findAll(root, (n) => n.localName === "code");
+    assert.equal(code.length, 1, id);
+    assert.match(code[0].textContent, /html`|import \{/, id);
+    assert.equal(auditNames(root).length, 0, id);
+    assert.equal(auditTables(root).length, 0, id);
   }
+});
+
+test("gallery: the options table lists every option; loading has none", async () => {
+  const root = await gallery("topbar");
+  const names = findAll(root, (n) => n.localName === "td" && n.className === "mono").map((n) => n.textContent);
+  for (const opt of ["title", "iconSrc", "status", "version", "infoPath", "showLang", "views", "nav", "bridge"]) {
+    assert.ok(names.includes(opt), opt);
+  }
+  const none = await gallery("loading");
+  assert.ok(none.textContent.includes("This component takes no options."));
+});
+
+test("gallery: the topbar preview follows its switches and the code example follows with it", async () => {
+  const root = await gallery("topbar");
+  const header = () => findAll(root, (n) => n.localName === "header")[0];
+  const codeText = () => findAll(root, (n) => n.localName === "code")[0].textContent;
+  assert.equal(findAll(header(), (n) => n.className === "lang-switch").length, 0);
+  assert.equal(findAll(header(), (n) => n.className === "topbar-version").length, 1);
+  assert.match(codeText(), /showLang=\$\{false\}/);
+  const boxes = findAll(root, (n) => n.localName === "input" && n.getAttribute("type") === "checkbox");
+  boxes[0].checked = true;
+  boxes[0].dispatch("change", { target: boxes[0] });
+  await settle();
+  const again = findAll(root, (n) => n.localName === "input" && n.getAttribute("type") === "checkbox");
+  again[2].checked = false;
+  again[2].dispatch("change", { target: again[2] });
+  await settle();
+  assert.equal(findAll(header(), (n) => n.className === "lang-switch").length, 1);
+  assert.equal(findAll(header(), (n) => n.className === "topbar-version").length, 0);
+  assert.match(codeText(), /showLang=\$\{true\}/);
+  assert.doesNotMatch(codeText(), /version=/);
+});
+
+test("gallery: all badge kinds render", async () => {
+  const root = await gallery("badge");
   const kinds = ["ok", "warn", "degraded", "error", "muted", "info"];
   for (const kind of kinds) {
     assert.ok(findAll(root, (n) => n.localName === "span" && n.className === `badge ${kind}`).length >= 1, kind);
   }
-  assert.equal(roleOf(root, "status").length >= 1, true);
-  assert.equal(findAll(root, (n) => n.localName === "table").length, 2);
   assert.equal(auditNames(root).length, 0);
+});
+
+test("gallery: loading shows the status and the table page has three tables", async () => {
+  assert.equal(roleOf(await gallery("loading"), "status").length >= 1, true);
+  const root = await gallery("table");
+  assert.equal(findAll(root, (n) => n.localName === "table").length, 3);
   assert.equal(auditTables(root).length, 0);
 });
 
 test("gallery: the modal opens, closes with its action and with Escape", async () => {
-  const root = await mountView("gallery");
+  const root = await gallery("modal");
   assert.equal(roleOf(root, "dialog").length, 0);
   const opener = await click(root, "button", "Open dialog");
   assert.equal(roleOf(root, "dialog").length, 1);
@@ -340,7 +400,7 @@ test("gallery: the modal opens, closes with its action and with Escape", async (
 });
 
 test("gallery: the dangerous confirm needs the exact phrase, the plain one does not", async () => {
-  const root = await mountView("gallery");
+  const root = await gallery("confirm");
   await click(root, "button", "Plain confirm");
   const plain = roleOf(root, "dialog")[0];
   assert.equal(prop(findByText(plain, "button", "Confirm")[0], "disabled"), false);
@@ -368,7 +428,7 @@ test("gallery: the dangerous confirm needs the exact phrase, the plain one does 
 });
 
 test("gallery: toasts appear with the right roles", async () => {
-  const root = await mountView("gallery");
+  const root = await gallery("toast");
   await click(root, "button", "Error toast");
   assert.ok(roleOf(root, "alert").some((n) => n.textContent.includes("Something went wrong")));
   await click(root, "button", "Success toast");
@@ -378,7 +438,7 @@ test("gallery: toasts appear with the right roles", async () => {
 });
 
 test("gallery: tabs change with the arrow keys", async () => {
-  const root = await mountView("gallery");
+  const root = await gallery("tabs");
   const tabs = () => roleOf(root, "tab");
   const selected = () => tabs().findIndex((n) => n.getAttribute("aria-selected") === "true");
   assert.equal(selected(), 0);
@@ -393,13 +453,14 @@ test("gallery: tabs change with the arrow keys", async () => {
 });
 
 test("gallery: hostile names stay text, unknown error codes show [code], values are formatted", async () => {
-  const root = await mountView("gallery");
+  const root = await gallery("table");
   assert.equal(findAll(root, (n) => n.localName === "b").length, 0);
   assert.ok(root.textContent.includes("<b>bold</b> row"));
-  assert.ok(root.textContent.includes("[teapot]"));
   assert.match(root.textContent, /2 KiB/);
-  await click(root, "button", "Toggle known error");
-  assert.ok(root.textContent.includes("conflicts with the current state"));
+  const errors = await gallery("error");
+  assert.ok(errors.textContent.includes("[teapot]"));
+  await click(errors, "button", "Toggle known error");
+  assert.ok(errors.textContent.includes("conflicts with the current state"));
 });
 
 // ---- tokens ----
@@ -702,9 +763,9 @@ test("whole demo: every view in en and de has no unlabeled control, no unresolve
 
 test("whole demo: open dialogs keep accessible names in both languages", async () => {
   for (const lang of ["en", "de"]) {
-    const gallery = await mountView("gallery", { lang });
-    const buttons = findAll(gallery, (n) => n.localName === "button" && n.className.includes("btn"));
-    for (const label of lang === "en" ? ["Open dialog", "Dangerous confirm"] : ["Dialog öffnen", "Gefährliche Bestätigung"]) {
+    for (const [c, label] of lang === "en" ? [["modal", "Open dialog"], ["confirm", "Dangerous confirm"]] : [["modal", "Dialog öffnen"], ["confirm", "Gefährliche Bestätigung"]]) {
+      const gallery = await mountView("gallery", { lang, params: { c } });
+      const buttons = findAll(gallery, (n) => n.localName === "button" && n.className.includes("btn"));
       const opener = buttons.find((b) => b.textContent.trim() === label);
       assert.ok(opener, label);
       opener.dispatch("click");
@@ -755,15 +816,15 @@ test("the topbar shows the info link once api/health reports the slug, and recor
 
 
 test("gallery: expanded table details remain a separate card and can be closed", async () => {
-  const root = await mountView("gallery");
+  const root = await gallery("table");
   const button = await click(root, "button", "Toggle details");
   assert.equal(button.getAttribute("aria-expanded"), "true");
-  assert.equal(findAll(root, (n) => n.localName === "table").length, 3);
+  assert.equal(findAll(root, (n) => n.localName === "table").length, 4);
   assert.equal(findByText(root, "h2", "Expanded details").length, 1);
   assert.equal(auditTables(root).length, 0);
   await click(root, "button", "Toggle details");
   assert.equal(button.getAttribute("aria-expanded"), "false");
-  assert.equal(findAll(root, (n) => n.localName === "table").length, 2);
+  assert.equal(findAll(root, (n) => n.localName === "table").length, 3);
 });
 
 
