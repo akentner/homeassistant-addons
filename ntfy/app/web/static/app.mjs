@@ -12,12 +12,13 @@ import en from "./strings.en.mjs";
 
 registerStrings({ de, en });
 
+// Icons are Material Design Icons path data (24x24), decorative next to the visible label.
 export const VIEWS = [
   { id: "users", titleKey: "view.users", icon: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2h14M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8m11 18v-2a6 6 0 0 0-3-5.2V21h3M16 3v8a4 4 0 0 0 0-8Z" },
-  { id: "acl", titleKey: "view.acl" },
-  { id: "matrix", titleKey: "view.matrix" },
-  { id: "tokens", titleKey: "view.tokens" },
-  { id: "tools", titleKey: "view.tools" },
+  { id: "acl", titleKey: "view.acl", icon: "M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M12,7C13.4,7 14.8,8.1 14.8,9.5V11C15.4,11 16,11.6 16,12.3V15.8C16,16.4 15.4,17 14.7,17H9.2C8.6,17 8,16.4 8,15.7V12.2C8,11.6 8.6,11 9.2,11V9.5C9.2,8.1 10.6,7 12,7M12,8.2C11.2,8.2 10.5,8.7 10.5,9.5V11H13.5V9.5C13.5,8.7 12.8,8.2 12,8.2Z" },
+  { id: "matrix", titleKey: "view.matrix", icon: "M4,3H20A2,2 0 0,1 22,5V20A2,2 0 0,1 20,22H4A2,2 0 0,1 2,20V5A2,2 0 0,1 4,3M4,7V10H8V7H4M10,7V10H14V7H10M20,10V7H16V10H20M4,12V15H8V12H4M4,20H8V17H4V20M10,12V15H14V12H10M10,20H14V17H10V20M20,20V17H16V20H20M20,12H16V15H20V12Z" },
+  { id: "tokens", titleKey: "view.tokens", icon: "M22,18V22H18V19H15V16H12L9.74,13.74C9.19,13.91 8.61,14 8,14A6,6 0 0,1 2,8A6,6 0 0,1 8,2A6,6 0 0,1 14,8C14,8.61 13.91,9.19 13.74,9.74L22,18M7,5A2,2 0 0,0 5,7A2,2 0 0,0 7,9A2,2 0 0,0 9,7A2,2 0 0,0 7,5Z" },
+  { id: "tools", titleKey: "view.tools", icon: "M22.7,19L13.6,9.9C14.5,7.6 14,4.9 12.1,3C10.1,1 7.1,0.6 4.7,1.7L9,6L6,9L1.6,4.7C0.4,7.1 0.9,10.1 2.9,12.1C4.8,14 7.5,14.5 9.8,13.6L18.9,22.7C19.3,23.1 19.9,23.1 20.3,22.7L22.6,20.4C23.1,20 23.1,19.3 22.7,19Z" },
 ];
 const IDS = VIEWS.map((v) => v.id);
 const DEFAULT_VIEW = "users";

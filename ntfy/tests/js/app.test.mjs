@@ -222,3 +222,10 @@ test("the merged health and data pages still resolve: old hashes land on tools, 
   migrateLegacyHash(loc);
   assert.equal(loc.hash, "#/healthy");
 });
+
+test("every view has a decorative icon rendered next to its nav label", async () => {
+  assert.ok(VIEWS.every((v) => /^M[-\d.,A-Za-z\s]+Z$/.test(v.icon || "")), "icon path data per view");
+  const root = await mountApp();
+  const withIcon = links(root).filter((a) => findAll(a, (n) => n.localName === "svg").length === 1);
+  assert.equal(withIcon.length, VIEWS.length);
+});
