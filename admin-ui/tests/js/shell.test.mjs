@@ -765,3 +765,10 @@ test("Topbar: a hostile or non-string version is not rendered", async () => {
     assert.equal(byClass(root, "topbar-version").length, 0, String(bad));
   }
 });
+
+test("Topbar: showLang=false marks the bar so the right-hand group is pushed to the end; default does not", async () => {
+  const off = await mount(html`<${Topbar} title="T" showLang=${false} />`);
+  assert.ok(tag(off, "header")[0].className.split(" ").includes("topbar-end"));
+  const on = await mount(html`<${Topbar} title="T" />`);
+  assert.ok(!tag(on, "header")[0].className.split(" ").includes("topbar-end"));
+});

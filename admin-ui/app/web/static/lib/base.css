@@ -120,6 +120,8 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 .topbar > .brand-icon, .topbar > .menu-btn, .topbar > .info-btn, .topbar > .badge { flex: none; }
 .topbar-version { flex: none; color: var(--mut); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .topbar-extra { display: contents; }
+/* without the language switch (showLang=false) the title takes the free width, so info icon, badge and version sit right */
+.topbar-end:not(.topbar-nav) > h1 { flex: 1 1 auto; }
 .brand-icon { border-radius: 6px; }
 .menu-btn, .info-btn {
   display: inline-flex; align-items: center; justify-content: center; min-width: 48px; min-height: 48px; padding: 0;

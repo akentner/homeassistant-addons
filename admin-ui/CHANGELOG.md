@@ -4,6 +4,12 @@ All notable changes to the **Admin UI Blueprint** add-on are documented in this 
 [Keep a Changelog](https://keepachangelog.com/). This is our own code without an upstream project: the version is bumped
 manually with `make update-version`.
 
+## [0.2.2-0] - 2026-11-05
+
+### Fixed
+
+- Lib 0.8.1: with `showLang={false}` the title takes the free width, so the right-hand group sits at the right edge
+
 ## [0.2.1-0] - 2026-11-05
 
 ### Added

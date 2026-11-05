@@ -8,6 +8,7 @@ cached, failures are retried after a pause.
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 import time
@@ -21,6 +22,8 @@ VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$")
 TIMEOUT_S = 2.0
 RETRY_AFTER_S = 60.0
 MAX_BYTES = 256 * 1024
+# The s6 base image keeps container variables out of the environment of plain `#!/bin/sh` processes
+TOKEN_FILE = "/run/s6/container_environment/SUPERVISOR_TOKEN"
 
 Opener = Callable[[urllib.request.Request, float], Any]
 Info = dict[str, str]
@@ -30,9 +33,20 @@ def _open(req: urllib.request.Request, timeout: float) -> Any:
     return urllib.request.urlopen(req, timeout=timeout)  # noqa: S310 - fixed http://supervisor URL
 
 
-def fetch_info(environ: Mapping[str, str], opener: Opener = _open) -> Info | None:
-    """Return {"slug", "version"} (both validated), or None (no token, no answer, unexpected shape)."""
+def _token(environ: Mapping[str, str], token_file: str = TOKEN_FILE) -> str:
     token = environ.get("SUPERVISOR_TOKEN", "")
+    if token:
+        return token
+    try:
+        with open(token_file, encoding="utf-8") as fh:
+            return fh.read(512).strip()
+    except OSError:
+        return ""
+
+
+def fetch_info(environ: Mapping[str, str], opener: Opener = _open, token_file: str = TOKEN_FILE) -> Info | None:
+    """Return {"slug", "version"} (both validated), or None (no token, no answer, unexpected shape)."""
+    token = _token(environ, token_file)
     if not token:
         return None
     req = urllib.request.Request(SUPERVISOR_URL, headers={"Authorization": f"Bearer {token}"})
