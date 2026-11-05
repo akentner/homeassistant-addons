@@ -275,7 +275,7 @@ export function Topbar({ title, iconSrc, status, bridge, children, views, active
   const mode = NAV_MODES.includes(nav) ? nav : "tabs";
   const inBar = mode === "topbar" && list.length > 0;
   return html`<div class="shell-head" style=${insetStyle(safe)}>
-    <header class=${`topbar${inBar ? " topbar-nav" : ""}`}>
+    <header class=${`topbar${inBar ? " topbar-nav" : ""}${showLang === false ? " topbar-end" : ""}`}>
       ${kiosk &&
       html`<button class="menu-btn" type="button" aria-label=${tt("btn.menu")} onClick=${() => bridge.toggleMenu()}>
         <${NavIcon} path=${MENU_PATH} />
