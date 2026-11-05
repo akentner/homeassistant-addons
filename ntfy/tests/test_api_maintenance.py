@@ -271,6 +271,16 @@ def test_health_fills_counts(reset_client: Client, monkeypatch: pytest.MonkeyPat
     assert body["db"]["schema_version"] == 10
 
 
+def test_health_reports_addon_slug_only_when_valid(reset_client: Client, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(health_api, "ntfy_health", lambda: {"healthy": True, "role": "server"})
+    monkeypatch.setenv("NTFY_ADDON_SLUG", "72a005f5_ntfy")
+    assert reset_client.json("GET", "/api/health")[1]["addon_slug"] == "72a005f5_ntfy"
+    monkeypatch.setenv("NTFY_ADDON_SLUG", "../evil")
+    assert "addon_slug" not in reset_client.json("GET", "/api/health")[1]
+    monkeypatch.delenv("NTFY_ADDON_SLUG")
+    assert "addon_slug" not in reset_client.json("GET", "/api/health")[1]
+
+
 def test_health_degraded_on_unsupported_schema(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from helpers.ntfy_db import make_auth_db
 

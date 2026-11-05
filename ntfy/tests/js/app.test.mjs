@@ -20,7 +20,7 @@ const navigate = async (hash) => {
   await settle();
 };
 
-const { App, VIEWS } = await import(new URL("app.mjs", STATIC));
+const { App, VIEWS, semver, migrateLegacyHash } = await import(new URL("app.mjs", STATIC));
 
 const HEALTH = fixtures["GET api/health"];
 const fakeLoad = async (id) => ({ default: ({ params }) => html`<p class="fake-view">view ${id} ${JSON.stringify(params)}</p>` });
@@ -42,14 +42,14 @@ const withHealth = async (payload, fn) => {
     fixtures["GET api/health"] = HEALTH;
   }
 };
-const links = (root) => findAll(root, (n) => n.localName === "a" && (n.className || "").split(" ").includes("tab"));
+const links = (root) => findAll(root, (n) => n.localName === "a" && (n.className || "").split(" ").includes("topnav-link"));
 
-test("topbar shows the title and seven tab links in VIEWS order", async () => {
+test("topbar shows the title and five nav links in VIEWS order", async () => {
   const root = await mountApp();
   assert.equal(findByText(root, "h1", "ntfy").length, 1);
-  assert.deepEqual(VIEWS.map((v) => v.id), ["users", "acl", "matrix", "tokens", "tools", "health", "data"]);
+  assert.deepEqual(VIEWS.map((v) => v.id), ["users", "acl", "matrix", "tokens", "tools"]);
   assert.deepEqual(links(root).map((a) => a.getAttribute("href")), VIEWS.map((v) => `#/${v.id}`));
-  assert.equal(findAll(root, (n) => n.localName === "select" && n.className === "lang-switch").length, 1);
+  assert.equal(findAll(root, (n) => n.localName === "select" && n.className === "lang-switch").length, 0);
 });
 
 test("the active tab follows the hash, an unknown or hostile hash falls back to users", async () => {
@@ -79,7 +79,7 @@ test("query params of the hash reach the view", async () => {
 test("health badge: ok, degraded with alert, failed and loading", async () => {
   let root = await mountApp();
   assert.equal(findByText(root, "span", "OK").length, 1);
-  assert.match(root.textContent, /Add-on 2\.36\.0-0/);
+  assert.equal(findAll(root, (n) => (n.className || "") === "topbar-version")[0].textContent, "2.36.0");
 
   await withHealth({ ...HEALTH, status: "degraded", db: { ...HEALTH.db, error: "locked <b>x</b>" } }, async () => {
     root = await mountApp();
@@ -114,7 +114,7 @@ test("a language switch re-renders tab titles in German without a reload", async
   await settle();
   assert.equal(findByText(root, "a", "Benutzer").length, 1);
   assert.equal(findByText(root, "a", "Users").length, 0);
-  assert.match(root.textContent, /Add-on 2\.36\.0-0/);
+  assert.equal(findAll(root, (n) => (n.className || "") === "topbar-version")[0].textContent, "2.36.0");
   assert.equal(globalThis.document.documentElement.lang, "de");
   setLang("en");
   await settle();
@@ -165,7 +165,7 @@ test("a view whose module fails to load shows the localized note, no backend tex
 });
 
 test("every view file exists, exports meta and a default function, and its relative imports exist", async () => {
-  assert.equal(VIEWS.length, 7);
+  assert.equal(VIEWS.length, 5);
   for (const v of VIEWS) {
     const file = new URL(`views/${v.id}.mjs`, STATIC);
     assert.ok(existsSync(file), v.id);
@@ -190,4 +190,42 @@ test("all requested URLs are relative", async () => {
 // Preact/toast timers can outlive the tests; end the worker once the results are reported.
 test.after(() => {
   setTimeout(() => process.exit(process.exitCode ?? 0), 300).unref();
+});
+
+test("the info button points at the HA info page of the add-on and is hidden without a slug", async () => {
+  const hrefs = (root) => findAll(root, (n) => n.localName === "a" && (n.className || "").split(" ").includes("info-btn"));
+  const root = await mountApp();
+  const btn = hrefs(root);
+  assert.equal(btn.length, 1);
+  assert.equal(btn[0].getAttribute("href"), "/config/app/72a005f5_ntfy/config");
+  await withHealth({ ...HEALTH, addon_slug: undefined }, async () => {
+    assert.equal(hrefs(await mountApp()).length, 0);
+  });
+});
+
+test("semver drops the subpatch and anything that is not a version", () => {
+  assert.equal(semver("2.37.2-6"), "2.37.2");
+  assert.equal(semver("2.37.2"), "2.37.2");
+  assert.equal(semver("unknown"), "");
+  assert.equal(semver(undefined), "");
+});
+
+test("the merged health and data pages still resolve: old hashes land on tools, query kept", async () => {
+  for (const [from, to] of [["#/health", "#/tools"], ["#/data", "#/tools"], ["#/data?x=1", "#/tools?x=1"]]) {
+    const seen = [];
+    const root = await mountApp({ hash: from, load: async (id) => (seen.push(id), fakeLoad(id)) });
+    assert.equal(globalThis.location.hash, to);
+    assert.deepEqual(seen, ["tools"]);
+    assert.match(root.textContent, /view tools/);
+  }
+  const loc = { hash: "#/healthy" };
+  migrateLegacyHash(loc);
+  assert.equal(loc.hash, "#/healthy");
+});
+
+test("every view has a decorative icon rendered next to its nav label", async () => {
+  assert.ok(VIEWS.every((v) => /^M[-\d.,A-Za-z\s]+Z$/.test(v.icon || "")), "icon path data per view");
+  const root = await mountApp();
+  const withIcon = links(root).filter((a) => findAll(a, (n) => n.localName === "svg").length === 1);
+  assert.equal(withIcon.length, VIEWS.length);
 });

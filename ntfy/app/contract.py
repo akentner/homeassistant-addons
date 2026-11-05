@@ -399,6 +399,7 @@ class Health(TypedDict):
 
     status: str
     addon_version: str
+    addon_slug: NotRequired[str]
     ntfy: dict[str, Any]
     db: dict[str, Any]
     counts: dict[str, int] | None

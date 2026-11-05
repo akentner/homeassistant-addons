@@ -212,4 +212,4 @@ def test_index_html_has_no_inline_script_handler_or_style() -> None:
 def test_own_module_list_is_complete() -> None:
     names = {p.name for p in OWN_MODULES}
     assert {"app.mjs", "components.mjs", "model.mjs"} <= names
-    assert len([p for p in OWN_MODULES if p.parent.name == "views"]) == 7
+    assert len([p for p in OWN_MODULES if p.parent.name == "views"]) == 5

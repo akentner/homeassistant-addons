@@ -10,6 +10,8 @@ export NTFY_CONFIG_FILE="${DATA_DIR}/server.yml"
 export NTFY_AUTH_FILE="${DATA_DIR}/auth.db"
 NTFY_ADDON_VERSION="$(bashio::app.version 2>/dev/null || bashio::addon.version 2>/dev/null || echo unknown)"
 export NTFY_ADDON_VERSION
+NTFY_ADDON_SLUG="$(bashio::app.slug 2>/dev/null || bashio::addon.slug 2>/dev/null || true)"
+export NTFY_ADDON_SLUG
 
 umask 077
 cd /opt/ntfy-gui || exit 1

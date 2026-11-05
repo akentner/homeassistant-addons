@@ -1,4 +1,4 @@
-// View tests of the management group: health, tools, tokens, data (owned by plan 27-04).
+// View tests of the management group: status, tools, tokens, export, backups (owned by plan 27-04).
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -86,14 +86,14 @@ const PUBLISH_OK = { ok: true, status: 200, id: "msg123" };
 // ---- health ----
 
 test("health: status badge, version, sizes, plural-aware counts and a labelled Refresh button", async () => {
-  const root = await mount("health");
+  const root = await mount("tools");
   const text = all(root);
   assert.ok(badges(root).includes("OK"));
-  assert.match(text, /Add-on 2\.36\.0-0/);
+  assert.match(text, /Version\s*2\.36\.0-0/);
   assert.match(text, /ntfy is healthy, role server/);
   assert.match(text, /auth\.db schema 10 \(supported\)/);
-  assert.match(text, /auth\.db size: 2 KiB/);
-  assert.match(text, /Message cache size: 1 MiB/);
+  assert.match(text, /auth\.db size\s*2 KiB/);
+  assert.match(text, /Message cache size\s*1 MiB/);
   assert.match(text, /3 users, 2 rules, 1 token(?!s)/);
   assert.equal(buttons(root, "Refresh").length, 1);
   assert.equal(auditNames(root).length, 0);
@@ -108,7 +108,7 @@ test("health: db.error is secondary text, unsupported schema and degraded status
     db: { schema_version: 99, supported: false, size_bytes: 0, cache_size_bytes: 0, error: "boom <i>x</i>" },
   };
   await withFixtures({ "GET api/health": payload }, async () => {
-    const root = await mount("health");
+    const root = await mount("tools");
     assert.ok(badges(root).includes("Degraded"));
     assert.match(all(root), /ntfy is not healthy/);
     assert.match(all(root), /schema 99 \(unsupported\)/);
@@ -118,15 +118,15 @@ test("health: db.error is secondary text, unsupported schema and degraded status
 });
 
 test("health: German mount has no English literal and German sizes and counts", async () => {
-  const root = await mount("health", {}, { lang: "de" });
+  const root = await mount("tools", {}, { lang: "de" });
   assertGerman(root, "health.");
-  assert.match(all(root), /Größe der auth\.db: 2 KiB/);
+  assert.match(all(root), /Größe der auth\.db\s*2 KiB/);
   assert.match(all(root), /3 Benutzer, 2 Regeln, 1 Token/);
   assert.equal(auditNames(root).length, 0);
 });
 
 test("health publish: Publish is disabled without a topic, the datalist offers concrete topics only", async () => {
-  const root = await mount("health");
+  const root = await mount("tools");
   assert.ok(prop(buttons(root, "Publish")[0], "disabled"));
   const options = findAll(byId(root, "health-topics"), (n) => n.localName === "option").map((n) => prop(n, "value"));
   assert.deepEqual(options, ["alerts"]);
@@ -138,7 +138,7 @@ test("health publish: Publish is disabled without a topic, the datalist offers c
 test("health publish: a confirmation naming the topic comes first, then the POST; ok true reports success", async () => {
   await withFixtures({ "POST api/health/publish": PUBLISH_OK }, async () => {
     await clearToasts();
-    const root = await mount("health");
+    const root = await mount("tools");
     await type(byId(root, "health-topic"), "alerts");
     await click(buttons(root, "Publish")[0]);
     assert.equal(callsTo("POST", "api/health/publish").length, 0);
@@ -157,7 +157,7 @@ test("health publish: ok false (rate limit 429, unreachable 0) is reported as a 
   for (const [status, reason] of [[429, /rate limit/], [0, /could not be reached/]]) {
     await withFixtures({ "POST api/health/publish": { ok: false, status, id: null } }, async () => {
       await clearToasts();
-      const root = await mount("health");
+      const root = await mount("tools");
       await type(byId(root, "health-topic"), "alerts");
       await click(buttons(root, "Publish")[0]);
       await click(buttons(root, "Publish").pop());
@@ -171,7 +171,7 @@ test("health publish: ok false (rate limit 429, unreachable 0) is reported as a 
 test("health publish: an API error keeps the dialog open with the localized code, never the backend message", async () => {
   await withFixtures({}, async () => {
     failures["POST api/health/publish"] = { status: 500, error: "internal_error", message: "secret backend detail" };
-    const root = await mount("health");
+    const root = await mount("tools");
     await type(byId(root, "health-topic"), "alerts");
     await click(buttons(root, "Publish")[0]);
     await click(buttons(root, "Publish").pop());
@@ -442,7 +442,7 @@ test("tokens: German mount has no English literal, also with the create dialog o
 // ---- data ----
 
 test("data: export link is relative and exactly what apiHref builds; the hashes box shows the notice", async () => {
-  const root = await mount("data");
+  const root = await mount("tools");
   const link = () => findAll(root, (n) => n.localName === "a" && cls(n).includes("btn") && !cls(n).includes("small"))[0];
   assert.equal(prop(link(), "href"), apiHref("export", { format: "yaml", include_hashes: 0 }));
   assert.ok(!prop(link(), "href").startsWith("/"));
@@ -461,7 +461,7 @@ test("data: export link is relative and exactly what apiHref builds; the hashes 
 });
 
 test("data: backups table with localized date, size, reason and an apiHref download link", async () => {
-  const root = await mount("data");
+  const root = await mount("tools");
   const row = findAll(root, (n) => n.localName === "tr").find((r) => r.textContent.includes("auth-20261102T100000Z.db"));
   assert.ok(row.textContent.includes(formatDateTime(Date.parse("2026-11-02T10:00:00Z"), "en")));
   assert.ok(row.textContent.includes("4 KiB"));
@@ -483,7 +483,7 @@ test("data: reasons map to words, an unknown reason is shown raw, a bad date rea
     { name: "b.db", size_bytes: 1, created: "2026-11-02T10:00:00Z", reason: "weird<b>" },
   ];
   await withFixtures({ "GET api/backups": { backups } }, async () => {
-    const root = await mount("data");
+    const root = await mount("tools");
     const rows = findAll(root, (n) => n.localName === "tr");
     const a = rows.find((r) => r.textContent.includes("a.db"));
     const b = rows.find((r) => r.textContent.includes("b.db"));
@@ -498,7 +498,7 @@ test("data: Create backup now posts an empty body, toasts the name and reloads t
   const backup = { backup: { name: "auth-20261103T090000Z-manual.db", size_bytes: 1, created: "2026-11-03T09:00:00Z", reason: "manual" } };
   await withFixtures({ "POST api/backups": backup }, async () => {
     await clearToasts();
-    const root = await mount("data");
+    const root = await mount("tools");
     const before = callsTo("GET", "api/backups").length;
     await click(buttons(root, "Create backup now")[0]);
     assert.deepEqual(callsTo("POST", "api/backups")[0].body, {});
@@ -509,12 +509,12 @@ test("data: Create backup now posts an empty body, toasts the name and reloads t
 
 test("data: empty backups list shows the empty text", async () => {
   await withFixtures({ "GET api/backups": { backups: [] } }, async () => {
-    assert.match(all(await mount("data")), /No backups yet\./);
+    assert.match(all(await mount("tools")), /No backups yet\./);
   });
 });
 
 test("data: reset needs the exact phrase (wrong and differently-cased stay disabled), then posts it", async () => {
-  const root = await mount("data");
+  const root = await mount("tools");
   assert.equal(findAll(root, (n) => n.localName === "button" && /^(Reset|Clear)/.test(n.textContent.trim())).length, 3);
   await click(buttons(root, "Reset ACLs")[0]);
   const phrase = () => findAll(root, (n) => n.localName === "input" && /-phrase$/.test(n.getAttribute("id") || ""))[0];
@@ -541,7 +541,7 @@ test("data: cache and everything use their own phrases; the toast names deleted 
     },
     async () => {
       await clearToasts();
-      const root = await mount("data");
+      const root = await mount("tools");
       const phrase = () => findAll(root, (n) => n.localName === "input" && /-phrase$/.test(n.getAttribute("id") || ""))[0];
       await click(buttons(root, "Clear message cache")[0]);
       await type(phrase(), RESET_PHRASES.cache);
@@ -560,7 +560,7 @@ test("data: cache and everything use their own phrases; the toast names deleted 
 test("data: a failing reset keeps the dialog open with the localized error", async () => {
   await withFixtures({}, async () => {
     failures["POST api/reset/acls"] = { status: 409, error: "locked", message: "hidden detail" };
-    const root = await mount("data");
+    const root = await mount("tools");
     await click(buttons(root, "Reset ACLs")[0]);
     const input = findAll(root, (n) => n.localName === "input" && /-phrase$/.test(n.getAttribute("id") || ""))[0];
     await type(input, RESET_PHRASES.acls);
@@ -572,7 +572,7 @@ test("data: a failing reset keeps the dialog open with the localized error", asy
 });
 
 test("data: German mount has no English literal, also with a reset dialog open", async () => {
-  const root = await mount("data", {}, { lang: "de" });
+  const root = await mount("tools", {}, { lang: "de" });
   assertGerman(root, "data.");
   assert.ok(findAll(root, (n) => n.localName === "caption").some((c) => c.textContent.includes("Backups der Auth-Datenbank")));
   assert.ok(all(root).includes(formatDateTime(Date.parse("2026-11-02T10:00:00Z"), "de")));
@@ -586,4 +586,14 @@ test("data: German mount has no English literal, also with a reset dialog open",
 // Preact/toast timers can outlive the tests; end the worker once the results are reported.
 test.after(() => {
   setTimeout(() => process.exit(process.exitCode ?? 0), 300).unref();
+});
+
+test("tools: one page with the sections in the requested order and a status table", async () => {
+  const root = await mount("tools");
+  const titles = findAll(root, (n) => n.localName === "h2").map((n) => n.textContent.trim());
+  assert.deepEqual(titles, [
+    "Status", "Test publish", "Effective rights", "Topic generator", "Export", "Backups", "Danger zone",
+  ]);
+  const rows = findAll(root, (n) => n.localName === "th" && n.getAttribute("scope") === "row").map((n) => n.textContent.trim());
+  assert.deepEqual(rows, ["State", "Version", "ntfy", "Database schema", "auth.db size", "Message cache size", "Contents"]);
 });

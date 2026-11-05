@@ -27,6 +27,6 @@ test("every ntfy string key is referenced by a literal in the ntfy sources", asy
     const base = key.replace(/\.(one|other)$/, "");
     if (!literals.has(key) && !literals.has(base)) orphans.push(key);
   }
-  assert.ok(sourceFiles.length >= 10, "the scan covers app, components, model and the seven views");
+  assert.ok(sourceFiles.length >= 8, "the scan covers app, components, model and the five views");
   assert.deepEqual(orphans, [], `unreferenced string keys: ${orphans.join(", ")}`);
 });
