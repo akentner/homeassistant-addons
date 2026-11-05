@@ -7,13 +7,15 @@ LOG="${LOGDIR:-/share/haos-monitor}/$SLUG.log"
 PROBLEM_AGE=60 PROBLEM_IO_FULL10=30 PROBLEM_SDA_INFLIGHT=8 PROBLEM_DSTATE=1 PROBLEM_KMSG=1
 # Kernel error lines (KERR) count when they are at most this many seconds older than the host uptime
 KMSG_WINDOW=600
+# "SYNC start" without "SYNC done" counts as syncing for at most this many seconds (then the normal verdict applies)
+SYNC_MAX=600
 # D-state tasks waiting on these wchans are not disk stalls (e.g. short-lived runc) and do not count
 DSTATE_IGNORE='^(anon_pipe_read|anon_pipe_write|pipe_read|pipe_write|worker_thread)$'
 # The ext4 journal thread waits for its commit I/O for a few seconds now and then; that alone is not a stall
 # (a real one also shows io_full10, other blocked tasks or kernel errors)
 # shellcheck disable=SC1090
 [ -r "${ENV_FILE:-/etc/haos-monitor.env}" ] && . "${ENV_FILE:-/etc/haos-monitor.env}"
-FILTER='^[^ ]+ (SAMPLE|DISK|DSTATE|PROBE|BOOT|KERR) '
+FILTER='^[^ ]+ (SAMPLE|DISK|DSTATE|PROBE|BOOT|KERR|SYNC) '
 
 # The state file holds only the lines above, so a kernel log flood cannot push the samples out of the tail window
 if [ -r "$LOG.state" ]; then
@@ -46,6 +48,8 @@ function reboot_check(u,   k) {
     if (match(line, /io_some="[^"]*"/)) io_some = avg(substr(line, RSTART, RLENGTH))
     if (match(line, /io_full="[^"]*"/)) io_full = avg(substr(line, RSTART, RLENGTH))
     if (match(line, /mem_full="[^"]*"/)) mem_full = avg(substr(line, RSTART, RLENGTH))
+  } else if (kind == "SYNC") {
+    if (($3 == "start" || $3 == "done") && ts ~ /^[0-9TZ:-]+$/) { sync_state = $3; sync_ts = ts }
   } else if (kind == "BOOT") {
     reboot_check(val($3))
   } else if (kind == "KERR") {
@@ -90,6 +94,8 @@ END {
   gsub(/[^A-Za-z0-9 ():._\/=,-]/, "", last)
   last = substr(last, 1, 120)
   print "sts=" sts
+  print "sync_state=" sync_state
+  print "sync_ts=" sync_ts
   print "pts=" pts
   print "up=" (up == "" ? -1 : up)
   print "load1=" (load1 == "" ? -1 : load1)
@@ -120,11 +126,16 @@ age_of() {
 age=$(age_of "$sts")
 probe_age=$(age_of "$pts")
 
+# syncing: the monitor started and has not yet seen its first live sample. Only the stale verdict is held back; a real
+# problem (I/O stall, blocked tasks, kernel errors) still counts.
+syncing=false
+if [ "$sync_state" = start ] && [ "$(age_of "$sync_ts")" -le "$SYNC_MAX" ]; then syncing=true; fi
+
 # one flag per problem component; reasons lists the ones that fired
 flags=$(awk -v age="$age" -v io="${io_full10:--1}" -v sda="${sda_inflight:--1}" -v ds="${dstate:--1}" -v km="${kmsg_errors:--1}" \
-  -v pa="$PROBLEM_AGE" -v pio="$PROBLEM_IO_FULL10" -v ps="$PROBLEM_SDA_INFLIGHT" -v pd="$PROBLEM_DSTATE" -v pk="$PROBLEM_KMSG" \
+  -v sy="$syncing" -v pa="$PROBLEM_AGE" -v pio="$PROBLEM_IO_FULL10" -v ps="$PROBLEM_SDA_INFLIGHT" -v pd="$PROBLEM_DSTATE" -v pk="$PROBLEM_KMSG" \
   'BEGIN {
-    a = (age >= pa); i = (io >= pio); s = (sda >= ps); d = (ds >= pd); k = (km >= pk)
+    a = (age >= pa && sy != "true"); i = (io >= pio); s = (sda >= ps); d = (ds >= pd); k = (km >= pk)
     r = ""
     if (a) r = r ",stale"
     if (i) r = r ",io_full10"
@@ -147,6 +158,6 @@ printf '{"age":%s,"up":%s,"load1":%s,"io_some10":%s,"io_full10":%s,"mem_full10":
 printf '"sda_inflight":%s,"mmc_inflight":%s,"dstate":%s,"probe_age":%s,"ping":%s,"p22222":%s,"p1883":%s,"p8123":%s,"p4357":%s,"problem":%s,' \
   "${sda_inflight:--1}" "${mmc_inflight:--1}" "${dstate:--1}" "$probe_age" "${ping:--1}" \
   "${p22222:--1}" "${p1883:--1}" "${p8123:--1}" "${p4357:--1}" "$problem"
-printf '"r_age":%s,"r_io":%s,"r_sda":%s,"r_dstate":%s,"r_kmsg":%s,"reasons":"%s","dstate_tasks":"%s","kmsg_errors":%s,"kmsg_last":"%s","key_fp":"%s","key_type":"%s"}\n' \
+printf '"r_age":%s,"r_io":%s,"r_sda":%s,"r_dstate":%s,"r_kmsg":%s,"reasons":"%s","dstate_tasks":"%s","kmsg_errors":%s,"kmsg_last":"%s","key_fp":"%s","key_type":"%s","syncing":%s}\n' \
   "$r_age" "$r_io" "$r_sda" "$r_dstate" "$r_kmsg" "$reasons" "$dstate_tasks" "${kmsg_errors:--1}" "$kmsg_last" \
-  "$key_fp" "$key_type"
+  "$key_fp" "$key_type" "$syncing"

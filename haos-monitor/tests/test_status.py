@@ -13,12 +13,13 @@ from typing import Any
 
 import pytest
 
-from app.status import NUMBER_FIELDS, TEXT_FIELDS, StatusError, read_status
-from conftest import FIXTURE_FP, FIXTURE_TYPE, REAL_STATUS_SH, write_log
+from app.status import BOOL_FIELDS, NUMBER_FIELDS, TEXT_FIELDS, StatusError, read_status
+from conftest import FIXTURE_FP, FIXTURE_TYPE, REAL_STATUS_SH, _ts, write_log
 
 ENV = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LOGDIR": "/nonexistent", "HOSTS_FILE": "/x", "ENV_FILE": "/y"}
 
 FULL: dict[str, Any] = {name: 1 for name in NUMBER_FIELDS} | {
+    "syncing": True,
     "reasons": "stale,kmsg",
     "dstate_tasks": "12 jbd2:wait",
     "kmsg_last": "EXT4-fs error",
@@ -41,20 +42,27 @@ def printing(tmp_path: Path, payload: Any) -> Path:
 
 
 def test_whitelist_sizes() -> None:
-    assert len(NUMBER_FIELDS) == 22 and len(TEXT_FIELDS) == 5
-    assert len(set(NUMBER_FIELDS) | set(TEXT_FIELDS)) == 27
+    assert len(NUMBER_FIELDS) == 22 and len(TEXT_FIELDS) == 5 and BOOL_FIELDS == ("syncing",)
+    assert len(set(NUMBER_FIELDS) | set(TEXT_FIELDS) | set(BOOL_FIELDS)) == 28
 
 
 def test_full_object_yields_exactly_the_whitelist(tmp_path: Path) -> None:
     out = read_status("a", status_sh=printing(tmp_path, FULL | {"extra": 1, "ssh_private_key": "x"}), env=ENV)
-    assert set(out) == set(NUMBER_FIELDS) | set(TEXT_FIELDS)
-    assert out["reasons"] == "stale,kmsg" and out["key_fp"] == FIXTURE_FP
+    assert set(out) == set(NUMBER_FIELDS) | set(TEXT_FIELDS) | set(BOOL_FIELDS)
+    assert out["syncing"] is True and out["reasons"] == "stale,kmsg" and out["key_fp"] == FIXTURE_FP
 
 
 def test_missing_fields_get_defaults(tmp_path: Path) -> None:
     out = read_status("a", status_sh=printing(tmp_path, {}), env=ENV)
     assert all(out[name] == -1 for name in NUMBER_FIELDS)
     assert all(out[name] == "" for name in TEXT_FIELDS)
+    assert out["syncing"] is False
+
+
+@pytest.mark.parametrize("bad", [1, "true", None, "yes", [True]])
+def test_syncing_only_a_real_true_counts(tmp_path: Path, bad: Any) -> None:
+    out = read_status("a", status_sh=printing(tmp_path, {"syncing": bad}), env=ENV)
+    assert out["syncing"] is False
 
 
 @pytest.mark.parametrize("bad", [True, False, "5", None, [1], {"a": 1}, "NaN"])
@@ -204,7 +212,7 @@ def test_contract_with_the_real_status_sh(env: dict[str, Path]) -> None:
     raw = subprocess.run(
         [str(REAL_STATUS_SH), "ha_backup"], env=real_env(env), capture_output=True, check=True, text=True
     ).stdout
-    assert set(json.loads(raw)) == set(NUMBER_FIELDS) | set(TEXT_FIELDS)
+    assert set(json.loads(raw)) == set(NUMBER_FIELDS) | set(TEXT_FIELDS) | set(BOOL_FIELDS)
     out = read_status("ha_backup", status_sh=REAL_STATUS_SH, env=real_env(env))
     assert out["key_fp"] == FIXTURE_FP and out["key_type"] == FIXTURE_TYPE
     assert out["problem"] == 0 and 0 <= out["age"] < 60
@@ -218,3 +226,61 @@ def test_contract_stale_log_flags_a_problem(env: dict[str, Path]) -> None:
     out = read_status("ha_backup", status_sh=REAL_STATUS_SH, env=real_env(env))
     assert out["r_age"] == 1 and out["problem"] == 1
     assert "stale" in out["reasons"]
+
+
+def add_sync(env: dict[str, Path], *lines: tuple[float, str]) -> None:
+    """Append `SYNC start|done` markers (age in seconds, state) to the state file like monitor.sh does."""
+    with (env["logdir"] / "ha_backup.log.state").open("a", encoding="utf-8") as fh:
+        for age, state in lines:
+            fh.write(f"{_ts(age)} SYNC {state}\n")
+
+
+@needs_tools
+def test_syncing_holds_back_only_the_stale_verdict(env: dict[str, Path]) -> None:
+    write_log(env["logdir"], "ha_backup", age=300)
+    add_sync(env, (280, "start"))
+    out = read_status("ha_backup", status_sh=REAL_STATUS_SH, env=real_env(env))
+    assert out["syncing"] is True and out["r_age"] == 0 and out["problem"] == 0 and out["reasons"] == "none"
+    assert out["age"] >= 299  # the real age stays visible
+
+
+@needs_tools
+def test_syncing_does_not_hide_a_real_problem(env: dict[str, Path]) -> None:
+    write_log(env["logdir"], "ha_backup", age=300, io_full=80)
+    add_sync(env, (280, "start"))
+    out = read_status("ha_backup", status_sh=REAL_STATUS_SH, env=real_env(env))
+    assert out["syncing"] is True and out["problem"] == 1 and out["reasons"] == "io_full10"
+
+
+@needs_tools
+def test_sync_done_ends_syncing(env: dict[str, Path]) -> None:
+    write_log(env["logdir"], "ha_backup", age=300)
+    add_sync(env, (290, "start"), (280, "done"))
+    out = read_status("ha_backup", status_sh=REAL_STATUS_SH, env=real_env(env))
+    assert out["syncing"] is False and out["problem"] == 1 and out["r_age"] == 1
+
+
+@needs_tools
+def test_syncing_expires_after_ten_minutes(env: dict[str, Path]) -> None:
+    write_log(env["logdir"], "ha_backup", age=700)
+    add_sync(env, (650, "start"))
+    out = read_status("ha_backup", status_sh=REAL_STATUS_SH, env=real_env(env))
+    assert out["syncing"] is False and out["problem"] == 1 and "stale" in out["reasons"]
+
+
+@needs_tools
+def test_healthy_log_without_markers_is_not_syncing(env: dict[str, Path]) -> None:
+    out = read_status("ha_backup", status_sh=REAL_STATUS_SH, env=real_env(env))
+    assert out["syncing"] is False and out["problem"] == 0
+
+
+@needs_tools
+def test_status_json_keeps_problem_green_and_adds_the_boolean(env: dict[str, Path]) -> None:
+    import subprocess
+
+    write_log(env["logdir"], "ha_backup", age=300)
+    add_sync(env, (280, "start"))
+    raw = subprocess.run(
+        [str(REAL_STATUS_SH), "ha_backup"], env=real_env(env), capture_output=True, check=True, text=True
+    ).stdout
+    assert '"syncing":true' in raw and json.loads(raw)["problem"] == 0

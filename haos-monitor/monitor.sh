@@ -52,7 +52,7 @@ log() {
   ts=$(now)
   printf '%s %s\n' "$ts" "$*" >> "$LOG"
   case $* in
-    SAMPLE*|DISK*|DSTATE*|PROBE*|BOOT*|KERR*)
+    SAMPLE*|DISK*|DSTATE*|PROBE*|BOOT*|KERR*|SYNC*)
       printf '%s %s\n' "$ts" "$*" >> "$LOG.state"
       _n=$((_n + 1))
       [ $((_n % 200)) -ne 0 ] || trim_state ;;
@@ -176,6 +176,11 @@ probe &
 [ -z "${SLUG:-}" ] || incidents &
 
 log "START host=$HOST:$PORT interval=${INTERVAL}s"
+# Catch-up marker for status.sh: "SYNC start" until the first live SAMPLE arrives ("SYNC done"), so the backlog of a
+# start does not show as stale samples. Mirrored into the state file by log().
+SYNC_FLAG="$LOG.syncing"
+: > "$SYNC_FLAG"
+log "SYNC start"
 while :; do
   log "CONNECT"
   ssh -T -i "$KEY" \
@@ -183,7 +188,16 @@ while :; do
     -o ConnectTimeout=5 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 \
     -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=${KNOWN_HOSTS:-/tmp/known_hosts}" \
     -p "$PORT" "root@$HOST" "$REMOTE" 2>&1 |
-    while IFS= read -r line; do log "$line"; done
+    while IFS= read -r line; do
+      log "$line"
+      case $line in
+        "SAMPLE "*)
+          if [ -e "$SYNC_FLAG" ]; then
+            rm -f "$SYNC_FLAG"
+            log "SYNC done"
+          fi ;;
+      esac
+    done
   log "DISCONNECT"
   sleep 5
 done

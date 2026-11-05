@@ -1,4 +1,4 @@
-"""monitor.sh: the kernel-log replay limit of the remote script."""
+"""monitor.sh: the kernel-log replay limit of the remote script and the SYNC markers."""
 
 from __future__ import annotations
 
@@ -58,3 +58,9 @@ def test_cutoff_is_derived_from_uptime_and_replay_seconds() -> None:
     text = MONITOR_SH.read_text(encoding="utf-8")
     assert 'REPLAY_SECONDS="${REPLAY_SECONDS:-300}"' in text
     assert "cutoff=$(( ${up%.*} * 1000000 - '\"$REPLAY_SECONDS\"' * 1000000 ))" in text
+
+
+def test_sync_markers_are_mirrored_into_the_state_file() -> None:
+    text = MONITOR_SH.read_text(encoding="utf-8")
+    assert "SAMPLE*|DISK*|DSTATE*|PROBE*|BOOT*|KERR*|SYNC*)" in text
+    assert text.index('log "SYNC start"') < text.index('log "SYNC done"')
