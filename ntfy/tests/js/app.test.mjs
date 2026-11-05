@@ -20,7 +20,7 @@ const navigate = async (hash) => {
   await settle();
 };
 
-const { App, VIEWS } = await import(new URL("app.mjs", STATIC));
+const { App, VIEWS, semver } = await import(new URL("app.mjs", STATIC));
 
 const HEALTH = fixtures["GET api/health"];
 const fakeLoad = async (id) => ({ default: ({ params }) => html`<p class="fake-view">view ${id} ${JSON.stringify(params)}</p>` });
@@ -79,7 +79,7 @@ test("query params of the hash reach the view", async () => {
 test("health badge: ok, degraded with alert, failed and loading", async () => {
   let root = await mountApp();
   assert.equal(findByText(root, "span", "OK").length, 1);
-  assert.match(root.textContent, /v2\.36\.0-0/);
+  assert.equal(findAll(root, (n) => (n.className || "") === "topbar-version")[0].textContent, "2.36.0");
 
   await withHealth({ ...HEALTH, status: "degraded", db: { ...HEALTH.db, error: "locked <b>x</b>" } }, async () => {
     root = await mountApp();
@@ -114,7 +114,7 @@ test("a language switch re-renders tab titles in German without a reload", async
   await settle();
   assert.equal(findByText(root, "a", "Benutzer").length, 1);
   assert.equal(findByText(root, "a", "Users").length, 0);
-  assert.match(root.textContent, /v2\.36\.0-0/);
+  assert.equal(findAll(root, (n) => (n.className || "") === "topbar-version")[0].textContent, "2.36.0");
   assert.equal(globalThis.document.documentElement.lang, "de");
   setLang("en");
   await settle();
@@ -201,4 +201,11 @@ test("the info button points at the HA info page of the add-on and is hidden wit
   await withHealth({ ...HEALTH, addon_slug: undefined }, async () => {
     assert.equal(hrefs(await mountApp()).length, 0);
   });
+});
+
+test("semver drops the subpatch and anything that is not a version", () => {
+  assert.equal(semver("2.37.2-6"), "2.37.2");
+  assert.equal(semver("2.37.2"), "2.37.2");
+  assert.equal(semver("unknown"), "");
+  assert.equal(semver(undefined), "");
 });

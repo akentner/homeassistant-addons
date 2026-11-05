@@ -93,6 +93,12 @@ export function infoPath(health) {
   return /^[a-z0-9][a-z0-9_]{0,63}$/.test(slug) ? `/config/app/${slug}/info` : null;
 }
 
+// "2.37.2-6" -> "2.37.2": the subpatch counts add-on-only fixes; anything that is not a version shows nothing.
+export function semver(raw) {
+  const match = /^(\d+\.\d+\.\d+)(?:-[\w.]+)?$/.exec(typeof raw === "string" ? raw : "");
+  return match ? match[1] : "";
+}
+
 export function App({ ha, load = loadView }) {
   const tt = useT();
   const lang = useLang();
@@ -136,9 +142,8 @@ export function App({ ha, load = loadView }) {
   const dbError = health && health.db && typeof health.db.error === "string" ? health.db.error : "";
 
   return html`<div>
-    <${Topbar} title=${tt("app.title")} status=${status} bridge=${bridge} views=${VIEWS} activeId=${route.id} nav="topbar" infoPath=${infoPath(health)} showLang=${false}>
-      ${health && html`<span class="muted">${tt("app.version", { version: String(health.addon_version) })}</span>`}
-    <//>
+    <${Topbar} title=${tt("app.title")} status=${status} bridge=${bridge} views=${VIEWS} activeId=${route.id} nav="topbar" infoPath=${infoPath(health)} showLang=${false}
+      version=${semver(health && health.addon_version)} />
     <main>
       ${health &&
       health.status === "degraded" &&

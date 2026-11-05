@@ -2,7 +2,6 @@
 // The shared admin-ui lib already provides btn.*, state.*, lang.* and the generic errors.*.
 export default {
   "app.title": "ntfy",
-  "app.version": "v{version}",
   "app.degraded": "The ntfy auth database cannot be used right now.",
   "view.users": "Users",
   "view.acl": "ACL rules",
