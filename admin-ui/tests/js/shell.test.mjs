@@ -734,3 +734,34 @@ test("optional navigation SVG paths are decorative in tabs and inline navigation
     render(null, root);
   }
 });
+
+// ---- opt-in showLang / version ----
+
+test("Topbar: default keeps the language switch and shows no version", async () => {
+  const root = await mount(html`<${Topbar} title="T" status=${{ kind: "ok", text: "OK" }} />`);
+  assert.equal(byClass(root, "lang-switch").length, 1);
+  assert.equal(byClass(root, "topbar-version").length, 0);
+});
+
+test("Topbar: showLang=false omits the language switch only", async () => {
+  const root = await mount(html`<${Topbar} title="T" status=${{ kind: "ok", text: "OK" }} showLang=${false} />`);
+  assert.equal(byClass(root, "lang-switch").length, 0);
+  assert.equal(byClass(root, "badge").length, 1);
+});
+
+test("Topbar: right-aligned order is info icon, badge, version", async () => {
+  const root = await mount(
+    html`<${Topbar} title="T" status=${{ kind: "ok", text: "OK" }} infoPath=${INFO} version="0.7.3-0" showLang=${false} />`,
+  );
+  const [header] = tag(root, "header");
+  const cls = header.childNodes.filter((n) => n.localName).map((n) => n.className.split(" ")[0]);
+  assert.deepEqual(cls.slice(-3), ["info-btn", "badge", "topbar-version"]);
+  assert.equal(byClass(root, "topbar-version")[0].textContent, "0.7.3-0");
+});
+
+test("Topbar: a hostile or non-string version is not rendered", async () => {
+  for (const bad of ["<b>x</b>", "", 7, null, "a".repeat(40)]) {
+    const root = await mount(html`<${Topbar} title="T" version=${bad} />`);
+    assert.equal(byClass(root, "topbar-version").length, 0, String(bad));
+  }
+});

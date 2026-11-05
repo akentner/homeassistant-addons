@@ -118,6 +118,7 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 .topbar > * { min-width: 0; }
 .topbar h1 { flex: 0 1 auto; margin: 0; overflow: hidden; font-size: 20px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .topbar > .brand-icon, .topbar > .menu-btn, .topbar > .info-btn, .topbar > .badge { flex: none; }
+.topbar-version { flex: none; color: var(--mut); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .topbar-extra { display: contents; }
 .brand-icon { border-radius: 6px; }
 .menu-btn, .info-btn {
