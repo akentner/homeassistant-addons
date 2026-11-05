@@ -49,7 +49,7 @@ test("topbar shows the title and seven nav links in VIEWS order", async () => {
   assert.equal(findByText(root, "h1", "ntfy").length, 1);
   assert.deepEqual(VIEWS.map((v) => v.id), ["users", "acl", "matrix", "tokens", "tools", "health", "data"]);
   assert.deepEqual(links(root).map((a) => a.getAttribute("href")), VIEWS.map((v) => `#/${v.id}`));
-  assert.equal(findAll(root, (n) => n.localName === "select" && n.className === "lang-switch").length, 1);
+  assert.equal(findAll(root, (n) => n.localName === "select" && n.className === "lang-switch").length, 0);
 });
 
 test("the active tab follows the hash, an unknown or hostile hash falls back to users", async () => {

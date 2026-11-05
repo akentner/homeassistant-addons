@@ -136,7 +136,7 @@ export function App({ ha, load = loadView }) {
   const dbError = health && health.db && typeof health.db.error === "string" ? health.db.error : "";
 
   return html`<div>
-    <${Topbar} title=${tt("app.title")} status=${status} bridge=${bridge} views=${VIEWS} activeId=${route.id} nav="topbar" infoPath=${infoPath(health)}>
+    <${Topbar} title=${tt("app.title")} status=${status} bridge=${bridge} views=${VIEWS} activeId=${route.id} nav="topbar" infoPath=${infoPath(health)} showLang=${false}>
       ${health && html`<span class="muted">${tt("app.version", { version: String(health.addon_version) })}</span>`}
     <//>
     <main>
