@@ -1,5 +1,8 @@
 # Configuration
 
+> **Deprecated.** This add-on is no longer maintained, built or linted. The directory stays in the repository for
+> reference only; no new images are published. Existing installations keep working with the last published image.
+
 The Terraform Bridge add-on translates `Authorization: Bearer <token>` requests from the OpenTofu/Terraform provider
 into HA Supervisor HTTP API calls authenticated by `SUPERVISOR_TOKEN`. This document covers the user-facing
 configuration of the add-on, the bearer-token lifecycle (issuance, rotation, recovery), the `/v1/*` endpoint reference,
