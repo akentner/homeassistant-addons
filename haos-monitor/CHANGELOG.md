@@ -3,6 +3,15 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.7.3-0] - 2026-11-05
+
+### Changed
+
+- Use admin-ui lib 0.7.1: static files and the page carry a strong `ETag` and answer `If-None-Match` with `304`;
+  `index.html` is served with `?v=<hash>` asset URLs and stays `no-cache`, so a changed front end is never shown from a
+  stale browser cache
+- A browser that cached the 0.6.x page heuristically may need one hard reload (Ctrl+Shift+R) after updating
+
 ## [0.7.2-0] - 2026-11-05
 
 ### Fixed
