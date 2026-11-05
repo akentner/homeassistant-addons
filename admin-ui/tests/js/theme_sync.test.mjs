@@ -490,3 +490,23 @@ test("Frosted Glass transparent card background is accepted and preserves its di
   env.sync.refresh();
   assert.equal(env.sync.status().cardStyle.backgroundReason, "contrast");
 });
+
+test("toast surface follows the parent snackbar tokens, only when readable, and resets when removed", () => {
+  const env = makeEnv({ vars: { ...DARK, "--ha-color-neutral-10": "#14171a", "--ha-color-on-neutral-loud": "#f5f5f5", "--ha-border-radius-sm": "6px" } });
+  env.sync.start();
+  assert.equal(env.root.props.get("--sync-toast-bg"), "#14171a");
+  assert.equal(env.root.props.get("--sync-toast-fg"), "#f5f5f5");
+  assert.equal(env.root.props.get("--sync-toast-radius"), "6px");
+  env.vars["--ha-color-on-neutral-loud"] = "#181b1e"; // unreadable on the surface: keep the own tokens
+  env.sync.refresh();
+  assert.equal(env.root.props.has("--sync-toast-bg"), false);
+  assert.equal(env.root.props.has("--sync-toast-fg"), false);
+  env.vars["--ha-color-on-neutral-loud"] = "javascript:alert(1)"; // not a colour
+  env.sync.refresh();
+  assert.equal(env.root.props.has("--sync-toast-bg"), false);
+  delete env.vars["--ha-border-radius-sm"];
+  env.sync.refresh();
+  assert.equal(env.root.props.has("--sync-toast-radius"), false);
+  env.sync.dispose();
+  assert.equal(env.root.props.size, 0);
+});
