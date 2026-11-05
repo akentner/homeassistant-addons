@@ -12,6 +12,8 @@ LOG="${LOG_FILE:-$LOGDIR/haos-monitor.log}"
 MAX_BYTES="${MAX_BYTES:-20971520}"
 INTERVAL="${INTERVAL:-10}"
 KEY="${KEY_FILE:-/dev/shm/monitor_key}"
+# Kernel log history replayed on start, in seconds before the host uptime
+REPLAY_SECONDS="${REPLAY_SECONDS:-300}"
 
 mkdir -p "$LOGDIR"
 umask 077
@@ -40,6 +42,7 @@ rotate() {
 # flood in the main log cannot push them out of the tail window. Trimmed to its last 3000 lines when it exceeds 1 MB.
 STATE_MAX_BYTES=1048576
 _n=0
+_r=0
 trim_state() {
   [ "$(wc -c < "$LOG.state")" -gt "$STATE_MAX_BYTES" ] || return 0
   tail -n 3000 "$LOG.state" > "$LOG.state.tmp" && mv "$LOG.state.tmp" "$LOG.state"
@@ -54,7 +57,9 @@ log() {
       _n=$((_n + 1))
       [ $((_n % 200)) -ne 0 ] || trim_state ;;
   esac
-  rotate
+  # wc forks, so check the size only every 100 lines (the log grows by at most a few KB in between)
+  _r=$((_r + 1))
+  [ $((_r % 100)) -ne 0 ] || rotate
 }
 
 # Outside view: independent of the SSH session, correlates with Gatus.
@@ -82,8 +87,18 @@ probe() {
 REMOTE='
 trap "kill 0" EXIT HUP
 # Kernel log: every line as KMSG; level <= err or known failure texts additionally as KERR
+# Replay limit: /dev/kmsg replays the whole ring buffer on every start. Lines older than cutoff (kernel usec) are
+# dropped, neither KMSG nor KERR, so a restart neither floods the queue nor re-counts old errors as new.
 kmsg_filter() {
+  skip=0
   while IFS= read -r l; do
+    case $l in
+      " "*) [ "$skip" -eq 0 ] || continue ;;
+      *)
+        skip=0
+        r=${l#*,}; r=${r#*,}; t=${r%%,*}
+        case $t in ""|*[!0-9]*) ;; *) if [ "$t" -lt "$cutoff" ]; then skip=1; continue; fi ;; esac ;;
+    esac
     printf "KMSG %s\n" "$l"
     p=${l%%,*}
     case $p in ""|*[!0-9]*) p=6 ;; esac
@@ -98,6 +113,7 @@ kmsg_filter() {
 }
 read -r up _ < /proc/uptime
 echo "BOOT up=$up"
+cutoff=$(( ${up%.*} * 1000000 - '"$REPLAY_SECONDS"' * 1000000 ))
 ( cat /dev/kmsg | kmsg_filter ) &
 n=0
 dnow=""
