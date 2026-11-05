@@ -37,5 +37,5 @@ The blueprint rules, the lib reference, the sync workflow and the integration fa
 [docs]: DOCS.md
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
-[release-shield]: https://img.shields.io/badge/version-v0.2.2-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v0.2.2
+[release-shield]: https://img.shields.io/badge/version-v0.3.0-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v0.3.0

@@ -19,6 +19,8 @@
   --chip: #eef0f3;
   --hover: #f0f2f5;
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+  --toast-bg: var(--sync-toast-bg, #1c1e21);
+  --toast-fg: var(--sync-toast-fg, #f1f3f5);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -38,6 +40,8 @@
     --chip: #272b30;
     --hover: #23272b;
     --shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+    --toast-bg: var(--sync-toast-bg, #2c3036);
+    --toast-fg: var(--sync-toast-fg, #f1f3f5);
   }
 }
 
@@ -57,6 +61,8 @@
   --chip: #272b30;
   --hover: #23272b;
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+  --toast-bg: var(--sync-toast-bg, #2c3036);
+  --toast-fg: var(--sync-toast-fg, #f1f3f5);
 }
 
 [data-theme="light"] {
@@ -75,6 +81,8 @@
   --chip: #eef0f3;
   --hover: #f0f2f5;
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+  --toast-bg: var(--sync-toast-bg, #1c1e21);
+  --toast-fg: var(--sync-toast-fg, #f1f3f5);
 }
 
 /* A nested panel that shows the true tokens even while theme-sync is active. */
@@ -82,6 +90,9 @@
   --sync-ha-card-background: initial;
   --sync-card-radius: initial;
   --sync-card-shadow: initial;
+  --sync-toast-bg: initial;
+  --sync-toast-fg: initial;
+  --sync-toast-radius: initial;
   --sync-bg: initial;
   --sync-card: initial;
   --sync-fg: initial;
@@ -236,14 +247,24 @@ table.data td.actions > .btn + .btn { margin-inline-start: 8px; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--bd); }
 .modal-head h2 { margin: 0; font-size: 16px; }
 .modal-body { padding: 16px; }
-.toast-stack { position: fixed; right: 16px; bottom: 16px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
-.toast {
-  max-width: 360px; padding: 8px 14px; border: 1px solid var(--bd); border-left-width: 4px; border-radius: 6px;
-  background: var(--card); box-shadow: var(--shadow); cursor: pointer; overflow-wrap: anywhere;
+/* Toasts follow the Home Assistant snackbar: dark neutral surface, bottom centre, fade and rise in. The stack does not
+   catch clicks itself; --safe-bottom only exists inside the topbar, so the env() inset is the fallback. */
+.toast-stack {
+  position: fixed; left: 50%; bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 16px); z-index: 200;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; width: max-content; max-width: min(650px, calc(100vw - 16px));
+  transform: translateX(-50%); pointer-events: none;
 }
-.toast.ok { border-left-color: var(--ok); }
-.toast.error { border-left-color: var(--err); }
-.toast.info { border-left-color: var(--acc); }
+.toast {
+  box-sizing: border-box; display: flex; align-items: center; gap: 8px; min-width: min(350px, calc(100vw - 32px)); max-width: 100%;
+  min-height: 48px; padding: 12px 16px; border-radius: var(--sync-toast-radius, 4px); background: var(--toast-bg); color: var(--toast-fg);
+  box-shadow: var(--shadow); cursor: pointer; overflow-wrap: anywhere; pointer-events: auto;
+  animation: toast-in 0.15s ease both;
+}
+.toast.ok { box-shadow: inset 4px 0 0 var(--ok), var(--shadow); }
+.toast.error { box-shadow: inset 4px 0 0 var(--err), var(--shadow); }
+.toast .btn.secondary { flex: none; min-width: 32px; min-height: 32px; margin-inline-start: auto; color: inherit; border-color: transparent; }
+.toast .btn.secondary:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); filter: none; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 /* danger zone */
 .danger-zone { border-color: var(--err); }

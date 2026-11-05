@@ -4,6 +4,15 @@ All notable changes to the **Admin UI Blueprint** add-on are documented in this 
 [Keep a Changelog](https://keepachangelog.com/). This is our own code without an upstream project: the version is bumped
 manually with `make update-version`.
 
+## [0.3.0-0] - 2026-11-05
+
+### Changed
+
+- Lib 0.9.0: toasts follow the Home Assistant snackbar (dark neutral surface, bottom centre, fade and rise in, 48 px
+  high, safe-area aware). Embedded, theme-sync takes the colours and radius from the parent (`--ha-color-neutral-10`,
+  `--ha-color-on-neutral-loud`, `--ha-border-radius-sm`) when they are readable; otherwise the own `--toast-*` tokens
+  apply
+
 ## [0.2.2-0] - 2026-11-05
 
 ### Fixed

@@ -187,6 +187,9 @@ export function createThemeSync(options = {}) {
         cardBackground: cardBackground(background),
         cardRadius: cardRadius(read("--ha-card-border-radius") || read("--ha-border-radius-lg")),
         cardShadow: cardShadow(read("--ha-card-box-shadow")),
+        toastBg: read("--ha-color-neutral-10"),
+        toastFg: read("--ha-color-on-neutral-loud"),
+        toastRadius: cardRadius(read("--ha-border-radius-sm")),
       };
     } catch {
       return { reason: "parent_inaccessible" };
@@ -255,6 +258,14 @@ export function createThemeSync(options = {}) {
     const result = evaluate({ ...colors, haCard: read.cardBackground });
     if (read.cardRadius) result.wanted.set("--sync-card-radius", read.cardRadius);
     if (read.cardShadow) result.wanted.set("--sync-card-shadow", read.cardShadow);
+    // The parent's snackbar surface; only taken when both colours are opaque and readable, else the own toast tokens stay.
+    const toastBg = parseColor(read.toastBg);
+    const toastFg = parseColor(read.toastFg);
+    if (opaque(toastBg) && opaque(toastFg) && contrastRatio(toastFg, toastBg) >= MIN_CONTRAST) {
+      result.wanted.set("--sync-toast-bg", serializeColor(toastBg));
+      result.wanted.set("--sync-toast-fg", serializeColor(toastFg));
+    }
+    if (read.toastRadius) result.wanted.set("--sync-toast-radius", read.toastRadius);
     if (read.headerHeight) result.wanted.set(HEADER_HEIGHT, read.headerHeight);
     writeTheme(mode);
     writeProps(result.wanted);

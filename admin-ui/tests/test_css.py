@@ -312,7 +312,7 @@ def test_hygiene_hex_only_inside_token_blocks(blocks: list[tuple[str, str, str]]
 
 def test_hygiene_only_declared_tokens_referenced(css: str, themes: dict[str, dict[str, str]]) -> None:
     declared = {k for k in themes["light"] if k.startswith("--")}
-    sync = {f"--sync-{n}" for n in SYNCED} | {"--sync-header-height", "--sync-ha-card-background", "--sync-card-radius", "--sync-card-shadow"}
+    sync = {f"--sync-{n}" for n in SYNCED} | {"--sync-header-height", "--sync-ha-card-background", "--sync-card-radius", "--sync-card-shadow", "--sync-toast-bg", "--sync-toast-fg", "--sync-toast-radius"}
     for m in re.finditer(r"var\((--[a-z-]+)", css):
         name = m.group(1)
         # --safe-* are layout variables set per element from the bridge insets, not theme tokens
@@ -348,3 +348,18 @@ def test_cards_use_separate_ha_appearance_tokens(blocks: list[tuple[str, str, st
     isolated = find_decls(blocks, ".theme-isolated")
     for name in ("--sync-ha-card-background", "--sync-card-radius", "--sync-card-shadow"):
         assert isolated[name] == "initial"
+
+
+def test_toasts_follow_the_ha_snackbar(blocks: list[tuple[str, str, str]]) -> None:
+    stack = find_decls(blocks, ".toast-stack")
+    assert stack["position"] == "fixed" and stack["left"] == "50%" and stack["pointer-events"] == "none"
+    assert "env(safe-area-inset-bottom" in stack["bottom"]
+    toast = find_decls(blocks, ".toast")
+    assert toast["min-height"] == "48px" and toast["padding"] == "12px 16px"
+    assert toast["background"] == "var(--toast-bg)" and toast["pointer-events"] == "auto"
+
+
+def test_toast_kinds_keep_a_leading_accent_except_info(blocks: list[tuple[str, str, str]]) -> None:
+    assert "var(--ok)" in find_decls(blocks, ".toast.ok")["box-shadow"]
+    assert "var(--err)" in find_decls(blocks, ".toast.error")["box-shadow"]
+    assert not any(sel == ".toast.info" for _ctx, sel, _body in blocks)
