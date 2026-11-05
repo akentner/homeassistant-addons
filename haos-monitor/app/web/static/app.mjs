@@ -22,6 +22,13 @@ function defaultHa() {
   }
 }
 
+// The add-on's configuration page in HA ("/config/app/<slug>/config"); the slug comes from the backend (Supervisor), so
+// it is never hard-coded. Without a valid slug (direct run, no Supervisor answer) the info icon stays away.
+export function configPath(data) {
+  const slug = data && typeof data.addon_slug === "string" ? data.addon_slug : "";
+  return /^[a-z0-9][a-z0-9_]{0,63}$/.test(slug) ? `/config/app/${slug}/config` : undefined;
+}
+
 export function App({ ha }) {
   const tt = useT();
   const overview = useOverview();
@@ -43,7 +50,14 @@ export function App({ ha }) {
   const status = { kind: info.kind, text: info.count > 0 ? tp("hm.problems", info.count) : labels[info.labelKey] };
 
   return html`<div>
-    <${Topbar} title=${tt("app.title")} status=${status} bridge=${bridge} />
+    <${Topbar}
+      title=${tt("app.title")}
+      status=${status}
+      bridge=${bridge}
+      infoPath=${configPath(overview.data)}
+      version=${overview.data && overview.data.addon_version}
+      showLang=${false}
+    />
     <main>
       <${ErrorBoundary}><${Overview} ...${overview} /><//>
     </main>

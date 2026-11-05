@@ -3,6 +3,16 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.8.0-0] - 2026-11-05
+
+### Changed
+
+- Topbar: the language switch is gone (the page follows the browser language); right-aligned it now shows an info icon
+  that opens the add-on's configuration page in Home Assistant, the status badge and the add-on version
+- The info icon and the version come from the Supervisor (`addon_slug` and `addon_version` in `/api/overview`, needs no
+  extra permission); without an answer both stay hidden
+- Use admin-ui lib 0.8.0
+
 ## [0.7.3-0] - 2026-11-05
 
 ### Changed
