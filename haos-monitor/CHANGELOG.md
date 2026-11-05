@@ -3,6 +3,12 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.8.3-0] - 2026-11-05
+
+### Changed
+
+- Use admin-ui lib 0.9.1: info toasts get a blue accent
+
 ## [0.8.2-0] - 2026-11-05
 
 ### Changed

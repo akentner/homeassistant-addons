@@ -359,7 +359,7 @@ def test_toasts_follow_the_ha_snackbar(blocks: list[tuple[str, str, str]]) -> No
     assert toast["background"] == "var(--toast-bg)" and toast["pointer-events"] == "auto"
 
 
-def test_toast_kinds_keep_a_leading_accent_except_info(blocks: list[tuple[str, str, str]]) -> None:
+def test_toast_kinds_keep_a_leading_accent(blocks: list[tuple[str, str, str]]) -> None:
     assert "var(--ok)" in find_decls(blocks, ".toast.ok")["box-shadow"]
     assert "var(--err)" in find_decls(blocks, ".toast.error")["box-shadow"]
-    assert not any(sel == ".toast.info" for _ctx, sel, _body in blocks)
+    assert "var(--acc)" in find_decls(blocks, ".toast.info")["box-shadow"]
