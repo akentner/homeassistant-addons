@@ -3,6 +3,14 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.8.1-0] - 2026-11-05
+
+### Fixed
+
+- The info icon and the version did not show up: the Supervisor token is not in the environment of the GUI process, so
+  it is now also read from the s6 container environment
+- Without the language switch the info icon, badge and version now sit at the right edge of the top bar (lib 0.8.1)
+
 ## [0.8.0-0] - 2026-11-05
 
 ### Changed

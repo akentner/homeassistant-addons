@@ -39,9 +39,9 @@ def test_fetch_info_returns_slug_and_version_with_the_bearer_token() -> None:
     assert req.get_header("Authorization") == "Bearer secret"
 
 
-def test_no_token_means_unknown_without_a_request() -> None:
+def test_no_token_means_unknown_without_a_request(tmp_path: Any) -> None:
     opener = opener_returning({})
-    assert fetch_info({}, opener) is None
+    assert fetch_info({}, opener, str(tmp_path / "missing")) is None
     assert opener.seen == []
 
 
@@ -82,3 +82,12 @@ def test_resolver_caches_success_and_retries_failure_after_a_pause() -> None:
     now[0] += RETRY_AFTER_S
     assert resolver.get() == {"slug": "s", "version": "1.0.0"}
     assert resolver.get() == {"slug": "s", "version": "1.0.0"} and len(calls) == 2  # cached for good
+
+
+def test_token_falls_back_to_the_s6_container_environment_file(tmp_path: Any) -> None:
+    token_file = tmp_path / "SUPERVISOR_TOKEN"
+    token_file.write_text("from-file\n")
+    opener = opener_returning({"data": {"slug": "s", "version": "1.0.0"}})
+    assert fetch_info({}, opener, str(token_file)) == {"slug": "s", "version": "1.0.0"}
+    (req,) = opener.seen
+    assert req.get_header("Authorization") == "Bearer from-file"
