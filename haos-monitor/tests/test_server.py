@@ -11,7 +11,7 @@ import pytest
 
 from app.web.admin_ui import ERROR_STATUS
 from app.web.server import Sources, build_router, make_server
-from conftest import INGRESS, REAL_STATUS_SH, write_hosts, write_log
+from conftest import INGRESS, REAL_STATUS_SH, _ts, write_hosts, write_log
 
 KEYS = {"slug", "name", "host", "status", "error", "incidents"}
 
@@ -172,3 +172,18 @@ def test_now_ms_comes_from_the_server_clock(env: dict[str, Path]) -> None:
     handler, _params = router.match("GET", "/api/overview")
     result = handler(Request(method="GET", path="/api/overview"))
     assert result["now_ms"] == 1234500
+
+
+def test_overview_passes_syncing_through(serve: Any, env: dict[str, Path]) -> None:
+    two_hosts(env)
+    with (env["logdir"] / "stale.log.state").open("a", encoding="utf-8") as fh:
+        fh.write(f"{_ts(800)} SYNC start\n")
+    _status, data = overview(start(serve, env))
+    good, stale = data["hosts"]
+    assert good["status"]["syncing"] is False
+    assert stale["status"]["syncing"] is False  # the start marker is older than ten minutes: normal verdict
+    assert stale["status"]["problem"] == 1
+    with (env["logdir"] / "good.log.state").open("a", encoding="utf-8") as fh:
+        fh.write(f"{_ts(10)} SYNC start\n")
+    _status, data = overview(start(serve, env))
+    assert data["hosts"][0]["status"]["syncing"] is True and data["hosts"][0]["status"]["problem"] == 0

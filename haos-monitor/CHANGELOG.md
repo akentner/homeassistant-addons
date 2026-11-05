@@ -3,6 +3,21 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.7.2-0] - 2026-11-05
+
+### Fixed
+
+- Limit the kernel log replay on start: lines older than 5 minutes before the host uptime are dropped on the host, so
+  old errors are not counted as new and fresh samples no longer queue behind the backlog (host showed red for about 15
+  minutes after every start)
+- Check the log size only every 100 lines instead of forking `wc` for each line
+
+### Added
+
+- State `syncing`: the monitor marks its start (`SYNC start` / `SYNC done`); `/api/status.json` gets `"syncing":true`
+  and holds back the stale verdict for at most 10 minutes, so `problem` and Gatus stay green. Real problems still count.
+  New metric `haos_monitor_syncing`; the web UI shows an "Updating…" badge instead of red
+
 ## [0.7.1-0] - 2026-11-04
 
 ### Changed

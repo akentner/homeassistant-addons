@@ -44,6 +44,7 @@ NUMBER_FIELDS = (
     "r_kmsg",
     "kmsg_errors",
 )
+BOOL_FIELDS = ("syncing",)
 TEXT_FIELDS = ("reasons", "dstate_tasks", "kmsg_last", "key_fp", "key_type")
 
 MAX_OUTPUT = 65536
@@ -161,6 +162,8 @@ def parse_status(raw: bytes) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise StatusError("status output is not an object")
     result: dict[str, Any] = {name: _number(data.get(name)) for name in NUMBER_FIELDS}
+    for name in BOOL_FIELDS:
+        result[name] = data.get(name) is True  # absent (older status.sh) or anything but a real true: not syncing
     for name in TEXT_FIELDS:
         result[name] = _text(name, data.get(name))
     return result

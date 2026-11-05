@@ -103,6 +103,17 @@ Pipe waits such as short-lived `runc` are skipped. `KERR` lines count per kernel
 full kernel log replay after a reconnect does not count twice. Kernel errors right after a reboot also count for 10
 minutes of uptime, so a reboot can raise `problem` briefly.
 
+On every start the host replays its kernel ring buffer. The remote script drops lines older than 5 minutes before the
+host uptime (neither `KMSG` nor `KERR`), so the backlog is short and old errors are not counted as new after a restart.
+
+## Syncing
+
+At start the monitor logs `SYNC start` and, after the first live `SAMPLE`, `SYNC done` (both mirrored to the state
+file). While the start is not yet followed by `done` (at most 10 minutes), the status reports `"syncing":true` and the
+`stale` verdict is held back, so `problem` stays `0` and Gatus stays green. A real problem (I/O stall, blocked tasks,
+kernel errors) still counts. After 10 minutes the normal verdict applies. The web UI shows an "Updating…" badge instead
+of a red card.
+
 Samples, probes and `KERR` lines are mirrored to `<slug>.log.state` (trimmed at 1 MB), which the status code reads, so a
 kernel log flood cannot push the samples out of its window.
 
@@ -123,8 +134,9 @@ The add-on hostname is `<repository-id>-haos-monitor`; for this repository it is
 the add-on's Info page). A locally built copy (`/addons/haos-monitor`) would be `local-haos-monitor` instead.
 
 `http://72a005f5-haos-monitor:8099/api/status.json[?host=<slug>]` returns flat JSON (for Gatus): numbers plus the
-strings `reasons`, `dstate_tasks`, `kmsg_last`, `key_fp` and `key_type`. Without `host` the first configured host is
-returned; an unknown host gives HTTP 404 `{"error":"unknown host"}`.
+strings `reasons`, `dstate_tasks`, `kmsg_last`, `key_fp` and `key_type`, and the boolean `syncing` (see
+[Syncing](#syncing); `problem` stays `0` while only the stale verdict is held back). Without `host` the first configured
+host is returned; an unknown host gives HTTP 404 `{"error":"unknown host"}`.
 
 The same endpoints are available under `/cgi-bin/status` and `/cgi-bin/metrics` (kept for existing Gatus and Prometheus
 configs). `/api/hosts.json` lists the hosts and `/api/incidents.json?host=<slug>` the recent incidents.
@@ -149,6 +161,7 @@ data only shows the age and problem series.
 | `haos_monitor_kmsg_errors`                  |             | Kernel error lines, last 10 min of host uptime |
 | `haos_monitor_ping_up`                      |             | Host answers ping                              |
 | `haos_monitor_port_open`                    | `port`      | `22222`, `1883`, `8123`, `4357` reachable      |
+| `haos_monitor_syncing`                      |             | 1 while catching up after the start            |
 | `haos_monitor_problem`                      |             | 1 if any threshold is exceeded                 |
 | `haos_monitor_problem_reason`               | `reason`    | `stale`, `io_full10`, `sda_inflight`, `dstate` |
 

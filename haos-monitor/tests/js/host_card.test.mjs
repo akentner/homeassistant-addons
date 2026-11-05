@@ -21,7 +21,7 @@ const XSS = "<img src=x onerror=alert(1)><script>boom()</script><b>x</b>";
 const status = (over = {}) => ({
   age: 3, up: 400000, load1: 1.5, io_some10: 2, io_full10: 0, mem_full10: 0, sda_inflight: 0, mmc_inflight: 1, dstate: 0,
   probe_age: 2, ping: 1, p22222: 1, p1883: 1, p8123: 1, p4357: 1, problem: 0, r_age: 0, r_io: 0, r_sda: 0, r_dstate: 0,
-  r_kmsg: 0, reasons: "none", dstate_tasks: "", kmsg_errors: 0, kmsg_last: "", key_fp: "SHA256:abcDEF123", key_type: "ED25519",
+  r_kmsg: 0, reasons: "none", dstate_tasks: "", kmsg_errors: 0, kmsg_last: "", key_fp: "SHA256:abcDEF123", key_type: "ED25519", syncing: false,
   ...over,
 });
 const host = (over = {}) => ({ slug: "ha_backup", name: "ha-backup", host: "192.0.2.9", status: status(), error: null, incidents: [], ...over });
@@ -216,4 +216,21 @@ test("a11y: names and table headers are clean", async () => {
 
 test.after(() => {
   setTimeout(() => process.exit(process.exitCode ?? 0), 300).unref();
+});
+
+test("header: syncing shows an info badge instead of the red verdict, in both languages", async () => {
+  const root = await mount(host({ status: status({ syncing: true, age: 200 }) }));
+  const badge = cls(root, "badge")[0];
+  assert.equal(badge.textContent, "Updating…");
+  assert.ok(badge.className.includes("info"));
+  assert.equal(cls(root, "reasons").length, 0);
+  setLang("de");
+  const de = await mount(host({ status: status({ syncing: true }) }));
+  assert.equal(cls(de, "badge")[0].textContent, "Aktualisiere…");
+  setLang("en");
+});
+
+test("header: a real problem beats syncing", async () => {
+  const root = await mount(host({ status: status({ syncing: true, problem: 1, reasons: "io_full10" }) }));
+  assert.equal(cls(root, "badge")[0].textContent, "PROBLEM");
 });

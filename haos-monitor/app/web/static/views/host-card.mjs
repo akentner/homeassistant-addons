@@ -7,11 +7,12 @@ import { formatDateTime, formatNumber, formatRelative } from "../vendor/admin-ui
 import { PORTS, REASONS, ROWS, bootMs, isUnknown, isViolated, keyInfo, portState, reasonIds } from "../model.mjs";
 
 const GLYPH = { up: "✓", down: "✗", unknown: "–" };
-const BADGE_KIND = { ok: "ok", problem: "error", unknown: "muted" };
+const BADGE_KIND = { ok: "ok", problem: "error", syncing: "info", unknown: "muted" };
 
 function verdictOf(status) {
   if (!status) return "unknown";
-  return status.problem === 1 ? "problem" : "ok";
+  if (status.problem === 1) return "problem";
+  return status.syncing === true ? "syncing" : "ok";
 }
 
 function ValueRow({ row, status, nowMs, tt, lang }) {
@@ -38,7 +39,12 @@ export function HostCard({ host, nowMs }) {
   const lang = useLang();
   const status = host.status || null;
   const verdict = verdictOf(status);
-  const verdictText = { ok: tt("hm.verdict.ok"), problem: tt("hm.verdict.problem"), unknown: tt("hm.verdict.unknown") };
+  const verdictText = {
+    ok: tt("hm.verdict.ok"),
+    syncing: tt("hm.verdict.syncing"),
+    problem: tt("hm.verdict.problem"),
+    unknown: tt("hm.verdict.unknown"),
+  };
   const known = new Map(REASONS.map((r) => [r.id, tt(r.labelKey)]));
   const reasons = verdict === "problem" ? reasonIds(status).map((id) => known.get(id) ?? id) : [];
   const stateText = { up: tt("hm.port.state.up"), down: tt("hm.port.state.down"), unknown: tt("hm.port.state.unknown") };

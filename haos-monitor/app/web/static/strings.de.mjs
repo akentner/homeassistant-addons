@@ -4,6 +4,7 @@ export default {
   "app.title": "HAOS Monitor",
 
   "hm.verdict.ok": "OK",
+  "hm.verdict.syncing": "Aktualisiere…",
   "hm.verdict.problem": "PROBLEM",
   "hm.verdict.unknown": "Unbekannt",
 

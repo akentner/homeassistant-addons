@@ -37,5 +37,5 @@ See [DOCS.md][docs] for all options, the status endpoint and the MQTT entities.
 [docs]: DOCS.md
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg
-[release-shield]: https://img.shields.io/badge/version-v0.7.1-blue.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v0.7.1
+[release-shield]: https://img.shields.io/badge/version-v0.7.2-blue.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v0.7.2
