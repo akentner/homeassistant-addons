@@ -87,10 +87,10 @@ const safely = (fn) => {
 };
 
 // HA's info page of this add-on (its settings live there); the slug comes from api/health, unknown means no link.
-// Since HA 2026.2 the frontend route is /config/app/<slug>/info.
+// Since HA 2026.2 the frontend route is /config/app/<slug>/config (the settings tab; /info is the overview).
 export function infoPath(health) {
   const slug = health && typeof health.addon_slug === "string" ? health.addon_slug : "";
-  return /^[a-z0-9][a-z0-9_]{0,63}$/.test(slug) ? `/config/app/${slug}/info` : null;
+  return /^[a-z0-9][a-z0-9_]{0,63}$/.test(slug) ? `/config/app/${slug}/config` : null;
 }
 
 // "2.37.2-6" -> "2.37.2": the subpatch counts add-on-only fixes; anything that is not a version shows nothing.

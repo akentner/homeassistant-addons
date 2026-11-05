@@ -197,7 +197,7 @@ test("the info button points at the HA info page of the add-on and is hidden wit
   const root = await mountApp();
   const btn = hrefs(root);
   assert.equal(btn.length, 1);
-  assert.equal(btn[0].getAttribute("href"), "/config/app/72a005f5_ntfy/info");
+  assert.equal(btn[0].getAttribute("href"), "/config/app/72a005f5_ntfy/config");
   await withHealth({ ...HEALTH, addon_slug: undefined }, async () => {
     assert.equal(hrefs(await mountApp()).length, 0);
   });
