@@ -3,6 +3,12 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.7.5-0] - 2026-11-05
+
+### Changed
+
+- Use admin-ui lib 0.9.0: toasts look like the Home Assistant snackbar
+
 ## [0.7.4-0] - 2026-11-05
 
 ### Changed
