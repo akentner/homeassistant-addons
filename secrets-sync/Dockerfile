@@ -1,7 +1,7 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.24
 FROM ${BUILD_FROM}
 
-ARG BW_CLI_VERSION=2026.10.0
+ARG BW_CLI_VERSION=2026.10.1
 
 # nodejs/npm only for the Bitwarden CLI; sops + age for the SOPS provider; git + ssh for the SOPS git source; py3-yaml for the YAML round trip; py3-jinja2 for synthetic keys
 RUN apk add --no-cache nodejs npm python3 py3-yaml py3-jinja2 sops age git openssh-client \
