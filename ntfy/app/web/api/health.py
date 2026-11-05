@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.request
 from typing import Any
 
@@ -11,6 +12,7 @@ from app import maintenance
 from app.contract import NTFY_PORT, ApiError
 from app.web.server import Request, Router
 
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,63}$")
 _publish = maintenance.publish_test  # module-level indirection so tests can patch the network
 
 
@@ -44,7 +46,8 @@ def register(router: Router, ctx: Any) -> None:
                 counts = ctx.db.counts()
             except ApiError:
                 counts = None
-        return {
+        slug = os.environ.get("NTFY_ADDON_SLUG", "")
+        body: dict[str, Any] = {
             "status": status,
             "addon_version": os.environ.get("NTFY_ADDON_VERSION", "unknown"),
             "ntfy": ntfy,
@@ -57,6 +60,9 @@ def register(router: Router, ctx: Any) -> None:
             },
             "counts": counts,
         }
+        if _SLUG_RE.match(slug):  # unknown or odd: the key stays out and the GUI hides the info link
+            body["addon_slug"] = slug
+        return body
 
     def publish(req: Request) -> dict[str, Any]:
         body = req.body()

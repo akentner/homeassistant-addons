@@ -1,4 +1,4 @@
-// Shell on the admin-ui lib: Topbar with tab navigation, hash routing, lazy views, health poll, toasts and the
+// Shell on the admin-ui lib: Topbar with the navigation in the bar, hash routing, lazy views, health poll, toasts and the
 // optional HA wiring (bridge + theme sync, progressive enhancement only: nothing depends on them, D-10).
 // Relative URLs only (the page lives below an ingress path); the lib is imported through its public modules only.
 import { html, render, useState, useEffect, useRef, usePoll, ErrorNote, Loading, Toasts } from "./vendor/admin-ui/ui.mjs";
@@ -86,6 +86,13 @@ const safely = (fn) => {
   }
 };
 
+// HA's info page of this add-on (its settings live there); the slug comes from api/health, unknown means no link.
+// Since HA 2026.2 the frontend route is /config/app/<slug>/info.
+export function infoPath(health) {
+  const slug = health && typeof health.addon_slug === "string" ? health.addon_slug : "";
+  return /^[a-z0-9][a-z0-9_]{0,63}$/.test(slug) ? `/config/app/${slug}/info` : null;
+}
+
 export function App({ ha, load = loadView }) {
   const tt = useT();
   const lang = useLang();
@@ -129,7 +136,7 @@ export function App({ ha, load = loadView }) {
   const dbError = health && health.db && typeof health.db.error === "string" ? health.db.error : "";
 
   return html`<div>
-    <${Topbar} title=${tt("app.title")} status=${status} bridge=${bridge} views=${VIEWS} activeId=${route.id} nav="tabs">
+    <${Topbar} title=${tt("app.title")} status=${status} bridge=${bridge} views=${VIEWS} activeId=${route.id} nav="topbar" infoPath=${infoPath(health)}>
       ${health && html`<span class="muted">${tt("app.version", { version: String(health.addon_version) })}</span>`}
     <//>
     <main>

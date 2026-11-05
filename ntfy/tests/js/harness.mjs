@@ -47,7 +47,7 @@ export const fixtures = {
   },
   "POST api/tokens/reveal": { value: TOKEN_VALUE },
   "GET api/health": {
-    status: "ok", addon_version: "2.36.0-0", ntfy: { healthy: true, role: "server" },
+    status: "ok", addon_version: "2.36.0-0", addon_slug: "72a005f5_ntfy", ntfy: { healthy: true, role: "server" },
     db: { schema_version: 10, supported: true, size_bytes: 2048, cache_size_bytes: 1048576, error: null },
     counts: { users: 3, acl_rules: 2, tokens: 1 },
   },
