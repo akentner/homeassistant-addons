@@ -21,7 +21,7 @@ from .errors import ApiError
 from .headers import DEFAULT_CSP, security_headers
 from .ingress import INGRESS_REMOTE, is_ingress
 from .router import Download, Request, Router
-from .static import StaticFiles
+from .static import StaticFiles, etag_matches
 
 MAX_BODY = 65536
 BODY_METHODS = ("POST", "PUT", "PATCH", "DELETE")
@@ -136,10 +136,14 @@ def make_handler(
             method = self.command
             try:
                 if method == "GET" and via_ingress:
-                    asset = static.resolve(parts.path)
+                    asset = static.resolve_asset(parts.path)
                     if asset is not None:
                         kind = "html" if parts.path == "/" else "static"
-                        self._send(200, asset[0], asset[1], cache="no-cache", kind=kind)
+                        validator = {"ETag": asset.etag}
+                        if etag_matches(self.headers.get("If-None-Match"), asset.etag):
+                            self._send(304, b"", asset.ctype, cache="no-cache", extra=validator, kind=kind)
+                        else:
+                            self._send(200, asset.body, asset.ctype, cache="no-cache", extra=validator, kind=kind)
                         return
                 handler, params = router.match(method, parts.path)
                 body = self._read_body() if method in BODY_METHODS else None

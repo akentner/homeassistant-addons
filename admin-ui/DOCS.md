@@ -79,6 +79,15 @@ every method and path. API responses carry `Cache-Control: no-store`, static fil
 and static files carry no `X-Frame-Options` because Home Assistant frames the page. Unexpected exceptions return
 `500 internal_error` with the traceback on stdout only.
 
+Static caching: every static response (and `/`) carries `Cache-Control: no-cache` and a strong `ETag` (sha256 of the
+served bytes); a matching `If-None-Match` (list, `W/` prefix and `*` accepted) answers `304` without body. No
+`Last-Modified` is sent, because it invites heuristic caching. `/` is served with every `src`/`href="static/..."` value
+rewritten to `...?v=<hash of that asset>`, so a changed asset changes the index and its ETag; consumers edit nothing. ES
+module imports inside `.mjs` files stay unversioned and rely on revalidation. `StaticFiles.resolve()` still returns
+`(content, content type)`; `resolve_asset()` adds the ETag. The skeleton registers no service worker and never sends
+`Clear-Site-Data`. A browser that cached a page heuristically before this change (for example the 0.6.x busybox page of
+haos-monitor) never asks the server again until that entry expires: a hard reload once clears it.
+
 The demo API (`app/web/demo_api.py`) serves fake data for the gallery and the sample CRUD: `api/health`, `api/items`
 with create, update and a type-to-confirm delete, `api/fail/<code>` for error states, `api/slow`, `api/whoami` and
 `api/echo`.

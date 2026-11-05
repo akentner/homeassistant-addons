@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import http.client
 import json
+import re
 import threading
 from pathlib import Path
 from typing import Any, Iterator
@@ -247,7 +248,9 @@ def test_public_routes_answer_without_ingress_and_with_query(srv: Srv) -> None:
 def test_shell_is_static_and_relative(srv: Srv, state_file: Path) -> None:
     code, body = srv.req("GET", "/", INGRESS)
     assert code == 200
-    assert 'href="static/vendor/admin-ui/base.css"' in body and 'src="static/app.mjs"' in body
+    # asset URLs are served with a ?v=<hash> query (cache busting), the paths stay relative
+    assert re.search(r'href="static/vendor/admin-ui/base\.css\?v=[0-9a-f]{12}"', body)
+    assert re.search(r'src="static/app\.mjs\?v=[0-9a-f]{12}"', body)
     for needle in ("mqtt_password", "bitwarden", "sync_ok"):
         assert needle not in body  # no state data in the shell
     assert "http://" not in body and "https://" not in body
