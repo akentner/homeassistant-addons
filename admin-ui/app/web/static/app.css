@@ -25,3 +25,20 @@
 .rule { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--bd); }
 .rule p { margin: 4px 0 0; }
 .spike-result { overflow: auto; max-height: 24em; padding: 8px; border: 1px solid var(--bd); border-radius: 4px; }
+
+/* component gallery: sub-navigation next to the component page, a row of links on narrow screens */
+.gallery { display: grid; grid-template-columns: minmax(140px, 200px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.subnav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.subnav a { display: block; min-height: 24px; padding: 8px 12px; border-radius: 6px; color: var(--fg); text-decoration: none; }
+.subnav a:hover { background: var(--hover); }
+.subnav a[aria-current="page"] { background: var(--hover); font-weight: 600; box-shadow: inset 3px 0 0 var(--acc); }
+.subnav a:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.gallery .section h3 { font-size: 14px; margin: 16px 0 8px; }
+.code { margin: 0; padding: 12px; overflow: auto; border: 1px solid var(--bd); border-radius: 6px; background: var(--chip); font-size: 12px; line-height: 1.5; }
+.topbar-preview { border: 1px solid var(--bd); border-radius: 6px; overflow: hidden; }
+.topbar-preview .shell-head { position: static; }
+@media (max-width: 700px) {
+  .gallery { grid-template-columns: minmax(0, 1fr); }
+  .subnav ul { flex-direction: row; overflow-x: auto; }
+  .subnav a { white-space: nowrap; }
+}

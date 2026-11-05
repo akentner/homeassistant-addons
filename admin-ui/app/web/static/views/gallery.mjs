@@ -13,8 +13,10 @@ import {
   Tabs,
   toast,
 } from "../lib/ui.mjs";
+import { Topbar } from "../lib/shell.mjs";
 import { useLang, useT } from "../lib/i18n.mjs";
 import { formatBytes, formatDateTime } from "../lib/format.mjs";
+import { COMPONENT_IDS, DOCS, topbarCode } from "./gallery-docs.mjs";
 
 export const meta = { id: "gallery", titleKey: "demo.nav.gallery" };
 
@@ -38,14 +40,93 @@ const SAMPLE_ROWS = [
   { id: "2", name: "plain row", note: "beta", size: 5242880, created: 1710000000000 },
 ];
 
-function Section({ title, children }) {
-  return html`<section class="section card">
-    <h2>${title}</h2>
-    ${children}
-  </section>`;
+const DEFAULT_COMPONENT = COMPONENT_IDS[0];
+
+// One page per component: preview, option table and a code example. The sub-navigation picks the component through the
+// hash query (#/gallery?c=<id>); an unknown id falls back to the first one.
+export function componentOf(params) {
+  const raw = params && typeof params.c === "string" ? params.c : "";
+  return COMPONENT_IDS.includes(raw) ? raw : DEFAULT_COMPONENT;
 }
 
-export default function Gallery() {
+function SubNav({ active }) {
+  const tt = useT();
+  return html`<nav class="subnav" aria-label=${tt("demo.gallery.subnav")}>
+    <ul>
+      ${COMPONENT_IDS.map(
+        (id) => html`<li key=${id}>
+          <a href=${`#/gallery?c=${id}`} aria-current=${id === active ? "page" : null}>${tt(`demo.gallery.sub.${id}`)}</a>
+        </li>`,
+      )}
+    </ul>
+  </nav>`;
+}
+
+function OptionsTable({ id }) {
+  const tt = useT();
+  const options = DOCS[id].options;
+  if (options.length === 0) return html`<p class="muted">${tt("demo.gallery.opt.none")}</p>`;
+  return html`<div class="table-scroll"><table class="data">
+    <caption class="sr-only">${tt("demo.gallery.opt.caption")}</caption>
+    <thead>
+      <tr>
+        <th scope="col">${tt("demo.gallery.col.option")}</th>
+        <th scope="col">${tt("demo.gallery.col.type")}</th>
+        <th scope="col">${tt("demo.gallery.col.default")}</th>
+        <th scope="col">${tt("demo.gallery.col.desc")}</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${options.map(
+        (opt) => html`<tr key=${opt.name}>
+          <td class="mono">${opt.name}</td>
+          <td class="mono">${opt.type}</td>
+          <td class="mono">${opt.def}</td>
+          <td>${tt(opt.key)}</td>
+        </tr>`,
+      )}
+    </tbody>
+  </table></div>`;
+}
+
+function Usage({ code }) {
+  const tt = useT();
+  return html`<div>
+    <p class="hint">${tt("demo.gallery.code.hint")}</p>
+    <pre class="code" tabindex="0" aria-label=${tt("demo.gallery.code.label")}><code>${code}</code></pre>
+  </div>`;
+}
+
+// Live topbar with switchable options.
+function TopbarPreview({ opts, setOpts }) {
+  const tt = useT();
+  const switches = [
+    ["showLang", opts.showLang],
+    ["info", opts.info],
+    ["version", opts.version],
+  ];
+  return html`<div>
+    <div class="row" role="group" aria-label=${tt("demo.gallery.topbar.controls")}>
+      ${switches.map(
+        ([key, on]) => html`<label key=${key} class="row">
+          <input type="checkbox" checked=${on} onChange=${(ev) => setOpts({ ...opts, [key]: ev.target.checked })} />
+          ${tt(`demo.gallery.topbar.${key}`)}
+        </label>`,
+      )}
+    </div>
+    <div class="topbar-preview">
+      <${Topbar}
+        title=${tt("app.title")}
+        status=${{ kind: "ok", text: tt("state.ok") }}
+        infoPath=${opts.info ? "/config/app/local_admin_ui/config" : undefined}
+        version=${opts.version ? "0.8.3-0" : undefined}
+        showLang=${opts.showLang}
+      />
+    </div>
+  </div>`;
+}
+
+function Preview({ id, topbar, setTopbar }) {
   const tt = useT();
   const lang = useLang();
   const [modalOpen, setModalOpen] = useState(false);
@@ -62,28 +143,25 @@ export default function Gallery() {
   ];
   const phrase = tt("demo.gallery.confirm.phrase");
 
-  return html`<div>
-    <${Section} title=${tt("demo.gallery.badge.title")}>
-      <div class="row">
-        ${BADGE_KINDS.map((kind) => html`<${Badge} key=${kind} kind=${kind}>${tt(BADGE_KEYS[kind])}<//>`)}
-      </div>
-    <//>
-
-    <${Section} title=${tt("demo.gallery.toast.title")}>
-      <div class="row">
-        <button class="btn secondary" type="button" onClick=${() => toast("ok", tt("demo.gallery.toast.ok_text"))}>
-          ${tt("demo.gallery.toast.ok")}
-        </button>
-        <button class="btn secondary" type="button" onClick=${() => toast("error", tt("demo.gallery.toast.error_text"))}>
-          ${tt("demo.gallery.toast.error")}
-        </button>
-        <button class="btn secondary" type="button" onClick=${() => toast("info", tt("demo.gallery.toast.info_text"))}>
-          ${tt("demo.gallery.toast.info")}
-        </button>
-      </div>
-    <//>
-
-    <${Section} title=${tt("demo.gallery.modal.title")}>
+  if (id === "topbar") return html`<${TopbarPreview} opts=${topbar} setOpts=${setTopbar} />`;
+  if (id === "badge")
+    return html`<div class="row">
+      ${BADGE_KINDS.map((kind) => html`<${Badge} key=${kind} kind=${kind}>${tt(BADGE_KEYS[kind])}<//>`)}
+    </div>`;
+  if (id === "toast")
+    return html`<div class="row">
+      <button class="btn secondary" type="button" onClick=${() => toast("ok", tt("demo.gallery.toast.ok_text"))}>
+        ${tt("demo.gallery.toast.ok")}
+      </button>
+      <button class="btn secondary" type="button" onClick=${() => toast("error", tt("demo.gallery.toast.error_text"))}>
+        ${tt("demo.gallery.toast.error")}
+      </button>
+      <button class="btn secondary" type="button" onClick=${() => toast("info", tt("demo.gallery.toast.info_text"))}>
+        ${tt("demo.gallery.toast.info")}
+      </button>
+    </div>`;
+  if (id === "modal")
+    return html`<div>
       <button class="btn" type="button" onClick=${() => setModalOpen(true)}>${tt("demo.gallery.modal.open")}</button>
       ${modalOpen &&
       html`<${Modal} title=${tt("demo.gallery.modal.heading")} onClose=${() => setModalOpen(false)}>
@@ -92,9 +170,9 @@ export default function Gallery() {
           <button class="btn" type="button" onClick=${() => setModalOpen(false)}>${tt("btn.close")}</button>
         </div>
       <//>`}
-    <//>
-
-    <${Section} title=${tt("demo.gallery.confirm.title")}>
+    </div>`;
+  if (id === "confirm")
+    return html`<div>
       <div class="row">
         <button class="btn secondary" type="button" onClick=${() => setConfirmKind("plain")}>
           ${tt("demo.gallery.confirm.open_plain")}
@@ -126,13 +204,10 @@ export default function Gallery() {
           toast("ok", tt("demo.gallery.confirm.done"));
         }}
       />`}
-    <//>
-
-    <${Section} title=${tt("demo.gallery.copy.title")}>
-      <${CopyField} value="demo-token-0123456789" label=${tt("demo.gallery.copy.label")} />
-    <//>
-
-    <${Section} title=${tt("demo.gallery.table.title")}>
+    </div>`;
+  if (id === "copy") return html`<${CopyField} value="demo-token-0123456789" label=${tt("demo.gallery.copy.label")} />`;
+  if (id === "table")
+    return html`<div>
       <div class="table-scroll"><table class="data">
         <caption class="sr-only">${tt("demo.gallery.table.caption")}</caption>
         <thead><tr><th scope="col">${tt("demo.gallery.col.name")}</th><th scope="col">${tt("demo.gallery.table.actions")}</th></tr></thead>
@@ -148,19 +223,14 @@ export default function Gallery() {
         <${DataTable} columns=${columns} rows=${SAMPLE_ROWS} rowKey="id" caption=${tt("demo.gallery.table.caption")} />
       </section>`}
       <${DataTable} columns=${columns} rows=${SAMPLE_ROWS} rowKey="id" caption=${tt("demo.gallery.table.caption")} />
-    <//>
-
-    <${Section} title=${tt("demo.gallery.tabs.title")}>
-      <${Tabs} tabs=${TAB_IDS} active=${tab} onChange=${setTab} label=${tt("demo.gallery.tabs.title")}>
-        <p>${tt("demo.gallery.tabs.panel", { tab })}</p>
-      <//>
-    <//>
-
-    <${Section} title=${tt("demo.gallery.loading.title")}>
-      <${Loading} />
-    <//>
-
-    <${Section} title=${tt("demo.gallery.error.title")}>
+    </div>`;
+  if (id === "tabs")
+    return html`<${Tabs} tabs=${TAB_IDS} active=${tab} onChange=${setTab} label=${tt("demo.gallery.tabs.title")}>
+      <p>${tt("demo.gallery.tabs.panel", { tab })}</p>
+    <//>`;
+  if (id === "loading") return html`<${Loading} />`;
+  if (id === "error")
+    return html`<div>
       <div class="row">
         <button class="btn secondary" type="button" onClick=${() => setKnownError(!knownError)}>
           ${tt("demo.gallery.error.toggle")}
@@ -168,12 +238,28 @@ export default function Gallery() {
       </div>
       ${knownError && html`<${ErrorNote} error=${{ code: "conflict" }} />`}
       <${ErrorNote} error=${{ code: "teapot" }} />
-    <//>
+    </div>`;
+  return html`<${Field} id="gallery-field" label=${tt("demo.gallery.field.label")} hint=${tt("demo.gallery.field.hint")}>
+    <input id="gallery-field" type="text" aria-describedby="gallery-field-hint" />
+  <//>`;
+}
 
-    <${Section} title=${tt("demo.gallery.field.title")}>
-      <${Field} id="gallery-field" label=${tt("demo.gallery.field.label")} hint=${tt("demo.gallery.field.hint")}>
-        <input id="gallery-field" type="text" aria-describedby="gallery-field-hint" />
-      <//>
-    <//>
+export default function Gallery({ params }) {
+  const tt = useT();
+  const id = componentOf(params);
+  const [topbar, setTopbar] = useState({ showLang: false, info: true, version: true });
+  const code = id === "topbar" ? topbarCode(topbar) : DOCS[id].code.join("\n");
+  return html`<div class="gallery">
+    <${SubNav} active=${id} />
+    <section class="section card" key=${id}>
+      <h2>${tt(`demo.gallery.sub.${id}`)}</h2>
+      <p>${tt(`demo.gallery.desc.${id}`)}</p>
+      <h3>${tt("demo.gallery.h.preview")}</h3>
+      <${Preview} id=${id} topbar=${topbar} setTopbar=${setTopbar} />
+      <h3>${tt("demo.gallery.h.options")}</h3>
+      <${OptionsTable} id=${id} />
+      <h3>${tt("demo.gallery.h.usage")}</h3>
+      <${Usage} code=${code} />
+    </section>
   </div>`;
 }
