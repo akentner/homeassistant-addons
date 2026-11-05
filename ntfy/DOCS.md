@@ -77,10 +77,12 @@ translated text per error code. For a code the GUI does not know, the code is sh
 - **ACL rules**: per topic and user, including `everyone` and wildcards such as `alerts-*`. A topic x user matrix shows
   all rules at a glance.
 - **Tokens**: create with a label and an optional expiry, revoke, reveal a value on demand.
+- **Tools**: one page with these sections, in this order: status table, test message, effective rights, topic generator,
+  export, backups and the reset actions (danger zone). The old `#/health` and `#/data` links open it.
 - **Effective rights**: pick a user and a topic and see what ntfy would allow, and why.
 - **Topic generator**: creates a random 16-character topic and sets the default rules, `homeassistant` read-write and
   `akentner` read-only.
-- **Health**: status, database size and schema version, and a test publish.
+- **Status** shows health, version, database size and schema version; a test publish sends a real message.
 - **Export**, **backups** and **reset actions** are described below.
 
 Two behaviours worth knowing: when a role change drops rules, the message names the number of dropped rules, and a test

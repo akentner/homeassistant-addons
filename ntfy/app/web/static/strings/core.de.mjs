@@ -8,8 +8,6 @@ export default {
   "view.matrix": "Matrix",
   "view.tokens": "Token",
   "view.tools": "Werkzeuge",
-  "view.health": "Zustand",
-  "view.data": "Export & Backups",
   "errors.ntfy_error": "Der ntfy-Befehl ist fehlgeschlagen",
   "errors.locked": "Die ntfy-Auth-Datenbank ist gesperrt, bitte gleich noch einmal versuchen",
   "errors.db_unavailable": "Die ntfy-Auth-Datenbank ist nicht verfügbar",

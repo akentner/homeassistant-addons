@@ -97,10 +97,10 @@ def test_every_route_is_called_by_the_frontend() -> None:
     assert not unused, f"routes without a frontend call site: {unused}"
 
 
-def test_health_publish_only_from_health_view() -> None:
+def test_health_publish_only_from_tools_view() -> None:
     for path in [STATIC / "app.mjs", *sorted((STATIC / "views").glob("*.mjs"))]:
         has_call = "health/publish" in path.read_text(encoding="utf-8")
-        assert has_call == (path.name == "health.mjs"), path.name
+        assert has_call == (path.name == "tools.mjs"), path.name
 
 
 def test_topic_cases_python_parity() -> None:

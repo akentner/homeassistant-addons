@@ -20,7 +20,7 @@ const navigate = async (hash) => {
   await settle();
 };
 
-const { App, VIEWS, semver } = await import(new URL("app.mjs", STATIC));
+const { App, VIEWS, semver, migrateLegacyHash } = await import(new URL("app.mjs", STATIC));
 
 const HEALTH = fixtures["GET api/health"];
 const fakeLoad = async (id) => ({ default: ({ params }) => html`<p class="fake-view">view ${id} ${JSON.stringify(params)}</p>` });
@@ -44,10 +44,10 @@ const withHealth = async (payload, fn) => {
 };
 const links = (root) => findAll(root, (n) => n.localName === "a" && (n.className || "").split(" ").includes("topnav-link"));
 
-test("topbar shows the title and seven nav links in VIEWS order", async () => {
+test("topbar shows the title and five nav links in VIEWS order", async () => {
   const root = await mountApp();
   assert.equal(findByText(root, "h1", "ntfy").length, 1);
-  assert.deepEqual(VIEWS.map((v) => v.id), ["users", "acl", "matrix", "tokens", "tools", "health", "data"]);
+  assert.deepEqual(VIEWS.map((v) => v.id), ["users", "acl", "matrix", "tokens", "tools"]);
   assert.deepEqual(links(root).map((a) => a.getAttribute("href")), VIEWS.map((v) => `#/${v.id}`));
   assert.equal(findAll(root, (n) => n.localName === "select" && n.className === "lang-switch").length, 0);
 });
@@ -165,7 +165,7 @@ test("a view whose module fails to load shows the localized note, no backend tex
 });
 
 test("every view file exists, exports meta and a default function, and its relative imports exist", async () => {
-  assert.equal(VIEWS.length, 7);
+  assert.equal(VIEWS.length, 5);
   for (const v of VIEWS) {
     const file = new URL(`views/${v.id}.mjs`, STATIC);
     assert.ok(existsSync(file), v.id);
@@ -208,4 +208,17 @@ test("semver drops the subpatch and anything that is not a version", () => {
   assert.equal(semver("2.37.2"), "2.37.2");
   assert.equal(semver("unknown"), "");
   assert.equal(semver(undefined), "");
+});
+
+test("the merged health and data pages still resolve: old hashes land on tools, query kept", async () => {
+  for (const [from, to] of [["#/health", "#/tools"], ["#/data", "#/tools"], ["#/data?x=1", "#/tools?x=1"]]) {
+    const seen = [];
+    const root = await mountApp({ hash: from, load: async (id) => (seen.push(id), fakeLoad(id)) });
+    assert.equal(globalThis.location.hash, to);
+    assert.deepEqual(seen, ["tools"]);
+    assert.match(root.textContent, /view tools/);
+  }
+  const loc = { hash: "#/healthy" };
+  migrateLegacyHash(loc);
+  assert.equal(loc.hash, "#/healthy");
 });

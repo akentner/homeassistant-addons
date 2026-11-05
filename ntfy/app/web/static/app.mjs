@@ -18,8 +18,6 @@ export const VIEWS = [
   { id: "matrix", titleKey: "view.matrix" },
   { id: "tokens", titleKey: "view.tokens" },
   { id: "tools", titleKey: "view.tools" },
-  { id: "health", titleKey: "view.health" },
-  { id: "data", titleKey: "view.data" },
 ];
 const IDS = VIEWS.map((v) => v.id);
 const DEFAULT_VIEW = "users";
@@ -99,9 +97,16 @@ export function semver(raw) {
   return match ? match[1] : "";
 }
 
+// The health and data pages were merged into tools: old bookmarks (#/health, #/data) land there instead of on users.
+export function migrateLegacyHash(loc = globalThis.location) {
+  const match = /^#\/?(?:health|data)(\?.*)?$/.exec(loc && typeof loc.hash === "string" ? loc.hash : "");
+  if (match) loc.hash = `#/tools${match[1] || ""}`;
+}
+
 export function App({ ha, load = loadView }) {
   const tt = useT();
   const lang = useLang();
+  migrateLegacyHash();
   const route = useHashRoute(IDS, DEFAULT_VIEW);
   const [health, setHealth] = useState(null);
   const [failed, setFailed] = useState(false);

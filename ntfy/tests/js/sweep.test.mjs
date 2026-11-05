@@ -27,8 +27,8 @@ async function withData({ fix = {}, fail = {} }, fn) {
 
 const texts = {};
 
-test("VIEWS lists the seven views and every module carries the matching titleKey", async () => {
-  assert.equal(VIEWS.length, 7);
+test("VIEWS lists the five views and every module carries the matching titleKey", async () => {
+  assert.equal(VIEWS.length, 5);
   for (const view of VIEWS) {
     const mod = await import(new URL(`views/${view.id}.mjs`, STATIC));
     assert.equal(mod.meta.titleKey, view.titleKey, view.id);
