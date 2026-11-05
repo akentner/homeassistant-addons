@@ -124,9 +124,9 @@ host: verdict and reasons, all values (violated thresholds are highlighted and a
 coloured), port chips (ping, SSH, MQTT, HA, Observer), the SSH key fingerprint line (invalid in red), blocked tasks, the
 last kernel error and the last 10 `INCIDENT` log lines. It refreshes every 10 seconds and has a Reload button.
 
-The language follows the browser (German or English) and can be switched in the top bar. The page uses the light or dark
-theme of the system, or the Home Assistant theme when embedded. The page is served by the GUI server on port 8100 only;
-it is no longer available on the published port 8099.
+The language follows the browser (German or English). The top bar shows, right-aligned, an info icon (opens the add-on's
+configuration page in Home Assistant), the status badge and the add-on version. The page uses the light or dark it is no
+longer available on the published port 8099.
 
 ## Status endpoint
 

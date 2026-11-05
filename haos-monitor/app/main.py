@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from http.server import ThreadingHTTPServer
 
+from app.addon_info import InfoResolver
 from app.web.admin_ui import INGRESS_REMOTE, serve
 from app.web.server import Sources, make_server
 
@@ -49,7 +50,9 @@ def build_config(environ: Mapping[str, str]) -> Config:
 
 def build_server(cfg: Config, host: str = "0.0.0.0") -> ThreadingHTTPServer:
     sources = Sources(cfg.hosts_file, cfg.logdir, cfg.status_sh, cfg.env_file)
-    return make_server(sources, cfg.port, host=host, ingress_remote=cfg.ingress_remote)
+    return make_server(
+        sources, cfg.port, host=host, ingress_remote=cfg.ingress_remote, addon_info=InfoResolver(os.environ).get
+    )
 
 
 def main() -> int:

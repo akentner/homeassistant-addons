@@ -4,6 +4,13 @@ All notable changes to the **Admin UI Blueprint** add-on are documented in this 
 [Keep a Changelog](https://keepachangelog.com/). This is our own code without an upstream project: the version is bumped
 manually with `make update-version`.
 
+## [0.2.1-0] - 2026-11-05
+
+### Added
+
+- Lib 0.8.0: `Topbar` options `showLang={false}` (omit the language switch, default `true`) and `version` (plain version
+  text after the status badge). Both are opt-in; without them the bar is unchanged
+
 ## [0.2.0-0] - 2026-11-04
 
 ### Changed

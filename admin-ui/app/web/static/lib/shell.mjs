@@ -61,6 +61,8 @@ export function LangSwitch() {
 const DEFAULT_ICON = "./icon";
 // An absolute path on the HA origin ("/config/app/<slug>/info"): no scheme, no protocol-relative form.
 const isInfoPath = (path) => typeof path === "string" && /^\/[A-Za-z0-9._~\-/]{1,200}$/.test(path) && !path.startsWith("//");
+// Plain text only (a release such as "0.7.3-0"); anything else is not shown.
+const isVersion = (v) => typeof v === "string" && /^[A-Za-z0-9._+-]{1,32}$/.test(v);
 const NAV_MODES = ["topbar", "tabs"];
 const MENU_PATH = "M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z";
 const INFO_PATH = "M11 17h2v-6h-2v6m0-8h2V7h-2v2m1-7a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z";
@@ -217,7 +219,9 @@ function TopbarNav({ views, activeId, label, kiosk, info, onCollapse }) {
 // The menu button only shows while the bridge reports a requested kiosk mode.
 // infoPath ("/config/app/<slug>/info") adds an info link: icon in the bar, or an entry in the burger menu once the
 // navigation folds. onInfoNavigate("bridge" | "fallback" | "new_tab") reports which path a click took.
-export function Topbar({ title, iconSrc, status, bridge, children, views, activeId, nav, navLabel, infoPath, onInfoNavigate }) {
+// showLang={false} leaves the language switch out (default true). version (a short string such as "0.7.3-0") shows
+// as plain text after the status badge; right-aligned order is: info icon, badge, version, [children], language switch.
+export function Topbar({ title, iconSrc, status, bridge, children, views, activeId, nav, navLabel, infoPath, onInfoNavigate, showLang = true, version }) {
   const tt = useT();
   const [iconOk, setIconOk] = useState(true);
   const [kiosk, setKiosk] = useState(() => Boolean(bridge && bridge.getState().kiosk === true));
@@ -285,8 +289,9 @@ export function Topbar({ title, iconSrc, status, bridge, children, views, active
       !(inBar && navCollapsed) &&
       html`<a class="info-btn" href=${info.href} target=${info.target} rel=${info.rel} aria-label=${tt("nav.info")} title=${tt("nav.info")} onClick=${info.onClick}><${NavIcon} path=${INFO_PATH} /></a>`}
       ${status && html`<${Badge} kind=${status.kind}>${status.text}<//>`}
+      ${isVersion(version) && html`<span class="topbar-version">${version}</span>`}
       ${children && html`<span class="topbar-extra">${children}</span>`}
-      <${LangSwitch} />
+      ${showLang !== false && html`<${LangSwitch} />`}
     </header>
     ${mode === "tabs" && list.length > 0 && html`<${TabNav} views=${list} activeId=${activeId} label=${navLabel} />`}
   </div>`;

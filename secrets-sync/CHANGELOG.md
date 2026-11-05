@@ -3,6 +3,12 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.7.3-0] - 2026-11-05
+
+### Changed
+
+- Use admin-ui lib 0.8.0 (opt-in topbar options only, the page looks the same)
+
 ## [0.7.2-0] - 2026-11-05
 
 ### Changed

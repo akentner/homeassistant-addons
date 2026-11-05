@@ -187,3 +187,18 @@ def test_overview_passes_syncing_through(serve: Any, env: dict[str, Path]) -> No
         fh.write(f"{_ts(10)} SYNC start\n")
     _status, data = overview(start(serve, env))
     assert data["hosts"][0]["status"]["syncing"] is True and data["hosts"][0]["status"]["problem"] == 0
+
+
+def test_addon_slug_and_version_are_added_when_known(serve: Any, env: dict[str, Path]) -> None:
+    two_hosts(env)
+    info = {"slug": "a1b2c3d4_haos_monitor", "version": "0.7.3-0"}
+    client = serve(make_server(sources(env), 0, host="127.0.0.1", ingress_remote="127.0.0.1", addon_info=lambda: info))
+    status, data = overview(client)
+    assert status == 200
+    assert (data["addon_slug"], data["addon_version"]) == ("a1b2c3d4_haos_monitor", "0.7.3-0")
+
+
+def test_addon_keys_are_absent_when_unknown(serve: Any, env: dict[str, Path]) -> None:
+    two_hosts(env)
+    _status, data = overview(start(serve, env))
+    assert set(data) == {"now_ms", "hosts"}

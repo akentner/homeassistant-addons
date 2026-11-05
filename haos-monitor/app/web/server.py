@@ -45,7 +45,11 @@ def status_env(sources: Sources) -> dict[str, str]:
     }
 
 
-def build_router(sources: Sources, clock: Callable[[], float] = time.time) -> Router:
+def build_router(
+    sources: Sources,
+    clock: Callable[[], float] = time.time,
+    addon_info: Callable[[], dict[str, str] | None] = lambda: None,
+) -> Router:
     router = Router()
     logdir = Path(sources.logdir)
 
@@ -75,7 +79,12 @@ def build_router(sources: Sources, clock: Callable[[], float] = time.time) -> Ro
                     "incidents": last_incidents(log),
                 }
             )
-        return {"now_ms": int(clock() * 1000), "hosts": entries}
+        body: dict[str, Any] = {"now_ms": int(clock() * 1000), "hosts": entries}
+        info = addon_info()
+        if info:  # unknown (no token, direct run): the keys stay out and the GUI hides the info link and the version
+            body["addon_slug"] = info["slug"]
+            body["addon_version"] = info["version"]
+        return body
 
     # Not public: the machine endpoints stay on the busybox httpd (8099), this server only answers ingress.
     router.add("GET", "/api/overview", api_overview)
@@ -87,6 +96,7 @@ def make_server(
     port: int,
     host: str = "0.0.0.0",
     ingress_remote: str = INGRESS_REMOTE,
+    addon_info: Callable[[], dict[str, str] | None] = lambda: None,
 ) -> ThreadingHTTPServer:
-    router = build_router(sources)
+    router = build_router(sources, addon_info=addon_info)
     return _make_server(router, StaticFiles(STATIC_DIR), port, ingress_remote=ingress_remote, host=host)

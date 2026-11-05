@@ -85,7 +85,7 @@ test("mount: one relative request, one card per host in order, title and no navi
   assert.equal(tag(root, "h1")[0].textContent, "HAOS Monitor");
   assert.equal(cls(root, "tabs").length + cls(root, "topnav").length + tag(root, "nav").length, 0);
   assert.equal(tag(root, "main").length, 1);
-  assert.equal(tag(root, "select").filter((s) => s.className === "lang-switch").length, 1);
+  assert.equal(tag(root, "select").filter((s) => s.className === "lang-switch").length, 0);
 });
 
 test("bar status: loading, ok, problems (plural), degraded, error", async () => {
@@ -235,21 +235,18 @@ test("boot time comes from now_ms, not from the browser clock", async () => {
   }
 });
 
-test("language: the switch re-renders in german and issues no new request", async () => {
+test("language: no switch in the bar; a language change re-renders without a new request", async () => {
   const { root } = await mountApp();
-  const [select] = tag(root, "select").filter((s) => s.className === "lang-switch");
-  select.value = "de";
-  select.dispatch("change");
+  assert.equal(cls(root, "lang-switch").length, 0);
+  setLang("de");
   await settle();
   assert.equal(calls.length, 1);
   assert.ok(root.textContent.includes("Messwerte von A"));
   assert.ok(tag(root, "h3").some((h) => h.textContent === "Letzte Vorfälle"));
   assert.ok(root.textContent.includes("Aktualisiert"));
-  select.value = "en";
-  select.dispatch("change");
+  setLang("en");
   await settle();
   assert.ok(root.textContent.includes("Updated"));
-  setLang("en");
 });
 
 test("HA wiring: start once on mount, dispose on unmount", async () => {
@@ -306,4 +303,33 @@ test("hostile overview payload renders as text only and stays accessible", async
 
 test.after(() => {
   setTimeout(() => process.exit(process.exitCode ?? 0), 300).unref();
+});
+
+// ---- topbar: info icon, badge, version (right-aligned, in this order) ----
+
+const barOrder = (root) =>
+  tag(root, "header")[0].childNodes.filter((n) => n.localName).map((n) => (n.className || n.localName).split(" ")[0]);
+
+test("topbar: with the backend's slug and version the order is info icon, badge, version", async () => {
+  responder = async () => reply(200, { ...overview([entry("a")]), addon_slug: "a1b2c3d4_haos_monitor", addon_version: "0.7.3-0" });
+  const { root } = await mountApp();
+  assert.deepEqual(barOrder(root).slice(-3), ["info-btn", "badge", "topbar-version"]);
+  const [a] = cls(root, "info-btn");
+  assert.equal(a.attributes.href, "/config/app/a1b2c3d4_haos_monitor/config");
+  assert.equal(cls(root, "topbar-version")[0].textContent, "0.7.3-0");
+  assert.equal(cls(root, "lang-switch").length, 0);
+});
+
+test("topbar: without slug and version neither the info icon nor the version show up", async () => {
+  responder = async () => reply(200, overview([entry("a")]));
+  const { root } = await mountApp();
+  assert.equal(cls(root, "info-btn").length, 0);
+  assert.equal(cls(root, "topbar-version").length, 0);
+  assert.equal(cls(root, "badge").length > 0, true);
+});
+
+test("topbar: a hostile slug builds no link", async () => {
+  responder = async () => reply(200, { ...overview([entry("a")]), addon_slug: "../x", addon_version: "0.7.3-0" });
+  const { root } = await mountApp();
+  assert.equal(cls(root, "info-btn").length, 0);
 });
