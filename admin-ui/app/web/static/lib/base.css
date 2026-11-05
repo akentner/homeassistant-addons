@@ -260,6 +260,8 @@ table.data td.actions > .btn + .btn { margin-inline-start: 8px; }
   box-shadow: var(--shadow); cursor: pointer; overflow-wrap: anywhere; pointer-events: auto;
   animation: toast-in 0.15s ease both;
 }
+.toast.ok { box-shadow: inset 4px 0 0 var(--ok), var(--shadow); }
+.toast.error { box-shadow: inset 4px 0 0 var(--err), var(--shadow); }
 .toast .btn.secondary { flex: none; min-width: 32px; min-height: 32px; margin-inline-start: auto; color: inherit; border-color: transparent; }
 .toast .btn.secondary:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); filter: none; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
