@@ -12,6 +12,56 @@ key:
 ```bash
 cosign verify \
   --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub \
+  ghcr.io/berriai/litellm:v1.108.1
+```
+
+**Verify using the release tag (convenience):**
+
+Tags are protected in this repository and resolve to the same key. This option is easier to read but relies on tag
+protection rules:
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/v1.108.1/cosign.pub \
+  ghcr.io/berriai/litellm:v1.108.1
+```
+
+Expected output:
+
+```
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - The signatures were verified against the specified public key
+```
+
+---
+
+## What's Changed
+
+- ci: run the OSV scan and unit tests on stable, rc and lts branches (#50086) [backport lts/1.108.x] by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/50088
+- test: fix stale unit tests on 1.108 LTS by @yuneng-berri in https://github.com/BerriAI/litellm/pull/50091
+- fix(backport): backport 21 main fixes plus 2 prerequisites to lts/1.108.x for v1.108.1 by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/50136
+- fix(passthrough): skip team deployments when picking proxy-wide pass-through credentials on lts/1.108.x by
+  @kerry-berri in https://github.com/BerriAI/litellm/pull/50217
+
+**Full Changelog**: https://github.com/BerriAI/litellm/compare/v1.108.0...v1.108.1
+
+## Verify Docker Image Signature
+
+All LiteLLM Docker images are signed with [cosign](https://docs.sigstore.dev/cosign/overview/). This release is signed
+with the key introduced in
+[commit `e82a3c6`](https://github.com/BerriAI/litellm/commit/e82a3c646908ba0a6ee0beddc4310d7a6cac4065).
+
+**Verify using the pinned commit hash (recommended):**
+
+A commit hash is cryptographically immutable, so this is the strongest way to ensure you are using the published signing
+key:
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub \
   ghcr.io/berriai/litellm:v1.108.0
 ```
 
