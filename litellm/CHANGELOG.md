@@ -1,3 +1,50 @@
+> [!TIP] The `lts` image tag always points to the latest LTS release. Pull `ghcr.io/berriai/litellm:lts` to stay on the
+> newest LTS patch
+
+## Verify this release
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub \
+  ghcr.io/berriai/litellm:v1.108.2
+```
+
+Same command for `litellm-database`, `litellm-non_root` and the `docker.io/litellm/*` images
+
+## What's new in 1.108.2 (LTS)
+
+12 PRs. 11 fixed, 1 changed. No action needed to upgrade
+
+### Changes
+
+- **OpenAI:** Fixed `openai/` deployments with an empty `api_key` sending `OPENAI_ADMIN_KEY` as the bearer token
+  (#50218)
+- **AWS Bedrock:** Fixed Converse `service_tier` so unsupported tiers answer 400 and `reserved`, `auto` and
+  `standard_only` are honored (#50360)
+- **AWS Bedrock:** Fixed Invoke dropping the `per-turn-control-2026-07-01` beta on Claude 4.5 and newer (#50362)
+- **Vertex AI and Gemini:** Fixed chirp text-to-speech ignoring `vertex_location`, so US and EU deployments call their
+  multi-region host (#50392)
+- **Chat completions:** Fixed `response_format: json_object` on `openai/responses/*` and `azure/responses/*` answering
+  400 about the word json (#50267)
+- **Chat completions:** Fixed base64 PDFs sent to Claude as `image_url` answering 400, and Bedrock JSON schema calls
+  dropping thinking (#50280)
+- **Responses API:** Fixed `/v1/responses/compact` returning 500 when a `during_call` guardrail is on by default
+  (#50274)
+- **Embeddings, images and audio:** Fixed audio transcription errors echoing the full provider reply, transcript
+  included, to clients and logs (#50325)
+- **MCP:** Changed hosted MCP tools that a translated route cannot run to return a clear 400, or be dropped with
+  `drop_params` (#50348)
+- **Routing and fallbacks:** Fixed groups that accept unmatched tags rejecting requests after affinity or cooldown
+  filtering (#48470)
+- **Routing and fallbacks:** Fixed prompt caching routing not pinning follow-ups to one deployment when
+  `turn_off_message_logging` is on (#50276)
+- **Cost tracking and pricing:** Fixed spend rows being dropped and valid keys getting 401 while Postgres restarts or
+  shuts down (#50132)
+
+---
+
+Backport #50297 · Backport #50326 · [Full changelog](https://github.com/BerriAI/litellm/compare/v1.108.1...v1.108.2)
+
 ## Verify Docker Image Signature
 
 All LiteLLM Docker images are signed with [cosign](https://docs.sigstore.dev/cosign/overview/). This release is signed
