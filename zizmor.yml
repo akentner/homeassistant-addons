@@ -47,7 +47,7 @@ rules:
       - _build-template.yml:70:9
       - auto-update.yml:51:9
       - base-image-update.yml:35:9
-      - build.yml:61:9
+      - build.yml:62:9
       - lint.yml:22:9
       - test-install-provider.yml:28:9
       - test-terraform-provider.yml:24:9
@@ -72,7 +72,7 @@ rules:
   # DEFERRED (help): an explicit `repository:` where GitHub's self-repository syntax applies.
   self-repository:
     ignore:
-      - build.yml:198:11
+      - build.yml:208:11
 
   # DEFERRED (error/warning): `${{ inputs.* }}` and `${{ matrix.arch }}` interpolated straight into
   # `run:` blocks in the reusable build template — 11 findings at 9 distinct locations

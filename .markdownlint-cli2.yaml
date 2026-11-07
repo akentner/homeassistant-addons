@@ -27,3 +27,5 @@ ignores:
   # don't apply. Adding the ignore so pre-commit doesn't fail on every
   # commit that touches repo state.
   - "**/.gsd/**"
+  # terraform-bridge is deprecated and no longer maintained.
+  - "terraform-bridge/**"

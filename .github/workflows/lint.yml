@@ -81,7 +81,7 @@ jobs:
       - name: Lint YAML files
         run: |
           echo "Linting YAML files..."
-          find . -name "*.yaml" -o -name "*.yml" | grep -v ".git" | xargs yamllint -d relaxed
+          find . \( -name "*.yaml" -o -name "*.yml" \) -not -path "./terraform-bridge/*" | grep -v ".git" | xargs yamllint -d relaxed
 
       - name: Lint GitHub Actions workflows
         run: |
@@ -91,7 +91,7 @@ jobs:
       - name: Lint shell scripts
         run: |
           echo "� Running shellcheck on shell scripts..."
-          find . -name "*.sh" -type f -exec shellcheck {} + || \
+          find . -name "*.sh" -type f -not -path "./terraform-bridge/*" -exec shellcheck {} + || \
             echo "No shell scripts to check"
 
       - name: Lint Markdown files

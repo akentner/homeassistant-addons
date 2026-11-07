@@ -38,6 +38,7 @@ on:
       - "!internal/**"
       - "!terraform-provider-homeassistant/**"
       - "!tools/**"
+      - "!terraform-bridge/**"
   workflow_dispatch:
     inputs:
       addons:
@@ -83,6 +84,11 @@ jobs:
           # for it. One add-on declares two legs today, the rest declare one.
           SUPPORTED_ARCHS="amd64 aarch64"
 
+          # Deprecated add-ons: kept in the tree, never built. The path filter
+          # above covers push events; this list also covers workflow_dispatch
+          # (empty input builds everything) and explicit addons input.
+          DEPRECATED_ADDONS="terraform-bridge"
+
           if [ "$EVENT_NAME" = "push" ]; then
             base="${BEFORE_SHA:-}"
             if [ -z "$base" ] || ! git rev-parse --verify --quiet "${base}^{commit}" >/dev/null 2>&1; then
@@ -117,7 +123,7 @@ jobs:
 
           matrix_file=$(mktemp)
           accepted_file=$(mktemp)
-          CANDIDATES="$candidates" SUPPORTED_ARCHS="$SUPPORTED_ARCHS" \
+          CANDIDATES="$candidates" SUPPORTED_ARCHS="$SUPPORTED_ARCHS" DEPRECATED_ADDONS="$DEPRECATED_ADDONS" \
           MATRIX_FILE="$matrix_file" ACCEPTED_FILE="$accepted_file" python3 - <<'PY'
           import json
           import os
@@ -127,6 +133,7 @@ jobs:
           import yaml
 
           supported = os.environ["SUPPORTED_ARCHS"].split()
+          deprecated = set(os.environ["DEPRECATED_ADDONS"].split())
           names = [c.strip() for c in os.environ["CANDIDATES"].splitlines() if c.strip()]
           name_re = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
           include = []
@@ -135,6 +142,9 @@ jobs:
           for n in names:
               if not name_re.match(n):
                   print(f"::warning::ignoring '{n}': not a well-formed add-on directory name")
+                  continue
+              if n in deprecated:
+                  print(f"::notice::ignoring '{n}': deprecated add-on, not built")
                   continue
               paths = {k: f"{n}/{k}" for k in ("config.yaml", "build.yaml", "Dockerfile")}
               if not all(os.path.isfile(p) for p in paths.values()):
