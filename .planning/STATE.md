@@ -6,15 +6,15 @@ current_phase: 23
 current_phase_name: "coding-assistants: Claude Code + herdr (replaces tmux)"
 current_plan: 9
 status: Phase 22 gap-closure 22-04 executed (CR-01) — awaiting re-verification
-stopped_at: Completed 23-09-PLAN.md
-last_updated: "2026-11-01T20:47:24.862Z"
-state_head: b092dfbb321fc7dcdbd6986b99f545177a0da494
+stopped_at: "Phase 26 executed (13/13 plans), verification human_needed: live spike partial, PR pending"
+last_updated: "2026-11-02T14:30:00.000Z"
+state_head: 525d73e4de5ffa0147dcc95b2689704af4ef9ab8
 progress:
-  total_phases: 11
+  total_phases: 13
   completed_phases: 12
   total_plans: 43
   completed_plans: 42
-  percent: 98
+  percent: 92
 ---
 
 # Project State
@@ -186,6 +186,10 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
   printer configured and `f1c878cb_cups` is already removed)
 - Phase 22 added: cups: paperless-ngx PDF document upload
 - Phase 23 added: coding-assistants: Claude Code + herdr (replaces tmux)
+- Phase 24 added: ntfy add-on + admin GUI (live ACLs in `auth.db`, GUI via ingress, export of desired state)
+- Phase 25 added: ntfy IaC API (own bearer token, `desired-state` with dry-run/additive/prune; starts after Phase 24)
+- Phase 27 added: ntfy admin-ui lib migration (user decision 2026-11-02: first verify Phase 24 incl. UAT, then
+  Phase 27, then Phase 25)
 
 ### Key Decisions (v1.3)
 
@@ -433,11 +437,11 @@ Phase 21 wave 3 rollout and moved to `.planning/todos/completed/` (commits `d0a8
 
 ## Session Continuity
 
-**Resume file:** None
+**Resume file:** .planning/phases/24-ntfy-add-on-admin-gui/24-CONTEXT.md
 
-**Stopped at:** Completed 23-09-PLAN.md
+**Stopped at:** Phase 24 executed and verified (UAT 7/9, 2 blocked on production routing / published image); Phase 27 planned, next
 
-Last session: 2026-10-12T00:55:25.729Z
+Last session: 2026-11-01T21:43:18.207Z
 
 ---
 

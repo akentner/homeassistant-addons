@@ -1,0 +1,31 @@
+/* ntfy-specific rules on top of the admin-ui lib base.css. Tokens only, no literal colours. */
+.badge.gui { color: var(--acc); border-color: var(--acc); }
+.badge.options { color: var(--warn); border-color: var(--warn); }
+.badge.iac { color: var(--ok); border-color: var(--ok); }
+.toolbar label { display: inline-flex; align-items: center; gap: 4px; }
+
+/* wide tables scroll inside their wrapper (the lib clips overflow-x on html and body) */
+.table-scroll { overflow-x: auto; }
+
+/* buttons that carry no chrome of their own */
+.link-btn { padding: 0; border: 0; background: none; color: var(--acc); font: inherit; text-decoration: underline; cursor: pointer; }
+.cell-btn {
+  display: block; width: 100%; min-height: 32px; padding: 0; border: 0; background: none; color: inherit; font: inherit;
+  cursor: pointer;
+}
+
+/* topic x user matrix */
+.matrix { max-height: 70vh; overflow: auto; border: 1px solid var(--bd); border-radius: 8px; background: var(--card); }
+.matrix table { width: max-content; min-width: 100%; }
+.matrix th, .matrix td { padding: 4px 10px; text-align: center; border-bottom: 1px solid var(--bd); border-right: 1px solid var(--bd); }
+.matrix thead th { position: sticky; top: 0; z-index: 2; background: var(--card); }
+.matrix tbody th, .matrix thead th:first-child {
+  position: sticky; left: 0; z-index: 1; background: var(--card); text-align: left; font-weight: 500; color: var(--fg);
+}
+.matrix thead th:first-child { z-index: 3; }
+.matrix td.rw { color: var(--ok); }
+.matrix td.ro { color: var(--acc); }
+.matrix td.wo { color: var(--warn); }
+.matrix td.deny { color: var(--err); }
+.matrix td.cell { cursor: pointer; }
+.matrix td.cell:hover { background: var(--hover); }

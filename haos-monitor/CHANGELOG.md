@@ -3,6 +3,82 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.8.3-0] - 2026-11-05
+
+### Changed
+
+- Use admin-ui lib 0.9.1: info toasts get a blue accent
+
+## [0.8.2-0] - 2026-11-05
+
+### Changed
+
+- Use admin-ui lib 0.9.0: toasts look like the Home Assistant snackbar
+
+## [0.8.1-0] - 2026-11-05
+
+### Fixed
+
+- The info icon and the version did not show up: the Supervisor token is not in the environment of the GUI process, so
+  it is now also read from the s6 container environment
+- Without the language switch the info icon, badge and version now sit at the right edge of the top bar (lib 0.8.1)
+
+## [0.8.0-0] - 2026-11-05
+
+### Changed
+
+- Topbar: the language switch is gone (the page follows the browser language); right-aligned it now shows an info icon
+  that opens the add-on's configuration page in Home Assistant, the status badge and the add-on version
+- The info icon and the version come from the Supervisor (`addon_slug` and `addon_version` in `/api/overview`, needs no
+  extra permission); without an answer both stay hidden
+- Use admin-ui lib 0.8.0
+
+## [0.7.3-0] - 2026-11-05
+
+### Changed
+
+- Use admin-ui lib 0.7.1: static files and the page carry a strong `ETag` and answer `If-None-Match` with `304`;
+  `index.html` is served with `?v=<hash>` asset URLs and stays `no-cache`, so a changed front end is never shown from a
+  stale browser cache
+- A browser that cached the 0.6.x page heuristically may need one hard reload (Ctrl+Shift+R) after updating
+
+## [0.7.2-0] - 2026-11-05
+
+### Fixed
+
+- Limit the kernel log replay on start: lines older than 5 minutes before the host uptime are dropped on the host, so
+  old errors are not counted as new and fresh samples no longer queue behind the backlog (host showed red for about 15
+  minutes after every start)
+- Check the log size only every 100 lines instead of forking `wc` for each line
+
+### Added
+
+- State `syncing`: the monitor marks its start (`SYNC start` / `SYNC done`); `/api/status.json` gets `"syncing":true`
+  and holds back the stale verdict for at most 10 minutes, so `problem` and Gatus stay green. Real problems still count.
+  New metric `haos_monitor_syncing`; the web UI shows an "Updating…" badge instead of red
+
+## [0.7.1-0] - 2026-11-04
+
+### Changed
+
+- Use admin-ui lib 0.7.0 with HA-style navigation, optional icons and consistent minimum table row heights
+- Fix overlapping badge lines and preserve table layout in action cells
+
+## [0.7.0] - 2026-11-02
+
+- Change: the status page is rebuilt on the shared admin-ui blueprint (Preact, German and English, light and dark theme,
+  HA theme when embedded). One card per host with the same information as before: verdict and reasons, all values with
+  violated thresholds highlighted, port chips, the SSH key line, blocked tasks, the last kernel error and the last 10
+  incident lines. It still refreshes every 10 seconds and has a Reload button.
+- Change: the page is served by a small Python server behind the ingress gate on the internal port 8100 and is no longer
+  reachable on the optional published port 8099, where it was unauthenticated. `python3` is added to the image.
+- Change: a port without probe data now shows as unknown instead of down, and the uptime line uses localized relative
+  time (for example "5 days ago").
+- Unchanged contracts: `/api/status.json`, `/cgi-bin/status`, `/api/metrics.txt`, `/cgi-bin/metrics`, `/api/hosts.json`
+  and `/api/incidents.json` stay on port 8099 exactly as before, so Gatus and Prometheus configurations keep working.
+  The port settings, options and MQTT entities are unchanged.
+- CI: front end and add-on tests run in the lint workflow (job `haos-monitor`).
+
 ## [0.6.1-1] - 2026-10-31
 
 - Show the SHA256 fingerprint and type of each host's SSH key on the status page, in `/api/status.json` (`key_fp`,

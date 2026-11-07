@@ -1,5 +1,8 @@
 # Terraform Bridge
 
+> **Deprecated.** This add-on is no longer maintained, built or linted. The directory stays in the repository for
+> reference only; no new images are published. Existing installations keep working with the last published image.
+
 [![Release][release-shield]][release] [![License][license-shield]][license] ![Project Stage][project-stage-shield]
 ![Project Maintenance][maintenance-shield]
 

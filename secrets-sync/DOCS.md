@@ -319,6 +319,18 @@ the URL), `sops_git_url_scheme` (only ssh and https), `sops_git_path_invalid`, `
   and offers an "Apply anyway" button (forced sync after a confirmation; `POST /api/sync?force=1`, Ingress only). Zero
   items are never forced.
 
+## Supervisor secrets reload
+
+The Supervisor keeps its own copy of `secrets.yaml` to resolve `!secret` in add-on options, and it refuses to save the
+options of an add-on that references a key it does not know yet. So after a sync adds or removes key names, the add-on
+asks the Supervisor to re-read the file (event `supervisor_reload`). Changed values alone do not trigger it.
+
+- It uses `GET /addons/self/options/config`, which every add-on may call: no extra permission (`hassio_api`) and no
+  write. The response (resolved options) is never read.
+- The Supervisor throttles the reload to once per 60 s, so the call is repeated once after 65 s.
+- A failed call is only a warning (`supervisor_reload_failed`); the sync itself stays `ok`. Manual fallback:
+  `ha supervisor reload`.
+
 ## Web UI and API
 
 Ingress sidebar entry "Secrets Sync". Optional port `8099/tcp` serves only `GET /api/health` and `GET /api/status.json`;
@@ -327,13 +339,19 @@ is at least 10 s old (the interval itself is at least 60 s).
 
 The page has a fixed top bar (status, items, last sync, version, buttons) and tabs for keys, synthetic keys, key usage
 and events. It loads `api/status.json` and refreshes every 15 s, or when you press Refresh. The tab selection is kept
-(URL hash `#keys`, `#synthetic`, `#usage`, `#events`). When the shrink guard blocks a write, a card under the top bar
-lists the key names that would be removed, added or changed and offers "Apply anyway". A double-click on any key name
-copies it to the clipboard.
+(URL hash `#/keys`, `#/synthetic`, `#/usage`, `#/events`). When the shrink guard blocks a write, a card under the top
+bar lists the key names that would be removed, added or changed and offers "Apply anyway"; you confirm by typing the
+word `remove` (German UI: `entfernen`). A double-click on any key name copies it to the clipboard. The language follows
+the browser (German or English) and can be switched in the top bar.
+
+The page is built on the shared admin-ui library (Preact/htm, vendored under `app/web/static/vendor/admin-ui`, server
+skeleton in `app/web/admin_ui`; both are copied by `make sync-admin-ui` and never edited here). Deviation from the
+blueprint rule R-04: type-to-confirm is enforced in the browser only. The server keeps the established contract
+`POST /api/sync?force=1` without a confirmation phrase, so scripts keep working.
 
 | Route              | Method | Result                                                                                     |
 | ------------------ | ------ | ------------------------------------------------------------------------------------------ |
-| `/`                | GET    | Status page shell and `static/app.js`, `static/app.css` (Ingress only)                     |
+| `/`                | GET    | Status page shell, `static/` modules and styles, `icon` (Ingress only)                     |
 | `/api/status.json` | GET    | Full state (key names only)                                                                |
 | `/api/health`      | GET    | `{"status","age_seconds","stale","items","error_code"}`; 200 if ok and not stale, else 503 |
 | `/api/sync`        | POST   | 202 started, 429 rate limited, `?force=1` lifts the shrink guard once (Ingress only)       |

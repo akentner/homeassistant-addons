@@ -117,7 +117,7 @@ repos:
         name: Validate Dockerfile ARG-before-FROM scope
         entry: ./internal/validate-dockerfile-args.sh
         language: script
-        files: ^(phone-logger|meridian|iac-runner)/Dockerfile$
+        files: ^(phone-logger|meridian|iac-runner|admin-ui)/Dockerfile$
         pass_filenames: true
       - id: validate-versions
         name: Validate Add-on Versioning
@@ -158,6 +158,24 @@ repos:
         language: system
         files: ^(\.github/workflows/opencode\.yml|internal/verify-opencode-gate\.py)$
         pass_filenames: false
+      # check-admin-ui-sync and check-admin-ui-rules read a known set of paths (the lib and skeleton sources, the
+      # lock, the consumer copies and the scripts themselves), so a path-scoped `files:` regex is a complete trigger
+      # set, same reasoning as the verify-opencode-gate hook above. `pass_filenames: false` because neither script
+      # takes positional paths. CI runs `pre-commit run --all-files`, which matches every regex.
+      - id: check-admin-ui-sync
+        name: Check admin-ui lib and skeleton lock and consumer copies for drift
+        entry: python3 internal/sync-admin-ui.py --check
+        language: system
+        files: ^(admin-ui/lib\.lock|admin-ui/app/web/static/lib/.+|admin-ui/app/web/skeleton/.+|[^/]+/app/web/static/vendor/admin-ui/.+|[^/]+/app/web/admin_ui/.+|internal/sync-admin-ui\.py)$
+        pass_filenames: false
+      - id: check-admin-ui-rules
+        name: Check admin-ui front ends against the static blueprint rules
+        entry: python3 internal/check-admin-ui-rules.py
+        language: system
+        files: ^(admin-ui/app/web/static/.+|[^/]+/app/web/static/.+|internal/check-admin-ui-rules\.py)$
+        pass_filenames: false
+      # terraform-bridge is deprecated: its verify hooks only run on demand (`pre-commit run --hook-stage manual`), so they
+      # neither block commits nor fail the Lint workflow (the image exceeds the 60 MiB cap).
       - id: verify-bridge-scaffold
         name: terraform-bridge scaffold verify
         description: Build the Bridge, assert <= 30 MiB image, JSON placeholder, SIGTERM drain, SIGHUP reopen
@@ -166,6 +184,7 @@ repos:
         pass_filenames: false
         files: ^terraform-bridge/.*$
         require_serial: true
+        stages: [manual]
       - id: verify-bridge-no-token-leak
         name: terraform-bridge no-token-leak
         description: "Assert AUTH-05 + CF-02 + OPS-01 invariants: no SUPERVISOR_TOKEN/Bearer/bridge_token substrings in stdout, bridge plaintext surfaces exactly once, actor_token_fp matches SHA-256[8], OPS-01 request-log emitted for GET /"
@@ -174,6 +193,7 @@ repos:
         pass_filenames: false
         files: ^terraform-bridge/.*$
         require_serial: true
+        stages: [manual]
 
 # Configuration
 default_language_version:
@@ -181,4 +201,7 @@ default_language_version:
 
 # Global settings
 fail_fast: false
+
+# terraform-bridge is deprecated: kept in the tree but not linted or verified.
+exclude: ^terraform-bridge/
 minimum_pre_commit_version: "4.6.2"

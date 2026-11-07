@@ -253,6 +253,134 @@ Plans:
 - [ ] TBD (run /gsd-plan-phase 23 to break down; suggested: 1 Claude install + auth, 2 Claude MCP registration,
       3 herdr replaces tmux, 4 plugins + web-service/nginx, 5 docs/version bump/verify)
 
+### Phase 24: ntfy add-on + admin GUI
+
+**Goal:** New `ntfy/` add-on based on upstream ntfy (binwiederhier/ntfy) that exposes ntfy's server and auth
+configuration as add-on options and ships an ingress-only admin GUI. Live ACLs, users and tokens live in ntfy's
+`auth.db` under `/data` (persisted, in backups); add-on options carry only a baseline that is applied additively.
+Rejected: writing live ACLs back to the add-on options via the Supervisor API (edit conflicts, secrets in
+options/backups, duplicate of `auth.db`) and ntfy's declarative `auth-users`/`auth-access` (deletes entries on
+restart).
+**Requirements**: TBD
+**Depends on:** None (independent new add-on)
+**Plans:** 11 plans
+
+Success criteria:
+
+1. Add-on follows the repo pattern (`config.yaml`, `build.yaml`, `Dockerfile`, `run.sh`, `README.md`, `DOCS.md`,
+   `.upstream.yaml`, `image:` key), HA base image, bridge network (container port 8000 unpublished, hostname
+   `72a005f5-ntfy`), 3-file version sync, local `docker build` verified, upstream auto-update works, registered in the
+   root README and `internal/base-image-config.yaml`.
+2. Options pass through `base_url`, `enable_web_ui`, `behind_proxy`, `auth_default_access`, cache and attachment
+   settings; `admin_user`/`admin_password` bootstrap the first admin; `baseline_users[]` (same fields as the old
+   add-on's `users[]`) is applied additively via the CLI, never deleting; passwords of existing baseline users are only
+   reset when `baseline_overwrite_passwords` is true (default false); secrets use `password` fields.
+3. Admin GUI via HA Ingress only (gate on every route, relative URLs, vendored htm/Preact); backend drives
+   `ntfy user/access/token` (CLI) for writes and short-lived read-only SQLite for reads, never the undocumented
+   `/v1/users` API, so no ntfy admin password travels over the network.
+4. GUI features: user list (role, tier, tokens); ACL CRUD per topic/user incl. `everyone` and wildcards; topic x user
+   matrix; token create/label/expire/revoke (values revealable per click); effective-rights lookup; random 16-char
+   topic generator with default ACL (`homeassistant` rw, `akentner` ro); separate resets (ACLs / message cache /
+   everything) with typed confirmation and automatic `auth.db` backup; backups rotated by `backup_keep`; health
+   (status, DB size, test publish); guardrails for the last admin and the options admin.
+5. Every user/ACL/token carries an origin marker (`gui` | `options` | `iac`) kept in a sidecar file; baseline entries
+   show origin `options` and stay editable.
+6. Export button writes a versioned desired-state YAML/JSON (`schema: 1`; no secrets by default, optional password
+   hashes, never token values); the format is the contract for Phase 25.
+
+Research: done via three spikes (`.planning/phases/24-ntfy-add-on-admin-gui/spikes/`); decisions in `24-CONTEXT.md`.
+
+Plans:
+- [x] 24-01-PLAN.md — Wave 1: tracer, add-on skeleton and shared contract C1-C13
+- [x] 24-02-PLAN.md — Wave 2: NtfyCli and AuthDb, fake ntfy for tests
+- [x] 24-03-PLAN.md — Wave 2: origin sidecar, backups, export schema 1
+- [x] 24-04-PLAN.md — Wave 2: vendored htm/Preact, frontend lib, CSS, JS tests
+- [x] 24-05-PLAN.md — Wave 2: registration, icons, translations, docs incl. migration
+- [x] 24-06-PLAN.md — Wave 3: accounts backend (users/ACLs, guardrails, role-change snapshot)
+- [x] 24-07-PLAN.md — Wave 3: effective rights, tokens, topic generator
+- [x] 24-08-PLAN.md — Wave 3: resets, cache clearing, test publish, health, export/backup API
+- [x] 24-09-PLAN.md — Wave 3: baseline application at start
+- [x] 24-10-PLAN.md — Wave 3: GUI shell and 7 views
+- [x] 24-11-PLAN.md — Wave 4: registry/parity tests, Docker E2E against real ntfy, docs reconciliation
+
+### Phase 25: ntfy IaC API
+
+**Goal:** Separate IaC API in the `ntfy/` add-on so Ansible/OpenTofu can manage users, ACLs and tokens without the ntfy
+admin credential. Starts only after the Phase 24 GUI is usable.
+**Requirements**: TBD
+**Depends on:** Phase 24
+**Plans:** 0 plans
+
+Success criteria:
+
+1. Own bearer token (`password` option), independent of the ntfy admin; it can only manage users/ACLs/tokens and
+   cannot read messages.
+2. `GET /v1/state` returns the same format as the GUI export; `PUT /v1/desired-state` is idempotent with `dry_run` and
+   a diff response.
+3. Modes: `additive` (default, like `ntfy_apply.sh`) and `prune`, which removes only entries with origin `iac`.
+4. Separate port, not published by default and never routed via Cloudflare; optional bind to LAN/Tailscale.
+5. `DOCS.md` documents Ansible/OpenTofu usage; a threat-model note covers token handling and exposure.
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 25 to break down)
+
+### Phase 26: admin-ui blueprint
+
+**Goal:** Meta add-on `admin-ui`: a real HA add-on with a demo GUI that is the blueprint for all admin GUIs in this
+repo, now and later. It fixes design and rules (dark/light, a11y minimum, i18n de/en, test duty, ingress/security
+rules) and ships a reusable lib (tokens + base CSS, API client + ingress helper, Preact/htm components, Python server
+skeleton). Source of the lib is the ntfy GUI (Phase 24). The lib is distributed by copy (`make sync-admin-ui`, drift
+check, `lib.lock`); migration paths for `ntfy`, `secrets-sync` and `haos-monitor` are documented, not executed (own
+follow-up phases).
+**Requirements**: TBD (D-01..D-17 in `26-CONTEXT.md` act as requirements)
+**Depends on:** Phase 24
+**Plans:** 13 plans
+**Status:** Executed 2026-11-02; verification `human_needed` (see `26-VERIFICATION.md`): live spike only partly run,
+first CI run on GitHub pending.
+
+Success criteria:
+
+1. A real add-on `admin-ui` with a demo GUI exists and builds (HA base image, ingress, 3-file version sync).
+2. The blueprint fixes design and rules (dark/light, a11y, i18n de/en, tests, ingress/security) as `DOCS.md` rules
+   R-01..R-15 with an enforcement column.
+3. A reusable lib ships: tokens + base CSS, API client + ingress helper, Preact/htm components, Python server skeleton.
+4. Distribution is decided and implemented: copy + sync script + drift check + `lib.lock`, version/hash pinned.
+5. Migration paths for `ntfy`, `secrets-sync` and `haos-monitor` are documented; no migration happens in this phase.
+6. Rules are enforced by tests where possible (i18n parity, ingress gate, static rules, a11y minimum, contrast).
+7. CI job for lib tests, pytest and the sync check exists in `lint.yml`.
+8. A live spike of HA theme/iframe access decides what the rules guarantee (partial: run A only).
+
+Research: `26-RESEARCH.md`; spike notes in `.planning/phases/26-admin-ui-blueprint/spikes/ha-iframe-theme.md`; user quick
+tasks (sticky topbar, nav option with burger, icon, mobile overflow fix, CSP guide, spike version detection, add-on info
+link) in `.planning/quick/261102-admin-ui-topbar-nav-icon/`.
+
+Plans:
+- [x] 26-01-PLAN.md — Wave 1: tracer (gate, router, health, lib client, vendored Preact) and add-on shell, contract C1-C9
+- [x] 26-02-PLAN.md — Wave 2: Python skeleton hardening, demo API, server tests
+- [x] 26-03-PLAN.md — Wave 2: `lib/base.css` tokens, light/dark/`data-theme`, contrast fix and test
+- [x] 26-04-PLAN.md — Wave 2: hooks, ingress helper, Intl formatters, i18n and base strings
+- [x] 26-05-PLAN.md — Wave 2: `color.mjs`, `theme-sync.mjs`, `ha-bridge.mjs`
+- [x] 26-06-PLAN.md — Wave 2: sync script with drift semantics, rules scanner, Makefile targets
+- [x] 26-07-PLAN.md — Wave 2: `DOCS.md` rules, README/CLAUDE.md registration, base-image config
+- [x] 26-08-PLAN.md — Wave 3: a11y helpers, full components, shell, fake-DOM upgrade
+- [x] 26-09-PLAN.md — Wave 3: `lint.yml` job `admin-ui` (human-confirmed tool pins)
+- [x] 26-10-PLAN.md — Wave 4: demo shell, gallery, tokens, language and CRUD views
+- [x] 26-11-PLAN.md — Wave 5: rules checklist view and spike view S1..S15
+- [x] 26-12-PLAN.md — Wave 6: `lib.lock`, hooks, `check-all`, export contract test, final Docker smoke
+- [x] 26-13-PLAN.md — Wave 7: live spike on a real HA instance (run A only), results and follow-ups recorded
+
+### Phase 27: ntfy admin-ui lib migration
+
+**Goal:** The ntfy admin GUI (frontend and server skeleton) runs on the shared admin-ui lib (`make sync-admin-ui
+ADDON=ntfy`) instead of its own duplicates, keeps only ntfy-specific model/views/styles, has de+en strings, and its
+frontend tests run in CI. API error codes and the Phase 24 contract (C8, registry tests) stay unchanged.
+**Requirements**: TBD
+**Depends on:** Phase 24 (verified incl. UAT), Phase 26; runs before Phase 25 (IaC API)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 27 to break down)
+
 ### 📋 v1.4 iac-runner (Phases 16-19) — PLANNING
 
 **Milestone Goal:** Ship a Home Assistant Supervisor add-on (`iac-runner/`) that clones a Git repo (e.g.
@@ -764,6 +892,7 @@ exercised. Operator documentation (`README.md` + `DOCS.md`) is written from obse
 | 18. MQTT + HA Entities              | v1.4      | 0/TBD                                                         | Planned             | —          |
 | 19. E2E + DOCS                      | v1.4      | 0/TBD                                                         | Planned             | —          |
 | 21. CUPS print server AirPrint/mDNS | —         | 10/10 | Complete | 2026-10-04 |
+| 26. admin-ui blueprint              | —         | 13/13 | Executed, verification human_needed | 2026-11-02 |
 
 ---
 

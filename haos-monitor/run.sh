@@ -92,6 +92,14 @@ done
 
 [ -s "$HOSTS" ] || { echo "no usable host configured" >&2; exit 1; }
 
+# Ingress GUI on the internal port 8100 (never published): reads /etc/haos-monitor.hosts, /status.sh and $LOGDIR
+# (exported above), never the options or key files. Restarted two seconds after any exit.
+(
+  cd /opt/haos-monitor-gui || exit 1
+  while :; do python3 -m app.main || true; sleep 2; done
+) &
+
+# Machine endpoints (status, metrics, hosts, incidents) on the optional published port 8099
 httpd -p 8099 -h /www -c /etc/httpd.conf
 # Children are supervised individually; keep the container running regardless
 while :; do sleep 3600; done

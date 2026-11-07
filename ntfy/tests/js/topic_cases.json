@@ -1,0 +1,77 @@
+[
+  {
+    "match": true,
+    "pattern": "pub*",
+    "topic": "pub1"
+  },
+  {
+    "match": false,
+    "pattern": "pub*",
+    "topic": "PUB1"
+  },
+  {
+    "match": true,
+    "pattern": "pub*",
+    "topic": "pub"
+  },
+  {
+    "match": false,
+    "pattern": "a_b*",
+    "topic": "aXbz"
+  },
+  {
+    "match": true,
+    "pattern": "a_b*",
+    "topic": "a_bz"
+  },
+  {
+    "match": true,
+    "pattern": "*",
+    "topic": "x"
+  },
+  {
+    "match": false,
+    "pattern": "x",
+    "topic": "xy"
+  },
+  {
+    "match": true,
+    "pattern": "x",
+    "topic": "x"
+  },
+  {
+    "match": true,
+    "pattern": "a*b*",
+    "topic": "aXXbYY"
+  },
+  {
+    "match": false,
+    "pattern": "a*b*",
+    "topic": "bXXa"
+  },
+  {
+    "match": true,
+    "pattern": "*end",
+    "topic": "theend"
+  },
+  {
+    "match": false,
+    "pattern": "*end",
+    "topic": "endx"
+  },
+  {
+    "match": true,
+    "pattern": "a-b",
+    "topic": "a-b"
+  },
+  {
+    "match": false,
+    "pattern": "a.b",
+    "topic": "aXb"
+  },
+  {
+    "match": true,
+    "pattern": "**",
+    "topic": "anything"
+  }
+]

@@ -143,6 +143,18 @@ make validate-addons        # Validates add-on configs
   guidelines
 - GitHub Workflows: stored in `.github/workflows/` (currently only `lint.yml`)
 
+### Admin UI layout rule
+
+- The shared admin UI topbar **matches the HA parent `--header-height`, including its bottom border**. Use **56 CSS px
+  as the fallback** when the parent is inaccessible or its value is missing/invalid. This applies to desktop, mobile,
+  inline navigation and the collapsed menu.
+- Navigation links, icons, badges and actions must fit inside that height and must never stretch the topbar.
+- HA safe-area padding and a separate tab bar sit outside the synced topbar height.
+- Keep this rule in `admin-ui/app/web/static/lib/base.css`; sync consumer copies with `make sync-admin-ui`.
+- Prepare shared lib releases with `make release-admin-ui-lib VERSION=X.Y.Z`; commit sources and all consumer copies
+  together. CI requires strict sync and passing consumer tests. Add-on image versions still use `make update-version`.
+  `admin-ui/tests/test_css.py` and `admin-ui/tests/js/theme_sync.test.mjs` enforce sizing and parent-value validation.
+
 ### Configuration Standards
 
 - All user-facing configuration in add-on `config.yaml` with `options` section defining defaults

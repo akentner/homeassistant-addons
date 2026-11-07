@@ -1,0 +1,94 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import * as m from "../../app/web/static/lib/model.mjs";
+
+const cases = JSON.parse(readFileSync(new URL("./topic_cases.json", import.meta.url), "utf8"));
+
+test("matchTopic agrees with the shared fixture", () => {
+  assert.ok(cases.length >= 12);
+  for (const c of cases) assert.equal(m.matchTopic(c.pattern, c.topic), c.match, `${c.pattern} vs ${c.topic}`);
+});
+
+test("validators", () => {
+  assert.ok(m.validUsername("alice"));
+  assert.ok(!m.validUsername("-x"));
+  assert.ok(!m.validUsername("a".repeat(65)));
+  assert.ok(m.validTopicPattern("pre*"));
+  assert.ok(!m.validTopic("pre*"));
+  assert.ok(m.validTopic("abc_1"));
+  assert.ok(m.validDuration("2d"));
+  assert.ok(!m.validDuration("2w"));
+  assert.ok(m.validLabel("a".repeat(64)));
+  assert.ok(!m.validLabel("a".repeat(65)));
+  assert.ok(!m.validLabel("bad\nlabel"));
+});
+
+test("buildMatrix", () => {
+  const mx = m.buildMatrix(
+    [{ username: "bob" }, { username: "everyone" }, { username: "alice" }],
+    [
+      { user: "bob", topic: "t2", permission: "rw" },
+      { user: "alice", topic: "t1", permission: "ro" },
+      { user: "ghost", topic: "t1", permission: "deny" },
+      { user: "bob", topic: "t1", permission: "wo" },
+    ],
+  );
+  assert.deepEqual(mx.users, ["everyone", "alice", "bob", "ghost"]);
+  assert.deepEqual(mx.topics, ["t1", "t2"]);
+  assert.equal(mx.cells.bob.t2, "rw");
+  assert.equal(mx.cells.ghost.t1, "deny");
+  assert.equal(mx.cells.alice.t2, undefined);
+});
+
+test("sortRules and groupRulesByUser", () => {
+  const rules = [
+    { user: "b", topic: "z", permission: "ro" },
+    { user: "everyone", topic: "a", permission: "ro" },
+    { user: "b", topic: "a", permission: "rw" },
+  ];
+  assert.deepEqual(m.sortRules(rules).map((r) => `${r.user}:${r.topic}`), ["everyone:a", "b:a", "b:z"]);
+  assert.deepEqual(Object.keys(m.groupRulesByUser(rules)), ["everyone", "b"]);
+});
+
+test("constants mirror the contract", () => {
+  assert.deepEqual(m.RESET_PHRASES, { acls: "reset acls", cache: "clear cache", everything: "reset everything" });
+  assert.deepEqual(m.PERMISSIONS, ["rw", "ro", "wo", "deny"]);
+});
+
+test("expiryState", () => {
+  const now = 2_000_000_000_000;
+  assert.equal(m.expiryState(0, now), "never");
+  assert.equal(m.expiryState(1, now), "expired");
+  assert.equal(m.expiryState(now / 1000 + 100, now), "active");
+});
+
+test("protectionKind maps the protection reasons to kinds", () => {
+  assert.equal(m.protectionKind("last_admin"), "last_admin");
+  assert.equal(m.protectionKind("options_admin"), "options_admin");
+  assert.equal(m.protectionKind("anonymous"), "anonymous");
+  assert.equal(m.protectionKind("something_new"), "other");
+  assert.equal(m.protectionKind(null), "other");
+  assert.equal(m.protectionKind(undefined), "other");
+});
+
+test("effectiveExplain returns kind and params, never text", () => {
+  const rule = { user: "alice", topic: "alerts", permission: "rw" };
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "admin", rule: null } }), { kind: "admin", params: {} });
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "user-rule", rule } }), { kind: "user_rule", params: rule });
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "everyone-rule", rule } }), { kind: "everyone_rule", params: rule });
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "default", rule: null } }), { kind: "default", params: {} });
+  assert.deepEqual(m.effectiveExplain(null), { kind: "default", params: {} });
+  assert.deepEqual(m.effectiveExplain({ source: { kind: "user-rule", rule: { ...rule, extra: 1 } } }).params, rule);
+});
+
+test("the public export list is exactly the ntfy logic that stays", () => {
+  assert.deepEqual(
+    Object.keys(m).sort(),
+    [
+      "ORIGINS", "PERMISSIONS", "RESET_PHRASES", "buildMatrix", "effectiveExplain", "expiryState", "groupRulesByUser",
+      "matchTopic", "protectionKind", "sortRules", "validDuration", "validLabel", "validTopic", "validTopicPattern",
+      "validUsername",
+    ],
+  );
+});

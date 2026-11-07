@@ -3,6 +3,65 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.7.6-0] - 2026-11-05
+
+### Changed
+
+- Use admin-ui lib 0.9.1: info toasts get a blue accent
+
+## [0.7.5-0] - 2026-11-05
+
+### Changed
+
+- Use admin-ui lib 0.9.0: toasts look like the Home Assistant snackbar
+
+## [0.7.4-0] - 2026-11-05
+
+### Changed
+
+- Use admin-ui lib 0.8.1
+
+## [0.7.3-0] - 2026-11-05
+
+### Changed
+
+- Use admin-ui lib 0.8.0 (opt-in topbar options only, the page looks the same)
+
+## [0.7.2-0] - 2026-11-05
+
+### Changed
+
+- Use admin-ui lib 0.7.1: static files and the page carry a strong `ETag` and answer `If-None-Match` with `304`;
+  `index.html` is served with `?v=<hash>` asset URLs and stays `no-cache`, so a changed front end is never shown from a
+  stale browser cache
+
+## [0.7.1-0] - 2026-11-04
+
+### Changed
+
+- Use admin-ui lib 0.7.0 with HA-style navigation, optional icons and consistent minimum table row heights
+- Fix overlapping badge lines and preserve table layout in action cells
+
+## [0.7.0-0] - 2026-11-02
+
+- Change: the web UI is rebuilt on the shared admin-ui library (Preact/htm, lib 0.5.0) and the server runs on its
+  skeleton. Same pages and data; the look changes slightly (the library fixes colour contrast), the language follows the
+  browser and can be switched, and the tab hash is now `#/keys` (old `#keys` links still work).
+- Change: "Apply anyway" now asks to type `remove` (`entfernen` in German) instead of a browser confirm dialog.
+- Unchanged contracts: `api/status.json`, `api/health` (200/503), `POST api/sync` (202, 429, `?force=1`) and
+  `POST api/preview`. `api/health` and `api/status.json` stay reachable on the optional TCP port without Ingress;
+  everything else, including unknown paths, is Ingress only. Error responses additionally carry a `message` field.
+- CI: front end and add-on tests run in the lint workflow (job `secrets-sync`).
+
+## [0.6.0-0] - 2026-11-01
+
+- Feature: after a sync that adds or removes key names, the add-on makes the Supervisor re-read `secrets.yaml`, so
+  `!secret` references to new keys can be saved in add-on options right away (until now `ha supervisor reload` was
+  needed). Value-only changes do not trigger it. It needs no extra permission, is repeated once after 65 s because the
+  Supervisor throttles reloads, and a failure is only a warning event (`supervisor_reload_failed`).
+- Change: the top bar uses the served add-on icon only; the inline SVG fallback is gone (the icon stays hidden until it
+  has loaded).
+
 ## [0.5.1-0] - 2026-11-01
 
 - Feature: key names in the web UI are one unit (a click selects the whole name) and a double-click copies the name to

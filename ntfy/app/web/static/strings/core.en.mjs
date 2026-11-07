@@ -1,0 +1,28 @@
+// Core strings of the ntfy GUI (owner: plan 27-01): shell, view titles, ntfy error codes and hints.
+// The shared admin-ui lib already provides btn.*, state.*, lang.* and the generic errors.*.
+export default {
+  "app.title": "ntfy",
+  "app.degraded": "The ntfy auth database cannot be used right now.",
+  "view.users": "Users",
+  "view.acl": "ACL rules",
+  "view.matrix": "Matrix",
+  "view.tokens": "Tokens",
+  "view.tools": "Tools",
+  "errors.ntfy_error": "The ntfy command failed",
+  "errors.locked": "The ntfy auth database is locked, try again in a moment",
+  "errors.db_unavailable": "The ntfy auth database is not available",
+  "errors.db_unsupported": "The ntfy auth database has an unsupported schema version",
+  "perm.rw": "read + write",
+  "perm.ro": "read only",
+  "perm.wo": "write only",
+  "perm.deny": "deny",
+  "perm.none": "none",
+  "perm.label": "Permission",
+  "origin.gui": "GUI",
+  "origin.options": "Options",
+  "origin.iac": "IaC",
+  "expiry.never": "never",
+  "expiry.expired": "expired {date}",
+  "hint.db_unsupported": "Update the add-on or ntfy.",
+  "hint.db_unavailable": "Wait a moment and reload.",
+};

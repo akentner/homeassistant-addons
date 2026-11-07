@@ -1,0 +1,20 @@
+name: "Admin UI Blueprint"
+description: "Blueprint add-on: demo admin GUI behind ingress on a shared Preact lib and server skeleton"
+version: "0.3.2-0"
+stage: "experimental"
+slug: "admin_ui"
+init: false
+arch:
+  - amd64
+image: "ghcr.io/akentner/homeassistant-addons/{arch}-admin_ui"
+url: "https://github.com/akentner/homeassistant-addons"
+startup: "application"
+boot: "manual"
+host_network: false
+ingress: true
+ingress_port: 8099
+panel_icon: "mdi:palette-swatch"
+panel_title: "Admin UI"
+panel_admin: false
+options: {}
+schema: {}
