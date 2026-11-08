@@ -1,6 +1,8 @@
 build_from:
   amd64: "ghcr.io/home-assistant/amd64-base-debian:bookworm"
-  aarch64: "ghcr.io/home-assistant/aarch64-base-debian:bookworm"
+  # aarch64 is not built (not needed; saves the slow emulated CI build). The Dockerfile and the aarch64 pins below are
+  # kept so re-enabling is one line here plus `aarch64` in config.yaml arch:.
+  # aarch64: "ghcr.io/home-assistant/aarch64-base-debian:bookworm"
 
 args:
   VERSION: "1.3.0"
