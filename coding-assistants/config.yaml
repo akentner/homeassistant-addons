@@ -1,6 +1,6 @@
 name: "Coding Assistants"
-description: "Terminal with Claude Code, OpenCode and GitHub Copilot CLI — herdr sessions over SSH + web terminal"
-version: "1.1.0-0"
+description: "Terminal with Claude Code, OpenCode, OpenAI Codex and GitHub Copilot CLI — herdr sessions over SSH + web terminal"
+version: "1.2.0-0"
 slug: "coding_assistants"
 init: false
 hassio_api: true
@@ -38,6 +38,8 @@ backup_exclude:
   - ".config/herdr/*.sock"
   - ".config/herdr/*.log"
   - ".config/herdr/session-snapshots/*"
+  - ".codex/sessions/*"
+  - ".codex/log/*"
 
 options:
   log_level: "info"
@@ -80,6 +82,7 @@ schema:
   ha_token: str
   claude_code_oauth_token: password?
   anthropic_api_key: password?
+  openai_api_key: password?
   herdr_web_password: password?
   zigbee2mqtt:
     enabled: bool?

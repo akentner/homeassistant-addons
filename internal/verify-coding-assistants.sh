@@ -94,7 +94,7 @@ declare -A CA_OPTS=()
 declare -A CA_EXTRA=()
 
 # Registered scenarios: NAME -> function scenario_<NAME with - replaced by _>
-SCENARIOS=(claude-launcher claude-state claude-auth mcp-servers mcp-integrations drift herdr-core herdr-attach surface
+SCENARIOS=(claude-launcher claude-state claude-auth codex-state mcp-servers mcp-integrations drift herdr-core herdr-attach surface
     plugins services services-auth docs)
 # Scenarios that need neither Docker nor the image: when only these are selected the image build is skipped.
 STATIC_SCENARIOS=(drift docs)
@@ -549,6 +549,88 @@ scenario_claude_auth() {
 }
 
 # =============================================================================
+# Scenario codex-state
+# =============================================================================
+CA_OPENAI_FIXTURE="verify-openai-key-value"
+
+# shellcheck disable=SC2016
+scenario_codex_state() {
+    local data opts pid env agents="/data/.codex/AGENTS.md"
+
+    # Container A: user AGENTS.md with a stale block, OPENAI_API_KEY set
+    data="${SCRATCH_DIR}/codex-a/data"
+    mkdir -p "${data}/.codex"
+    opts="${data}/options.json"
+    write_options "${opts}" ".openai_api_key=\"${CA_OPENAI_FIXTURE}\""
+    printf 'USER-NOTE-1\n<!-- coding-assistants:begin -->\nstale\n<!-- coding-assistants:end -->\n' >"${data}/.codex/AGENTS.md"
+    start_ca codex-a "${data}" "${opts}"
+    wait_ca codex-a || return 0
+
+    assert_match "codex --version prints the pinned version" \
+        "$(ca_exec codex-a codex --version)" "codex-cli $(build_yaml_args "${ADDON_DIR}/build.yaml" |
+            awk -F'\t' '$1 == "CODEX_VERSION" { print $2 }')\$"
+    assert_eq "/data/.codex mode is 700" "$(ca_exec codex-a stat -c %a /data/.codex)" "700"
+    assert_eq "stale block text is gone" "$(ca_count codex-a '^stale$' "${agents}")" "0"
+    assert_eq "USER-NOTE-1 appears exactly once" "$(ca_count codex-a '^USER-NOTE-1$' "${agents}")" "1"
+    assert_ok "AGENTS.md block equals TOOLS.md" diff -B \
+        <(ca_exec codex-a sed -n '/^<!-- coding-assistants:begin -->$/,/^<!-- coding-assistants:end -->$/p' "${agents}" |
+            sed '1d;$d') "${ADDON_DIR}/TOOLS.md"
+    assert_eq "login shell has CODEX_HOME" "$(ca_exec codex-a bash -lc 'echo $CODEX_HOME')" "/data/.codex"
+    assert_eq "attach wrapper defaults CODEX_HOME" \
+        "$(ca_count codex-a '^: "${CODEX_HOME:=/data/.codex}"$' /usr/local/bin/coding-assistants-attach)" "1"
+    assert_eq "fish conf.d sets CODEX_HOME" \
+        "$(ca_count codex-a '^set -x CODEX_HOME /data/.codex$' /data/.config/fish/conf.d/00-coding-assistants.fish)" "1"
+    pid="$(ca_pid codex-a ttyd)"
+    if [[ -z "${pid}" ]]; then
+        fail "ttyd process not found in codex container A"
+    else
+        env="$(ca_environ codex-a "${pid}")"
+        assert_ok "ttyd environment has OPENAI_API_KEY with the option value" \
+            grep -qxF "OPENAI_API_KEY=${CA_OPENAI_FIXTURE}" <<<"${env}"
+        assert_ok "ttyd environment has CODEX_HOME" grep -qxF "CODEX_HOME=/data/.codex" <<<"${env}"
+    fi
+    assert_eq "api key value is absent from /etc/profile.d/00-coding-assistants.sh" \
+        "$(ca_count codex-a "${CA_OPENAI_FIXTURE}" /etc/profile.d/00-coding-assistants.sh)" "0"
+    assert_eq "api key value is absent from the fish conf.d file" \
+        "$(ca_count codex-a "${CA_OPENAI_FIXTURE}" /data/.config/fish/conf.d/00-coding-assistants.fish)" "0"
+    assert_eq "api key value is absent from the container log" \
+        "$(ca_logs codex-a | grep -c -e "${CA_OPENAI_FIXTURE}" || true)" "0"
+    assert_match "versions.json carries the codex version" \
+        "$(ca_exec codex-a jq -r .codex /opt/coding-assistants/versions.json)" '^[0-9]+\.[0-9]+\.[0-9]+'
+
+    # Restart: user text after the block survives, the block is rewritten, not duplicated
+    ca_exec codex-a sh -c "echo USER-NOTE-2 >> ${agents}"
+    restart_ca codex-a
+    wait_ca codex-a || return 0
+    assert_eq "USER-NOTE-1 still appears exactly once after a restart" "$(ca_count codex-a '^USER-NOTE-1$' "${agents}")" "1"
+    assert_eq "USER-NOTE-2 appears exactly once after a restart" "$(ca_count codex-a '^USER-NOTE-2$' "${agents}")" "1"
+    assert_eq "exactly one begin marker after a restart" \
+        "$(ca_count codex-a '^<!-- coding-assistants:begin -->$' "${agents}")" "1"
+
+    # Container B: option absent / empty -- nothing may be exported, not even an empty OPENAI_API_KEY
+    docker rm -f "$(ca_cname codex-a)" >/dev/null 2>&1
+    local variant filter
+    for variant in absent empty; do
+        docker rm -f "$(ca_cname codex-b-absent)" >/dev/null 2>&1
+        data="${SCRATCH_DIR}/codex-b-${variant}/data"
+        mkdir -p "${data}"
+        opts="${data}/options.json"
+        filter="."
+        [[ "${variant}" == "empty" ]] && filter='.openai_api_key=""'
+        write_options "${opts}" "${filter}"
+        start_ca "codex-b-${variant}" "${data}" "${opts}"
+        wait_ca "codex-b-${variant}" || continue
+        pid="$(ca_pid "codex-b-${variant}" ttyd)"
+        if [[ -z "${pid}" ]]; then
+            fail "ttyd process not found in codex container B (${variant})"
+            continue
+        fi
+        assert_eq "no OPENAI_API_KEY in the ttyd environment (option ${variant})" \
+            "$(ca_environ "codex-b-${variant}" "${pid}" | grep -c '^OPENAI_API_KEY=' || true)" "0"
+    done
+}
+
+# =============================================================================
 # Scenario mcp-servers
 # =============================================================================
 # Fixture values deliberately do not look like real credentials (keeps secret scanners quiet).
@@ -705,9 +787,9 @@ scenario_mcp_integrations() {
 # =============================================================================
 # Scenario drift (static: no container, no image)
 # =============================================================================
-# CI forwards only the standard build args, so the herdr pins live as Dockerfile ARG defaults and are mirrored in
+# CI forwards only the standard build args, so the herdr and codex pins live as Dockerfile ARG defaults and are mirrored in
 # build.yaml `args:`. Every build.yaml arg except VERSION must equal the Dockerfile default, and every Dockerfile
-# `ARG HERDR_*=` default must exist in build.yaml.
+# `ARG HERDR_*=` / `ARG CODEX_*=` default must exist in build.yaml.
 
 # build_yaml_args FILE -- the `args:` block as KEY<TAB>VALUE lines (quotes stripped)
 build_yaml_args() {
@@ -745,7 +827,7 @@ drift_compare() {
             echo "drift: Dockerfile ARG ${key} has no key in build.yaml args"
             rc=1
         }
-    done < <(grep -E '^ARG HERDR_[A-Z0-9_]+=' "${dockerfile}" | sed -E 's/^ARG ([A-Z0-9_]+)=.*/\1/')
+    done < <(grep -E '^ARG (HERDR|CODEX)_[A-Z0-9_]+=' "${dockerfile}" | sed -E 's/^ARG ([A-Z0-9_]+)=.*/\1/')
     return "${rc}"
 }
 
@@ -759,12 +841,15 @@ scenario_drift() {
     fi
     local key
     for key in HERDR_VERSION HERDR_SHA256_X86_64 HERDR_SHA256_AARCH64 HERDR_SUBAGENT_WATCH_REF HERDR_WEB_SERVICE_REF \
-        HERDR_CLAUDE_LIMITS_REF; do
+        HERDR_CLAUDE_LIMITS_REF CODEX_VERSION CODEX_SHA256_X86_64 CODEX_SHA256_AARCH64; do
         assert_eq "build.yaml carries the pin ${key}" \
             "$(build_yaml_args "${by}" | grep -c "^${key}"$'\t')" "1"
     done
     assert_match "plugin pins are full 40-character commit SHAs" \
         "$(build_yaml_args "${by}" | awk -F'\t' '$1 ~ /_REF$/ { print $2 }' | tr '\n' ' ')" '^([0-9a-f]{40} )+$'
+
+    assert_match "codex digests are 64-character hex SHA256 values" \
+        "$(build_yaml_args "${by}" | awk -F'\t' '$1 ~ /^CODEX_SHA256_/ { print $2 }' | tr '\n' ' ')" '^([0-9a-f]{64} ){2}$'
 
     # Negative controls: the comparison must fail on a changed value and on a pin missing from build.yaml.
     sed -E 's/^(  HERDR_VERSION: ").*(")$/\10.0.0-drift\2/' "${by}" >"${tmp}/changed-value.yaml"
@@ -778,6 +863,18 @@ scenario_drift() {
         fail "negative control: a pin missing from build.yaml did not fail the drift check"
     else
         pass "negative control: a pin missing from build.yaml fails the drift check"
+    fi
+    sed -E 's/^(  CODEX_SHA256_X86_64: ").*(")$/\1deadbeef\2/' "${by}" >"${tmp}/changed-codex-digest.yaml"
+    if drift_compare "${tmp}/changed-codex-digest.yaml" "${df}" >/dev/null; then
+        fail "negative control: a changed CODEX_SHA256_X86_64 did not fail the drift check"
+    else
+        pass "negative control: a changed CODEX_SHA256_X86_64 fails the drift check"
+    fi
+    grep -v '^  CODEX_VERSION:' "${by}" >"${tmp}/missing-codex.yaml"
+    if drift_compare "${tmp}/missing-codex.yaml" "${df}" >/dev/null; then
+        fail "negative control: CODEX_VERSION missing from build.yaml did not fail the drift check"
+    else
+        pass "negative control: CODEX_VERSION missing from build.yaml fails the drift check"
     fi
 }
 

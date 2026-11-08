@@ -10,6 +10,12 @@ This add-on has no upstream — every entry below is hand-written by the maintai
 
 ### Added
 
+- **OpenAI Codex CLI** (`codex`) as a pinned static release binary (`CODEX_VERSION`, per-architecture SHA256 digests;
+  image about 110 MB larger). `CODEX_HOME=/data/.codex` persists login and config; the TOOLS.md context is injected into
+  `/data/.codex/AGENTS.md` as a marked block; new optional `openai_api_key` option (exported as `OPENAI_API_KEY` only
+  when set); sessions and logs are excluded from backups. Version shown in the greeting and web UI. Renovate bumps
+  `CODEX_VERSION`; digests are refreshed with `internal/update-codex-pins.sh`. MCP sync and sandbox defaults for Codex
+  are not part of this change.
 - **MariaDB / MySQL client with autocompletion** via a new `mycli:` add-on option (one or more named connections,
   persisted to `/data/.myclirc`). The bundled `mycli` TUI client connects on first run, with per-connection DSN aliases
   (`mycli -D <name>`) and `MYCLI_HOST/PORT/USER/PASSWORD/DATABASE` env vars. Each connection also auto-registers a

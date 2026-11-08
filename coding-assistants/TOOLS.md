@@ -61,6 +61,8 @@ Persistent storage is at `/data`.
   `claude_code_oauth_token` / `anthropic_api_key` or interactively with `claude login`; MCP servers from the add-on
   options are registered for it at user scope
 - `opencode` — OpenCode AI CLI
+- `codex` — OpenAI Codex CLI (static binary, state in `CODEX_HOME=/data/.codex`). Login with `codex login --device-auth`
+  or the add-on option `openai_api_key`. MCP servers are not synced for it: add them to `~/.codex/config.toml` by hand
 - `gh copilot` — GitHub Copilot CLI (`gh copilot suggest`, `gh copilot explain`)
 - `fff-mcp` — fast file search MCP server (auto-registered in OpenCode via the `mcp_servers:` config block)
 - `node /opt/mcp2zigbee2mqtt/dist/index.js` — Zigbee2MQTT MCP server; auto-registered in OpenCode when the

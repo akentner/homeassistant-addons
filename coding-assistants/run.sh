@@ -83,10 +83,16 @@ rm -rf /root/.claude /root/.claude.json
 ln -s /data/.claude /root/.claude
 ln -s /data/.claude.json /root/.claude.json
 
-# Tool context for Claude Code — TOOLS.md is injected into the user-level /data/.claude/CLAUDE.md as a marked block
-# that is rewritten on every start; all text outside the markers is preserved. Placed after the state persistence
-# above so a legacy volume is migrated before /data/.claude is first used. Block-level HTML comments are stripped
-# before injection into Claude's context, so the markers cost no tokens.
+# Codex CLI state (auth.json, config.toml, sessions) lives in CODEX_HOME=/data/.codex; it holds the login token, so
+# the directory is private. Exported for every shell further below. Login: `codex login --device-auth`.
+export CODEX_HOME="/data/.codex"
+mkdir -p "${CODEX_HOME}"
+chmod 700 "${CODEX_HOME}"
+
+# Tool context for Claude Code and Codex — TOOLS.md is injected into the user-level /data/.claude/CLAUDE.md and
+# /data/.codex/AGENTS.md as a marked block that is rewritten on every start; all text outside the markers is
+# preserved. Placed after the state persistence above so a legacy volume is migrated before /data/.claude is first
+# used. Block-level HTML comments are stripped before injection into Claude's context, so the markers cost no tokens.
 python3 - <<'PYEOF'
 import pathlib
 import re
@@ -99,37 +105,38 @@ if not tools.endswith("\n"):
     tools += "\n"
 block = BEGIN + "\n" + tools + "\n" + END + "\n"
 
-target = pathlib.Path("/data/.claude/CLAUDE.md")
-content = target.read_text() if target.exists() else ""
 span = re.compile(
     r"^" + re.escape(BEGIN) + r"[ \t]*\n.*?^" + re.escape(END) + r"[ \t]*(?:\n|\Z)",
     re.DOTALL | re.MULTILINE,
 )
-if not content.strip():
-    content = block
-elif span.search(content):
-    # Function replacement: backslashes in TOOLS.md must never be read as group references.
-    content = span.sub(lambda _match: block, content, count=1)
-else:
-    content = content.rstrip("\n") + "\n\n" + block
-target.write_text(content)
+for target in (pathlib.Path("/data/.claude/CLAUDE.md"), pathlib.Path("/data/.codex/AGENTS.md")):
+    content = target.read_text() if target.exists() else ""
+    if not content.strip():
+        content = block
+    elif span.search(content):
+        # Function replacement: backslashes in TOOLS.md must never be read as group references.
+        content = span.sub(lambda _match: block, content, count=1)
+    else:
+        content = content.rstrip("\n") + "\n\n" + block
+    target.write_text(content)
 PYEOF
-bashio::log.info "Updated tool context in Claude Code CLAUDE.md"
+bashio::log.info "Updated tool context in Claude Code CLAUDE.md and Codex AGENTS.md"
 
 # Write MOTD with current addon version and tool versions (absolute launcher path: PATH is not extended yet)
 ADDON_VERSION=$(bashio::addon.version)
 CLAUDE_VERSION=$(/root/.local/bin/claude --version 2>/dev/null | head -n 1 | cut -d' ' -f1) || true
 HERDR_BIN_VERSION=$(herdr --version 2>/dev/null | head -n 1 | cut -d' ' -f2) || true
 OPENCODE_VERSION=$(opencode --version 2>/dev/null | head -1)
+CODEX_BIN_VERSION=$(codex --version 2>/dev/null | head -n 1 | awk '{print $NF}') || true
 MOTD_HA_URL=$(bashio::config 'ha_url')
 cat > /etc/motd << EOF
-Coding Assistants ${ADDON_VERSION}  |  claude ${CLAUDE_VERSION}  |  herdr ${HERDR_BIN_VERSION}  |  opencode ${OPENCODE_VERSION}
+Coding Assistants ${ADDON_VERSION}  |  claude ${CLAUDE_VERSION}  |  herdr ${HERDR_BIN_VERSION}  |  opencode ${OPENCODE_VERSION}  |  codex ${CODEX_BIN_VERSION}
 HA: ${MOTD_HA_URL}
 EOF
 
 # Version info for web UI
-printf '{"addon":"%s","claude":"%s","herdr":"%s","opencode":"%s"}\n' \
-    "${ADDON_VERSION}" "${CLAUDE_VERSION}" "${HERDR_BIN_VERSION}" "${OPENCODE_VERSION}" \
+printf '{"addon":"%s","claude":"%s","herdr":"%s","opencode":"%s","codex":"%s"}\n' \
+    "${ADDON_VERSION}" "${CLAUDE_VERSION}" "${HERDR_BIN_VERSION}" "${OPENCODE_VERSION}" "${CODEX_BIN_VERSION}" \
     > /opt/coding-assistants/versions.json
 
 # Fish config persistence — copy defaults on first run, then symlink
@@ -416,6 +423,7 @@ export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 export XDG_CONFIG_HOME="/data/.config"
 export XDG_DATA_HOME="/data/.local/share"
+export CODEX_HOME="/data/.codex"
 export PATH="/root/.opencode/bin:/root/.local/bin:/usr/local/bin:$PATH"
 EOF
     printf 'export HA_URL=%q\n' "${HA_URL}"
@@ -465,6 +473,15 @@ if [[ -n "${CLAUDE_AUTH_API_KEY}" && "${CLAUDE_AUTH_API_KEY}" != "null" ]]; then
 fi
 unset CLAUDE_AUTH_OAUTH CLAUDE_AUTH_API_KEY
 
+# Codex: optional OpenAI API key, same rules (process environment only, never written to disk, empty exports nothing).
+# Without it, Codex uses the ChatGPT login stored in CODEX_HOME (`codex login --device-auth`).
+CODEX_AUTH_API_KEY=$(bashio::config 'openai_api_key') || CODEX_AUTH_API_KEY=""
+if [[ -n "${CODEX_AUTH_API_KEY}" && "${CODEX_AUTH_API_KEY}" != "null" ]]; then
+    export OPENAI_API_KEY="${CODEX_AUTH_API_KEY}"
+    bashio::log.info "Exported OPENAI_API_KEY from the add-on options"
+fi
+unset CODEX_AUTH_API_KEY
+
 # Inject user-configured env vars
 if jq -e '.env_vars | length > 0' /data/options.json > /dev/null 2>&1; then
     while IFS= read -r entry; do
@@ -485,6 +502,7 @@ set -x LANG en_US.UTF-8
 set -x LC_ALL en_US.UTF-8
 set -x XDG_CONFIG_HOME /data/.config
 set -x XDG_DATA_HOME /data/.local/share
+set -x CODEX_HOME /data/.codex
 set -U fish_user_paths (string match -rv '^/homeassistant/(bin|scripts/bin)' $fish_user_paths)
 fish_add_path /root/.opencode/bin /root/.local/bin /usr/local/bin
 
