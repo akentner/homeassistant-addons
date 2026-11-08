@@ -60,7 +60,8 @@ Persistent storage is at `/data`.
 - `claude` — Claude Code CLI (native installer; updates itself, `claude update`). Auth through the add-on options
   `claude_code_oauth_token` / `anthropic_api_key` or interactively with `claude login`; MCP servers from the add-on
   options are registered for it at user scope
-- `opencode` — OpenCode AI CLI
+- `opencode` — OpenCode 2 AI CLI (`opencode upgrade` updates it persistently); MCP servers live under `mcp.servers` in
+  `~/.config/opencode/opencode.json`
 - `codex` — OpenAI Codex CLI (static binary, state in `CODEX_HOME=/data/.codex`). Login with `codex login --device-auth`
   or the add-on option `openai_api_key`. MCP servers are not synced for it: add them to `~/.codex/config.toml` by hand
 - `gh copilot` — GitHub Copilot CLI (`gh copilot suggest`, `gh copilot explain`)

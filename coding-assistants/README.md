@@ -11,7 +11,7 @@ This add-on provides a persistent development terminal inside Home Assistant wit
 pre-installed:
 
 - **Claude Code** (`claude`) — Anthropic's coding agent in the terminal
-- **OpenCode** (`opencode`) — OpenCode AI agent
+- **OpenCode** (`opencode`) — OpenCode 2 AI agent (web/API server on port 4096)
 - **OpenAI Codex** (`codex`) — OpenAI's coding agent in the terminal (`codex login --device-auth`)
 - **GitHub Copilot CLI** (`copilot`) — GitHub Copilot in the terminal
 
@@ -51,7 +51,7 @@ env_vars:
 ```
 
 [docs]: https://github.com/akentner/homeassistant-addons/blob/main/coding-assistants/DOCS.md
-[release-shield]: https://img.shields.io/badge/version-v1.2.0-orange.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.2.0
+[release-shield]: https://img.shields.io/badge/version-v1.3.0-orange.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.3.0
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg

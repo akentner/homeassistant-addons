@@ -25,15 +25,38 @@ cp "${tmp}" "${OPENCODE_JSON}"
 rm "${tmp}"
 bashio::log.info "Updated tool context in OpenCode instructions"
 
-# Opencode binary persistence — first start copies the bundled binary into /data,
-# then symlinks /root/.opencode/bin → /data/opencode/bin. The official installer writes
-# upgrades to $HOME/.opencode/bin, so routing that path through /data keeps user-initiated
-# `opencode upgrade` invocations across container rebuilds.
+# OpenCode 2 keeps MCP servers under mcp.servers (OpenCode 1: directly under mcp, with "enabled"). Move legacy entries
+# once so every writer below can use the new shape; idempotent, existing mcp.servers entries win.
+tmp=$(mktemp)
+jq '
+    if (.mcp // {}) | to_entries | map(select(.key != "servers")) | length > 0 then
+        .mcp = {
+            servers: (
+                ((.mcp | del(.servers)) | with_entries(
+                    .value |= (
+                        (if has("enabled") then . + {disabled: (.enabled | not)} else . end) | del(.enabled)
+                    )
+                )) + (.mcp.servers // {})
+            )
+        }
+    else . end
+' "${OPENCODE_JSON}" > "${tmp}" && cp "${tmp}" "${OPENCODE_JSON}"
+rm -f "${tmp}"
+
+# Opencode binary persistence — the bundled binary is seeded into /data when none is persisted or the persisted one is
+# older (e.g. a leftover OpenCode 1.x), then /root/.opencode/bin is symlinked to /data/opencode/bin. `opencode upgrade`
+# writes to $HOME/.opencode/bin, so routing that path through /data keeps user-initiated upgrades across container
+# rebuilds; a persisted version at least as new as the image seed is never touched.
+opencode_semver() { "$1" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1; }
 mkdir -p /data/opencode/bin
-if [[ ! -e /data/opencode/bin/opencode ]]; then
+OC_SEED_VERSION=$(opencode_semver /opt/opencode-initial/opencode) || OC_SEED_VERSION=""
+OC_PERSISTED_VERSION=""
+[[ -x /data/opencode/bin/opencode ]] && { OC_PERSISTED_VERSION=$(opencode_semver /data/opencode/bin/opencode) || OC_PERSISTED_VERSION=""; }
+if [[ -z "${OC_PERSISTED_VERSION}" ]] \
+    || [[ "$(printf '%s\n%s\n' "${OC_PERSISTED_VERSION}" "${OC_SEED_VERSION}" | sort -V | head -n 1)" != "${OC_SEED_VERSION}" ]]; then
     cp /opt/opencode-initial/opencode /data/opencode/bin/opencode
     chmod +x /data/opencode/bin/opencode
-    bashio::log.info "Initialized opencode binary in persistent storage"
+    bashio::log.info "Seeded opencode ${OC_SEED_VERSION} into persistent storage (persisted: ${OC_PERSISTED_VERSION:-none})"
 fi
 rm -rf /root/.opencode/bin
 ln -s /data/opencode/bin /root/.opencode/bin
@@ -173,17 +196,17 @@ claude_mcp_merge() {
 
 # MCP server auto-registration — merge addon config into OpenCode's opencode.json
 if jq -e '.mcp_servers | length > 0' /data/options.json > /dev/null 2>&1; then
-    # OpenCode format: { name: { type: "local", command: [...], enabled } }
+    # OpenCode 2 format: mcp.servers = { name: { type: "local", command: [...] } }
     OPENCODE_JSON="/data/.config/opencode/opencode.json"
     [[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
     MCP_OBJ_OC=$(jq -c '
         .mcp_servers
         | map(select(.type != "http"))
-        | map({ (.name): { type: "local", command: ([.command] + (.args // [])), enabled: true } })
+        | map({ (.name): { type: "local", command: ([.command] + (.args // [])) } })
         | add // {}
     ' /data/options.json)
     tmp=$(mktemp)
-    jq --argjson mcp "${MCP_OBJ_OC}" '.mcp = ($mcp + (.mcp // {}))' "${OPENCODE_JSON}" > "${tmp}"
+    jq --argjson mcp "${MCP_OBJ_OC}" '.mcp.servers = ($mcp + (.mcp.servers // {}))' "${OPENCODE_JSON}" > "${tmp}"
     cp "${tmp}" "${OPENCODE_JSON}"
     rm "${tmp}"
 
@@ -236,10 +259,9 @@ if bashio::config.true 'zigbee2mqtt.enabled'; then
     OPENCODE_JSON="/data/.config/opencode/opencode.json"
     [[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
     tmp=$(mktemp)
-    jq '.mcp["zigbee2mqtt"] = {
+    jq '.mcp.servers["zigbee2mqtt"] = {
             type: "local",
-            command: ["node", "/opt/mcp2zigbee2mqtt/dist/index.js"],
-            enabled: true
+            command: ["node", "/opt/mcp2zigbee2mqtt/dist/index.js"]
         }' "${OPENCODE_JSON}" > "${tmp}"
     cp "${tmp}" "${OPENCODE_JSON}"
     rm "${tmp}"
@@ -371,12 +393,12 @@ PYEOF
         } > "${mcp_script}"
         chmod 700 "${mcp_script}"
 
-        # Register in OpenCode (opencode.json → mcp)
+        # Register in OpenCode (opencode.json → mcp.servers)
         OPENCODE_JSON="/data/.config/opencode/opencode.json"
         [[ -f "${OPENCODE_JSON}" ]] || echo '{}' > "${OPENCODE_JSON}"
         tmp=$(mktemp)
         jq --arg n "${mcp_name}" --arg cmd "${mcp_script}" \
-            '.mcp[$n] = { type: "local", command: [$cmd], enabled: true }' "${OPENCODE_JSON}" > "${tmp}"
+            '.mcp.servers[$n] = { type: "local", command: [$cmd] }' "${OPENCODE_JSON}" > "${tmp}"
         cp "${tmp}" "${OPENCODE_JSON}"
         rm "${tmp}"
 
@@ -693,9 +715,20 @@ esac
 FONT_SIZE=$(bashio::config 'terminal_font_size')
 FONT_FAMILY=$(bashio::config 'terminal_font_family')
 
-# Start opencode server (port 4096)
-bashio::log.info "Starting opencode server on port 4096..."
-opencode serve --port 4096 --hostname 0.0.0.0 &
+# Start opencode server (port 4096). OpenCode 2 always protects the API with a password (basic auth, user "opencode")
+# and prints a random one to its log when OPENCODE_PASSWORD is unset. Use the option, else a generated password kept in
+# /data/.opencode-password (mode 600; read it with `cat`). The variable is passed to the server process only, never
+# exported to the shells, written to the profile files or logged.
+OC_PASSWORD=$(bashio::config 'opencode_password') || OC_PASSWORD=""
+if [[ -z "${OC_PASSWORD}" || "${OC_PASSWORD}" == "null" ]]; then
+    if [[ ! -s /data/.opencode-password ]]; then
+        (umask 077 && head -c 24 /dev/urandom | base64 | tr -d '/+=\n' > /data/.opencode-password)
+    fi
+    OC_PASSWORD=$(cat /data/.opencode-password)
+fi
+bashio::log.info "Starting opencode server on port 4096 (basic auth, user opencode)..."
+OPENCODE_PASSWORD="${OC_PASSWORD}" opencode serve --port 4096 --hostname 0.0.0.0 &
+unset OC_PASSWORD
 
 # Start ttyd — web terminal, bound to localhost (nginx proxies /terminal/)
 bashio::log.info "Starting web terminal on port 7681 (localhost)..."

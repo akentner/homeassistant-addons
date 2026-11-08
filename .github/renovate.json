@@ -59,6 +59,20 @@
         "CODEX_VERSION[:=]\\s*\"?(?<currentValue>\\d+\\.\\d+\\.\\d+)\"?"
       ],
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "anomalyco/opencode",
+      "extractVersionTemplate": "^v(?<version>2\\.\\d+\\.\\d+)$",
+      "fileMatch": [
+        "^coding-assistants/build\\.yaml$",
+        "^coding-assistants/Dockerfile$"
+      ],
+      "matchStrings": [
+        "OPENCODE_VERSION[:=]\\s*\"?(?<currentValue>\\d+\\.\\d+\\.\\d+)\"?"
+      ],
+      "versioningTemplate": "semver"
     }
   ],
   "extends": [
@@ -119,6 +133,17 @@
       "groupName": "coding-assistants codex",
       "matchDepNames": [
         "openai/codex"
+      ],
+      "matchManagers": [
+        "custom.regex"
+      ]
+    },
+    {
+      "additionalBranchPrefix": "coding-assistants-",
+      "description": "OpenCode bump: also run internal/update-opencode-pins.sh (SHA256 digests) and make update-version before merge",
+      "groupName": "coding-assistants opencode",
+      "matchDepNames": [
+        "anomalyco/opencode"
       ],
       "matchManagers": [
         "custom.regex"

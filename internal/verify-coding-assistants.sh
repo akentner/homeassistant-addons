@@ -11,6 +11,8 @@
 #   --keep               keep containers, image and scratch dir for debugging
 #   SCENARIO             one or more scenario names, a group prefix (e.g. `claude` = every claude-* scenario) or
 #                        `all` (default)
+#   CA_VERIFY_SERIAL=1   environment knob: keep a single scenario container alive at a time (needed together with
+#                        CA_VERIFY_DOCKER_ARGS="--network host", where all containers share the host ports)
 #   CA_VERIFY_IMAGE=TAG  environment knob: reuse an existing image and skip the build (development loop only)
 #   CA_VERIFY_DOCKER_ARGS  environment knob: extra `docker run` options for every container (development only)
 #
@@ -94,7 +96,7 @@ declare -A CA_OPTS=()
 declare -A CA_EXTRA=()
 
 # Registered scenarios: NAME -> function scenario_<NAME with - replaced by _>
-SCENARIOS=(claude-launcher claude-state claude-auth codex-state mcp-servers mcp-integrations drift herdr-core herdr-attach surface
+SCENARIOS=(claude-launcher claude-state claude-auth codex-state opencode-state mcp-servers mcp-integrations drift herdr-core herdr-attach surface
     plugins services services-auth docs)
 # Scenarios that need neither Docker nor the image: when only these are selected the image build is skipped.
 STATIC_SCENARIOS=(drift docs)
@@ -289,6 +291,10 @@ start_ca() {
     CA_EXTRA[${name}]="$(printf '%s\n' "$@")"
 
     CONTAINERS+=("${cname}")
+    if [[ "${CA_VERIFY_SERIAL:-0}" == "1" ]]; then
+        # Host-network runs (CA_VERIFY_DOCKER_ARGS="--network host") share ports: only one container may be alive.
+        docker ps -q --filter "name=ca-verify-${STAMP}-" | xargs -r docker rm -f >/dev/null 2>&1
+    fi
     docker run -d --name "${cname}" \
         --add-host=host.docker.internal:host-gateway \
         -e "SUPERVISOR_API=http://host.docker.internal:${CA_STUB_PORT[${name}]}" \
@@ -631,6 +637,91 @@ scenario_codex_state() {
 }
 
 # =============================================================================
+# Scenario opencode-state
+# =============================================================================
+CA_OC_PASSWORD_FIXTURE="verify-opencode-password"
+
+# oc_stub_version NAME VERSION -- (the running binary is removed first: writing to it fails with ETXTBSY) executable stub "opencode" in the persistent bin dir that only answers --version
+oc_stub_version() {
+    # shellcheck disable=SC2016
+    ca_exec "$1" sh -c 'rm -f /data/opencode/bin/opencode \
+        && printf "#!/bin/sh\necho \"opencode v%s\"\n" "$1" > /data/opencode/bin/opencode \
+        && chmod +x /data/opencode/bin/opencode' sh "$2"
+}
+
+# oc_api_status NAME [USER:PASSWORD] -- HTTP status of /api/info on the opencode server
+oc_api_status() {
+    local auth=()
+    [[ -n "${2:-}" ]] && auth=(-u "$2")
+    ca_exec "$1" curl -s -m 5 -o /dev/null -w '%{http_code}' "${auth[@]}" http://127.0.0.1:4096/api/info
+}
+
+scenario_opencode_state() {
+    local data opts want got pw
+
+    want="$(build_yaml_args "${ADDON_DIR}/build.yaml" | awk -F'\t' '$1 == "OPENCODE_VERSION" { print $2 }')"
+
+    # Container A: persisted OpenCode 1 binary and a legacy flat opencode.json, password from the option
+    data="${SCRATCH_DIR}/oc-a/data"
+    mkdir -p "${data}/opencode/bin" "${data}/.config/opencode"
+    opts="${data}/options.json"
+    write_options "${opts}" ".opencode_password=\"${CA_OC_PASSWORD_FIXTURE}\"
+        | .mcp_servers=[{name:\"fff\",type:\"stdio\",command:\"/usr/local/bin/fff-mcp\"}]"
+    printf '#!/bin/sh\necho 1.19.5\n' >"${data}/opencode/bin/opencode"
+    chmod +x "${data}/opencode/bin/opencode"
+    printf '{"mcp":{"legacy":{"type":"local","command":["/bin/true"],"enabled":false}}}\n' \
+        >"${data}/.config/opencode/opencode.json"
+    start_ca oc-a "${data}" "${opts}"
+    wait_ca oc-a || return 0
+
+    got="$(ca_exec oc-a opencode --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)"
+    assert_eq "persisted OpenCode 1.19.5 was replaced by the image seed" "${got}" "${want}"
+    assert_eq "/root/.opencode/bin points to /data/opencode/bin" "$(ca_exec oc-a readlink /root/.opencode/bin)" \
+        "/data/opencode/bin"
+    json_check "legacy flat mcp entry moved to mcp.servers with disabled" \
+        "$(ca_exec oc-a cat /data/.config/opencode/opencode.json)" \
+        '.mcp.servers.legacy.disabled == true and (.mcp.servers.legacy | has("enabled") | not) and (.mcp | has("legacy") | not)'
+    json_check "mcp_servers option registered under mcp.servers" \
+        "$(ca_exec oc-a cat /data/.config/opencode/opencode.json)" '.mcp.servers.fff.command == ["/usr/local/bin/fff-mcp"]'
+    assert_eq "server without credentials answers 401" "$(oc_api_status oc-a)" "401"
+    assert_eq "server accepts the option password (user opencode)" \
+        "$(oc_api_status oc-a "opencode:${CA_OC_PASSWORD_FIXTURE}")" "200"
+    assert_eq "no generated password file when the option is set" \
+        "$(ca_exec oc-a sh -c 'test -e /data/.opencode-password && echo yes || echo no')" "no"
+    assert_eq "password value is absent from the container log" \
+        "$(ca_logs oc-a | grep -c -e "${CA_OC_PASSWORD_FIXTURE}" || true)" "0"
+    assert_eq "password value is absent from /etc/profile.d/00-coding-assistants.sh" \
+        "$(ca_count oc-a "${CA_OC_PASSWORD_FIXTURE}" /etc/profile.d/00-coding-assistants.sh)" "0"
+
+    # Restart: a persisted version newer than the seed is kept, the mcp migration is idempotent
+    oc_stub_version oc-a 99.0.0
+    restart_ca oc-a
+    wait_ca oc-a || return 0
+    assert_eq "newer persisted version 99.0.0 is kept" \
+        "$(ca_exec oc-a opencode --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)" "99.0.0"
+    json_check "mcp.servers unchanged after a restart" "$(ca_exec oc-a cat /data/.config/opencode/opencode.json)" \
+        '.mcp.servers | keys == ["fff", "legacy"]'
+
+    # Container B: no option -- a generated password is persisted (mode 600) and works, and stays stable on restart
+    docker rm -f "$(ca_cname oc-a)" >/dev/null 2>&1
+    data="${SCRATCH_DIR}/oc-b/data"
+    mkdir -p "${data}"
+    opts="${data}/options.json"
+    write_options "${opts}"
+    start_ca oc-b "${data}" "${opts}"
+    wait_ca oc-b || return 0
+    pw="$(ca_exec oc-b cat /data/.opencode-password)"
+    assert_match "generated password is non-empty" "${pw}" '^[A-Za-z0-9]{16,}$'
+    assert_eq "generated password file mode is 600" "$(ca_exec oc-b stat -c %a /data/.opencode-password)" "600"
+    assert_eq "server accepts the generated password" "$(oc_api_status oc-b "opencode:${pw}")" "200"
+    assert_eq "generated password is not in the container log" \
+        "$(ca_logs oc-b | grep -c -e "${pw}" || true)" "0"
+    restart_ca oc-b
+    wait_ca oc-b || return 0
+    assert_eq "generated password is stable across a restart" "$(ca_exec oc-b cat /data/.opencode-password)" "${pw}"
+}
+
+# =============================================================================
 # Scenario mcp-servers
 # =============================================================================
 # Fixture values deliberately do not look like real credentials (keeps secret scanners quiet).
@@ -677,9 +768,9 @@ scenario_mcp_servers() {
 
         oc="$(ca_exec mcp-a cat /data/.config/opencode/opencode.json)"
         json_check "A: OpenCode still registers fff and with-extras" "${oc}" \
-            '.mcp | has("fff") and has("with-extras")'
-        json_check "A: OpenCode still skips the http server" "${oc}" '.mcp | has("ha-mcp") | not'
-        json_check "A: OpenCode fff command unchanged" "${oc}" '.mcp.fff.command == ["/usr/local/bin/fff-mcp"]'
+            '.mcp.servers | has("fff") and has("with-extras")'
+        json_check "A: OpenCode still skips the http server" "${oc}" '.mcp.servers | has("ha-mcp") | not'
+        json_check "A: OpenCode fff command unchanged" "${oc}" '.mcp.servers.fff.command == ["/usr/local/bin/fff-mcp"]'
 
         logs="$(ca_logs mcp-a)"
         assert_eq "A: no MCP secret in the container log" \
@@ -760,7 +851,7 @@ scenario_mcp_integrations() {
 
     oc="$(ca_exec mcpi cat /data/.config/opencode/opencode.json)"
     json_check "OpenCode still has zigbee2mqtt and both mariadb entries" "${oc}" \
-        '.mcp | has("zigbee2mqtt") and has("mariadb-homeassistant") and has("mariadb-analytics")'
+        '.mcp.servers | has("zigbee2mqtt") and has("mariadb-homeassistant") and has("mariadb-analytics")'
 
     # User edits win across a container re-creation (written through a temp file + cp, like run.sh does)
     ca_exec mcpi sh -c 'jq ".mcpServers[\"mariadb-analytics\"].command = \"user-edited\"
@@ -827,7 +918,7 @@ drift_compare() {
             echo "drift: Dockerfile ARG ${key} has no key in build.yaml args"
             rc=1
         }
-    done < <(grep -E '^ARG (HERDR|CODEX)_[A-Z0-9_]+=' "${dockerfile}" | sed -E 's/^ARG ([A-Z0-9_]+)=.*/\1/')
+    done < <(grep -E '^ARG (HERDR|CODEX|OPENCODE)_[A-Z0-9_]+=' "${dockerfile}" | sed -E 's/^ARG ([A-Z0-9_]+)=.*/\1/')
     return "${rc}"
 }
 
