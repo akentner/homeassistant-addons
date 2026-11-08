@@ -201,16 +201,33 @@ RUN curl -fsSL https://bun.sh/install | bash \
 # graphify — knowledge graph skill for AI coding assistants
 RUN uv tool install graphifyy
 
-# opencode — installed via the official installer so `opencode upgrade` works at runtime.
-# The installer hardcodes $HOME/.opencode/bin as its target path, which matches opencode's
-# own method-detection heuristic in packages/opencode/src/installation/index.ts. A copy is
-# stashed at /opt/opencode-initial/ so run.sh can bootstrap the binary into the persistent
-# /data volume on first start; subsequent upgrades persist across container rebuilds.
-# --no-modify-path: we manage PATH ourselves in /etc/profile.d/00-coding-assistants.sh.
-RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
-    && mkdir -p /opt/opencode-initial \
+# opencode 2 — pinned release binary (glibc build, runs on Bookworm). The 1.x installer (opencode.ai/install) refuses
+# 2.x, so the binary is fetched from the GitHub release instead. The ARG defaults are mirrored 1:1 in build.yaml
+# (verify scenario `drift`); the digests are the GitHub release asset digests of tag v<version>. Renovate bumps
+# OPENCODE_VERSION only: refresh the digests with internal/update-opencode-pins.sh.
+# The binary is placed where the official installer (and `opencode upgrade`) writes it, $HOME/.opencode/bin, and a copy is
+# stashed at /opt/opencode-initial/ so run.sh can seed it into the persistent /data volume (only when it is newer than
+# what is persisted); user-initiated upgrades persist across container rebuilds.
+ARG OPENCODE_VERSION=2.2.6
+ARG OPENCODE_SHA256_X86_64=08bb21d6326ce740d91cce7ebe88a6536933f6e1e30353b91a06b01f25da306c
+ARG OPENCODE_SHA256_AARCH64=f2d27600c367e45057d6a16f6a5c2aa8d77b41a9b10d4bc3d849c2f88870e944
+RUN ARCH=$(uname -m) \
+    && case "${ARCH}" in \
+        x86_64) OPENCODE_ASSET="opencode-linux-x64"; OPENCODE_SHA256="${OPENCODE_SHA256_X86_64}" ;; \
+        aarch64) OPENCODE_ASSET="opencode-linux-arm64"; OPENCODE_SHA256="${OPENCODE_SHA256_AARCH64}" ;; \
+        *) echo "opencode: unsupported architecture ${ARCH}" >&2; exit 1 ;; \
+    esac \
+    && mkdir -p /tmp/opencode /root/.opencode/bin /opt/opencode-initial \
+    && curl -fsSL \
+        "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/${OPENCODE_ASSET}.tar.gz" \
+        -o /tmp/opencode/opencode.tar.gz \
+    && echo "${OPENCODE_SHA256}  /tmp/opencode/opencode.tar.gz" | sha256sum -c - \
+    && tar xzf /tmp/opencode/opencode.tar.gz -C /tmp/opencode \
+    && install -m 0755 /tmp/opencode/opencode /root/.opencode/bin/opencode \
     && cp /root/.opencode/bin/opencode /opt/opencode-initial/opencode \
-    && ln -sf /root/.opencode/bin/opencode /usr/local/bin/opencode
+    && ln -sf /root/.opencode/bin/opencode /usr/local/bin/opencode \
+    && rm -rf /tmp/opencode \
+    && [ "$(opencode --version | grep -oE '[0-9]+[.][0-9]+[.][0-9]+' | head -n 1)" = "${OPENCODE_VERSION}" ]
 
 # Claude Code — native installer (no Node dependency). The installer places the versioned binary in
 # /root/.local/share/claude/versions/<ver> and a launcher symlink in /root/.local/bin/claude; both are moved out

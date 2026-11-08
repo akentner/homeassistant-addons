@@ -82,6 +82,13 @@ Optional password. An OpenAI API key, exported as `OPENAI_API_KEY` into the same
 options (never written to a file or the log). An empty option exports nothing, so Codex uses the ChatGPT login of
 `codex login --device-auth`, see [OpenAI Codex](#openai-codex).
 
+### `opencode_password`
+
+Optional password for the OpenCode server on port 4096 (HTTP basic auth, user `opencode`). OpenCode 2 always protects
+its API: without this option the add-on generates a password once, stores it in `/data/.opencode-password` (mode 600)
+and keeps it across restarts; read it with `cat /data/.opencode-password`. The value is passed to the server process
+only, never exported to the shells, written to the profile files or logged.
+
 ### `herdr_web_password`
 
 Optional password. The login password of the herdr web UI at `/services/`, see [Web UI](#web-ui-services). It is handed
@@ -186,7 +193,9 @@ claude mcp remove <name> --scope user
 ```
 
 (or delete the key from `.mcpServers` in `/data/.claude.json`). The add-on re-creates it from the current options on the
-next start. OpenCode entries are merged the same way, see `opencode.json` in `/data/.config/opencode/`.
+next start. OpenCode entries are merged the same way: under `mcp.servers` in `opencode.json` in
+`/data/.config/opencode/` (OpenCode 2 layout; entries of the OpenCode 1 layout directly under `mcp` are moved there once
+on start).
 
 ```yaml
 mcp_servers:
@@ -274,7 +283,14 @@ keeps nested shells from attaching again.
 | `mycli`        | MariaDB/MySQL client   |
 | `sqlite3`      | SQLite CLI for HA      |
 
-## Upgrading `opencode`
+## OpenCode
+
+OpenCode 2 is installed as a pinned release binary (`OPENCODE_VERSION` and the SHA256 digests `OPENCODE_SHA256_X86_64` /
+`OPENCODE_SHA256_AARCH64` as `ARG` defaults in the `Dockerfile`, mirrored 1:1 in `build.yaml` and checked by
+`internal/verify-coding-assistants.sh drift`). The server runs on port 4096 with basic auth, see
+[`opencode_password`](#opencode_password).
+
+### Upgrading `opencode`
 
 `opencode` can be upgraded inside a running container — no add-on rebuild required.
 
@@ -283,8 +299,15 @@ opencode upgrade        # downloads the latest release to ~/.opencode/bin
 ```
 
 The opencode binary lives under `/root/.opencode/bin`, which the add-on symlinks into the persistent `/data` volume.
-Upgrades therefore survive container restarts and rebuilds. The bundled version in the image is only used as the seed on
-the very first start of an empty `/data` volume; delete `/data/opencode/bin/opencode` to fall back to it.
+Upgrades therefore survive container restarts and rebuilds. On every start the bundled binary replaces the persisted one
+only when it is newer (a leftover OpenCode 1.x is replaced by the bundled OpenCode 2); a persisted version at least as
+new as the image is never touched. Delete `/data/opencode/bin/opencode` to fall back to the bundled one.
+
+### Updating the bundled version
+
+Renovate opens a PR that bumps `OPENCODE_VERSION` in the `Dockerfile` and `build.yaml` (2.x releases only). It cannot
+update the digests: on that branch run `internal/update-opencode-pins.sh` (fetches the release asset digests with `gh`),
+then `make update-version ADDON=coding-assistants VERSION=<new add-on version>`.
 
 ## Claude Code
 

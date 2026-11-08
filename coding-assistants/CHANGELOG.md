@@ -8,6 +8,18 @@ This add-on has no upstream — every entry below is hand-written by the maintai
 
 ## [Unreleased]
 
+### Changed
+
+- **OpenCode 2** replaces OpenCode 1 as a pinned release binary (`OPENCODE_VERSION`, per-architecture SHA256 digests;
+  the 1.x installer cannot install 2.x). A persisted OpenCode 1.x binary in `/data/opencode/bin` is replaced by the
+  bundled one on the first start; a newer persisted version is kept. MCP servers are written to `mcp.servers` of
+  `opencode.json`; entries of the OpenCode 1 layout are moved there once (`enabled` becomes `disabled`). Renovate bumps
+  `OPENCODE_VERSION` (2.x releases); digests are refreshed with `internal/update-opencode-pins.sh`.
+- **OpenCode server password:** OpenCode 2 always requires one (basic auth, user `opencode`; it used to be open). The
+  new optional `opencode_password` option sets it; otherwise a password is generated once into
+  `/data/.opencode-password`. The old `OPENCODE_SERVER_PASSWORD` is not used by OpenCode 2 — if you set it via
+  `env_vars`, switch to the option. The image grows by roughly 130 MB (the OpenCode 2 binary is about 260 MB unpacked).
+
 ### Added
 
 - **OpenAI Codex CLI** (`codex`) as a pinned static release binary (`CODEX_VERSION`, per-architecture SHA256 digests;

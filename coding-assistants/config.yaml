@@ -1,6 +1,6 @@
 name: "Coding Assistants"
 description: "Terminal with Claude Code, OpenCode, OpenAI Codex and GitHub Copilot CLI — herdr sessions over SSH + web terminal"
-version: "1.2.0-0"
+version: "1.3.0-0"
 slug: "coding_assistants"
 init: false
 hassio_api: true
@@ -84,6 +84,7 @@ schema:
   anthropic_api_key: password?
   openai_api_key: password?
   herdr_web_password: password?
+  opencode_password: password?
   zigbee2mqtt:
     enabled: bool?
     mqtt_broker_url: str?
