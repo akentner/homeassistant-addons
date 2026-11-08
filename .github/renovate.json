@@ -45,6 +45,20 @@
         "BW_CLI_VERSION[:=]\\s*\"?(?<currentValue>\\d+\\.\\d+\\.\\d+)\"?"
       ],
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "openai/codex",
+      "extractVersionTemplate": "^rust-v(?<version>.+)$",
+      "fileMatch": [
+        "^coding-assistants/build\\.yaml$",
+        "^coding-assistants/Dockerfile$"
+      ],
+      "matchStrings": [
+        "CODEX_VERSION[:=]\\s*\"?(?<currentValue>\\d+\\.\\d+\\.\\d+)\"?"
+      ],
+      "versioningTemplate": "semver"
     }
   ],
   "extends": [
@@ -94,6 +108,17 @@
       "groupName": "secrets-sync bw cli",
       "matchDepNames": [
         "@bitwarden/cli"
+      ],
+      "matchManagers": [
+        "custom.regex"
+      ]
+    },
+    {
+      "additionalBranchPrefix": "coding-assistants-",
+      "description": "Codex bump: also run internal/update-codex-pins.sh (SHA256 digests) and make update-version before merge",
+      "groupName": "coding-assistants codex",
+      "matchDepNames": [
+        "openai/codex"
       ],
       "matchManagers": [
         "custom.regex"

@@ -234,6 +234,30 @@ RUN curl -fsSL https://claude.ai/install.sh | bash \
 # hadolint ignore=DL3016
 RUN npm install -g @github/copilot fx mcp-server-mysql
 
+# OpenAI Codex CLI — static musl release binary (no Node needed). Pinned like herdr: the ARG defaults are mirrored 1:1
+# in build.yaml (verify scenario `drift`); the digests are the GitHub release asset digests of tag rust-v<version>.
+# Renovate bumps CODEX_VERSION only — refresh the digests with internal/update-codex-pins.sh. The archive holds a single
+# file named codex-<arch>-unknown-linux-musl. State lives in CODEX_HOME=/data/.codex (set by run.sh).
+ARG CODEX_VERSION=0.167.0
+ARG CODEX_SHA256_X86_64=9d64836106d5b374e90ee4454c7ebcde7ca7106558bd7e41a34b9f26ebda251a
+ARG CODEX_SHA256_AARCH64=843489acb4d4b1079745c36b03c5963b887b83155af208fd53584e33ee8eb281
+RUN ARCH=$(uname -m) \
+    && case "${ARCH}" in \
+        x86_64) CODEX_SHA256="${CODEX_SHA256_X86_64}" ;; \
+        aarch64) CODEX_SHA256="${CODEX_SHA256_AARCH64}" ;; \
+        *) echo "codex: unsupported architecture ${ARCH}" >&2; exit 1 ;; \
+    esac \
+    && ASSET="codex-${ARCH}-unknown-linux-musl" \
+    && mkdir -p /tmp/codex \
+    && curl -fsSL \
+        "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/${ASSET}.tar.gz" \
+        -o /tmp/codex/codex.tar.gz \
+    && echo "${CODEX_SHA256}  /tmp/codex/codex.tar.gz" | sha256sum -c - \
+    && tar xzf /tmp/codex/codex.tar.gz -C /tmp/codex \
+    && install -m 0755 "/tmp/codex/${ASSET}" /usr/local/bin/codex \
+    && rm -rf /tmp/codex \
+    && [ "$(codex --version | awk '{print $NF}')" = "${CODEX_VERSION}" ]
+
 # herdr plugins (phase 23, plugin review gate 23-PLUGIN-REVIEW.md). Each plugin is checked out at a pinned COMMIT into
 # /opt/herdr-plugins/<repository-name>: none of the repositories has a tag, so a tag pin is not possible (D-06). The pins
 # are ARG defaults, mirrored 1:1 in build.yaml and compared by `internal/verify-coding-assistants.sh drift`. The commit

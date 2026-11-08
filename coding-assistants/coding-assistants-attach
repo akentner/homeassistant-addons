@@ -29,11 +29,12 @@ fi
 # Defaults for callers without the add-on environment (a bare ttyd child, an SSH login); user-set values win.
 : "${XDG_CONFIG_HOME:=/data/.config}"
 : "${XDG_DATA_HOME:=/data/.local/share}"
+: "${CODEX_HOME:=/data/.codex}"
 : "${LANG:=en_US.UTF-8}"
 : "${LC_ALL:=en_US.UTF-8}"
 : "${TERM:=xterm-256color}"
 PATH="/root/.local/bin:/usr/local/bin:${PATH}"
-export XDG_CONFIG_HOME XDG_DATA_HOME LANG LC_ALL TERM PATH
+export XDG_CONFIG_HOME XDG_DATA_HOME CODEX_HOME LANG LC_ALL TERM PATH
 
 server_running() {
     herdr status --json 2>/dev/null | jq -e '.server.running == true' >/dev/null 2>&1

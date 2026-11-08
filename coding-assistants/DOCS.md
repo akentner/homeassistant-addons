@@ -76,6 +76,12 @@ Precedence and interplay:
   overrides the option. Such an entry is also written to the profile files, see `env_vars`.
 - An empty option exports nothing, so Claude Code falls back to the credentials of `claude login`.
 
+### `openai_api_key`
+
+Optional password. An OpenAI API key, exported as `OPENAI_API_KEY` into the same process environment as the Claude
+options (never written to a file or the log). An empty option exports nothing, so Codex uses the ChatGPT login of
+`codex login --device-auth`, see [OpenAI Codex](#openai-codex).
+
 ### `herdr_web_password`
 
 Optional password. The login password of the herdr web UI at `/services/`, see [Web UI](#web-ui-services). It is handed
@@ -248,6 +254,7 @@ keeps nested shells from attaching again.
 | -------------- | ---------------------- |
 | `claude`       | Claude Code            |
 | `opencode`     | OpenCode AI agent      |
+| `codex`        | OpenAI Codex CLI       |
 | `copilot`      | GitHub Copilot CLI     |
 | `git`, `gh`    | Git + GitHub CLI       |
 | `jq`, `yq`     | JSON / YAML query      |
@@ -376,6 +383,28 @@ If the herdr server stops or crashes, `run.sh` starts it again after about 3 sec
 as a restart of the server. After a clean stop herdr restores the saved layout with fresh shells; after a crash nothing
 may have been saved, the session starts empty and the next client re-creates workspace `main`. While no server answers,
 clients fall back to a plain `fish` shell instead of a dead connection.
+
+## OpenAI Codex
+
+Codex (`codex`) is the static musl release binary of [openai/codex](https://github.com/openai/codex), without Node.
+State lives in `CODEX_HOME=/data/.codex` (mode 700, exported for web terminal, SSH and fish): `auth.json`,
+`config.toml`, `AGENTS.md` and the sessions. `sessions/` and `log/` are excluded from backups.
+
+- **Login:** `codex login --device-auth` (works without a browser in the container), or set the `openai_api_key` option.
+- **Tool context:** TOOLS.md is injected into `/data/.codex/AGENTS.md` as a marked block on every start; text outside
+  the markers is preserved.
+- **MCP:** not synced yet. Add MCP servers to `~/.codex/config.toml` manually.
+- **Sandbox:** Codex's own sandbox inside the container is untested. If it fails, run
+  `codex --sandbox danger-full-access` or set `sandbox_mode = "danger-full-access"` in `~/.codex/config.toml`. The
+  add-on writes no Codex sandbox or approval defaults.
+
+### Updating Codex
+
+The version is pinned in the image: `CODEX_VERSION` and the two SHA256 digests (`CODEX_SHA256_X86_64`,
+`CODEX_SHA256_AARCH64`) are `ARG` defaults in the `Dockerfile`, mirrored 1:1 in `build.yaml` (checked by
+`internal/verify-coding-assistants.sh drift`). Renovate opens a PR that bumps `CODEX_VERSION` in both files, but it
+cannot update the digests: on that branch run `internal/update-codex-pins.sh` (fetches the release asset digests with
+`gh`), then `make update-version ADDON=coding-assistants VERSION=<new add-on version>`.
 
 ### Updating herdr
 
