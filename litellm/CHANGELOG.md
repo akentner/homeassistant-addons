@@ -6,6 +6,36 @@
 ```bash
 cosign verify \
   --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub \
+  ghcr.io/berriai/litellm:v1.108.3
+```
+
+Same command for `litellm-database`, `litellm-non_root` and the `docker.io/litellm/*` images
+
+## What's new in 1.108.3 (LTS)
+
+11 PRs. 3 fixed. No action needed to upgrade
+
+### Changes
+
+- **AWS Bedrock:** Fixed every request failing on a Bedrock deployment with `api_base: ""`, which answered 500 or 400
+  (#50449)
+- **MCP:** Fixed tool results over 1 MiB failing with `SSE stream ended without a response`, broken since v1.103.0
+  (#47034)
+- **Guardrails:** Fixed model-level `post_call` guardrails checking each response twice and calling the moderation
+  provider twice (#50463)
+
+---
+
+Backport #50484 · Backport #50487 · [Full changelog](https://github.com/BerriAI/litellm/compare/v1.108.2...v1.108.3)
+
+> [!TIP] The `lts` image tag always points to the latest LTS release. Pull `ghcr.io/berriai/litellm:lts` to stay on the
+> newest LTS patch
+
+## Verify this release
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub \
   ghcr.io/berriai/litellm:v1.108.2
 ```
 
