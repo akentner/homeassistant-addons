@@ -6,6 +6,45 @@
 ```bash
 cosign verify \
   --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub \
+  ghcr.io/berriai/litellm:v1.108.4
+```
+
+Same command for `litellm-database`, `litellm-non_root` and the `docker.io/litellm/*` images
+
+## What's new in 1.108.4 (LTS)
+
+10 PRs. 7 fixed, 1 changed. No action needed to upgrade
+
+### Changes
+
+- **AWS Bedrock:** Fixed 400s from GLM, GPT-6 Luna and Nova 2 on Bedrock when the conversation carries Claude's signed
+  thinking (#50399)
+- **AWS Bedrock:** Changed `/bedrock` pass-through routes to enforce the model's `guardrailConfig` over any guardrail
+  the caller sends (#47429)
+- **Vertex AI and Gemini:** Fixed Vertex AI Claude batches failing with 404 at create (#50365)
+- **Messages API:** Fixed `chatgpt/` models on `/v1/messages` dropping encrypted reasoning between turns (#50456)
+- **Messages API:** Fixed `/v1/messages` to OpenAI sending `background: true` upstream, which billed full runs that came
+  back empty (#50462)
+- **Embeddings, images and audio:** Fixed `/v1/videos` polls failing with per-model keys or hitting the wrong provider
+  account with a 404 (#44614)
+- **Routing and fallbacks:** Fixed team keys being served by a proxy-wide wildcard instead of the team's own BYOK
+  wildcard deployment (#48490)
+- **SDK:** Fixed `completion()`, `responses()` and `messages` with tools failing with `No module named 'mcp'` on a base
+  install, broken since v1.106.0 (#45961)
+
+---
+
+Backport #50568 · Backport #50605 · Backport #50693 ·
+[Full changelog](https://github.com/BerriAI/litellm/compare/v1.108.3...v1.108.4)
+
+> [!TIP] The `lts` image tag always points to the latest LTS release. Pull `ghcr.io/berriai/litellm:lts` to stay on the
+> newest LTS patch
+
+## Verify this release
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub \
   ghcr.io/berriai/litellm:v1.108.3
 ```
 
