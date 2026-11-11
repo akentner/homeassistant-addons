@@ -1,3 +1,791 @@
+## Verify this release
+
+```bash
+cosign verify \
+  --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub \
+  ghcr.io/berriai/litellm:v1.109.0
+```
+
+Same command for `litellm-database`, `litellm-non_root` and the `docker.io/litellm/*` images
+
+## What's new in 1.109.0
+
+982 PRs. 144 added, 424 fixed, 60 changed, 17 improved, 9 removed. 5 need action
+
+### Action required
+
+- **Routing and fallbacks:** Change string fallback targets to lists of model names (#48943)
+- **Caching:** Switch `cache_params.type` from `disk` to `local` or `redis`, since the `disk` cache backend (diskcache)
+  has been removed (#48114)
+- **Routing and fallbacks:** Add `optional_pre_call_checks: ["enforce_model_rate_limits"]` to keep a hard `rpm` cap on
+  deployments (#48873)
+- **Vertex AI and Gemini:** Set `drop_params: true` or stop sending `temperature`, `top_p` and `top_k` to Gemini 3.6
+  Flash, 3.5 Flash-Lite and newer (#47645)
+- **Deployment:** Deploy Lens from its own chart and set `lens.*` in your values (#49169)
+
+### Highlights
+
+- **Admin UI:** Added a Chat UI with a model hub, image generation and usage metrics (#48108)
+- **Routing and fallbacks:** Added mid-stream fallback continuation so a streaming chat cut off mid-answer continues on
+  the configured fallback (#41127)
+- **Deployment:** Added `LITELLM_OFFLINE_MODE` to turn off every fetch LiteLLM makes on its own with one switch (#48096)
+- **Cost tracking and pricing:** Added `model_info.pricing_provider` to price a deployment from another provider's
+  catalog rates instead of $0 (#47620)
+- **Vertex AI and Gemini:** Added Gemini 3.1 Flash TTS support, including multi-speaker voices and `mp3`, `opus`, `alaw`
+  and `mulaw` output (#31915)
+- **SDK:** Fixed tool calls on `completion()` and `responses()` failing with `No module named 'mcp'` on base SDK
+  installs (#45961) <sup>Also in [1.108.4](https://github.com/BerriAI/litellm/releases/tag/v1.108.4)</sup>
+
+### All changes
+
+<details><summary><b>OpenAI</b> (19)</summary>
+
+- Added per-deployment workload identity on non-chat routes, realtime and the moderation guardrail (#39966)
+- Added the 12-hour cache write rate for `gpt-5.6-cyber` (#48246)
+- Added OpenAI `gpt-6.1-terra` with pricing (#48429)
+- Added Batch and Ultrafast 12-hour cache write rates for OpenAI models (#48433)
+- Added `gpt-6-rosalind` to the model cost map with its published prices (#49268)
+- Added `gpt-6-astra-law` with pricing from the OpenAI pricing page (#49444)
+- Fixed 400 errors and $0 spend logs on `gpt-transcribe` calls without `response_format` (#44021)
+- Fixed nonstreaming `aiohttp_openai` responses dropping `service_tier` (#47263)
+- Fixed `prompt_cache_retention` such as `24h` being silently dropped instead of sent upstream (#47480)
+- Fixed `/health` marking OpenAI and Azure audio chat models unhealthy (#47730)
+- Fixed OpenAI `context_length_exceeded` errors raising `BadRequestError` instead of `ContextWindowExceededError`
+  (#47954)
+- Fixed 12-hour prompt cache writes on `openai/gpt-5.6` and newer billing at the 30-minute rate (#48088)
+- Fixed uncatalogued ChatGPT models hitting an unsupported Chat Completions endpoint (#48244)
+- Fixed the whole `reasoning_effort` dict not being sent when chat is bridged to Responses (#48807)
+- Fixed 400 `invalid_beta` on Agents API calls through the OpenAI passthrough (#49009)
+- Fixed empty `e.response.text` on OpenAI and Azure errors so the upstream error body is readable (#49079)
+- Changed OpenAI 401 and 404 `invalid_request_error` to raise matching exceptions, not `BadRequestError` (#32537)
+- Changed the ChatGPT session id to derive from `prompt_cache_key` for stable cache affinity (#42014)
+- Changed `gpt-6-luna` Decisions cache rates to the standard cached and write rates (#48066)
+
+</details>
+
+<details><summary><b>Azure</b> (18)</summary>
+
+- Added Entra ID auth, including keyless auth, for Azure Decisions on `/v1/decisions` and `/v1/systemone` (#46539,
+  #48529)
+- Added access to Foundry agents through the project Responses API for `azure_ai/agents/<name>` (#47717)
+- Added `azure_ai/MAI-Code-1.1-Flash` (#47779)
+- Added `max_input_tokens` of 32768 for `azure_ai/Microsoft-Decision-1` (#48434)
+- Added `outputContentFormat=markdown` support on `/ocr` for Azure Document Intelligence (#48926)
+- Fixed Foundry chat requests losing OpenAI prompt cache breakpoints (#45299)
+- Fixed `/v1/responses` 404 on dated `api_version` deployments and `azure_ai` Grok reasoning token billing (#46377)
+- Fixed under-billed Grok reasoning tokens on `azure_ai` when the deployment name lacks "grok" (#46969)
+- Fixed Azure realtime over WebRTC failing with a 404 on `client_secrets` and an invalid token on the SDP exchange
+  (#47316)
+- Fixed 400 from Foundry when tool results contain `tool_reference` parts on chat (#48032)
+- Fixed 400 on `azure_ai/claude-*` when using `thinking.block_binding` (#48033)
+- Fixed Responses API calls that use an explicit v1 Azure base URL (#48118)
+- Fixed 404 on Azure vector store retrieve, update and delete (#48224)
+- Fixed null audio capability metadata on two Azure audio snapshot models (#48475)
+- Fixed Azure `context_length_exceeded` raising `BadRequestError` so `context_window_fallbacks` never ran (#48616)
+- Fixed batch calls on unversioned `azure/` o3, o4-mini, o3-mini, gpt-4o and gpt-4o-mini billing at the standard rate
+  (#49182)
+- Changed `max_input_tokens` to 128000 for `gpt-chat-latest` on Azure (#48252)
+- Improved Entra auth by reusing credentials and tokens across requests and refreshing them off the event loop (#46421,
+  #47348, #48769)
+
+</details>
+
+<details><summary><b>Anthropic</b> (16)</summary>
+
+- Fixed a fake `[System: ...]` message being added to tool-call-only assistant turns sent to Anthropic (#34822)
+- Fixed PDFs sent as chat `image_url` being rejected with 400 by sending them as document blocks (#46984)
+- Fixed Claude `json_schema` answers losing keys listed only in `required` and escaping non-ASCII characters (#47478)
+- Fixed replayed `redacted_thinking` blocks being dropped, and Bedrock Converse 400s when sent twice (#47489)
+- Fixed `clear_tool_uses` `input_tokens` trigger ignoring the system prompt, which delayed clearing (#47857)
+- Fixed native Anthropic responses omitting a null `stop_sequence` (#47987)
+- Fixed streamed responses leaving native web search fees out of the reconstructed usage cost (#48528)
+- Fixed `drop_params` not dropping `speed` on `claude-opus-4-7`, which Anthropic rejects with 400 (#48764)
+- Fixed 400 from beta-gated body fields when `drop_params: true`, including Claude Code and Codex traffic (#48793)
+- Fixed `model_context_window_exceeded` being reported as `stop` instead of `length` (#48874)
+- Fixed 400 on `/v1/messages` with many strict tools under `drop_params` by retrying without `strict` (#49102)
+- Fixed Claude `pause_turn` reported as finished and refusal explanations dropped on chat and Responses (#49192)
+- Fixed 500 on a non-string role or tool call id, now a 400 that names the field (#49237)
+- Fixed `metadata.user_id` being dropped on Anthropic `/v1/messages` pass-through routes (#49333)
+- Changed the default `max_tokens` for unmapped Anthropic models from 4096 to 128000 (#48502)
+- Changed the opening prompt usage estimate in the Chat Completions adapter to be off by default (#48633)
+
+</details>
+
+<details><summary><b>AWS Bedrock</b> (28)</summary>
+
+- Added context and output token limits for the Nova Sonic models (#48247)
+- Added pricing for native `guardrailConfig` trace usage to spend and `x-litellm-response-cost` (#48278)
+- Added `global.openai.gpt-6.1-terra` and `us.openai.gpt-6.1-terra` Bedrock models with pricing (#48441)
+- Added token counting for three Mantle-native Bedrock Claude models (#48682)
+- Added published Priority, Batch and Flex prices to 46 Bedrock regional rows (#49113)
+- Fixed Bedrock Voxtral transcription returning 400, logging $0 spend and ignoring `language` (#41565)
+- Fixed `Unknown provider=None` 404 for Bedrock models missing from the cost map (#43290)
+- Fixed 400 errors on Bedrock Kimi K3 Converse calls with `max_tokens` below 16 (#43875)
+- Fixed 400 `invalid beta flag` on Claude Code auto mode requests that carry no `safeguards` (#44471)
+- Fixed a malformed Bedrock batch JSONL line failing the upload with a 500 instead of a 400 (#45992)
+- Fixed `post_call` guardrails not scanning Claude output on `invoke-with-response-stream` passthrough (#46524)
+- Fixed Claude `json_schema` streams dropping reasoning and thinking blocks and ending on `tool_calls` with no tool
+  calls (#46863)
+- Fixed JSON schema requests failing on Fable 5 and Sonnet 4.6 and losing adaptive thinking on Haiku 5.5 (#46870)
+- Fixed `bedrock_request_metadata_fields` being ignored on the `/bedrock` pass-through routes (#47040)
+- Fixed Bedrock Opus 4.8 and Sonnet 5 dropping reasoning on `json_schema` requests by trying native output first
+  (#47100)
+- Fixed Bedrock batch jobs ignoring a configured control-plane endpoint (#47260)
+- Fixed AWS region lookups through Vault blocking the event loop and stalling other requests on the worker (#47331)
+- Fixed $0 spend and `ModelNotMappedError` for `bedrock/claude_platform/<id>` calls (#48150)
+- Fixed `max_input_tokens` to 922000 on Bedrock GPT models and added Mantle token counting for `claude-opus-5-5`
+  (#48479)
+- Fixed Bedrock rejecting `strict` tool schemas by retrying without `strict` under `drop_params` (#48733)
+- Fixed 400 on Bedrock when Codex repeats its tool list across turns (#49006)
+- Fixed region-prefixed Bedrock embedding models not routing to their region or billing its price (#49072)
+- Fixed `bedrock_mantle/openai.gpt-5.6-cyber` token limits and endpoints to match its model card (#49350)
+- Fixed `max_output_tokens` for Bedrock GovCloud West Llama 3 models, now 8192 (#49543)
+- Changed `converse-stream` pass-through to stream frames through post_call guardrails instead of buffering the reply
+  (#46307)
+- Changed `/bedrock` pass-through routes to apply a model's `guardrailConfig`, returning 400 if Bedrock cannot use it
+  (#47429)
+- Changed Bedrock pass-through to use request metadata as the session id, fixing 400s with `missing_session_id: reject`
+  (#49193)
+- Changed Bedrock Invoke and Mantle Claude to use the model's own default `max_tokens` (#49724)
+
+</details>
+
+<details><summary><b>Vertex AI and Gemini</b> (34)</summary>
+
+- Added Gemini 3.1 Flash TTS support, including multi-speaker voices and `mp3`, `opus`, `alaw` and `mulaw` output
+  (#31915)
+- Added a setting to drop chosen `anthropic-beta` values on the Vertex AI pass-through routes (#47185)
+- Added `LITELLM_GEMINI_DEFAULT_MAX_OUTPUT_TOKENS` to set the output limit for requests that set none (#47542)
+- Added `thought_signature_in_tool_call_id` to keep Gemini tool call ids short for clients that cap them (#47692)
+- Added a 2026-06-30 deprecation date to `vertex_ai/veo-2.0-generate-001` (#47847)
+- Added Batch rates for two Llama 4 MaaS models so Vertex batch jobs no longer bill at on-demand rates (#48085)
+- Added Vertex batch prices above 200k tokens and image output prices for Gemini models (#48945)
+- Fixed the Gemini 3 sampling deprecation warning logging on every request, now once per model per worker (#40868)
+- Fixed `vertex_ai/*` keys not listing partner, Veo and embedding models and dropping publisher prefixes (#41959)
+- Fixed Gemini TTS `/v1/audio/speech` calling Google twice and logging 0 tokens in spend (#44551)
+- Fixed 400 from compaction, thinking display and tool change betas on Claude via Vertex AI and Azure AI (#44747)
+- Fixed context caching on Vertex AI failing when a custom `api_base` is set (#44783)
+- Fixed streamed Vertex AI pass-through calls missing the regional 10% uplift and custom deployment prices (#44795)
+- Fixed Gemini not receiving integer enum values in tool parameters (#44908)
+- Fixed Vertex Claude batches returning 404 at create (#45715)
+- Fixed cache-marked requests listing all `cachedContents` on every call and creating duplicate caches (#46857)
+- Fixed Vertex AI rate limit errors returned as 403 when the error text contains 403 (#47134)
+- Fixed Gemini audio input and cached audio billed at the Standard rate on flex, priority and batch tiers (#48086)
+- Fixed `gemini-2.5-flash-native-audio` video input billed at the text rate instead of the audio/video rate (#48248)
+- Fixed Gemini 2.5 rejecting tool results with images and the history replay that follows (#48428)
+- Fixed Vertex AI shared credential cache growing without bound across credential and project pairs (#48442)
+- Fixed Vertex AI image sizes outside the old lookup table silently producing square output (#48463)
+- Fixed slow Google credential requests blocking the proxy worker on Claude `/v1/messages` (#48523)
+- Fixed explicit Gemini and Vertex embedding timeouts silently becoming 300 seconds (#48690)
+- Fixed Gemini grounding keeping only the first web source for a passage (#48745)
+- Fixed `labels` on `vertex_ai/claude-*` returning 400 by sending them as `X-Vertex-AI-Labels` (#48753)
+- Fixed 400 on `countTokens` and `generateContent` when repeated fields are a single object or null (#48771)
+- Fixed Vertex Claude `/v1/messages` returning 400 when the SDK sends `anthropic-version` as a header (#48814)
+- Fixed Claude web search billing per request on Vertex AI deployments priced in `model_info` (#49160)
+- Fixed batch image output billed at the Standard rate on `gemini-nano-banana-2.1` and `gemini-3.1-flash-lite-image`
+  (#49317, #49358)
+- Changed Gemini 3.6 Flash, 3.5 Flash-Lite and newer to refuse `temperature`, `top_p` and `top_k` without `drop_params`
+  (#47645)
+- Improved rerank latency by reusing cached Google credentials on every request (#48430)
+- Improved failure logs for Gemini and Vertex pass-through calls by adding the URL model and declared provider (#49075)
+- Removed the floor `deprecation_date` from `gemini-3.1-flash-lite-image` (#48587)
+
+</details>
+
+<details><summary><b>Other providers</b> (3)</summary>
+
+- Added 11 new providers: ai&, BigModel, CLF AI Gateway, Hostinger Router, Kyma API, Nace, OpenCode Go, OpenInfer,
+  Refuseless, StreamLake and ZeroGPU (#38958, #39324, #41006, #41034, #43874, #44863, #46523, #48140, #48497, #48563,
+  #48756)
+- Added models, endpoints and options for smaller providers (31 PRs) (#41021, #41522, #46156, #46875, #47401, #47473,
+  #47610, #47690, #47785, #47812, #48158, #48251, #48335, #48448, #48450, #48453, #48498, #48621, #48651, #48676,
+  #48677, #48735, #48871, #48998, #49252, #49280, #49281, #49282, #49287, #49297, #49542)
+- Fixed issues and updated behavior on smaller providers (41 PRs) (#38736, #40152, #43390, #44723, #45092, #45567,
+  #46091, #46861, #46945, #46959, #47091, #47423, #47424, #47432, #47495, #47784, #47794, #48121, #48254, #48265,
+  #48268, #48270, #48455, #48522, #48527, #48668, #48684, #48706, #48707, #48778, #48820, #48837, #49068, #49158,
+  #49278, #49344, #49458, #49462, #49498, #49502, #49616)
+
+</details>
+
+<details><summary><b>Chat completions</b> (17)</summary>
+
+- Fixed streams with `logprobs` ending in a 500 error frame before the finish chunk (#33549)
+- Fixed 500 errors when a prompt template omits `initial_prompt_value` or `final_prompt_value` (#39762)
+- Fixed rebuilt streamed text completions returning null `finish_reason` and zero `prompt_tokens` (#44349)
+- Fixed Foundry deployments and Claude fallbacks getting the wrong cache options, which caused 400s (#45295)
+- Fixed non-streaming chat dropping upstream response headers on `bedrock_mantle/` and other OpenAI-like providers
+  (#46928)
+- Fixed chat streams failing with a proxy error when progress chunks have no choice index (#46947)
+- Fixed the overhead header under-reporting on chat requests when guardrails add `litellm_metadata` (#47790)
+- Fixed streamed chunks containing `[DONE]` being read as end of stream and dropped (#47832)
+- Fixed completions streams including `usage` when it was not requested (#48052)
+- Fixed an upstream `abort` on streamed chat completions returning a clean HTTP 200 instead of a server error (#48328)
+- Fixed unbalanced think tags in merged streams and SSE lines splitting on characters other than CR/LF (#48755)
+- Fixed 400 on system-first models like Qwen3.5 when a later `developer` message appears (#48897)
+- Fixed streamed chat completions with `n>1` rebuilding each choice (#49002)
+- Fixed streaming clients missing tool execution when OpenAI-compatible providers end tool calls with `stop` (#49388)
+- Changed the `include_usage` stream chunk to send an empty `choices` array like OpenAI (#47109)
+- Changed stalled stream reads to raise a 408 `litellm.Timeout` on chat, messages and responses (#47198)
+- Changed streams that end without a finish reason to fail as errors instead of reporting a normal completion (#47665)
+
+</details>
+
+<details><summary><b>Responses API</b> (34)</summary>
+
+- Added `max_agentic_loops` support to raise the streamed MCP auto-execute round cap above 5 (#47688)
+- Added resuming background response streams with `stream` and `starting_after` on retrieve (#48819)
+- Added Codex client `tool_search` support on Anthropic and other bridged providers, cutting input tokens (#48972)
+- Fixed Responses API logging tasks being dropped by garbage collection and cut off at shutdown (#31074)
+- Fixed non-stream MCP auto-execute on `/v1/responses` logging and billing only one of its two model calls (#43667)
+- Fixed 400 from malformed `prompt_cache_breakpoint` on `/v1/responses` with `drop_params: true` (#45330)
+- Fixed later turns on an open Responses WebSocket skipping deployment checks and not counting toward budgets (#45727)
+- Fixed streamed `/v1/responses` events showing the backend deployment name in nested `response.model` (#46662)
+- Fixed `/v1/responses` on Claude dropping returned and replayed `compaction` items (#46754)
+- Fixed Responses WebSocket running `pre_call` guardrails on turn one only and rebilling that cost every turn (#47013)
+- Fixed OpenAI pass-through `GET /responses/{id}` being billed again on every call (#47171)
+- Fixed background spend not counting toward the key's project or per-model budgets (#47504)
+- Fixed the billed cost of background responses not reaching key and team loggers (#47506)
+- Fixed failed Responses streams billing 0 tokens and bridged `/v1/messages` stream failures not being reported (#47537)
+- Fixed `clear_tool_uses_20250919` being silently dropped for `openai/` models on the Responses API (#47861)
+- Fixed per-call `input_cost_per_token` and `output_cost_per_token` being ignored by `responses()` (#48119)
+- Fixed 500 when replaying `web_search_call` input items that have no `action` (#48417)
+- Fixed audio, PDF and image tool results and history media being dropped in Responses and Gemini conversions (#48484)
+- Fixed retries from `previous_response_id` returning 400 on Bedrock after a failed turn (#48647)
+- Fixed Responses params the chat bridge cannot translate causing 400s like `max_tool_calls` on Bedrock Claude (#48655)
+- Fixed typed streaming text access breaking on `/v1/responses` when `logprobs` is omitted (#48686)
+- Fixed `moderation` on `/v1/responses` being dropped before the OpenAI call (#48708)
+- Fixed later citation batches and pending citations being dropped when streaming Responses (#48747)
+- Fixed replayed Responses output items being rejected by OpenAI because of a null `created_by` (#48783)
+- Fixed an empty `function_call_output` reaching models as serialized JSON instead of an empty tool result (#48845)
+- Fixed Responses compaction by dropping params it rejects and sending Azure compaction to the v1 route (#48876)
+- Fixed Responses item order, phase and boundaries not being replayed on the next chat turn (#48912)
+- Fixed bridged Responses requests losing the requested text verbosity when sent to chat completions (#49049)
+- Fixed deployment `itpm` and `otpm` limits not being checked or counted on later Responses WebSocket turns (#49069)
+- Fixed `litellm.responses()` through `litellm_proxy/` leaving `e.body`, `e.code` and `e.type` empty on errors (#49073)
+- Fixed dict `reasoning_effort` losing `mode` and `context` on Azure, ChatGPT, Perplexity, xAI, Fireworks and Copilot
+  (#49082)
+- Fixed repeated Codex tools being merged for all callers, now only merged when `drop_params` is on (#49112)
+- Fixed native `/v1/responses` WebSocket turns not counting toward key and tag `tpm_limit` (#49257)
+- Changed a lone Responses built-in tool on Claude to return 400 before token counting (#48798)
+
+</details>
+
+<details><summary><b>Messages API</b> (14)</summary>
+
+- Fixed web-search-only requests coming back without native search blocks on streamed replies (#40967)
+- Fixed retried `/v1/messages` attempts mixing up usage and spend logs, and exhausted retries billing only the last
+  (#45194)
+- Fixed `safeguard_results` and `stop_details` missing from streamed `/v1/messages` `message_delta` events (#46096)
+- Fixed the `clear_tool_uses` polyfill ignoring `clear_at_least`, `exclude_tools` and `clear_tool_inputs` (#47123)
+- Fixed `/v1/messages` PDF documents being sent to Azure OpenAI models as images instead of file parts (#47166)
+- Fixed 500 on `/v1/messages` and count_tokens for null or numeric `tool_result` text, now a 400 (#47347)
+- Fixed 400 `Tool reference not found` for tool names over 64 chars when a guardrail rewrites `/v1/messages` (#47434)
+- Fixed canceled `/v1/messages` streams not closing the upstream request (#48220)
+- Fixed `stop_sequences` being ignored for OpenAI models on `/v1/messages` (#48534)
+- Fixed the client's `anthropic-beta` replacing the deployment's on `/v1/messages` (#48594)
+- Fixed `/v1/messages` streams reporting zero `input_tokens` in `message_start` when bridged to Chat Completions
+  (#48618)
+- Fixed Anthropic-format `tool_choice` crashing input token counting and causing false budget refusals (#48624)
+- Fixed 400 on `/v1/messages` caused by a non-spec `custom` object in tool definitions (#48893)
+- Fixed Mistral thinking text being lost on streaming `/v1/messages` (#49059)
+
+</details>
+
+<details><summary><b>Realtime</b> (4)</summary>
+
+- Added Soniox realtime speech-to-text on `/v1/realtime` with `stt-rt-v5` (#44822)
+- Fixed Gemini Live ignoring `session.update` instructions and tools, and answering text clients with audio (#39864)
+- Fixed `/health` reporting OpenAI realtime deployments with a missing or invalid key as healthy (#41233)
+- Fixed sessions going silent when a transcript guardrail sent `turn_detection` with no `type` to OpenAI (#44939)
+
+</details>
+
+<details><summary><b>Embeddings, images and audio</b> (8)</summary>
+
+- Added a per-request input batch limit on `/v1/embeddings` to cap how many inputs one call can send (#44574)
+- Fixed video status and content polling failing with per-model keys by keeping `model_id` in video ids (#44614)
+- Fixed `aws_polly/standard`, `long-form` and `generative` being sent with the `neural` engine (#47963)
+- Fixed image generation ignoring `max_retries` and Router retries multiplying upstream attempts (#48705)
+- Fixed async image edits with no image returning HTTP 500 instead of 400 (#48872)
+- Fixed key and team `router_settings` being ignored on `/v1/images/generations` (#49286)
+- Changed unsupported transcription providers to return 400 naming the provider and model instead of 500 (#47971)
+- Removed `dall-e-2` and `dall-e-3` support, and image generation without a model now returns 400 (#48703)
+
+</details>
+
+<details><summary><b>Batches and files</b> (8)</summary>
+
+- Added routing of `POST /v1/batches` to batch deployments and `supported_endpoints` on `/model_group/info` (#47376)
+- Fixed 400 on `GET /files/{id}/content` with raw `gs://` file ids from the unmanaged Vertex batch flow (#40621)
+- Fixed fine-tuning jobs failing with 400 for files uploaded with `target_model_names` (#46552)
+- Fixed completed batches skipping success callbacks and losing usage under redaction (#47192)
+- Fixed file lists showing every file on the shared key and ignoring `limit` and `after` with `require_managed_files`
+  (#47682)
+- Fixed batch retrieve showing zero prompt and completion tokens (#47740)
+- Fixed unbillable batches blocking file deletes and new-batch polling (#48752)
+- Fixed unmanaged `gs://` Vertex batches being costed through the wrong deployment and reading zero spend (#49301)
+
+</details>
+
+<details><summary><b>Vector stores</b> (5)</summary>
+
+- Added OpenSearch k-NN search as a vector store provider (#47759)
+- Fixed `/rag/ingest` and `/rag/query` ignoring team provider credentials and denying viewers and team JWTs (#45497)
+- Fixed team key vector store search failing when the team's first model is from a different provider (#46894)
+- Fixed team and key Allowed Vector Stores being ignored on `/v1/responses` `file_search` without a registry (#48915)
+- Improved Vertex AI Search vector store searches by reusing HTTP/2 connections and OAuth tokens (#40631)
+
+</details>
+
+<details><summary><b>Token counting</b> (10)</summary>
+
+- Added one log line per token count call with its id, model and count (#47657)
+- Fixed `/v1/messages/count_tokens` and `/utils/token_counter` failing on histories with a compaction block (#44784)
+- Fixed DeepSeek V4 token counts missing Azure's billed tokens by using DeepSeek's own tokenizer (#47173, #47353)
+- Fixed `count_tokens` overcounting PDFs about 12x for OpenAI and Azure models (#47554)
+- Fixed token counts retrying a failed HuggingFace tokenizer download and adding about 23s per request (#47586)
+- Fixed HTTP 500 when counting tokens for Anthropic search results and unsupported blocks (#48699)
+- Fixed token counts for OpenAI models newer than the tiktoken table by using `o200k_base` (#48728)
+- Fixed a loaded Hugging Face tokenizer being hidden when a later download fails (#48916)
+- Changed Responses input token counts to match inference, fixing Claude counts with tools and `text.format` (#47363)
+- Improved `token_counter` for inline `auto` images, including images under 768 pixels, with no HTTP requests (#48526)
+
+</details>
+
+<details><summary><b>MCP</b> (27)</summary>
+
+- Added upstream status and response body to the log when an MCP health check fails (#44125)
+- Added support for redeeming an ID-JAG as an RFC 7523 `jwt-bearer` grant on the gateway token endpoint (#46748)
+- Added Authorization URL, Token URL and Scopes fields to OAuth Delegate and True Passthrough server forms (#46941)
+- Added tool search and multi-select to the MCP toolset editor in the Admin UI (#48601)
+- Added failure logging for MCP SDK request rejections, shown as `MCP: request_rejected` (#49184)
+- Fixed `LITELLM_MCP_TOOL_LISTING_TIMEOUT` not applying to paginated `tools/list` on `/mcp` (#46513)
+- Fixed `tools/list` returning an empty list when servers answer 429, now retried with an error if all fail (#46649)
+- Fixed 412 on MCP calls with `id_jag_subject_source: refresh_token` after an Okta OIDC login (#46745, #46747, #47004)
+- Fixed the caller's LiteLLM key being forwarded to upstream MCP servers when `Authorization` is in `extra_headers`
+  (#46932)
+- Fixed VS Code sign-in to DCR bridge MCP servers when the upstream rejects loopback redirect URIs (#46940)
+- Fixed 403 when `proxy_admin_viewer` stores its own MCP credentials (#46994)
+- Fixed large MCP SSE tool results failing, and invalid size limits breaking MCP discovery and tool calls (#47034)
+- Fixed streamed MCP auto-execute billing only the first of its two model calls (#47422, #47445, #48899)
+- Fixed an upstream MCP 429 on session handshake being reported as an internal error (#47569)
+- Fixed MCP OAuth sign-in callback returning 403 behind AWS WAF by sealing the `litellm_cp_return_to` cookie (#47595)
+- Fixed per-user auth MCP servers missing from `/mcp-rest/tools/list` and `/mcp` `tools/list` (#47677)
+- Fixed streaming MCP follow-ups on `/v1/responses` dropping all but the latest tool round (#47698)
+- Fixed slow MCP tool calls delaying response headers until the SSE ping (#47897)
+- Fixed MCP management routes to follow the gateway's existing access rules (#48080)
+- Fixed a readonly MCP toolset URL returning every tool instead of only the toolset's tools (#48095)
+- Fixed oversized SSE tool catalogs returning a generic 500, now 502 with the size limit and pagination advice (#48424)
+- Fixed MCP toolset OAuth login advertising a resource URL that clients reject (#48474)
+- Fixed revoked or expired browser sessions still being accepted during gateway authorization (#48494)
+- Fixed MCP OpenAPI loading to accept valid YAML specs (#48622)
+- Fixed MCP tools in both `allowed_tools` and `disallowed_tools` still being callable (#48625)
+- Fixed MCP tools hidden by discovery guardrails still being callable by name (#48669)
+- Changed admin-owned team keys to reach only their team's MCP servers and toolsets (#49161)
+
+</details>
+
+<details><summary><b>Agents</b> (10)</summary>
+
+- Added the pi harness to `litellm.agent()` and fixed harness turn `cost` ignoring prompt cache prices (#45467)
+- Added request log entries for rejected A2A calls to forbidden or unknown agents (#49492)
+- Fixed OpenCode via `litellm.agent()` using the script's folder instead of the sandbox, and hanging on resume (#47530)
+- Fixed Gemini Managed Agents create returning 400 for `name` and interactions dropping inline `agent_config` (#48750)
+- Fixed `/a2a` calls to completion-bridge agents logging $0 on send and no spend row on stream (#49150)
+- Fixed 404 on `/a2a/{agent_id}/message/stream` and `/v1/a2a/{agent_id}/message/stream` (#49471)
+- Fixed agent `litellm_params.api_key` not being sent as bearer auth on A2A calls (#49474)
+- Fixed agent list and detail responses showing non-admins the backend URL instead of the proxy URL (#49483)
+- Fixed a blank search embedding model returning 503 instead of the `*_not_configured` 400 on agent and skill search
+  (#49485)
+- Changed proxy refusals on `/a2a` POST routes to return JSON-RPC errors (#49476)
+
+</details>
+
+<details><summary><b>Guardrails</b> (21)</summary>
+
+- Added opt-in `response_masked_data` on PANW Prisma AIRS `post_call` blocks (#46219)
+- Added `num_retries` to `generic_guardrail_api` for checks lost after connecting (#46965)
+- Added a native Reco guardrail that blocks requests on Reco errors unless `fail_on_error: false` (#48243)
+- Added Ovalix guardrail scanning of files, tool calls and tool results (#49309)
+- Added `litellm.guardrails.apply` SDK helper to invoke configured guardrails and get native findings (#49460, #49469,
+  #49470)
+- Fixed guardrail masks on messages and tools not reaching Bedrock Converse requests (#45874)
+- Fixed `generic_guardrail_api` rejecting Gemini native tools that have no `type` key (#46338)
+- Fixed corrupted numbered PII tokens in Presidio when one value matches several entities with `output_parse_pii`
+  (#47024)
+- Fixed `hide-secrets` missing secrets in tool results, tool inputs, `tool_calls` arguments, and system prompts (#47122)
+- Fixed generic guardrails with `mode: pre_mcp_call` being rejected at startup so MCP calls went unchecked (#48060)
+- Fixed pass-through guardrails scanning `litellm_metadata` fields added by LiteLLM, which caused false matches (#48276)
+- Fixed `hide-secrets` ignoring `skip_tool_message_in_guardrail` (#48689)
+- Fixed guardrails chosen in a Responses WebSocket frame not running, and a 500 with other guardrail settings (#48725)
+- Fixed Responses tool results not reaching `texts` guardrails (#48827)
+- Fixed `google_text_moderation` scanning embeddings input (#48934)
+- Fixed guardrail blocks on streamed `/v1/messages` not returning Anthropic events (#49010)
+- Fixed streamed `/v1/completions` skipping `post_call` guardrails for masking and blocking (#49035)
+- Fixed mid-stream upstream errors on `/v1/messages` being turned into a guardrail 400 (#49088)
+- Changed guardrail blocks mid-stream to end chat completions streams with an error event, not a cut connection (#46953)
+- Changed `lakera_v2` `on_flagged: block` to reject PII-only detections and added `on_flagged: mask` (#48944)
+- Improved streaming by running sampled guardrail scans in the background so chunks no longer pause (#48952)
+
+</details>
+
+<details><summary><b>Caching</b> (4)</summary>
+
+- Fixed streamed cache hits dropping reasoning, citations and audio and reordering tool calls (#32096)
+- Fixed `cache_control` being stripped from caller messages and tools, which broke caching on Claude fallbacks (#35602)
+- Fixed the cache key's model group being read from caller metadata instead of the router's metadata (#48917)
+- Removed the disk cache backend, so `cache_params.type: disk` now stops proxy startup (#48114)
+
+</details>
+
+<details><summary><b>Routing and fallbacks</b> (44)</summary>
+
+- Added mid-stream fallback continuation so a streaming chat cut off mid-answer continues on the configured fallback
+  (#41127)
+- Added Kubernetes pod discovery to spread load across pods behind a headless service `api_base` (#44342, #44393,
+  #44666)
+- Added opt-in filtering that keeps chat requests off deployments flagged as non-chat (#46257)
+- Added the `x-litellm-priority` header to set request priority (#47618)
+- Added opt-in session repinning to the replacement deployment after a successful failover (#48206)
+- Added a `clamp` mode for complexity routing that keeps the caller's smaller output token limit (#48632)
+- Added deployment `rpd` and `tpd` daily limits to `enforce_model_rate_limits` (#48875, #48957)
+- Added inferring custom classifier tiers from model mappings, and fixed a crash on plan-mode requests (#48987)
+- Fixed weighted failover skipping healthy same-group deployments under affinity (#32309)
+- Fixed `content_policy_fallbacks` not applying after `POST /fallback` or `/config/update` changes (#45428)
+- Fixed an explicit `allowed_fails: 3` not counting failures and fallbacks cooling down healthy deployments (#46183)
+- Fixed a `bedrock_mantle` deployment's `mode` switching sibling deployments between Chat Completions and Responses
+  (#46263)
+- Fixed prompt caching affinity ignoring tools and the `/v1/messages` system prompt when choosing a deployment (#46411)
+- Fixed all-cooled router 429 rows in SpendLogs not recording which deployments were cooling (#47120)
+- Fixed `stream_timeout` cutting off slow answers when Bedrock serves a `stream=True` call without streaming (#47162)
+- Fixed key and team `router_settings` reaching the provider and dropping retries, fallbacks and timeout (#47257)
+- Fixed 500s from `router_settings.default_priority` or an integer `priority`, and now reject a malformed `priority`
+  (#47498)
+- Fixed fallback retries logging a negative completion time and dropping latency-routed groups (#47541)
+- Fixed prompt caching affinity raising on non-dict `tools` entries instead of returning the provider's 400 (#47565)
+- Fixed cut Responses streams returning `server_error` instead of continuing on a fallback without prefill (#47672)
+- Fixed `IndexError` and wrong deployment lookups when deployments are deleted or added concurrently (#47680)
+- Fixed native Responses latency using different units than bridged responses in latency-based routing (#47727)
+- Fixed the router sending image requests to `supports_vision: false` deployments in mixed model groups (#48149, #48152,
+  #48241)
+- Fixed Decisions calls routing to deployments whose provider does not support them (#48175)
+- Fixed 500s on every request to a model group after one negative or NaN latency sample under latency routing (#48216)
+- Fixed tag fail-open groups rejecting unmatched tags after affinity or cooldown filtering (#48470)
+- Fixed one caller's exhausted forwarded Claude subscription putting the shared model into cooldown for others (#48485)
+- Fixed proxy-wide wildcard deployments shadowing a team's own wildcard deployment for that team's keys (#48490)
+- Fixed complexity router replacing the held `user_turn` route on Codex compaction requests (#48627)
+- Fixed session tier pins diverging between proxy workers when using Redis (#48645)
+- Fixed nested environment references in router classifier connections being sent literally (#48717)
+- Fixed lifecycle events not passing through on background OpenAI Responses streams that cannot fall back (#48817)
+- Fixed new fallback rules erasing older ones when Redis refuses `DEL` (#48999)
+- Fixed a deployment's own `model_id` being overridden by the request body's (#49045)
+- Fixed 429s on requests without `max_tokens` and token counters not dropping to real usage after calls (#49054)
+- Fixed streamed context window errors skipping fallbacks when they occur before any output (#49293)
+- Fixed large requests silently falling back to heuristic routing when they exceed the classifier's input limit (#49306)
+- Fixed queued requests waiting until a 408 when a dead replica left expired scheduler queue entries (#49387)
+- Changed per-deployment `reasoning_effort_levels` to apply on every provider and route, including `azure_ai` (#46601)
+- Changed tag routing to use only prefixed caller tags once `tag_routing_prefix` is set (#47428)
+- Changed router `allowed_fails` to keep a lone deployment with no fallback in rotation instead of returning 429
+  (#48644)
+- Changed `user_turn` routing so child agent requests keep their own tier pin (#48701)
+- Changed Router init to reject string fallback targets that never routed (#48943)
+- Removed the deployment `rpm` filter from `enable_pre_call_checks` (#48873)
+
+</details>
+
+<details><summary><b>Cost tracking and pricing</b> (36)</summary>
+
+- Added `s3://` URI support for `LITELLM_MODEL_COST_MAP_URL` (#46972)
+- Added `model_info.pricing_provider` to price a deployment from another provider's catalog rates instead of $0 (#47620)
+- Added `x-litellm-upstream-model` header so pass-through upstreams can report the model name for spend (#48275)
+- Added a per-guardrail spend breakdown to user, team and organization daily activity (#48702)
+- Fixed Responses-style bodies sent to `/cursor/chat/completions` not being logged or billed (#30277)
+- Fixed cached and reasoning token counts dropped from streamed usage, pricing streams at the full input rate (#36678)
+- Fixed per-second deployment rates billing per token on native `/v1/messages` (#42417)
+- Fixed streams with no backend usage being recorded at 0 tokens and $0 instead of the token estimate (#44230)
+- Fixed background interactions going unbilled after a crash, a late restart or on models with their own `api_key`
+  (#45743)
+- Fixed daily tag spend being lost when the Redis tag buffer write failed (#47307)
+- Fixed deployments with `model_info.base_model` such as `azure/eu/o3` billing $0 on every request (#47497)
+- Fixed unpriced Decisions model versions billing $0 and malformed replies failing with an unclear error (#47508)
+- Fixed non-streamed requests adding double their recorded cost to key spend (#47510)
+- Fixed $0 billing for undated `azure/eu/*` and `azure/us/*` models and added Volcengine `doubao-seed-2-1` rows (#47561)
+- Fixed live budget counters missing the partial cost of streams that fail mid-flight (#47741)
+- Fixed key, team, user and daily spend rows being dropped when the proxy stops right after a request (#48131)
+- Fixed Azure AI Sonnet 5.5 cache read pricing, Azure web search cost and retired model dates in the cost map (#48188)
+- Fixed batch costs billing 12-hour cache writes at the plain batch write rate (#48259)
+- Fixed Price Data Reload wiping custom pricing of DB models, which logged $0 spend on `/v1/messages` (#48486)
+- Fixed `extra_spend_tag_headers` not matching mixed-case header names (#48620)
+- Fixed `gpt-5-nano` priority pricing using an input price OpenAI does not sell (#48763)
+- Fixed a NaN or infinite cost blocking daily spend writes and returning 500 on non-streaming calls (#48829)
+- Fixed SDK calls sharing one `metadata` dict being billed for earlier calls' Bedrock guardrail traces (#48923)
+- Fixed a gateway's `usage.cost` being billed as 0 on chat, Responses and streamed calls (#48953)
+- Fixed streamed `usage.cost` disagreeing with the spend row the proxy writes (#48955)
+- Fixed response cost differing between the header, spend log and budget counters (#48993)
+- Fixed wrong rates for long-prompt Gemini Pro batch and long-context Azure GPT-6 Astra Flex requests (#49114)
+- Fixed explicit zero prices being discarded in batch cache, speech and Perplexity search costs (#49294)
+- Fixed rerank token usage missing from spend logs (#49308)
+- Fixed provider-reported totals booking all spend on output, now split by the cost map rate ratio (#49357)
+- Fixed streamed bridged `/v1/messages` spend booked as input 0 and discounts applied twice (#49365)
+- Fixed `/openai` pass-through `/v1/decisions` calls logged at $0 with no tokens (#49392)
+- Changed streamed `/v1/completions` without `stream_options` to bill from provider usage like chat (#45366)
+- Changed daily activity reports and exports to show missing model and key values under fallback buckets (#48925)
+- Removed the legacy `max_tokens` cost map field in favor of `max_input_tokens` and `max_output_tokens` (#48471)
+- Updated cost map prices for models on smaller providers (17 PRs) (#47411, #47623, #48694, #48825, #48844, #48849,
+  #48858, #48879, #48884, #48891, #48900, #48978, #49123, #49124, #49125, #49146, #49148)
+
+</details>
+
+<details><summary><b>Logging and observability</b> (39)</summary>
+
+- Added key alias, user and end user to Langfuse generation metadata on OTEL v2 (#42697)
+- Added `maximum_spend_logs_size` to delete the oldest spend logs first once they exceed a size limit (#47450, #47451,
+  #47500)
+- Added a warning log when `drop_params` drops a requested reasoning level (#47761, #48933)
+- Added `disable_pre_routing_error_logs` to skip spend rows for pre-routing rejections (#48239)
+- Added `is_silent_experiment` marker on mirrored `silent_model` calls in spend logs and callbacks (#48888)
+- Added diagnostics that identify aiohttp connection pool saturation behind request timeouts (#49499)
+- Fixed 404 when deleting callbacks configured under `callbacks` or `failure_callback` (#42740)
+- Fixed Responses `instructions` still reaching request and response logs when message logging is turned off (#43315)
+- Fixed OTel spans reporting full cost for cache hits and added a cache-hit flag (#43604)
+- Fixed failed OTel spans showing an empty status message instead of the error message (#44185)
+- Fixed spend logs ignoring the caller's `litellm_session_id` when `request_correlation_in_logs: true` (#44199)
+- Fixed Langfuse showing no time to first token for `langfuse_otel` calls (#45597)
+- Fixed provider-side 401s missing from `litellm_deployment_failure_responses` and `litellm_deployment_state` (#46668)
+- Fixed Prometheus `/metrics` not reporting a value for the in-memory spend queue size (#46956)
+- Fixed the proxy printing plaintext at startup with `json_logs` on, so the banner and model list are now JSON (#47035)
+- Fixed mid-stream failure alerts reporting `https://api.openai.com` and dropping deployment, key and team (#47045)
+- Fixed `CustomLogger` receiving both sync and async failure hooks on async call failures (#47124)
+- Fixed a Prometheus-enabled backend returning 404 on `/metrics` during startup (#47129)
+- Fixed legacy `s3` success callback writing no object for streamed `/v1/messages` calls (#47156)
+- Fixed root logger INFO lines being dropped when `json_logs` is on and `LITELLM_LOG` is set (#47175)
+- Fixed Prometheus deployment failure metrics exporting `api_provider="None"` on many failure paths (#47384)
+- Fixed spend log size-based cleanup over-deleting rows after a Postgres statistics reset (#47449, #47501)
+- Fixed per-team Arize sampling to decide by trace id so every pod keeps or drops the same traces (#47468)
+- Fixed dropped streams being logged with 0 prompt and completion tokens instead of the usage already sent (#47838)
+- Fixed `spend_logs_metadata` being `null` on `/v1beta/interactions` spend log rows (#47848)
+- Fixed key and team Langfuse destinations losing user, tags and session on OTel v2 without global Langfuse keys
+  (#48718)
+- Fixed excluded requests like `/model/info` still exporting auth and database spans on OTEL v2 (#48720)
+- Fixed proxy logs staying red after a failed request under `--detailed_debug` (#48966)
+- Fixed `/v1/models` requests missing from the caller's OTEL trace (#49141)
+- Fixed `llm_exceptions` alerts firing on every `BudgetExceededError` rejection (#49290)
+- Fixed image generation requests refused by the router missing from failure logging (#49349)
+- Fixed failure metrics losing deployment ids for blocked requests and Ollama metadata lookups calling the wrong server
+  (#49727)
+- Changed `langfuse_otel` to set trace-level name, input, output and tags on traces LiteLLM starts (#42705)
+- Changed OTel spans to omit cost when the price lookup failed instead of reporting 0 (#44187)
+- Changed Prometheus to count successful fallbacks under the originally requested model (#45555)
+- Changed proxy 401 auth rejections to log one WARNING line without a traceback (#48613)
+- Changed pass-through routes to trace as `litellm.passthrough` instead of `chat` with OTel v2 or GenAI semconv (#48675)
+- Changed OTel v2 to stop printing span JSON to stdout unless the operator asks (#48723)
+- Improved `--detailed_debug` logs by printing the request body only where it enters and leaves the proxy (#48973)
+
+</details>
+
+<details><summary><b>Keys, teams and auth</b> (33)</summary>
+
+- Added assigning a project to a key that has none through `/key/update`, without regenerating the key (#41700)
+- Added an opt-in setting for key owners to edit `max_budget` and `budget_limits` on `/key/update` (#44763)
+- Added mapping of propagated `baggage` values to budget tags (#47358)
+- Added per-provider and per-model rpm/tpm requirements for `enforce_project_model_quota` (#47693)
+- Added per-request resolution of `oidc/google/<audience>` `api_key` references (#47703)
+- Added `general_settings.claude_code_marketplace_auth_required` to put the Claude Code marketplace behind a key
+  (#48980)
+- Added choosing the session team for Claude Code gateway users (#49001)
+- Fixed `/team/block` and `/team/unblock` not applying to cached teams until the cache expired (#35643)
+- Fixed `default_key_generate_params.allowed_routes` being ignored on key generation (#41236)
+- Fixed SCIM PATCH dropping enterprise extension attributes, now stored in `metadata.scim_enterprise` (#46738)
+- Fixed 401 when an admin-configured `api_key` is an `oidc/file/` or `oidc/env/` reference (#47341)
+- Fixed SCIM group delete leaving memberships and members' team keys active, and removing members one at a time (#47544)
+- Fixed deleted keys staying usable on other workers until the auth cache TTL expired (#47609)
+- Fixed 403 on `/typesafe` Jev calls with `typesafe/*` allowlists and added Jev to Admin UI model pickers (#47697)
+- Fixed model family and access group entries in `model_max_budget` never being enforced (#47722)
+- Fixed team member `total_spend` showing lower than current cycle spend (#48260)
+- Fixed negative RPM and TPM limits being stored, they now return 422 (#48444)
+- Fixed concurrency slots staying occupied after finished streams, so keys got rejected with SSE keepalive on (#48452)
+- Fixed team members' spend never resetting after a temporary budget increase on a member using the team default
+  (#48495)
+- Fixed 500 on `/key/generate` and `/user/new` with `get_spend_routes` and no license, now 403 (#48623)
+- Fixed key edit and regenerate sending `duration: ""` when the expiry field is blank (#48634)
+- Fixed `max_end_user_budget_id` not applying to new end users on cached keys (#48704)
+- Fixed per-model end user budgets not being enforced for master-key calls that send `user` (#48815)
+- Fixed TPM reservations ignoring chat media and overcounting Responses tool images as base64 text (#48865)
+- Fixed credential `PATCH` overwriting the stored secret with its masked read-back value (#48950)
+- Fixed CLI SSO and Claude Code gateway team lists changing order after team writes (#49033)
+- Fixed `/health` probing models a key or team is not allowed to use, including wildcard key models (#49155)
+- Fixed `team_id_upsert` not creating the `team_id_jwt_field` team on UI SSO login (#49256)
+- Fixed exhausted key or member budgets blocking model discovery and key and user info calls (#49463)
+- Changed `/key/info` to return a generic 500 for unexpected database errors (#46190)
+- Changed personal keys to inherit MCP and agent access from owner teams under `personal_key_model_access_from_teams`
+  (#46293)
+- Changed key `budget_duration` and `budget_id` updates to need admin rights, like `max_budget` (#47681)
+- Changed free installs to refuse new SSO accounts past five users without locking out existing SSO users (#48097)
+
+</details>
+
+<details><summary><b>Admin UI</b> (57)</summary>
+
+- Added shareable URL state for Usage views and links from Internal Users to Usage (#43425)
+- Added a general settings option to enable wildcard model listings from the dashboard (#43624, #47979)
+- Added separate display of subscription-covered providers and account fees on the Usage page (#44772)
+- Added your own member spend and budget per team to the Your Teams page (#45674)
+- Added Delete to the guardrail detail page with a typed-name confirmation shared with the table row (#45893)
+- Added admin-defined custom tags and metadata from `model_info` on the Model Hub (#46064)
+- Added a 1 hour cache write cost field to the add model and model edit forms (#46830)
+- Added `LITELLM_UI_USE_SI_TERMINOLOGY` to show SI instead of AI in the Admin UI (#47440)
+- Added a failed state with Retry on the Logs table, Usage totals and Caching chart when fetches fail (#47671)
+- Added client usage inspection for users and team members (#47974)
+- Added sorting of virtual keys by expiry, activity, spend and limits (#48074, #48105, #48106, #48107, #48109)
+- Added usage charts and PDF export to Aria answers (#48094)
+- Added a Chat UI with a model hub, image generation and usage metrics (#48108)
+- Added PDF, text, `.docx` and `.xlsx` document uploads to Chat (#48137)
+- Added an admin setting for the default Usage time range (#48207)
+- Added budget period tooltips to key, team, user and organization spend tiles (#48487, #48488)
+- Added sorting and persistent display ordering to the Model Group Alias table (#48500)
+- Added the `authorization` MCP auth type to the create and edit server forms (#48629)
+- Added Chat replies that keep running after the browser closes, with Stop to cancel (#49461)
+- Added an optional deep research mode in Chat with persistent source citations (#49508, #49531)
+- Fixed the key edit form not prefilling Organization from the key's `org_id` (#39535)
+- Fixed UI request logs not showing the internal user's email (#41150)
+- Fixed the upgrade notice undercounting new features and fixes for patch releases (#46942)
+- Fixed negative prices being saved on the model edit form (#46978)
+- Fixed Model Hub showing stale Unhealthy status instead of the newest health check (#47552)
+- Fixed Admin UI snippets still showing the retired example master key (#47612)
+- Fixed team per-model rate limit and budget pickers missing access-group models (#47630)
+- Fixed Tool Policies page and `/v1/tool/list` staying empty with `use_redis_transaction_buffer` enabled (#47653)
+- Fixed empty headers blocking pass-through endpoint creation and authentication showing off for free users (#48081)
+- Fixed MCP results being dropped on Chat follow-up messages (#48124)
+- Fixed the Download CSV Template button in bulk invite doing nothing (#48199)
+- Fixed copy icons in key and log details silently failing over HTTP (#48425)
+- Fixed empty value cells for String settings in general settings (#48431)
+- Fixed the Aria button blocking Logs pagination by moving it into the dashboard header (#48454)
+- Fixed deleted model parameters returning after saving and refreshing (#48456)
+- Fixed denied or failed search tool calls showing `No results found` instead of the error (#48464, #48478)
+- Fixed Decisions Playground hiding chat models that also declare decision endpoints (#48504, #48505)
+- Fixed Connect showing the light logo in dark mode and Chat omitting configured branding (#48532)
+- Fixed the spend log detail drawer breaking for request IDs containing `#`, `?` or `%` (#48630)
+- Fixed guardrail wizard navigation buttons being hidden when topics are selected (#48688)
+- Fixed the Playground not showing reasoning for `/v1/responses` (#48850)
+- Fixed Simple auto router setup hiding Responses models that Advanced setup offers (#48851)
+- Fixed the Aria Agent avatar showing as a broken image (#48890)
+- Fixed budget-only team saves silently revoking an unrestricted team's direct model access (#49258)
+- Fixed Z.AI credential fields missing from the Add Model provider form (#49314, #49325)
+- Fixed auto router templates not resolving when a `*` catch-all lists models over a partial wildcard (#49331)
+- Changed the Chat page to be on by default, and `enable_chat_ui: false` still hides it (#46918)
+- Changed the Playground chat to a single composer with a Settings popover and a reply inspector panel (#46934)
+- Changed the unset Budget Reset Period label from `n/a` to `Never resets` (#47065)
+- Changed budget dialogs to show spend limit and rate limits without a collapsed Optional Settings section (#47662)
+- Changed the upgrade notice to follow the changelog instead of the latest GitHub release (#47998)
+- Changed gateway and usage assistance into a single Aria Agent (#48082)
+- Changed the Aria empty model state to show in the model picker instead of a banner (#48223)
+- Changed auto router setup to start with two models and move classifier options under Advanced (#48451)
+- Changed keyboard hint chips across the Admin UI to one shared style (#48885)
+- Removed the separate hosted telemetry request sent on Chat submissions (#48225)
+- Removed the deprecated Old Usage page at `/ui/old-usage`, as `/ui/usage` shows everything it did (#49284)
+
+</details>
+
+<details><summary><b>Deployment</b> (18)</summary>
+
+- Added a boot warning when config `environment_variables` replaces a key already set in the process environment
+  (#47165)
+- Added `suppress_startup_output` to turn off startup prints and stop repeated Search Tools lists on reload (#47708)
+- Added a `litellm-setup` agent skill for self-hosting setup (#47731)
+- Added `LITELLM_DISABLE_LATEST_RELEASE_CHECK` to turn off the outbound latest release check (#48065)
+- Added `LITELLM_OFFLINE_MODE` to turn off every fetch LiteLLM makes on its own with one switch (#48096)
+- Added a pre-upgrade check for old spend-log rows that would fail the `(api_key, startTime)` index build (#48493)
+- Added `serviceName` and `servicePort` to Helm `ingress.extraPaths` to route paths to custom Services (#48674)
+- Fixed workers staying stale on configuration changes after a Redis reconnect (#43313)
+- Fixed `litellm --num_workers 2` crash-looping on slow hosts (#45039)
+- Fixed `--reload` ignoring `--num_workers`, now honored on uvicorn 0.50.0 or newer (#45909)
+- Fixed environment variables removed from the database staying active on running workers until restart (#46709)
+- Fixed rare lock hangs by requiring `anyio>=4.14.0` (#47378)
+- Fixed proxy startup being blocked by compressible `api_key` values that fit in the Postgres index (#48911)
+- Fixed tag spend and queued success callbacks being lost on proxy shutdown (#48988)
+- Changed the Terraform module to default its component images to the module release tag (#46960)
+- Changed `litellm-helm` to stop installing placeholder models into every install (#47056)
+- Changed the pre-migration check to a rolled-back dry run of pending migrations (#48961)
+- Removed the bundled Lens subchart from both Helm charts, which now connect to a separately deployed Lens (#49169)
+
+</details>
+
+<details><summary><b>SDK</b> (8)</summary>
+
+- Added support for Python 3.15 (#48359)
+- Fixed tool calls on `completion()` and `responses()` failing with `No module named 'mcp'` on base SDK installs
+  (#45961) <sup>Also in [1.108.4](https://github.com/BerriAI/litellm/releases/tag/v1.108.4)</sup>
+- Fixed `mock_response=""` sending a real provider request instead of returning an empty mock (#48266)
+- Fixed deprecated MCP helper imports requiring optional MCP dependencies (#48615)
+- Fixed `Unclosed client session` warnings from evicted aiohttp SDK clients (#48650)
+- Fixed `httpx.ReadError: Connection closed` on streams using the aiohttp transport's own session (#48920)
+- Changed `import litellm` to raise `ImportError` when the `_native` extension is missing (#48852)
+- Improved provider timeout errors to name the expired phase and limit instead of `after None seconds` (#48250)
+
+</details>
+
+<details><summary><b>Performance</b> (12)</summary>
+
+- Fixed memory growth on proxies without Redis, which queued a budget spend increment per request (#46831)
+- Fixed the first `/openapi.json` request blocking a worker for about 6 seconds (#47352)
+- Fixed `LiteLLM_ToolTable` writes scaling with workers, and `call_count` now counts real tool calls (#48089)
+- Improved `lite` command startup time by no longer importing the full SDK (#46803)
+- Improved streaming so long buffered streams no longer stall other requests on the same worker (#46925)
+- Improved proxy responsiveness on very large OpenAI chat completions requests (#46967)
+- Improved streaming speed on OpenAI-compatible providers by cutting per-chunk overhead (#47030)
+- Improved proxy latency by freezing the startup heap so gen-2 GC passes no longer pause requests for 0.6 to 0.8 s
+  (#47137)
+- Improved routing by resolving deployment usage limits once instead of on every request (#47393)
+- Improved savings rollup speed by reading deployment pricing from the router's cached model info (#47400)
+- Improved proxy CPU use on streamed OpenAI and Azure responses by removing caught exceptions on every chunk (#49166)
+- Improved request logging speed by skipping the base64 image scan on plain text (#49228)
+
+</details>
+
+<details><summary><b>Other</b> (33)</summary>
+
+- Added `lite claude --subscription` to keep the claude.ai login while routing through the proxy (#47385)
+- Added `lite codex --subscription` to keep the ChatGPT login (#48741)
+- Added each model group's reasoning efforts to pi, OpenCode and Codex when launched through `lite` (#48949)
+- Fixed agentic web search follow-ups losing the provider prefix for Bedrock Mantle, OpenRouter and Bedrock models
+  (#38885)
+- Fixed proxy errors returning the string `"None"` for `type` and `param` instead of `null` (#39540)
+- Fixed Claude Code web searches sending the instructional prefix to the search provider (#43458)
+- Fixed partial wildcards like `cloudflare/@cf/*` listing no models on `/v1/models` and `/model/info` (#46390)
+- Fixed `POST /model/update` dropping the `model_info` fields sent in the request (#46902)
+- Fixed 400 `Invalid JSON` on request bodies sent with `Content-Encoding: zstd` or `gzip` (#47418)
+- Fixed an `api_base` ending in `/` adding `//` to the provider path and causing 404 errors (#47535)
+- Fixed `lite pi` sending no session id, so sessions now group and `session_affinity` can pin them (#47700)
+- Fixed `lite login` tokens being treated as expired after a day when the proxy still accepts them (#47712)
+- Fixed WebSocket connections ignoring SSL verification, custom CA bundles, client certificates and proxies (#47968)
+- Fixed 404 on model discovery when `/claude_code_gateway` is the client base URL (#48221)
+- Fixed missing usage on native decisions calls being reported as zero tokens and $0 cost (#48261)
+- Fixed non-object JSON request bodies crashing parsing and auth errors, they now return 400 (#48438)
+- Fixed Decisions responses to keep missing probabilities absent while preserving explicit `0.0` (#48524)
+- Fixed `/config/field/update` storing boolean settings as text instead of JSON booleans (#48595)
+- Fixed concurrency slots not being released when synthetic streams complete (#48628)
+- Fixed client disconnects during body upload returning misleading errors, they now abort with 499 (#48640)
+- Fixed Decisions providers returning empty or non-JSON 200 bodies raising an unhandled validation error (#48662)
+- Fixed `lite codex` aliases of Codex-known models missing that model's catalog entry (#48894)
+- Fixed new model rows not applying on every worker as soon as they are written (#49034)
+- Fixed partial wildcard health checks probing models outside the wildcard (#49060)
+- Fixed model listing for wildcard aliases over a provider org showing models that cannot be routed (#49152)
+- Fixed Headroom compression and retrieval reaching different pods by forwarding tenant-scoped session affinity (#49255)
+- Fixed HTTP 500 on unrelated model edits when a model has saved access windows (#49316)
+- Changed shared-handler errors to report the right `type` instead of always `internal_server_error` (#39555)
+- Changed customer list routes to paginate, defaulting to 50 customers with page sizes from 1 to 100 (#48700)
+- Changed management and health route errors to stop reporting `type: auth_error` and to use fitting status codes
+  (#48739)
+- Changed `litellm_settings.drop_params` to apply to Claude Code and Codex requests (#49058)
+- Changed `/v1/decisions` to honor a deployment's own `supports_audio_input` and `supports_video_input` flags (#49207)
+- Removed the System One question count cap in Decisions (#47985)
+
+</details>
+
+---
+
+[Full changelog](https://github.com/BerriAI/litellm/compare/v1.108.0...v1.109.0)
+
 > [!TIP] The `lts` image tag always points to the latest LTS release. Pull `ghcr.io/berriai/litellm:lts` to stay on the
 > newest LTS patch
 
