@@ -208,7 +208,7 @@ RUN uv tool install graphifyy
 # The binary is placed where the official installer (and `opencode upgrade`) writes it, $HOME/.opencode/bin, and a copy is
 # stashed at /opt/opencode-initial/ so run.sh can seed it into the persistent /data volume (only when it is newer than
 # what is persisted); user-initiated upgrades persist across container rebuilds.
-ARG OPENCODE_VERSION=2.2.6
+ARG OPENCODE_VERSION=2.3.0
 ARG OPENCODE_SHA256_X86_64=08bb21d6326ce740d91cce7ebe88a6536933f6e1e30353b91a06b01f25da306c
 ARG OPENCODE_SHA256_AARCH64=f2d27600c367e45057d6a16f6a5c2aa8d77b41a9b10d4bc3d849c2f88870e944
 RUN ARCH=$(uname -m) \
