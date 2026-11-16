@@ -1,4 +1,4 @@
-# Home Assistant Add-on: Repo Proxy
+# Home Assistant Add-on: Marketplace Repo Proxy
 
 [![Release][release-shield]][release] ![Project Stage][project-stage-shield] ![Project Maintenance][maintenance-shield]
 

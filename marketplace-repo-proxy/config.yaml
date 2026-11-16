@@ -1,11 +1,11 @@
-name: "Repo Proxy"
+name: "Marketplace Repo Proxy"
 description: "Serves private GitHub add-on repositories to the HA store under hashed URLs (scaffold)"
 version: "0.1.0-0"
-slug: "repo_proxy"
+slug: "marketplace_repo_proxy"
 init: false
 arch:
   - amd64
-image: "ghcr.io/akentner/homeassistant-addons/{arch}-repo_proxy"
+image: "ghcr.io/akentner/homeassistant-addons/{arch}-marketplace_repo_proxy"
 url: "https://github.com/akentner/homeassistant-addons"
 startup: "application"
 boot: "auto"

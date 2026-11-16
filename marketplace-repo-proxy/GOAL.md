@@ -1,4 +1,4 @@
-# Goal: Repo Proxy
+# Goal: Marketplace Repo Proxy
 
 ## Problem
 

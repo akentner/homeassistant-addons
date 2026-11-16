@@ -1,4 +1,4 @@
-# Repo Proxy
+# Marketplace Repo Proxy
 
 Scaffold of an add-on that serves private GitHub repositories to the Home Assistant store. The goal and design questions
 are in [GOAL.md](GOAL.md).
