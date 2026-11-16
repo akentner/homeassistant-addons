@@ -170,6 +170,15 @@ Own code, no upstream project. Keeps an SSH session to each observed host, logs 
 - `problem` sensor with the reasons as attributes (stale data, I/O pressure, in-flight I/O, D-state tasks)
 - Remote side uses shell builtins only, so it keeps working while the data disk is stalled
 
+### [Repo Proxy](./repo-proxy)
+
+![Supports amd64 Architecture][amd64-shield]
+
+_Serves private GitHub add-on repositories to the HA store under hashed URLs (scaffold)._
+
+Own code, no upstream project. Planned as a proxy that mirrors a private repository and publishes it under an
+unguessable URL, optionally only inside the add-on network. See [GOAL.md](./repo-proxy/GOAL.md).
+
 ### [Secrets Sync](./secrets-sync)
 
 ![Supports amd64 Architecture][amd64-shield]
