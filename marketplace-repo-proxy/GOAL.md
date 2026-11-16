@@ -25,7 +25,9 @@ An add-on that acts as a proxy between the store and the private repository:
 
 - One or more configured source repositories (`url`, credential, branch/ref filter), each with one or more per-user
   access hashes.
-- Optional public URL (`public_url`) used for the printed store URLs.
+- Optional public URL (`public_url`) used for the printed store URLs; TLS terminates at a reverse proxy.
+- Management page behind ingress (admin-ui blueprint): published repositories, sync state, users and their hashes with
+  store URLs; add, revoke and rotate users.
 - Periodic refresh of the mirror plus a manual refresh trigger.
 - The served repository must contain a valid add-on repository (`repository.yaml` at the root) and keep `image:` keys
   usable (images may be private as well, see open questions).
@@ -35,7 +37,6 @@ An add-on that acts as a proxy between the store and the private repository:
 ## Non-goals (for now)
 
 - Proxying container images from private registries (separate problem, see open questions).
-- User management or a GUI. If a GUI is added later it follows the shared admin-ui blueprint.
 - Serving anything other than add-on repositories.
 
 ## Open questions

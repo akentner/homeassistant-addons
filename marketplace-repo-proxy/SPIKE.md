@@ -70,7 +70,7 @@ uses `/data/tmp` and `/data/addons/git`. No impact on the proxy.
 
 Not yet tested end to end: the real `ha store repositories add <url>` → install → update cycle. It runs the same
 validation and clone code tested above, so the remaining risk is low. Do it with the first implementation, preferably on
-`lxc-haos-104` (see [Decisions for the user](#decisions-for-the-user)).
+`lxc-haos-104` (see [Decisions](#decisions)).
 
 ## Recommendation
 
@@ -137,7 +137,7 @@ http://72a005f5-marketplace-repo-proxy:8080/repo/akentner/private-addons/3f9c…
 https://addons.example.com/repo/akentner/private-addons/7a02…4b                        # public
 ```
 
-- `<owner>/<repo>` is the GitHub repository (assumption: `<base>` = owner/organisation). Owner and repo names are not
+- `<owner>/<repo>` is the GitHub repository (decided: `<base>` = owner/organisation). Owner and repo names are not
   secret; the hash is. Unknown owner, repo or hash all give the same 404, so names cannot be enumerated.
 - **Several hashes per repository, one per user (access token).** Each token is a random 128-bit value (`/dev/urandom` →
   32 lowercase hex chars), generated once and persisted in `/data/access.json` keyed by `(repository, user label)`.
@@ -150,26 +150,29 @@ https://addons.example.com/repo/akentner/private-addons/7a02…4b               
   ```
 
   `GIT_PROJECT_ROOT=/srv/git/access`. Revoking a user removes the symlink; the next request gets a 404 without a server
-  reload. The symlink set is rebuilt from the options at every start, so a user removed from the options is revoked.
+  reload. The symlink set is rebuilt from `/data/access.json` at every start, so a stray symlink cannot survive.
 
 - **Query parameters**: git appends its endpoint after the query string
   (`GET /repo/o/r/<hash>?ref=main/info/refs&service=git-upload-pack`, `POST …?ref=main/git-upload-pack`), so a server
   without special handling returns 404. The `url.rewrite-once` rules above normalise both forms; the parameters are
-  accepted and **ignored**. The branch for the Supervisor stays `#<branch>` (the Supervisor strips the fragment before
-  calling git). Note: the query is part of the Supervisor's repository identity, so a store URL with different
-  parameters is a different store repository. Which parameters should mean something is an open decision.
+  accepted and **ignored** (decided: no parameter carries meaning). The branch for the Supervisor stays `#<branch>` (the
+  Supervisor strips the fragment before calling git). Note: the query is part of the Supervisor's repository identity,
+  so a store URL with different parameters is a different store repository.
 - **Rotation is expensive**, because the URL is the repository identity in the Supervisor: new URL = new repository hash
   = that user's installed add-ons must be reinstalled (back up their data first). With one token per user, rotation only
-  hits that one user. Mechanism: per-token option (for example `rotate: true`, consumed once and logged) plus a DOCS.md
-  procedure; the old URL stops working right away.
+  hits that one user. Mechanism: "Rotate" on the management page (type-to-confirm, with a reinstall warning) plus a
+  DOCS.md procedure; the old URL stops working right away.
 - The host is part of the URL too: `local-marketplace-repo-proxy` (local install), `72a005f5-marketplace-repo-proxy`
   (installed from this repository) and the public domain give different store repositories. Pick one per HA instance and
   keep it.
 - Backups of the proxy add-on include `/data` (default), so a restore keeps the tokens and therefore the URLs.
-- Logging: map the hash back to the user label (`access granted: alice → akentner/private-addons`), never log the hash
-  itself after the one-time startup listing; keep lighttpd's access log off (it would log full paths).
+- Logging: never log the hash. lighttpd's access log goes to a pipe (`accesslog.filename = "|<sink>"`); the sink maps
+  the hash to the user label, records "last fetch" per user for the management page and logs only
+  `fetch: <user> → <owner>/<repo>`. Not tested in the spike.
 
-Options sketch (flat list of dicts; HA's options schema is safest without nested lists inside list items):
+Options sketch: the options hold only what the sync needs. Users and their hashes live on the
+[management page](#management-page-ingress) and in `/data/access.json`, so adding or revoking a user needs no restart
+and no hash ever appears in the add-on options.
 
 ```yaml
 github_token: "github_pat_…" # password
@@ -178,31 +181,55 @@ public_url: "" # e.g. https://addons.example.com, empty = internal only
 repositories:
   - repository: akentner/private-addons
     branch: main
-access:
-  - repository: akentner/private-addons
-    user: home
-  - repository: akentner/private-addons
-    user: friend-1
 ```
 
 ### Public exposure
 
-Optional publication on a public domain, off by default.
+Optional publication on a public domain, off by default. **Decided: TLS terminates at a reverse proxy.**
 
 - **TLS is mandatory and must use a publicly trusted certificate.** The cloning party is another HA instance's
   Supervisor; it uses the system CA bundle and has no way to trust a self-signed certificate or skip verification. A
   plain `http://` URL over the internet would also leak the hash.
-- **Recommended: terminate TLS at an existing reverse proxy** (Traefik add-on or Cloudflare Tunnel, both running on
-  `haos-op3050-1`). They sit on the `hassio` network and reach `<prefix>-marketplace-repo-proxy:8080` without publishing
-  the port. The add-on itself stays plain HTTP and only needs `public_url` to print the public store URLs.
-- **Alternative: direct TLS in the add-on** (`ssl`, `certfile`, `keyfile` in `/ssl`, the usual HA convention, lighttpd
-  `mod_openssl`) behind a published port. Only useful without a reverse proxy; needs a certificate for the domain.
+- **The reverse proxy terminates TLS** (Traefik add-on or Cloudflare Tunnel, both running on `haos-op3050-1`). They sit
+  on the `hassio` network and reach `<prefix>-marketplace-repo-proxy:8080` without publishing the port. The add-on
+  itself stays plain HTTP and only needs `public_url` to print the public store URLs.
+- No TLS inside the add-on (`ssl`/`certfile`/`keyfile`). The git port stays unpublished by default; publishing it
+  remains possible for LAN or Tailscale use over plain HTTP.
 - Proxy-side settings: no caching of `/repo/*` (CDN caching would serve stale refs or other users' responses), request
   body limit high enough for `git-upload-pack` POSTs, no access logs with full paths (they contain the hash), optional
   rate limit on 404s. With 128-bit tokens brute force is not a practical risk; leaked URLs are.
 - Bandwidth is small: each consuming Supervisor does a shallow fetch every 3 hours.
 - **Not verified yet**: a clone through Traefik/Cloudflare. Smart HTTP over HTTPS reverse proxies is standard (GitHub,
   Gitea), so the risk is low; test it with the first implementation.
+
+### Management page (Ingress)
+
+A GUI behind HA ingress lists the published repositories and manages users and hashes. It follows the admin-ui blueprint
+(`admin-ui/DOCS.md`, rules R-01 to R-15): Python stdlib server skeleton and Preact lib, copied in by
+`make sync-admin-ui ADDON=marketplace-repo-proxy` and never edited by hand.
+
+- **Two servers, two ports.** lighttpd serves git on `8080` (unpublished by default, reached by Supervisors and the
+  reverse proxy). The GUI runs on the ingress port (`ingress: true`, `ingress_port: 8099`), never published. The
+  blueprint's ingress gate (R-01: peer `172.30.32.2` plus `X-Ingress-Path`) rejects everything else, so git traffic
+  cannot run through the GUI server, and does not need to.
+- **Image**: `apk add python3` on top of git and lighttpd; the blueprint uses the same `amd64-base:3.24`.
+- **Process separation** (s6 services): `sync` is the only process with the GitHub token; `lighttpd` and `gui` never see
+  it. The GUI reads sync state from `/data/status.json`, requests a sync through a trigger file the sync loop watches,
+  and creates or removes the access symlinks itself.
+- **Source of truth**: repositories and the token in the add-on options (they need a restart anyway), users and hashes
+  in `/data/access.json`, written only by the GUI.
+
+| View         | Content                                                                                                                                                  | Actions                                                                                         |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Repositories | `owner/repo`, branch, last sync (relative), HEAD short SHA, add-ons found in the mirror, status (`ok`, `auth_failed`, `not_found`, `no_repository_yaml`) | Sync now                                                                                        |
+| Access       | Per repository: user label, created, last fetch, store URLs internal and public (`CopyField`)                                                            | Add user (generates a hash); revoke and rotate, both type-to-confirm with the user label (R-04) |
+| Info         | Setup steps: add the URL in the store, reverse proxy notes, rotation procedure                                                                           | none                                                                                            |
+
+- The page sits behind HA login and ingress, so it may show full store URLs. They are rendered as text only (R-03) and
+  never logged.
+- API errors use stable codes (R-14), for example `repository_unknown`, `user_exists`, `confirmation_required`.
+- Rotate shows the consequence before confirming: the user's Supervisor sees a new repository and must reinstall the
+  add-ons from it.
 
 ### Upstream authentication
 
@@ -245,7 +272,8 @@ Optional publication on a public domain, off by default.
    `/srv/git/repos/*` in `/etc/gitconfig`, otherwise git refuses with "dubious ownership" (seen in the spike).
 6. No published port by default (`8080/tcp: null`). Every add-on on the `hassio` network can reach the proxy, so the
    hash is the only secret: log the store URLs once at startup at `info`, never the GitHub token.
-7. Per-user tokens: a leaked URL is revoked by removing one `access` entry, without touching other users.
+7. Per-user tokens: a leaked URL is revoked on the management page, without touching other users.
+8. The management page is reachable only through ingress (blueprint gate R-01); its port is never published.
 
 ### Known limitations
 
@@ -254,19 +282,26 @@ Optional publication on a public domain, off by default.
 - **Private images** (`image:` on private GHCR) need registry credentials on the host
   (`ha docker registries add ghcr.io ...`), or public images, or local builds. Stays a non-goal.
 
-## Decisions for the user
+## Decisions
+
+Decided by the user (2026-11-17):
+
+- Public exposure through a reverse proxy that terminates TLS; no TLS in the add-on.
+- `<base>` in `/repo/<base>/<repo>/<hash>` is the GitHub owner/organisation.
+- Query parameters on the store URL are accepted and ignored.
+- A management page behind ingress shows the published repositories and their users/hashes.
+
+Still open:
 
 1. **Supervisor API role**: give the add-on `hassio_role: manager` for self-registration and `store/reload` after sync
    (faster updates, but a broad API role and a lower security rating), or stay without API access (manual "add
    repository", up to 3 h update lag)? Recommendation: without for v1, add later if the lag hurts.
-2. **Server**: lighttpd + `git http-backend` (recommended) or `git daemon` (smaller config, `git://` URL)?
+2. **Server**: lighttpd + `git http-backend` (recommended, all tests above) or `git daemon` (`git://` URL, does not fit
+   the `https://` reverse proxy)?
 3. **Install source**: install the proxy from this repository (`72a005f5-…` hostname, CI image) or as a local add-on
-   (`local-…`)? It fixes the store URL for good.
+   (`local-…`)? It fixes the internal store URLs for good.
 4. **End-to-end test host**: run the real store add → install → update test on `lxc-haos-104` (preferred) or on
    `haos-op3050-1` (adds and later removes one store repository)?
 5. **Credential**: one fine-grained PAT for v1 (recommended), or deploy keys per repository from the start?
-6. **Query parameters**: which GitHub-style parameters should have a meaning? Accepted and ignored is implemented in the
-   spike; a meaningful `ref`/`branch` would duplicate the Supervisor's `#branch` and needs a separate repository view
-   per ref.
-7. **Public TLS**: reverse proxy (Traefik/Cloudflare Tunnel, recommended) or TLS inside the add-on?
-8. **`<base>`**: GitHub owner/organisation (assumed), or a free namespace per proxy?
+6. **Where users live**: managed on the page and stored in `/data/access.json` (recommended: no restart, no hashes in
+   the options), or declared in the add-on options with a read-only page (config as code, restart per change)?
