@@ -1,3 +1,40 @@
+This is a security release. It hardens message templating against a set of denial-of-service attacks, where a crafted
+template could crash the server, exhaust its memory or outrun the execution deadline in a single request. It also stops
+slow S3 attachment uploads and unresponsive web push endpoints from tying up memory, connections and goroutines, and
+applies the web push subscription limit per IP prefix. **Upgrading is strongly recommended**.
+
+**Security:**
+
+- Message templating: values are now checked before they are printed or JSON-encoded, so a template can no longer crash
+  the server by printing a value that references itself, or build a huge string by printing a list of many references to
+  one value
+- Message templating: `printf` only accepts plain directives (no explicit argument indexes or `%p`) and no lists or
+  dicts as arguments, and the `html`, `js` and `urlquery` functions are no longer allowed
+- Message templating: the execution deadline is now also enforced inside a single template action, so a long pipeline or
+  deeply nested function calls can no longer outrun it
+- Message templating: the `regexMatch`, `regexFind`, `regexFindAll`, `regexReplaceAll`, `regexReplaceAllLiteral` and
+  `regexSplit` functions (and their `must` variants) now reject patterns longer than 1024 bytes or that compile to more
+  than 5000 instructions, so a template can no longer make the server compile and run a huge regular expression
+- Message templating: limit the result size of the `cat`, `toPrettyJSON`, `concat` and `keys` functions, and the list
+  size of `uniq`, `without` and `has`, so a small template can no longer build a huge string or list in a single call
+- Message templating: apply the iteration limit of `until`, `untilStep` and `seq` to decreasing sequences too, so a
+  negative step can no longer build an unbounded list
+- Attachments: buffer S3 uploads of unknown size in small chunks as data arrives, instead of allocating a full 5 MB part
+  up front (and a second one for multipart uploads), so that slow or stalled uploads no longer pin 5-10 MB of memory
+  each
+- Web push: use a timeout for deliveries and always close the push service response, so slow or unresponsive push
+  endpoints can no longer leak connections and goroutines; a timeout or network error no longer removes the subscription
+- Web push: count the subscription limit per IP prefix (the same IPv6 /64 or configured prefix as all other limits)
+  instead of per full IP address, so rotating addresses within one prefix no longer bypasses it
+
+**Bug fixes + maintenance:**
+
+- Stripe billing: when an abandoned checkout expires (`incomplete_expired`) after the user paid for another
+  subscription, the webhook no longer replaces the paying subscription with the expired one
+  ([#2199](https://github.com/binwiederhier/ntfy/pull/2199))
+- Message templating: errors in an inline message template (`X-Message` with `X-Template: yes`) now name the message
+  parameter instead of the priority parameter
+
 This release shares every visitor's rate limits across the nodes of a cluster: a client spread over several nodes is now
 limited once instead of once per node, and a node that restarts or crashes takes the limits over from its peers instead
 of forgetting them. It also fixes a denial-of-service bug in message templating, where a crafted template could build an
