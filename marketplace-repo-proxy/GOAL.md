@@ -12,14 +12,20 @@ An add-on that acts as a proxy between the store and the private repository:
 
 - It holds the GitHub credentials (deploy key or fine-grained token, stored as a `password` option).
 - It mirrors the private repository and serves it as a read-only git repository (smart HTTP) the Supervisor can clone.
-- The repository is published under a **hashed, unguessable URL path** (for example `/r/<hash>.git`), so the URL itself
-  acts as the shared secret for the store entry.
-- Optionally it is reachable **only inside the HA add-on network** (`http://<hostname>:<port>/...`, no published port),
-  so nothing is exposed outside the host. Publishing the port (LAN, Tailscale) stays an explicit opt-in.
+- The repository is published under a GitHub-like path with an **unguessable hash per user**:
+  `/repo/<owner>/<repo>/<hash>`, so the URL acts as the shared secret for one user's store entry. One repository can
+  have several hashes, which grants and revokes access per user.
+- GitHub-style query parameters on the store URL are accepted (git appends its endpoints after the query string, see
+  [SPIKE.md](SPIKE.md)).
+- By default it is reachable **only inside the HA add-on network** (`http://<hostname>:<port>/...`, no published port),
+  so nothing is exposed outside the host. Publishing on a **public domain** (HTTPS with a publicly trusted certificate,
+  usually through a reverse proxy) is an explicit opt-in.
 
 ## Scope (first version)
 
-- One or more configured source repositories (`url`, credential, branch/ref filter), each with its own hashed path.
+- One or more configured source repositories (`url`, credential, branch/ref filter), each with one or more per-user
+  access hashes.
+- Optional public URL (`public_url`) used for the printed store URLs.
 - Periodic refresh of the mirror plus a manual refresh trigger.
 - The served repository must contain a valid add-on repository (`repository.yaml` at the root) and keep `image:` keys
   usable (images may be private as well, see open questions).
