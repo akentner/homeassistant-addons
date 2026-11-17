@@ -48,7 +48,7 @@ does **not** work.
 - **API role** (`api/middleware/security.py`): `/store.*` needs `hassio_role: manager`. With it the proxy could register
   itself (`POST /store/repositories`) and trigger `POST /store/reload` after a sync.
 
-## Live verification on `haos-op3050-1`
+## Live verification on the production HA host
 
 Read-only for production state: no store entry added, no add-on installed or restarted.
 
@@ -60,17 +60,17 @@ Read-only for production state: no store entry added, no add-on installed or res
    with and without `#main` → valid. `git.Repo.clone_from()` with the same kwargs as `_clone` → OK, checkout contains
    `repository.yaml`. `ls-remote --heads` → OK. `fetch --update-shallow --depth 1` → OK. Wrong hash →
    `remote: not found`.
-3. DNS from the Supervisor container: bridged add-ons resolve (`72a005f5-ntfy` → `172.30.33.16`, `core-mariadb` →
-   `172.30.33.0`), host-network add-ons resolve to `172.30.32.1`. TCP to the **unpublished** ingress port `8099` of
-   `72a005f5-ntfy` connects.
+3. DNS from the Supervisor container: bridged add-ons (`<repo-hash>-<slug>`, `core-<slug>`) resolve to their
+   `172.30.33.x` address, host-network add-ons to `172.30.32.1`. TCP to the **unpublished** ingress port of a bridged
+   add-on connects.
 4. Cleanup: server stopped, temp repositories in the SSH add-on and `/data/tmp/mrp-spike-*` in the Supervisor removed.
 
 Side note: git inside the Supervisor container gets `Permission denied` when cloning into `/tmp`; the Supervisor itself
 uses `/data/tmp` and `/data/addons/git`. No impact on the proxy.
 
 Not yet tested end to end: the real `ha store repositories add <url>` → install → update cycle. It runs the same
-validation and clone code tested above, so the remaining risk is low. Do it with the first implementation, preferably on
-`lxc-haos-104` (see [Decisions](#decisions)).
+validation and clone code tested above, so the remaining risk is low. Do it with the first implementation on the
+production host (see [Decisions](#decisions)).
 
 ## Recommendation
 
@@ -190,9 +190,9 @@ Optional publication on a public domain, off by default. **Decided: TLS terminat
 - **TLS is mandatory and must use a publicly trusted certificate.** The cloning party is another HA instance's
   Supervisor; it uses the system CA bundle and has no way to trust a self-signed certificate or skip verification. A
   plain `http://` URL over the internet would also leak the hash.
-- **The reverse proxy terminates TLS** (Traefik add-on or Cloudflare Tunnel, both running on `haos-op3050-1`). They sit
-  on the `hassio` network and reach `<prefix>-marketplace-repo-proxy:8080` without publishing the port. The add-on
-  itself stays plain HTTP and only needs `public_url` to print the public store URLs.
+- **The reverse proxy terminates TLS** (Traefik add-on or Cloudflare Tunnel add-on). They sit on the `hassio` network
+  and reach `<prefix>-marketplace-repo-proxy:8080` without publishing the port. The add-on itself stays plain HTTP and
+  only needs `public_url` to print the public store URLs.
 - No TLS inside the add-on (`ssl`/`certfile`/`keyfile`). The git port stays unpublished by default; publishing it
   remains possible for LAN or Tailscale use over plain HTTP.
 - Proxy-side settings: no caching of `/repo/*` (CDN caching would serve stale refs or other users' responses), request
@@ -217,7 +217,8 @@ A GUI behind HA ingress lists the published repositories and manages users and h
   it. The GUI reads sync state from `/data/status.json`, requests a sync through a trigger file the sync loop watches,
   and creates or removes the access symlinks itself.
 - **Source of truth**: repositories and the token in the add-on options (they need a restart anyway), users and hashes
-  in `/data/access.json`, written only by the GUI.
+  in `/data/access.json`. GUI and provisioning API run in the same Python process and share one service module for
+  `/data/access.json` (atomic write, one lock), so there is no cross-process write race.
 
 | View         | Content                                                                                                                                                  | Actions                                                                                         |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
@@ -230,6 +231,38 @@ A GUI behind HA ingress lists the published repositories and manages users and h
 - API errors use stable codes (R-14), for example `repository_unknown`, `user_exists`, `confirmation_required`.
 - Rotate shows the consequence before confirming: the user's Supervisor sees a new repository and must reinstall the
   add-ons from it.
+
+### Provisioning API (IaC)
+
+Users can also be provisioned from outside, so OpenTofu/Ansible can manage access next to the GUI.
+
+- **Separate port, bearer token.** The admin-ui gate (R-01) only lets ingress traffic through, and its `public=True`
+  escape hatch allows literal paths without parameters only. A REST API therefore needs its own listener: port `8098`
+  (unpublished by default; publish it for LAN/Tailscale IaC runs). Never route it through the public reverse proxy.
+- **Token** like the deprecated `terraform-bridge` add-on: 256-bit random, generated on first start, only its SHA-256
+  stored in `/data/api-token`, plaintext shown once on the management page (and rotatable there), never logged. The API
+  is off until a token exists; `api_enabled` option, default `false`.
+- **Endpoints** (`/api/v1`, JSON, stable error codes):
+
+  | Method   | Path                                               | Behaviour                                                                   |
+  | -------- | -------------------------------------------------- | --------------------------------------------------------------------------- |
+  | `GET`    | `/repositories`                                    | Configured repositories with sync state                                     |
+  | `GET`    | `/repositories/{owner}/{repo}/users`               | Users with created, last fetch, source (`gui`/`api`); no hashes             |
+  | `PUT`    | `/repositories/{owner}/{repo}/users/{user}`        | Idempotent create; optional body `{"hash": "<32 hex>"}`; returns store URLs |
+  | `GET`    | `/repositories/{owner}/{repo}/users/{user}`        | One user including store URLs                                               |
+  | `DELETE` | `/repositories/{owner}/{repo}/users/{user}`        | Revoke (204; 404 if unknown)                                                |
+  | `POST`   | `/repositories/{owner}/{repo}/users/{user}/rotate` | New hash, returns the new store URLs                                        |
+
+- **Client-supplied hash** (optional in `PUT`): lets IaC own the secret (for example `random_id` in OpenTofu, stored in
+  SOPS), so a reinstalled proxy gets the same URLs back and consumers keep their store entries. A `PUT` with a different
+  hash for an existing user is a conflict (`409 hash_mismatch`), not a silent rotation.
+- **GUI and API side by side**: each user records its source. The GUI marks API-managed users ("managed by IaC") and
+  still allows revoke, but an IaC run would recreate them; that is expected drift handling, not a bug.
+- **Shared code**: put the bearer-gated listener into the admin-ui skeleton (next to the ingress server) instead of
+  writing it once here, so other GUIs (ntfy has the same plan) reuse it. That is a change in `admin-ui/` with its own
+  version bump and `make sync-admin-ui`.
+- **Clients**: no own Terraform provider. OpenTofu with a generic REST provider or `http` data sources, or Ansible
+  `uri`, is enough for five endpoints.
 
 ### Upstream authentication
 
@@ -289,19 +322,18 @@ Decided by the user (2026-11-17):
 - Public exposure through a reverse proxy that terminates TLS; no TLS in the add-on.
 - `<base>` in `/repo/<base>/<repo>/<hash>` is the GitHub owner/organisation.
 - Query parameters on the store URL are accepted and ignored.
-- A management page behind ingress shows the published repositories and their users/hashes.
+- Management page behind ingress, built on the admin-ui blueprint of this repository.
+- Users are managed in the GUI and can also be provisioned from outside through a REST API (IaC).
+- Server: lighttpd + `git http-backend`.
+- Install source: this repository (CI image, hostname `72a005f5-marketplace-repo-proxy`).
+- Upstream credential: one fine-grained PAT (`Contents: read-only`).
+- End-to-end test (store add → install → update) on the production host; it adds one store repository and removes it
+  afterwards.
 
 Still open:
 
 1. **Supervisor API role**: give the add-on `hassio_role: manager` for self-registration and `store/reload` after sync
    (faster updates, but a broad API role and a lower security rating), or stay without API access (manual "add
    repository", up to 3 h update lag)? Recommendation: without for v1, add later if the lag hurts.
-2. **Server**: lighttpd + `git http-backend` (recommended, all tests above) or `git daemon` (`git://` URL, does not fit
-   the `https://` reverse proxy)?
-3. **Install source**: install the proxy from this repository (`72a005f5-…` hostname, CI image) or as a local add-on
-   (`local-…`)? It fixes the internal store URLs for good.
-4. **End-to-end test host**: run the real store add → install → update test on `lxc-haos-104` (preferred) or on
-   `haos-op3050-1` (adds and later removes one store repository)?
-5. **Credential**: one fine-grained PAT for v1 (recommended), or deploy keys per repository from the start?
-6. **Where users live**: managed on the page and stored in `/data/access.json` (recommended: no restart, no hashes in
-   the options), or declared in the add-on options with a read-only page (config as code, restart per change)?
+2. **Bearer listener in the admin-ui skeleton** (recommended, reusable for ntfy) or local to this add-on (faster, no
+   admin-ui release)?

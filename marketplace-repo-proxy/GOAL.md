@@ -28,6 +28,7 @@ An add-on that acts as a proxy between the store and the private repository:
 - Optional public URL (`public_url`) used for the printed store URLs; TLS terminates at a reverse proxy.
 - Management page behind ingress (admin-ui blueprint): published repositories, sync state, users and their hashes with
   store URLs; add, revoke and rotate users.
+- Provisioning REST API with bearer token (separate port, off by default) so IaC can manage users.
 - Periodic refresh of the mirror plus a manual refresh trigger.
 - The served repository must contain a valid add-on repository (`repository.yaml` at the root) and keep `image:` keys
   usable (images may be private as well, see open questions).
