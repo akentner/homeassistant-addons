@@ -25,7 +25,7 @@ automations, scripts, and configs directly.
 
 - SSH server with public-key authentication (port configurable via HA network settings)
 - Web terminal via HA ingress (no port forwarding needed)
-- Shared Admin UI shell with Home Assistant theme sync, compact navigation, and German/English language switching
+- Shared Admin UI shell with Home Assistant theme sync and compact navigation with icons
 - Persistent herdr session (workspaces, tabs, panes) shared between SSH and web terminal
 - Claude Code with a persistent, self-updating install, persisted login state and the add-on's MCP servers registered
 - herdr plugins (subagent-watch, claude-limits) linked for opt-in use, plus a web UI for your agents at `/services/`
