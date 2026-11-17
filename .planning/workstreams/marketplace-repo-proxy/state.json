@@ -1,0 +1,38 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": null,
+  "next": {
+    "command": "/gsd-progress",
+    "label": "Show progress",
+    "reason": "Unsure of state \u2014 showing progress"
+  },
+  "phases": [
+    {
+      "name": "Git serving core",
+      "number": "1",
+      "status": "in_progress"
+    },
+    {
+      "name": "Supervisor integration",
+      "number": "2",
+      "status": "pending"
+    },
+    {
+      "name": "Management GUI",
+      "number": "3",
+      "status": "pending"
+    },
+    {
+      "name": "Provisioning API",
+      "number": "4",
+      "status": "pending"
+    },
+    {
+      "name": "Public exposure and release",
+      "number": "5",
+      "status": "pending"
+    }
+  ],
+  "updated_at": "2026-11-17T21:50:52.005Z"
+}
