@@ -133,8 +133,8 @@ Store URL, modelled on GitHub paths:
 
 ```text
 <scheme>://<host>[:<port>]/repo/<owner>/<repo>/<hash>[?<query>][#<branch>]
-http://72a005f5-marketplace-repo-proxy:8080/repo/akentner/private-addons/3f9c…e1      # internal
-https://addons.example.com/repo/akentner/private-addons/7a02…4b                        # public
+http://72a005f5-marketplace-repo-proxy:8080/repo/example-org/private-addons/3f9c…e1      # internal
+https://addons.example.com/repo/example-org/private-addons/7a02…4b                        # public
 ```
 
 - `<owner>/<repo>` is the GitHub repository (decided: `<base>` = owner/organisation). Owner and repo names are not
@@ -179,7 +179,7 @@ github_token: "github_pat_…" # password
 sync_interval: 15
 public_url: "" # e.g. https://addons.example.com, empty = internal only
 repositories:
-  - repository: akentner/private-addons
+  - repository: example-org/private-addons
     branch: main
 ```
 
@@ -258,11 +258,28 @@ Users can also be provisioned from outside, so OpenTofu/Ansible can manage acces
   hash for an existing user is a conflict (`409 hash_mismatch`), not a silent rotation.
 - **GUI and API side by side**: each user records its source. The GUI marks API-managed users ("managed by IaC") and
   still allows revoke, but an IaC run would recreate them; that is expected drift handling, not a bug.
-- **Shared code**: put the bearer-gated listener into the admin-ui skeleton (next to the ingress server) instead of
-  writing it once here, so other GUIs (ntfy has the same plan) reuse it. That is a change in `admin-ui/` with its own
-  version bump and `make sync-admin-ui`.
+- **Shared code (decided)**: the bearer-gated listener goes into the admin-ui skeleton next to the ingress server, so
+  other GUIs (ntfy has the same plan) reuse it. That is a change in `admin-ui/` with its own version bump, tests and
+  `make sync-admin-ui`, and it lands before the proxy's GUI work.
 - **Clients**: no own Terraform provider. OpenTofu with a generic REST provider or `http` data sources, or Ansible
   `uri`, is enough for five endpoints.
+
+### Supervisor integration
+
+Decided: the add-on gets `hassio_api: true` and `hassio_role: manager` in v1.
+
+- **Self-registration**: the proxy keeps one system user per repository (`source: system`, label `local`) and registers
+  its internal store URL (`http://72a005f5-marketplace-repo-proxy:8080/repo/<owner>/<repo>/<hash>`) with
+  `POST /store/repositories` if `GET /store/repositories` does not list it yet. Option `register_local`, default `true`.
+- **Fast updates**: after a sync that changed refs, `POST /store/reload` (reloads all store repositories; at most once
+  per sync interval).
+- **Rotation and removal of the local user**: add the new URL first, then try to remove the old one. The Supervisor
+  refuses to remove a repository that installed add-ons still use (`StoreError: … used by installed apps`), so the proxy
+  never orphans installed add-ons; it reports the leftover repository on the management page instead.
+- **Cost**: `manager` allows far more than the store (add-on control, backups, Core, host). The add-on's security rating
+  drops. Mitigations: only the calls listed here are used (one small Supervisor client module with an allow-list of
+  method and path), the `SUPERVISOR_TOKEN` stays in the `gui`/`sync` processes and never reaches lighttpd, and every
+  Supervisor call is logged without secrets.
 
 ### Upstream authentication
 
@@ -288,7 +305,7 @@ Users can also be provisioned from outside, so OpenTofu/Ansible can manage acces
   so a shorter interval only helps manual "Check for updates".
 - Manual trigger: `stdin: true` plus `hassio.addon_stdin` with `sync` (no extra port, no webhook). Webhooks are out:
   they need an inbound path, which contradicts "internal only".
-- Optional fast path (needs `hassio_role: manager`): after a sync that changed refs, call `POST /store/reload` so
+- After a sync that changed refs, call `POST /store/reload` (see [Supervisor integration](#supervisor-integration)) so
   updates show up within minutes instead of up to 3 hours.
 - Run the sync loop as a separate s6 service from lighttpd, so the token never reaches the HTTP server's process tree.
 
@@ -329,11 +346,8 @@ Decided by the user (2026-11-17):
 - Upstream credential: one fine-grained PAT (`Contents: read-only`).
 - End-to-end test (store add → install → update) on the production host; it adds one store repository and removes it
   afterwards.
+- Supervisor integration with `hassio_role: manager` in v1 (self-registration, store reload after sync).
+- The bearer-token listener for the provisioning API goes into the admin-ui skeleton.
+- PR #113 is squash-merged; implementation is planned as a GSD phase.
 
-Still open:
-
-1. **Supervisor API role**: give the add-on `hassio_role: manager` for self-registration and `store/reload` after sync
-   (faster updates, but a broad API role and a lower security rating), or stay without API access (manual "add
-   repository", up to 3 h update lag)? Recommendation: without for v1, add later if the lag hurts.
-2. **Bearer listener in the admin-ui skeleton** (recommended, reusable for ntfy) or local to this add-on (faster, no
-   admin-ui release)?
+Nothing open from the spike.
