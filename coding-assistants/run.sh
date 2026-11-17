@@ -158,8 +158,10 @@ HA: ${MOTD_HA_URL}
 EOF
 
 # Version info for web UI
-printf '{"addon":"%s","claude":"%s","herdr":"%s","opencode":"%s","codex":"%s"}\n' \
-    "${ADDON_VERSION}" "${CLAUDE_VERSION}" "${HERDR_BIN_VERSION}" "${OPENCODE_VERSION}" "${CODEX_BIN_VERSION}" \
+# slug: HA's info page of this add-on (/config/app/<slug>/info) is linked from the topbar; empty hides the link
+ADDON_SLUG=$(bashio::api.supervisor GET /addons/self/info false ".slug" 2> /dev/null) || ADDON_SLUG=""
+printf '{"addon":"%s","slug":"%s","claude":"%s","herdr":"%s","opencode":"%s","codex":"%s"}\n' \
+    "${ADDON_VERSION}" "${ADDON_SLUG}" "${CLAUDE_VERSION}" "${HERDR_BIN_VERSION}" "${OPENCODE_VERSION}" "${CODEX_BIN_VERSION}" \
     > /opt/coding-assistants/versions.json
 
 # Fish config persistence — copy defaults on first run, then symlink
