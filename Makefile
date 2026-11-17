@@ -126,6 +126,8 @@ test-admin-ui: ## Run the admin-ui Node and pytest suites
 	uv run --with pytest --with pyyaml python3 -m pytest admin-ui/tests -q
 
 test-admin-ui-consumers: ## Test each consumer separately (their Python app packages share a name)
+	node --test coding-assistants/tests/*.test.mjs
+	python3 -m unittest discover -s coding-assistants/tests -p 'test_*.py'
 	uv run --with pytest --with pyyaml python3 -m pytest ntfy/tests -q
 	uv run --with pytest --with pyyaml --with jinja2 python3 -m pytest secrets-sync/tests/web -q
 	uv run --with pytest --with pyyaml python3 -m pytest haos-monitor/tests -q
@@ -217,8 +219,9 @@ build-addon: ## Build an add-on image locally, replicating the HA build process 
 		echo "❌ $(ADDON)/build.yaml not found"; \
 		exit 1; \
 	fi
-	$(eval VERSION   := $(shell grep 'VERSION:' $(ADDON)/build.yaml | awk '{print $$2}' | tr -d '"'))
-	$(eval BUILD_FROM := $(shell grep 'amd64:' $(ADDON)/build.yaml | awk '{print $$2}' | tr -d '"'))
+	$(eval VERSION := $(shell awk '$$1 == "VERSION:" { gsub(/"/, "", $$2); print $$2; exit }' $(ADDON)/build.yaml))
+	$(eval CONFIG_VERSION := $(shell awk '$$1 == "version:" { gsub(/"/, "", $$2); print $$2; exit }' $(ADDON)/config.yaml))
+	$(eval BUILD_FROM := $(shell awk '$$1 == "amd64:" { gsub(/"/, "", $$2); print $$2; exit }' $(ADDON)/build.yaml))
 	$(eval _TIMEOUT  := $(if $(TIMEOUT),$(TIMEOUT),600))
 	@echo "🐳 Building $(ADDON) v$(VERSION)"
 	@echo "   BUILD_FROM=$(BUILD_FROM)"
@@ -227,7 +230,7 @@ build-addon: ## Build an add-on image locally, replicating the HA build process 
 	@echo "   BUILD_DATE=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)"
 	@echo "   BUILD_REF=$(shell git rev-parse --short HEAD)"
 	@echo "   BUILD_REPOSITORY=$(shell git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git||')"
-	@echo "   BUILD_VERSION=$(VERSION)"
+	@echo "   BUILD_VERSION=$(CONFIG_VERSION)"
 	@echo "   timeout=$(_TIMEOUT)s"
 	@echo ""
 	timeout $(_TIMEOUT) docker build \
@@ -240,12 +243,12 @@ build-addon: ## Build an add-on image locally, replicating the HA build process 
 		--build-arg BUILD_NAME="$(ADDON)" \
 		--build-arg BUILD_REF="$(shell git rev-parse --short HEAD)" \
 		--build-arg BUILD_REPOSITORY="$(shell git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git||')" \
-		--build-arg BUILD_VERSION="$(VERSION)" \
-		-t "local/$(ADDON):$(VERSION)" \
+		--build-arg BUILD_VERSION="$(CONFIG_VERSION)" \
+		-t "local/$(ADDON):$(CONFIG_VERSION)" \
 		$(ADDON)/ \
 	&& echo "" \
-	&& echo "✅ Built image: local/$(ADDON):$(VERSION)" \
-	&& echo "   Run with:  docker run --rm -it local/$(ADDON):$(VERSION) sh" \
+	&& echo "✅ Built image: local/$(ADDON):$(CONFIG_VERSION)" \
+	&& echo "   Run with:  docker run --rm -it local/$(ADDON):$(CONFIG_VERSION) sh" \
 	|| { EC=$$?; \
 	     if [ $$EC -eq 124 ]; then \
 	       echo "❌ Build timed out after $(_TIMEOUT)s (increase with TIMEOUT=<seconds>)"; \

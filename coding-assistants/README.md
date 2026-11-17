@@ -25,6 +25,7 @@ automations, scripts, and configs directly.
 
 - SSH server with public-key authentication (port configurable via HA network settings)
 - Web terminal via HA ingress (no port forwarding needed)
+- Shared Admin UI shell with Home Assistant theme sync, compact navigation, and German/English language switching
 - Persistent herdr session (workspaces, tabs, panes) shared between SSH and web terminal
 - Claude Code with a persistent, self-updating install, persisted login state and the add-on's MCP servers registered
 - herdr plugins (subagent-watch, claude-limits) linked for opt-in use, plus a web UI for your agents at `/services/`
@@ -51,7 +52,7 @@ env_vars:
 ```
 
 [docs]: https://github.com/akentner/homeassistant-addons/blob/main/coding-assistants/DOCS.md
-[release-shield]: https://img.shields.io/badge/version-v1.3.0-orange.svg
-[release]: https://github.com/akentner/homeassistant-addons/tree/v1.3.0
+[release-shield]: https://img.shields.io/badge/version-v1.3.2-orange.svg
+[release]: https://github.com/akentner/homeassistant-addons/tree/v1.3.2
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-experimental-orange.svg

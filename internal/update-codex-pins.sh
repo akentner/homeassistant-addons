@@ -1,5 +1,5 @@
 #!/bin/bash
-# Refresh the Codex CLI pins of the coding-assistants add-on (CODEX_VERSION and both SHA256 digests) in the
+# Refresh the complete Codex package pins of the coding-assistants add-on (CODEX_VERSION and both SHA256 digests) in the
 # Dockerfile ARG defaults and build.yaml args at once. Renovate can only bump CODEX_VERSION; the digests must be
 # refreshed with this script on the same branch (scenario `drift` of verify-coding-assistants.sh checks the mirror).
 #
@@ -16,7 +16,7 @@ VERSION="${1:-$(sed -nE 's/^  CODEX_VERSION: "([^"]+)"$/\1/p' "${BUILD_YAML}")}"
 digest() {
     local arch="$1" value
     value="$(gh api "repos/openai/codex/releases/tags/rust-v${VERSION}" \
-        --jq ".assets[] | select(.name == \"codex-${arch}-unknown-linux-musl.tar.gz\") | .digest")"
+        --jq ".assets[] | select(.name == \"codex-package-${arch}-unknown-linux-musl.tar.gz\") | .digest")"
     [[ "${value}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "no sha256 digest for ${arch} in rust-v${VERSION}" >&2; exit 1; }
     echo "${value#sha256:}"
 }

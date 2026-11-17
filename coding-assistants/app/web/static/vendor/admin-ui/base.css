@@ -1,0 +1,286 @@
+/* Admin UI blueprint tokens and base. Do not edit copies; edit admin-ui/app/web/static/lib/. */
+
+/* Light is the default; dark follows the system unless data-theme="light". An explicit data-theme on any element
+   forces that theme (demo shows both side by side). The dark values are duplicated on purpose (no light-dark():
+   Chromium 109 WebView) and kept in parity by tests/test_css.py. */
+:root {
+  color-scheme: light dark;
+  --bg: var(--sync-bg, #f4f5f7);
+  --fg: var(--sync-fg, #1c1e21);
+  --card: var(--sync-card, #ffffff);
+  --bd: var(--sync-bd, #dcdfe4);
+  --mut: #586069;
+  --ok: #176f2c;
+  --warn: #8a5700;
+  --err: #cf222e;
+  --acc: var(--sync-acc, #0969da);
+  --on-acc: var(--sync-on-acc, #ffffff);
+  --on-err: #ffffff;
+  --chip: #eef0f3;
+  --hover: #f0f2f5;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+  --toast-bg: var(--sync-toast-bg, #1c1e21);
+  --toast-fg: var(--sync-toast-fg, #f1f3f5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: var(--sync-bg, #111315);
+    --fg: var(--sync-fg, #e6e8eb);
+    --card: var(--sync-card, #1b1e21);
+    --bd: var(--sync-bd, #32363b);
+    --mut: #9aa1aa;
+    --ok: #3fb950;
+    --warn: #d29922;
+    --err: #ff7b72;
+    --acc: var(--sync-acc, #58a6ff);
+    --on-acc: var(--sync-on-acc, #0b1220);
+    --on-err: #1a0505;
+    --chip: #272b30;
+    --hover: #23272b;
+    --shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+    --toast-bg: var(--sync-toast-bg, #2c3036);
+    --toast-fg: var(--sync-toast-fg, #f1f3f5);
+  }
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: var(--sync-bg, #111315);
+  --fg: var(--sync-fg, #e6e8eb);
+  --card: var(--sync-card, #1b1e21);
+  --bd: var(--sync-bd, #32363b);
+  --mut: #9aa1aa;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --err: #ff7b72;
+  --acc: var(--sync-acc, #58a6ff);
+  --on-acc: var(--sync-on-acc, #0b1220);
+  --on-err: #1a0505;
+  --chip: #272b30;
+  --hover: #23272b;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+  --toast-bg: var(--sync-toast-bg, #2c3036);
+  --toast-fg: var(--sync-toast-fg, #f1f3f5);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: var(--sync-bg, #f4f5f7);
+  --fg: var(--sync-fg, #1c1e21);
+  --card: var(--sync-card, #ffffff);
+  --bd: var(--sync-bd, #dcdfe4);
+  --mut: #586069;
+  --ok: #176f2c;
+  --warn: #8a5700;
+  --err: #cf222e;
+  --acc: var(--sync-acc, #0969da);
+  --on-acc: var(--sync-on-acc, #ffffff);
+  --on-err: #ffffff;
+  --chip: #eef0f3;
+  --hover: #f0f2f5;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+  --toast-bg: var(--sync-toast-bg, #1c1e21);
+  --toast-fg: var(--sync-toast-fg, #f1f3f5);
+}
+
+/* A nested panel that shows the true tokens even while theme-sync is active. */
+.theme-isolated {
+  --sync-ha-card-background: initial;
+  --sync-card-radius: initial;
+  --sync-card-shadow: initial;
+  --sync-toast-bg: initial;
+  --sync-toast-fg: initial;
+  --sync-toast-radius: initial;
+  --sync-bg: initial;
+  --sync-card: initial;
+  --sync-fg: initial;
+  --sync-bd: initial;
+  --sync-acc: initial;
+  --sync-on-acc: initial;
+}
+
+/* base */
+* { box-sizing: border-box; }
+/* Safety net only: the topbar shrinks and folds its extras, so nothing should ever push the page sideways. */
+html, body { overflow-x: clip; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, sans-serif; }
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+h2 { font-size: 14px; margin: 0 0 8px; }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+.muted { color: var(--mut); }
+.hint { color: var(--mut); font-size: 12px; }
+.loading { color: var(--mut); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* top bar and tabs. The head (bar + tabs) is sticky; --safe-* come from the HA bridge insets (default 0). z-index 50
+   stays below modal (100) and toasts (200) and above page content, so the burger menu overlays the page. */
+.shell-head { position: sticky; top: 0; z-index: 50; padding-top: var(--safe-top, 0px); background: var(--card); }
+.topbar {
+  position: relative; display: flex; align-items: center; gap: 12px; height: var(--sync-header-height, 56px); min-height: var(--sync-header-height, 56px);
+  padding: 0 max(16px, var(--safe-right, 0px)) 0 max(16px, var(--safe-left, 0px)); background: var(--card);
+  border-bottom: 1px solid var(--bd);
+}
+.topbar > * { min-width: 0; }
+.topbar h1 { flex: 0 1 auto; margin: 0; overflow: hidden; font-size: 20px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.topbar > .brand-icon, .topbar > .menu-btn, .topbar > .info-btn, .topbar > .badge { flex: none; }
+.topbar-version { flex: none; color: var(--mut); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.topbar-extra { display: contents; }
+/* without the language switch (showLang=false) the title takes the free width, so info icon, badge and version sit right */
+.topbar-end:not(.topbar-nav) > h1 { flex: 1 1 auto; }
+.brand-icon { border-radius: 6px; }
+.menu-btn, .info-btn {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 48px; min-height: 48px; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; color: var(--fg); font: inherit; cursor: pointer;
+}
+.topbar .menu-btn, .topbar .info-btn { min-height: min(48px, calc(var(--sync-header-height, 56px) - 1px)); }
+.menu-btn:hover, .info-btn:hover { background: var(--hover); }
+.info-btn { text-decoration: none; }
+.topnav { height: 100%; display: flex; flex: 1 1 0; align-items: center; min-width: 40px; }
+.topnav-slot { height: 100%; position: relative; flex: 1 1 0; min-width: 0; overflow: hidden; }
+.topnav-inline { height: 100%; display: flex; gap: 0; width: max-content; margin: 0 auto; }
+.topnav-inline.is-collapsed { position: absolute; visibility: hidden; pointer-events: none; }
+.topnav-link, .topnav-menu-link {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px;
+  padding: 0 16px; color: var(--mut); text-decoration: none; white-space: nowrap; font-weight: 500;
+}
+.topnav-link:hover, .topnav-menu-link:hover { color: var(--fg); background: var(--hover); }
+.topnav-link { min-height: 0; border-bottom: 2px solid transparent; }
+.topnav-link.active { color: var(--acc); border-bottom-color: var(--acc); }
+.topnav-menu-link.active { color: var(--acc); background: var(--hover); }
+.nav-icon { width: 24px; height: 24px; flex: none; fill: currentColor; }
+.nav-burger { order: -1; padding: 0 8px; }
+.nav-burger.with-title { max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topnav-menu {
+  position: absolute; top: 100%; left: max(8px, var(--safe-left, 0px)); z-index: 60; display: flex; flex-direction: column;
+  min-width: 200px; max-width: calc(100vw - 16px); padding: 4px; background: var(--card); border: 1px solid var(--bd);
+  border-radius: 8px; box-shadow: var(--shadow);
+}
+.topnav-menu-link { justify-content: flex-start; white-space: normal; border-radius: 4px; }
+.lang-switch {
+  padding: 2px 6px; border: 1px solid var(--bd); border-radius: 6px; background: var(--card); color: var(--fg);
+  font: inherit; font-size: 12px;
+}
+.tabs, .tablist {
+  display: flex; gap: 0; padding: 0 16px; background: var(--card); border-bottom: 1px solid var(--bd);
+  overflow-x: auto;
+}
+.tab {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px;
+  padding: 0 24px; text-decoration: none; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--mut);
+  font: inherit; cursor: pointer; white-space: nowrap;
+}
+a.tab, a.tab:hover, a.tab:focus-visible { text-decoration: none; }
+.tab:hover { color: var(--fg); }
+.tab.active, .tab[aria-selected="true"] { color: var(--acc); border-bottom-color: var(--acc); font-weight: 500; }
+.tabpanel { padding: 16px 0; }
+
+/* cards, grid, tables */
+.card { background: var(--sync-ha-card-background, var(--card)); border: 1px solid var(--bd); border-radius: var(--sync-card-radius, 8px); box-shadow: var(--sync-card-shadow, none); padding: 12px 16px; margin: 0 0 12px; }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.toolbar .spacer, .spacer { flex: 1; }
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+table.data { font-size: 13px; }
+table.data th, table.data td { text-align: left; height: 52px; padding: 12px 16px; border-bottom: 1px solid var(--bd); vertical-align: middle; }
+table.data th { height: 56px; color: var(--mut); font-weight: 500; font-size: 12px; white-space: nowrap; }
+table.data tbody tr:hover { background: var(--hover); }
+table.data td.actions { text-align: right; white-space: nowrap; }
+th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--bd); }
+th { color: var(--mut); font-weight: 500; font-size: 12px; }
+
+/* badges */
+.badge { display: inline-flex; align-items: center; vertical-align: middle; min-height: 24px; line-height: 20px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--bd); background: var(--chip); font-size: 12px; white-space: nowrap; }
+.badge.ok { color: var(--ok); border-color: var(--ok); }
+.badge.warn, .badge.degraded { color: var(--warn); border-color: var(--warn); }
+.badge.error { color: var(--err); border-color: var(--err); }
+.badge.muted { color: var(--mut); }
+.badge.info { color: var(--acc); border-color: var(--acc); }
+
+/* buttons and forms */
+.btn {
+  display: inline-block; padding: 6px 14px; border: 1px solid var(--acc); border-radius: 6px; background: var(--acc);
+  color: var(--on-acc); font: inherit; cursor: pointer;
+}
+a.btn, a.btn:hover, a.btn:focus-visible { text-decoration: none; }
+.btn:hover:not(:disabled) { filter: brightness(1.1); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.secondary { background: transparent; color: var(--fg); border-color: var(--bd); }
+.btn.danger { background: var(--err); border-color: var(--err); color: var(--on-err); }
+.btn.small { padding: 2px 8px; font-size: 12px; }
+input[type="text"], input[type="password"], input[type="number"], select, textarea {
+  padding: 6px 8px; border: 1px solid var(--bd); border-radius: 6px; background: var(--card); color: var(--fg); font: inherit;
+  max-width: 100%;
+}
+:focus-visible, .btn:focus-visible, .tab:focus-visible, .menu-btn:focus-visible, .info-btn:focus-visible, .topnav-link:focus-visible, .topnav-menu-link:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.form-row { display: flex; flex-direction: column; gap: 4px; margin: 0 0 12px; }
+.form-row label { color: var(--mut); font-size: 12px; }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+/* A cell must retain table layout: flex on td breaks row height and its bottom border. */
+table.data td.actions { display: table-cell; margin-top: 0; }
+table.data td.actions > .btn + .btn { margin-inline-start: 8px; }
+/* Separate an expanded detail card from the table above it, including tall/multiline content. */
+.table-scroll + .card, table.data + .card { margin-top: 16px; }
+.copy-field { display: inline-flex; gap: 6px; align-items: center; }
+.copy-field input { min-width: 220px; }
+
+/* notices */
+.notice { color: var(--err); }
+.notice.error { border: 1px solid var(--err); border-radius: 6px; padding: 8px 12px; margin: 0 0 12px; }
+.notice.info { color: var(--fg); border: 1px solid var(--bd); border-radius: 6px; padding: 8px 12px; margin: 0 0 12px; }
+
+/* modal and toasts */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+  padding: 16px; background: rgba(0, 0, 0, 0.45);
+}
+.modal {
+  width: min(520px, 100%); max-height: 90vh; overflow: auto; background: var(--card); border: 1px solid var(--bd);
+  border-radius: 10px; box-shadow: var(--shadow);
+}
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--bd); }
+.modal-head h2 { margin: 0; font-size: 16px; }
+.modal-body { padding: 16px; }
+/* Toasts follow the Home Assistant snackbar: dark neutral surface, bottom centre, fade and rise in. The stack does not
+   catch clicks itself; --safe-bottom only exists inside the topbar, so the env() inset is the fallback. */
+.toast-stack {
+  position: fixed; left: 50%; bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 16px); z-index: 200;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; width: max-content; max-width: min(650px, calc(100vw - 16px));
+  transform: translateX(-50%); pointer-events: none;
+}
+.toast {
+  box-sizing: border-box; display: flex; align-items: center; gap: 8px; min-width: min(350px, calc(100vw - 32px)); max-width: 100%;
+  min-height: 48px; padding: 12px 16px; border-radius: var(--sync-toast-radius, 4px); background: var(--toast-bg); color: var(--toast-fg);
+  box-shadow: var(--shadow); cursor: pointer; overflow-wrap: anywhere; pointer-events: auto;
+  animation: toast-in 0.15s ease both;
+}
+.toast.ok { box-shadow: inset 4px 0 0 var(--ok), var(--shadow); }
+.toast.error { box-shadow: inset 4px 0 0 var(--err), var(--shadow); }
+.toast.info { box-shadow: inset 4px 0 0 var(--acc), var(--shadow); }
+.toast .btn.secondary { flex: none; min-width: 32px; min-height: 32px; margin-inline-start: auto; color: inherit; border-color: transparent; }
+.toast .btn.secondary:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); filter: none; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* danger zone */
+.danger-zone { border-color: var(--err); }
+.danger-zone h2 { color: var(--err); }
+.danger-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--bd); }
+
+@media (max-width: 600px) {
+  main { padding: 8px; }
+  .copy-field input { min-width: 0; width: 100%; }
+  .topbar { gap: 8px; padding: 0 max(8px, var(--safe-right, 0px)) 0 max(8px, var(--safe-left, 0px)); }
+  .topbar h1 { font-size: 16px; }
+  .topbar-extra { display: none; }
+  .topbar .lang-switch { max-width: 72px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

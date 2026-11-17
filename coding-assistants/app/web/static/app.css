@@ -1,0 +1,34 @@
+/* Only the outer shell follows Admin UI/HA tokens; ttyd keeps its configured terminal theme. */
+html, body, #app { height: 100%; }
+.app-shell { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+.app-shell > .shell-head { flex: none; }
+.workspace { display: flex; flex: 1; flex-direction: column; min-height: 0; max-width: none; width: 100%; margin: 0; padding: 0 0 env(safe-area-inset-bottom, 0px); }
+.terminal-toolbar {
+  display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 4px 12px;
+  min-height: 40px; padding: 4px 12px; border-bottom: 1px solid var(--bd); background: var(--card);
+}
+.terminal-toolbar[hidden], .frames [hidden], .frames .hidden { display: none; }
+.terminal-toolbar .hint { margin: 0; }
+.terminal-toolbar a { margin-inline-start: auto; }
+.frames { position: relative; flex: 1; min-height: 0; }
+.frames > iframe, .info-panel { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.info-panel { overflow: auto; }
+.info-content { max-width: 1100px; margin: 0 auto; padding: 16px; }
+.info-content > section { margin: 0 0 16px; }
+.info-content h2 { font-size: 18px; margin: 0 0 12px; }
+.info-content ul { margin: 0; padding-inline-start: 20px; }
+.info-content th { width: 30%; text-align: start; }
+.info-content td { overflow-wrap: anywhere; }
+.clipboard-helper { position: fixed; opacity: 0; }
+.clipboard-dialog {
+  box-sizing: border-box; width: min(720px, 90vw); max-height: 90vh; margin: auto; padding: 20px;
+  border: 1px solid var(--bd); border-radius: 8px; background: var(--card); color: var(--fg); box-shadow: var(--shadow);
+}
+.clipboard-dialog::backdrop { background: var(--bg); opacity: 0.75; }
+.clipboard-dialog h2 { margin: 0; font-size: 18px; }
+.clipboard-dialog textarea { box-sizing: border-box; width: 100%; height: min(50vh, 400px); font-family: monospace; }
+.clipboard-dialog .dialog-actions { margin-top: 12px; text-align: end; }
+@media (max-width: 600px) {
+  .terminal-hint { display: none; }
+  .terminal-toolbar { gap: 4px 8px; padding: 4px 8px; }
+}

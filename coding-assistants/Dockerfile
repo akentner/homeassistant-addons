@@ -92,9 +92,9 @@ RUN TTYD_VER=$(curl -sf https://api.github.com/repos/tsl0922/ttyd/releases/lates
 # the pins live here as ARG defaults and are mirrored 1:1 in build.yaml (internal/verify-coding-assistants.sh, scenario
 # `drift`, fails when they diverge). The digests are the GitHub release asset digests of the tag. The architecture
 # is picked with `uname -m`; any other value fails the build.
-ARG HERDR_VERSION=0.9.3
-ARG HERDR_SHA256_X86_64=18a8dc65f1c2fa485884344356dea1cfd911c6f06cf46fa78e193f4087f4dba7
-ARG HERDR_SHA256_AARCH64=4de7aa3e25678812e92960de64f7c2aaa1bca1f0f80a3c5e559837e231e1f5c0
+ARG HERDR_VERSION=0.9.5
+ARG HERDR_SHA256_X86_64=14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d
+ARG HERDR_SHA256_AARCH64=17d7536f2da50859523680ef279dffcac8e4a235f4e46fe8da6c2ec44141897c
 RUN ARCH=$(uname -m) \
     && case "${ARCH}" in \
         x86_64) HERDR_SHA256="${HERDR_SHA256_X86_64}" ;; \
@@ -251,27 +251,35 @@ RUN curl -fsSL https://claude.ai/install.sh | bash \
 # hadolint ignore=DL3016
 RUN npm install -g @github/copilot fx mcp-server-mysql
 
-# OpenAI Codex CLI — static musl release binary (no Node needed). Pinned like herdr: the ARG defaults are mirrored 1:1
+# OpenAI Codex CLI — complete musl release package (no Node needed). Pinned like herdr: ARG defaults are mirrored 1:1
 # in build.yaml (verify scenario `drift`); the digests are the GitHub release asset digests of tag rust-v<version>.
-# Renovate bumps CODEX_VERSION only — refresh the digests with internal/update-codex-pins.sh. The archive holds a single
-# file named codex-<arch>-unknown-linux-musl. State lives in CODEX_HOME=/data/.codex (set by run.sh).
+# Renovate bumps CODEX_VERSION only — refresh the digests with internal/update-codex-pins.sh. Keep the package layout:
+# bin/ contains the CLI and tool hosts; codex-resources/ includes bubblewrap. State lives in CODEX_HOME=/data/.codex.
 ARG CODEX_VERSION=0.167.0
-ARG CODEX_SHA256_X86_64=9d64836106d5b374e90ee4454c7ebcde7ca7106558bd7e41a34b9f26ebda251a
-ARG CODEX_SHA256_AARCH64=843489acb4d4b1079745c36b03c5963b887b83155af208fd53584e33ee8eb281
+ARG CODEX_SHA256_X86_64=3bbf75e83de6b58aed28f2cf6e33ad423ec31fd4700a1457b94be557ea5a7c6e
+ARG CODEX_SHA256_AARCH64=0de261ecf1e7f3028a7952f03fca2093f749277d38590b78bb32f8567756bbb7
 RUN ARCH=$(uname -m) \
     && case "${ARCH}" in \
         x86_64) CODEX_SHA256="${CODEX_SHA256_X86_64}" ;; \
         aarch64) CODEX_SHA256="${CODEX_SHA256_AARCH64}" ;; \
         *) echo "codex: unsupported architecture ${ARCH}" >&2; exit 1 ;; \
     esac \
-    && ASSET="codex-${ARCH}-unknown-linux-musl" \
+    && ASSET="codex-package-${ARCH}-unknown-linux-musl" \
     && mkdir -p /tmp/codex \
     && curl -fsSL \
         "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/${ASSET}.tar.gz" \
         -o /tmp/codex/codex.tar.gz \
     && echo "${CODEX_SHA256}  /tmp/codex/codex.tar.gz" | sha256sum -c - \
     && tar xzf /tmp/codex/codex.tar.gz -C /tmp/codex \
-    && install -m 0755 "/tmp/codex/${ASSET}" /usr/local/bin/codex \
+    && mkdir -p /opt/codex \
+    && cp -a /tmp/codex/bin /tmp/codex/codex-path /tmp/codex/codex-resources \
+        /tmp/codex/codex-package.json /opt/codex/ \
+    && ln -s /opt/codex/bin/codex /usr/local/bin/codex \
+    && ln -s /opt/codex/bin/codex-code-mode-host /usr/local/bin/codex-code-mode-host \
+    && ln -s /opt/codex/bin/codex-exec-server /usr/local/bin/codex-exec-server \
+    && test -x /opt/codex/codex-resources/bwrap \
+    && test -x /usr/local/bin/codex-code-mode-host \
+    && test -x /usr/local/bin/codex-exec-server \
     && rm -rf /tmp/codex \
     && [ "$(codex --version | awk '{print $NF}')" = "${CODEX_VERSION}" ]
 
@@ -340,7 +348,8 @@ RUN PLUGIN_DIR=/opt/herdr-plugins/herdr-web-service \
 
 # Web UI + nginx config
 RUN mkdir -p /opt/coding-assistants
-COPY index.html info.html /opt/coding-assistants/
+COPY index.html info.html icon.png /opt/coding-assistants/
+COPY app/web/static/ /opt/coding-assistants/static/
 COPY nginx.conf /etc/nginx/nginx.conf
 
 # Tool context for AI assistants

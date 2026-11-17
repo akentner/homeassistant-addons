@@ -575,6 +575,11 @@ scenario_codex_state() {
     assert_match "codex --version prints the pinned version" \
         "$(ca_exec codex-a codex --version)" "codex-cli $(build_yaml_args "${ADDON_DIR}/build.yaml" |
             awk -F'\t' '$1 == "CODEX_VERSION" { print $2 }')\$"
+    assert_ok "Codex code-mode host is executable" ca_exec codex-a test -x /usr/local/bin/codex-code-mode-host
+    assert_ok "Codex exec server is executable" ca_exec codex-a test -x /usr/local/bin/codex-exec-server
+    assert_ok "Codex package metadata is preserved" ca_exec codex-a test -f /opt/codex/codex-package.json
+    assert_match "bundled Codex bubblewrap starts" \
+        "$(ca_exec codex-a /opt/codex/codex-resources/bwrap --version)" '^bubblewrap '
     assert_eq "/data/.codex mode is 700" "$(ca_exec codex-a stat -c %a /data/.codex)" "700"
     assert_eq "stale block text is gone" "$(ca_count codex-a '^stale$' "${agents}")" "0"
     assert_eq "USER-NOTE-1 appears exactly once" "$(ca_count codex-a '^USER-NOTE-1$' "${agents}")" "1"
@@ -1315,9 +1320,12 @@ scenario_surface() {
     local data opts want_ver vj entry
     want_ver="$(build_yaml_args "${ADDON_DIR}/build.yaml" | awk -F'\t' '$1 == "HERDR_VERSION" { print $2 }')"
 
-    # Static: info.html rows and script, backup_exclude, legacy-multiplexer sweep over the user-visible files.
-    for entry in 'id="v-claude"' 'id="v-herdr"' 'v.claude' 'v.herdr'; do
-        assert_ok "info.html contains ${entry}" grep -qF -- "${entry}" "${ADDON_DIR}/info.html"
+    # The legacy Info URL now bootstraps the shared shell; version rows live in its Info component.
+    assert_ok "info.html opens the Info view" grep -qF 'data-initial-view="info"' "${ADDON_DIR}/info.html"
+    # JavaScript template syntax is matched literally.
+    # shellcheck disable=SC2016
+    for entry in '["claude", "Claude Code"]' '["herdr", "herdr"]' 'id=${`v-${key}`}'; do
+        assert_ok "Info component contains ${entry}" grep -qF -- "${entry}" "${ADDON_DIR}/app/web/static/app.mjs"
     done
     for entry in '.config/herdr/*.sock' '.config/herdr/*.log' '.config/herdr/session-snapshots/*' \
         '.local/share/claude/*'; do
@@ -1611,8 +1619,11 @@ scenario_services() {
 
     # Landing page and the terminal regression.
     body="$(ca_exec services curl -fsS http://127.0.0.1:8099/)"
-    assert_match "the landing page has the Services tab" "${body}" "show\('services', this\)"
-    assert_match "the landing page lazy-loads ./services/ in an iframe" "${body}" 'data-src="\./services/"'
+    assert_match "the landing page loads the shared Admin UI shell" "${body}" 'src="static/app\.mjs"'
+    assert_ok "the shell has a Services view" \
+        grep -qF '{ id: "services", titleKey: "ca.nav.services" }' "${ADDON_DIR}/app/web/static/app.mjs"
+    assert_eq "the shell module is served through nginx" "$(ca_ingress_status services /static/app.mjs)" "200"
+    assert_eq "the shared API client can read versions" "$(ca_ingress_status services /api/versions)" "200"
     assert_eq "GET /terminal/ still answers 200" "$(ca_ingress_status services /terminal/)" "200"
 
     # The plugin is reachable only through nginx: loopback bind (the add-on publishes only 2222 and 4096).

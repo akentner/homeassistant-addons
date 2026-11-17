@@ -400,6 +400,40 @@ The prefix is `ctrl+b`.
 | `prefix+w`       | Workspace navigation                             |
 | `prefix+[`       | Copy mode                                        |
 
+### Copying text in the browser
+
+Select text inside a herdr pane **without Shift**. The browser receives herdr's selected pane text and tries to copy it
+automatically, without sidebar or pane borders. If the browser blocks clipboard access, click **Copy selection** in the
+top bar. If copying is still unavailable, a text dialog lets you copy manually with Ctrl+C or Cmd+C.
+
+If the program inside the pane handles the mouse itself, use **Ctrl+B, then [** for herdr's copy mode: start a selection
+with **v** or Space and copy with **y** or Enter. Custom herdr key bindings and `copy_on_select` settings still apply.
+**Shift+drag** deliberately keeps ttyd's whole-screen selection, which can include herdr UI elements.
+
+Clipboard reads are not supported. Received selections stay in browser memory and are cleared when the terminal iframe
+reloads. No extra backend endpoint or herdr configuration is required.
+
+### Browser shell and shared Admin UI
+
+The outer browser shell uses this repository's shared Admin UI library: a Home Assistant-style topbar with compact
+navigation, German/English language switching and optional HA theme/layout synchronization. The header follows HA's
+header height (56 CSS px fallback, including its border); safe-area padding stays outside that height.
+
+Terminal and Services remain separate embedded applications. Switching views or languages does not recreate their
+iframes or restart sessions. Services loads only on its first visit. The terminal keeps the font and theme from the
+add-on options; changing the outer HA theme does not change the terminal palette. OpenCode opens separately on
+port 4096. The Info view shows versions, services, documentation and terminal shortcuts; `info.html` still opens that
+view.
+
+Developer notes: `make sync-admin-ui ADDON=coding-assistants` creates the library and skeleton copies. Never edit
+`app/web/static/vendor/admin-ui/` or `app/web/admin_ui/` manually. The browser library runs with the existing nginx/ttyd
+backend; the synchronized Python skeleton is not used or packaged. nginx serves the relative `api/versions` endpoint and
+JavaScript modules with the required MIME type, and keeps library stamps/version metadata private.
+
+Checks: `node --test coding-assistants/tests/*.test.mjs`,
+`python3 -m unittest discover -s coding-assistants/tests -p 'test_*.py'`, `make check-admin-ui-sync STRICT=yes` and
+`make check-admin-ui-rules`.
+
 ### Server respawn
 
 If the herdr server stops or crashes, `run.sh` starts it again after about 3 seconds. `herdr server stop` therefore acts
@@ -409,21 +443,26 @@ clients fall back to a plain `fish` shell instead of a dead connection.
 
 ## OpenAI Codex
 
-Codex (`codex`) is the static musl release binary of [openai/codex](https://github.com/openai/codex), without Node.
-State lives in `CODEX_HOME=/data/.codex` (mode 700, exported for web terminal, SSH and fish): `auth.json`,
-`config.toml`, `AGENTS.md` and the sessions. `sessions/` and `log/` are excluded from backups.
+In the browser terminal, **Shift+Enter** sends **Ctrl+J** to insert a newline in Codex. Plain Enter still submits.
+Ctrl+J also works directly. Other Enter modifier combinations are passed through to the terminal.
+
+Codex (`codex`) uses the complete musl release package of [openai/codex](https://github.com/openai/codex), without Node.
+The package lives in `/opt/codex`, including the code-mode host, exec server and bundled sandbox resources. The three
+executables are linked into `/usr/local/bin`; keep the package layout when updating them manually. State lives in
+`CODEX_HOME=/data/.codex` (mode 700, exported for web terminal, SSH and fish): `auth.json`, `config.toml`, `AGENTS.md`
+and the sessions. `sessions/` and `log/` are excluded from backups.
 
 - **Login:** `codex login --device-auth` (works without a browser in the container), or set the `openai_api_key` option.
 - **Tool context:** TOOLS.md is injected into `/data/.codex/AGENTS.md` as a marked block on every start; text outside
   the markers is preserved.
 - **MCP:** not synced yet. Add MCP servers to `~/.codex/config.toml` manually.
-- **Sandbox:** Codex's own sandbox inside the container is untested. If it fails, run
-  `codex --sandbox danger-full-access` or set `sandbox_mode = "danger-full-access"` in `~/.codex/config.toml`. The
-  add-on writes no Codex sandbox or approval defaults.
+- **Sandbox:** bundled bubblewrap is included, but container restrictions can still prevent its mount operations. If it
+  fails, run `codex --sandbox danger-full-access` or set `sandbox_mode = "danger-full-access"` in
+  `~/.codex/config.toml`. The add-on writes no Codex sandbox or approval defaults.
 
 ### Updating Codex
 
-The version is pinned in the image: `CODEX_VERSION` and the two SHA256 digests (`CODEX_SHA256_X86_64`,
+The version is pinned in the image: `CODEX_VERSION` and the two package SHA256 digests (`CODEX_SHA256_X86_64`,
 `CODEX_SHA256_AARCH64`) are `ARG` defaults in the `Dockerfile`, mirrored 1:1 in `build.yaml` (checked by
 `internal/verify-coding-assistants.sh drift`). Renovate opens a PR that bumps `CODEX_VERSION` in both files, but it
 cannot update the digests: on that branch run `internal/update-codex-pins.sh` (fetches the release asset digests with

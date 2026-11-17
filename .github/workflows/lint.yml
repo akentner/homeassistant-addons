@@ -216,6 +216,11 @@ jobs:
 
       - name: HAOS Monitor consumer tests
         run: python -m pytest haos-monitor/tests -q
+
+      - name: Coding Assistants consumer tests
+        run: |
+          node --test coding-assistants/tests/*.test.mjs
+          python -m unittest discover -s coding-assistants/tests -p 'test_*.py'
   # Appended on purpose, like admin-ui above (line-anchored zizmor deferrals).
   secrets-sync:
     runs-on: ubuntu-latest
