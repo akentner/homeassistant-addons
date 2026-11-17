@@ -808,27 +808,28 @@ in parallel with another worktree.
 
 ## Open Questions (RESOLVED)
 
-The user has not answered these questions yet. Each one is resolved for planning by a planned default (or a locked
-decision) plus the plan step that confirms or applies it; no plan builds on a value before its checkpoint.
+The user answered questions 1 and 2 and the version numbers on 2026-11-17 (01-CONTEXT.md "Release values", D-11 to
+D-13); question 3 is settled by the locked decision D-10. No plan has a checkpoint for any of them. The version numbers
+(Assumptions Log A1) are decided as D-13: lib 0.10.0, admin-ui 0.4.0-0 via
+`make update-version ADDON=admin-ui VERSION=0.4.0 NO_TAG=yes`.
 
-1. **Consumer version bumps.** RESOLVED (planning default, confirmed at checkpoint 01-06 task 1)
+1. **Consumer version bumps.** RESOLVED (decided by the user 2026-11-17, D-12)
    - What we know: precedent exists both ways (`172a1af` none, `e2e6f9d` all).
    - Unclear: whether the user wants CI to publish new consumer images for a not-yet-used skeleton addition.
-   - Recommendation: no bumps now (A2); confirm in the plan's release checkpoint.
-   - Resolution: planned default "no consumer bumps" (plan label A1). The blocking `checkpoint:decision` 01-06 task 1
-     asks the user before any version changes; 01-06 task 2 applies a different answer with `make update-version`.
-2. **Minimum length for option tokens.** RESOLVED (planning default, confirmed at checkpoint 01-04 task 1)
+   - Recommendation: no bumps now (A2).
+   - Resolution: no consumer version bump in this phase (D-12, plan label A1); consumer copies are refreshed only
+     through `make sync-admin-ui`. 01-06 task 2 syncs, 01-06 checks that no consumer version file changed.
+2. **Minimum length for option tokens.** RESOLVED (decided by the user 2026-11-17, D-11)
    - What we know: ntfy Phase 25 uses a `password` option; brute force over the network is limited by request cost.
-   - Recommendation: enforce at least 16 characters in `OptionToken` with a `ValueError` (message without the value);
-     confirm with the user because it constrains Phase 25.
-   - Resolution: planned default 16 (`OPTION_TOKEN_MIN_LENGTH`, plan label A2; supersedes "minimum length not
-     enforced" in A7). The blocking `checkpoint:decision` 01-04 task 1 asks the user before any length code exists;
-     01-04 task 2 implements the confirmed value, 01-05 documents it, 01-06 only cites it in the CHANGELOG.
-3. **`coding-assistants` docker build.** RESOLVED (locked decision D-10, applied in 01-06 task 3; no checkpoint)
+   - Recommendation: enforce at least 16 characters in `OptionToken` with a `ValueError` (message without the value).
+   - Resolution: 16 characters (`OPTION_TOKEN_MIN_LENGTH = 16`, D-11, plan label A2; supersedes "minimum length not
+     enforced" in A7; also binds ntfy Phase 25). 01-04 task 1 implements it, 01-05 documents it, 01-06 names it in the
+     CHANGELOG.
+3. **`coding-assistants` docker build.** RESOLVED (locked decision D-10, applied in 01-06 task 2; no checkpoint)
    - What we know: only `vendor/admin-ui/VERSION` and `LIB.stamp` change in its image; the build is long.
    - Recommendation: build it anyway (D-10 is literal), with `TIMEOUT=1800`.
    - Resolution: D-10 requires a local build for every consumer whose image content changes, which includes
-     `coding-assistants`; 01-06 task 3 builds it in the background with `TIMEOUT=1800`.
+     `coding-assistants`; 01-06 task 2 builds it in the background with `TIMEOUT=1800`.
 
 ## Environment Availability
 

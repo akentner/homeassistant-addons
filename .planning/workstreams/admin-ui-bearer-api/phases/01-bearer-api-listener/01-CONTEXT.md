@@ -58,6 +58,14 @@ listener, add-on options such as `api_enabled`, the management-page UI that show
   `make check-admin-ui-sync`, `make check-admin-ui-rules` and `make test-admin-ui` green. Docker verify scripts are not
   run in parallel with other worktrees.
 
+### Release values (decided by the user, 2026-11-17)
+- **D-11:** Option-token minimum length is 16 characters (`OPTION_TOKEN_MIN_LENGTH = 16`). This also binds ntfy
+  Phase 25. No checkpoint asks for it again.
+- **D-12:** Consumer add-ons (`coding-assistants`, `haos-monitor`, `ntfy`, `secrets-sync`) get no version bump in this
+  phase. Their copies are only refreshed through the sync tooling (`make sync-admin-ui`), never by hand (R-15).
+- **D-13:** Versions: lib `0.10.0`, admin-ui add-on `0.4.0-0` (via `make update-version ADDON=admin-ui VERSION=0.4.0`,
+  no tag). No checkpoint asks for them again.
+
 ### Claude's Discretion
 - Public names and signatures (for example `make_api_server(router, port, verifier, bind=...)`, a verifier protocol,
   class names `OptionToken` / `GeneratedToken`), module layout (new module vs. extension of `server.py`), and how the
@@ -65,8 +73,6 @@ listener, add-on options such as `api_enabled`, the management-page UI that show
   behaviour stays identical.
 - How `unauthorized` (401) enters the error table (`ERROR_STATUS` entry vs. `register_error_code`).
 - Default bind address, provided it is explicit in the API and documented in R-16.
-- Whether the lib version (`lib.lock`, `make release-admin-ui-lib`) moves together with the admin-ui add-on version;
-  follow the existing Distribution section of `admin-ui/DOCS.md`.
 
 </decisions>
 
