@@ -1,0 +1,1 @@
+No external API integration: the phase builds a bearer-gated JSON API server inside the admin-ui stdlib skeleton (server side only); it calls no external API, SDK or service, so there is no third-party capability surface to cover.

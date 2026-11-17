@@ -1,0 +1,18 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": null,
+  "next": {
+    "command": "/gsd-progress",
+    "label": "Show progress",
+    "reason": "Unsure of state \u2014 showing progress"
+  },
+  "phases": [
+    {
+      "name": "Bearer API listener",
+      "number": "1",
+      "status": "in_progress"
+    }
+  ],
+  "updated_at": "2026-11-17T21:37:31.871Z"
+}
