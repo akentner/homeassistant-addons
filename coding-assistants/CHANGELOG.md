@@ -10,6 +10,10 @@ This add-on has no upstream — every entry below is hand-written by the maintai
 
 ### Changed
 
+- **amd64 only:** the add-on is no longer built or published for aarch64 (not needed; the emulated aarch64 CI build took
+  about 20 minutes). The Dockerfile and the aarch64 pins stay, so re-enabling is a one-line change in `build.yaml`
+  (`build_from`) plus `aarch64` in the `arch:` list of `config.yaml`. Existing aarch64 images stay in the registry but
+  receive no updates.
 - **OpenCode 2** replaces OpenCode 1 as a pinned release binary (`OPENCODE_VERSION`, per-architecture SHA256 digests;
   the 1.x installer cannot install 2.x). A persisted OpenCode 1.x binary in `/data/opencode/bin` is replaced by the
   bundled one on the first start; a newer persisted version is kept. MCP servers are written to `mcp.servers` of
