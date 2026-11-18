@@ -29,22 +29,23 @@ base image only, 3-file version sync via `make update-version`, and a local `doc
 
 ## Options
 
-| Option                      | Type                          | Default  | Description                                                                                                                                         |
-| --------------------------- | ----------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `github_token`              | password                      | empty    | Fine-grained personal access token with `Contents: read-only` on the repositories below. Never logged. Empty token: every repository `auth_failed`. |
-| `sync_interval`             | integer, minimum 5            | `15`     | Minutes between two sync cycles.                                                                                                                    |
-| `public_url`                | URL, optional                 | not set  | Base URL behind a reverse proxy, e.g. `https://addons.example.com`. Not set: internal access only. Adds a second (public) store URL per user.       |
-| `repositories`              | list                          | empty    | Private GitHub repositories to serve.                                                                                                               |
-| `repositories[].repository` | `owner/repo`                  | required | GitHub owner (user or organization) and repository name. Case-insensitive; a `.git` suffix is not allowed.                                          |
-| `repositories[].branch`     | branch name, optional         | not set  | Branch to serve. Not set: the repository's default branch. Only this one branch is served.                                                          |
-| `register_local`            | boolean                       | `true`   | Register the internal store URL in this Home Assistant's add-on store. **No effect yet**; takes effect in a later version.                          |
-| `api_enabled`               | boolean                       | `false`  | Enable the provisioning API. **No effect yet**; takes effect in a later version.                                                                    |
-| `log_level`                 | `debug\|info\|warning\|error` | `info`   | Verbosity of the add-on log. Tokens and access hashes are never logged, at any level.                                                               |
+| Option                      | Type                          | Default  | Description                                                                                                                                             |
+| --------------------------- | ----------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `github_token`              | password                      | empty    | Fine-grained personal access token with `Contents: read-only` on the repositories below. Never logged. Empty token: every repository `auth_failed`.     |
+| `sync_interval`             | integer, minimum 5            | `15`     | Minutes between two sync cycles.                                                                                                                        |
+| `public_url`                | URL, optional                 | not set  | Base URL behind a reverse proxy, e.g. `https://addons.example.com`. Not set: internal access only. Adds a second (public) store URL per user.           |
+| `repositories`              | list                          | empty    | Private GitHub repositories to serve.                                                                                                                   |
+| `repositories[].repository` | `owner/repo`                  | required | GitHub owner (user or organization) and repository name. Case-insensitive; a `.git` suffix is not allowed.                                              |
+| `repositories[].branch`     | branch name, optional         | not set  | Branch to serve. Not set: the repository's default branch. Only this branch is offered as a ref; see [Security notes](#security-notes) for old commits. |
+| `register_local`            | boolean                       | `true`   | Register the internal store URL in this Home Assistant's add-on store. **No effect yet**; takes effect in a later version.                              |
+| `api_enabled`               | boolean                       | `false`  | Enable the provisioning API. **No effect yet**; takes effect in a later version.                                                                        |
+| `log_level`                 | `debug\|info\|warning\|error` | `info`   | Verbosity of the add-on log. Tokens and access hashes are never logged, at any level.                                                                   |
 
 Users and their access hashes never appear in the options. They live in `/data/access.json` (see
 [Managing users](#managing-users) and [Contracts](#contracts)). An invalid or duplicate entry in `repositories` is
-skipped with a warning in the log; the other entries keep working. A `public_url` with credentials (`user:password@`), a
-query or a fragment is ignored the same way, so no credentials reach the log.
+skipped with a warning in the log; the other entries keep working. A `public_url` that is not a valid `http(s)` URL, or
+that has credentials (`user:password@`), a query or a fragment, is ignored the same way, so no credentials reach the
+log.
 
 Example:
 
@@ -294,6 +295,10 @@ interval restarts after every cycle. `/run` is not part of backups.
   out only to the instances that need them, and revoke a leaked URL (`mrp users revoke`); rotate it if the user still
   needs access.
 - **Read-only.** Pushes are refused (403), and only the smart-HTTP read endpoints are served.
+- **Old commits.** Only the configured branch is offered as a ref. Commits that are no longer on it (an earlier branch,
+  history replaced by a force-push) stay in the mirror until git's garbage collection removes them. Until then a client
+  with a valid store URL for that repository can fetch such a commit by its full commit ID. Nothing crosses
+  repositories, and nothing is reachable without a valid URL.
 - **No public exposure without TLS.** Keep port `8080` unpublished; the add-on serves plain HTTP.
 
 ## Limitations
