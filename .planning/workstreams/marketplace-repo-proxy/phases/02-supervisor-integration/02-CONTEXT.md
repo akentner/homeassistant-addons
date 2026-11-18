@@ -83,6 +83,17 @@ Phase 1 (WR-01, WR-04, IN-01 to IN-07) stay deferred unless a Phase 2 change tou
   store repository get no updates until they are reinstalled from the new one. The leftover lifecycle of the old store
   repository (D-09/D-10: removal attempted, refusal reported, never forced) stays unchanged. There is no
   keep-old-URL-serving variant and no `--revoke-old` flag.
+- **D-30 (user decision 2026-11-18, was planner assumption A-17 in 02-01-PLAN.md):** D-28 mapping and precedence as
+  written in A-17: first match wins, `error` > `leftover` > `registered` > `missing`, with the facts and examples listed
+  there.
+- **D-31 (user decision 2026-11-18, was planner assumption A-18 in 02-04-PLAN.md):** `mrp local rotate` prints the D-11
+  warning on every call and rotates only with `--yes` (flag, no interactive prompt); the sync process needs no
+  confirmation key in the request file.
+- **D-32 (user decision 2026-11-18, was planner assumption A-22 in 02-01-PLAN.md):** D-29 details as written in A-22:
+  `message` only from fixed English templates, never Supervisor text (masked text to the log, `error` code and
+  `error_status` in the state), `message` absent for `registered`, unconfigured repositories with a recorded store
+  repository listed after the configured ones (`configured: false`, `leftover`), file written at every sync start
+  before the first Supervisor call.
 
 ### Tests (manager brief)
 - **D-12:** No test talks to a real Supervisor. pytest uses a fake Supervisor (stdlib HTTP server or injected
