@@ -7,6 +7,9 @@ import hashlib
 import hmac
 from typing import Protocol
 
+# Floor for operator-chosen option tokens, decided by the user (D-11); also binding for ntfy Phase 25
+OPTION_TOKEN_MIN_LENGTH = 16
+
 
 class TokenVerifier(Protocol):
     """Anything that can tell whether a presented bearer token is valid."""
@@ -15,16 +18,21 @@ class TokenVerifier(Protocol):
 
 
 class OptionToken:
-    """Token from an add-on `password` option; only its SHA-256 digest is kept in memory."""
+    """Token from an add-on `password` option; only its SHA-256 digest is kept in memory.
+
+    The value must be printable ASCII without spaces (0x21..0x7E) and at least OPTION_TOKEN_MIN_LENGTH characters long;
+    it is never stripped or normalised, and no error message contains it."""
+
+    __slots__ = ("_digest",)
 
     def __init__(self, value: str | None) -> None:
         if not isinstance(value, str) or not value:
             raise ValueError("option token missing: the API stays off")
-        try:
-            raw = value.encode("ascii")
-        except UnicodeEncodeError:
-            raise ValueError("option token must be printable ASCII without spaces") from None
-        self._digest = hashlib.sha256(raw).digest()
+        if not all("\x21" <= char <= "\x7e" for char in value):
+            raise ValueError("option token must be printable ASCII without spaces")
+        if len(value) < OPTION_TOKEN_MIN_LENGTH:
+            raise ValueError(f"option token shorter than {OPTION_TOKEN_MIN_LENGTH} characters")
+        self._digest = hashlib.sha256(value.encode("ascii")).digest()
 
     def verify(self, presented: str) -> bool:
         try:
