@@ -168,6 +168,53 @@ def fetch(repo_dir: Path, env: Mapping[str, str]) -> GitResult:
     )
 
 
+def classify(result: GitResult) -> tuple[str, str]:
+    """RED stub."""
+    return "fetch_failed", ""
+
+
+def sanitize(text: str, limit: int = 300) -> str:
+    """RED stub."""
+    return text
+
+
+def check_branch_name(branch: str) -> bool:
+    """RED stub."""
+    return True
+
+
+@dataclass(frozen=True)
+class HeadInfo:
+    head: str | None
+    has_repository_yaml: bool
+    addons: tuple[str, ...]
+
+
+def inspect_head(repo_dir: Path) -> HeadInfo:
+    """RED stub."""
+    return HeadInfo(None, False, ())
+
+
+def ref_snapshot(repo_dir: Path) -> dict[str, str]:
+    """RED stub."""
+    return {}
+
+
+def prune_foreign_refs(repo_dir: Path, branch: str) -> int:
+    """RED stub."""
+    return 0
+
+
+def run_maintenance(repo_dir: Path) -> GitResult:
+    """RED stub."""
+    return GitResult(0, "", "")
+
+
+def cleanup_stale_tmp(paths: Paths) -> int:
+    """RED stub."""
+    return 0
+
+
 def ensure_and_fetch(paths: Paths, spec: RepoSpec, url: str, branch: str, env: Mapping[str, str]) -> GitResult:
     """Fetch into the bare repository; a new one is built in a temp dir and renamed only after a good fetch."""
     final = paths.repo_dir(spec.owner, spec.name)
