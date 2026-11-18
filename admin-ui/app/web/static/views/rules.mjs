@@ -23,6 +23,7 @@ export const RULES = [
   { id: "R-13", status: "unverified", enforcedBy: ["admin-ui/tests/js/theme_sync.test.mjs", "admin-ui/tests/js/ha_bridge.test.mjs"] },
   { id: "R-14", status: "enforced", enforcedBy: ["admin-ui/tests/js/i18n.test.mjs", "admin-ui/tests/test_demo_api.py"] },
   { id: "R-15", status: "enforced", enforcedBy: ["Makefile", "admin-ui/tests/test_sync.py"] },
+  { id: "R-16", status: "review", enforcedBy: ["admin-ui/tests/test_api_server.py", "admin-ui/tests/test_api_tokens.py"] },
 ];
 
 // Literal keys per rule (R-06: keys are never built dynamically).
@@ -42,6 +43,7 @@ const TEXT = {
   "R-13": { title: "demo.rules.r13.title", how: "demo.rules.r13.how" },
   "R-14": { title: "demo.rules.r14.title", how: "demo.rules.r14.how" },
   "R-15": { title: "demo.rules.r15.title", how: "demo.rules.r15.how" },
+  "R-16": { title: "demo.rules.r16.title", how: "demo.rules.r16.how" },
 };
 const STATUS_TEXT = {
   enforced: "demo.rules.status.enforced",

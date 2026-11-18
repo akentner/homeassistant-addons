@@ -163,6 +163,8 @@ export default {
   "demo.rules.r14.how": "The UI maps errors.<code>, unknown codes show a generic text plus [code], the backend message is never the primary text.",
   "demo.rules.r15.title": "Lib changes only in admin-ui/",
   "demo.rules.r15.how": "Consumer copies are never hand-edited and the drift check fails on a mismatch.",
+  "demo.rules.r16.title": "Bearer API on its own port",
+  "demo.rules.r16.how": "Every method and path needs a bearer token and every failure gets the same 401; no token, no listener; the port stays unpublished and never sits behind ingress or a public proxy.",
   "demo.nav.spike": "Spike",
   "demo.spike.title": "Live spike (D-14)",
   "demo.spike.intro": "Run this page inside Home Assistant (panel, then a dashboard webpage card) and work through the checks. The result block at the bottom is the same every run.",

@@ -48,7 +48,7 @@ def test_docs_required_sections_exist() -> None:
 def test_docs_rules_table_has_every_rule_once() -> None:
     rows = _rows(r"^\| R-\d")
     ids = [r[0] for r in rows]
-    assert ids == [f"R-{n:02d}" for n in range(1, 16)]
+    assert ids == [f"R-{n:02d}" for n in range(1, 17)]
     for row in rows:
         assert len(row) == 4, row
         assert all(cell for cell in row), f"empty cell in {row[0]}"
@@ -61,6 +61,15 @@ def test_docs_unverified_claims_are_labelled() -> None:
     assert status["R-11"] == "unverified"
     assert status["R-13"] == "unverified"
 
+
+
+def test_docs_r16_exposure_stays_a_review_item() -> None:
+    # The exposure half of R-16 (port unpublished by default, never behind ingress or a public reverse proxy) lives in
+    # consumer manifests and has no automated check, so R-16 must never be marked enforced.
+    row = {r[0]: r for r in _rows(r"^\| R-\d")}["R-16"]
+    assert row[3] == "review"
+    assert "test_api_server.py" in row[2]
+    assert "test_api_tokens.py" in row[2]
 
 def test_docs_spike_table_has_every_item_once() -> None:
     rows = _rows(r"^\| S\d")
@@ -155,7 +164,8 @@ BROWSER_EXPORTS = {
 }
 SKELETON_EXPORTS = (
     "ApiError ERROR_STATUS register_error_code Request Router Download StaticFiles INGRESS_REMOTE is_ingress "
-    "ingress_user DEFAULT_CSP security_headers MAX_BODY make_handler make_server serve"
+    "ingress_user DEFAULT_CSP security_headers MAX_BODY make_handler make_server serve "
+    "make_api_server OptionToken GeneratedToken TokenVerifier"
 ).split()
 
 

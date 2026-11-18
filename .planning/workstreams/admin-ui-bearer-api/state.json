@@ -1,0 +1,18 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": null,
+  "next": {
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step (verify)",
+    "reason": "Phase 1 of 1 \u00b7 0% \u00b7 ready to verify"
+  },
+  "phases": [
+    {
+      "name": "Bearer API listener",
+      "number": "1",
+      "status": "in_progress"
+    }
+  ],
+  "updated_at": "2026-11-18T14:13:44.521Z"
+}

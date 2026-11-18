@@ -3,6 +3,13 @@
 All notable changes to the **HAOS Monitor** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.8.3-1] - 2026-11-18
+
+### Changed
+
+- Use admin-ui lib 0.10.0: the shared skeleton gains the bearer API listener; this add-on does not use it yet, so its
+  behaviour is unchanged
+
 ## [0.8.3-0] - 2026-11-05
 
 ### Changed
