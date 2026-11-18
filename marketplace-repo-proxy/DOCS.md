@@ -42,8 +42,8 @@ base image only, 3-file version sync via `make update-version`, and a local `doc
 | `log_level`                 | `debug\|info\|warning\|error` | `info`   | Verbosity of the add-on log. Tokens and access hashes are never logged, at any level.                                                               |
 
 Users and their access hashes never appear in the options. They live in `/data/access.json` (see
-[Managing users](#managing-users) and Contracts). An invalid or duplicate entry in `repositories` is skipped with a
-warning in the log; the other entries keep working.
+[Managing users](#managing-users) and [Contracts](#contracts)). An invalid or duplicate entry in `repositories` is
+skipped with a warning in the log; the other entries keep working.
 
 Example:
 
@@ -131,9 +131,9 @@ docker exec addon_{repo-hash}_marketplace_repo_proxy mrp sync
 - **Rotation** is `mrp users revoke` followed by `mrp users add` for the same user. The new URL has a new hash, so the
   consuming Supervisor sees a new repository: back up the data of the add-ons installed from the old URL, remove the old
   repository, add the new URL and reinstall the add-ons.
-- `/data/access.json` can also be edited directly (rules in Contracts). The add-on applies a hand edit within about a
-  second. A file that is not valid JSON is moved aside to `access.json.corrupt` and every URL stops working until it is
-  fixed, so prefer `mrp`.
+- `/data/access.json` can also be edited directly (rules in [Contracts](#contracts)). The add-on applies a hand edit
+  within about a second. A file that is not valid JSON is moved aside to `access.json.corrupt` and every URL stops
+  working until it is fixed, so prefer `mrp`.
 - `mrp sync` is the only manual sync trigger. There is no trigger through the add-on's standard input.
 
 ## Sync and status
@@ -142,8 +142,8 @@ The sync service runs one cycle over all configured repositories at start, then 
 now" request (`mrp sync`, later the management page) starts a cycle within about a second; requests that arrive during a
 running cycle are combined into one more cycle. The interval restarts after every cycle.
 
-Each repository's result is written to `/data/status.json` (see Contracts) and logged as one line, for example
-`sync example-org/private-addons: ok (main @ 0123456789ab, changed)`. Status codes:
+Each repository's result is written to `/data/status.json` (see [Contracts](#contracts)) and logged as one line, for
+example `sync example-org/private-addons: ok (main @ 0123456789ab, changed)`. Status codes:
 
 | Status               | Meaning                                                                                                                                             | What to do                                                                                                 |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -156,3 +156,153 @@ Each repository's result is written to `/data/status.json` (see Contracts) and l
 
 A repository that fails keeps serving its last good state: the mirror is only replaced by a successful fetch, and
 `head`, `addons` and `last_success` in `status.json` keep their last good values.
+
+## Contracts
+
+The management page and the provisioning API of later versions build on these files. Their names, locations, field names
+and write rules are stable: later versions may add fields, but never rename or remove them. All files are UTF-8 JSON
+with mode 0600, and all timestamps are ISO 8601 UTC with `Z` and second precision (`2026-11-18T12:00:00Z`).
+
+### /data/access.json
+
+Users and their access hashes. Example:
+
+```json
+{
+  "schema": 1,
+  "entries": [
+    {
+      "created": "2026-11-18T12:00:00Z",
+      "hash": "{32 lowercase hex}",
+      "repository": "example-org/private-addons",
+      "source": "cli",
+      "user": "alice"
+    }
+  ]
+}
+```
+
+| Field                  | Type    | Meaning                                                                                                                            |
+| ---------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `schema`               | integer | Document version, currently `1`.                                                                                                   |
+| `entries`              | list    | One entry per (repository, user).                                                                                                  |
+| `entries[].repository` | string  | `owner/repo` as configured in `repositories` (case kept, matched case-insensitively).                                              |
+| `entries[].user`       | string  | User label, `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`, unique per repository. `local` is reserved for the system user (source `system`). |
+| `entries[].hash`       | string  | Access hash: 32 lowercase hex characters, 128 random bits, unique across the whole file.                                           |
+| `entries[].created`    | string  | Creation time (ISO 8601 UTC with `Z`).                                                                                             |
+| `entries[].source`     | string  | Who created the entry: `gui`, `api`, `system` or `cli`. `cli` marks users created with `mrp`.                                      |
+
+Write rules:
+
+- Write only through the add-on's access store (`mrp` now, the management page and the API later). Every read and every
+  read-modify-write holds an exclusive lock on `/run/marketplace-repo-proxy/access.lock`.
+- A write goes to a temporary file in `/data` (mode 0600) and atomically replaces `access.json` by rename, so readers
+  never see a partial file.
+- Unknown top-level keys and unknown entry fields are preserved by every write.
+- A missing file means no users. A file that is not valid JSON is moved to `access.json.corrupt` and the add-on
+  continues with no users (fail closed).
+- A `schema` newer than this version knows is refused: nothing is written, and the add-on does not start until the file
+  is fixed or the add-on is updated.
+- Entries of repositories that are not configured stay in the file but grant no access.
+- Changes, including hand edits, are applied within about a second. A hand edit bypasses the lock; replace the file in
+  one step (write a copy, then rename it over `access.json`).
+
+### /data/status.json
+
+Sync state, written only by the sync service, always by atomic replace (readers need no lock). Example:
+
+```json
+{
+  "schema": 1,
+  "updated": "2026-11-18T12:00:06Z",
+  "upstream_override": false,
+  "sync": {
+    "state": "idle",
+    "last_started": "2026-11-18T12:00:00Z",
+    "last_finished": "2026-11-18T12:00:06Z",
+    "next_due": "2026-11-18T12:15:06Z",
+    "interval_minutes": 15,
+    "reason": "startup"
+  },
+  "repositories": [
+    {
+      "repository": "example-org/private-addons",
+      "branch": "main",
+      "branch_source": "upstream_default",
+      "status": "ok",
+      "message": "",
+      "last_attempt": "2026-11-18T12:00:05Z",
+      "last_success": "2026-11-18T12:00:05Z",
+      "last_change": "2026-11-18T12:00:05Z",
+      "head": "0123456789ab",
+      "addons": ["demo"],
+      "refs_changed": true
+    }
+  ]
+}
+```
+
+| Field                          | Type              | Meaning                                                                                           |
+| ------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------- |
+| `schema`                       | integer           | Document version, currently `1`.                                                                  |
+| `updated`                      | timestamp         | Time of the last write.                                                                           |
+| `upstream_override`            | boolean           | `true` only when the test-only upstream override is set (test setups, never through the options). |
+| `sync.state`                   | string            | `idle` or `running`.                                                                              |
+| `sync.last_started`            | timestamp or null | Start of the last cycle.                                                                          |
+| `sync.last_finished`           | timestamp or null | End of the last cycle.                                                                            |
+| `sync.next_due`                | timestamp or null | When the next interval cycle is due.                                                              |
+| `sync.interval_minutes`        | integer           | Effective `sync_interval`.                                                                        |
+| `sync.reason`                  | string or null    | What started the last cycle: `startup`, `interval` or `request`.                                  |
+| `repositories`                 | list              | One entry per configured repository, in options order.                                            |
+| `repositories[].repository`    | string            | `owner/repo` as configured.                                                                       |
+| `repositories[].branch`        | string or null    | Served branch: the configured one, or the upstream default branch once it is known.               |
+| `repositories[].branch_source` | string            | `configured` or `upstream_default`.                                                               |
+| `repositories[].status`        | string            | Status code, see below.                                                                           |
+| `repositories[].message`       | string            | One sanitised line for humans; empty on success. Never contains the token or a hash.              |
+| `repositories[].last_attempt`  | timestamp or null | Last sync attempt.                                                                                |
+| `repositories[].last_success`  | timestamp or null | Last attempt with status `ok` or `no_repository_yaml`; kept when a later attempt fails.           |
+| `repositories[].last_change`   | timestamp or null | Last successful attempt that changed the served refs.                                             |
+| `repositories[].head`          | string or null    | Short SHA (12 characters) of the served commit; kept when a later attempt fails.                  |
+| `repositories[].addons`        | list of strings   | Directories of the add-ons found in the served commit; kept when a later attempt fails.           |
+| `repositories[].refs_changed`  | boolean           | The last attempt changed the served refs (only `true` on success).                                |
+
+Status codes: `pending`, `ok`, `auth_failed`, `not_found`, `no_repository_yaml`, `fetch_failed` (meaning in
+[Sync and status](#sync-and-status)). `pending` and `fetch_failed` extend the original four codes; all six keep their
+meaning.
+
+### Sync trigger
+
+`/run/marketplace-repo-proxy/sync.request` requests a sync of all repositories. Any process in the container creates the
+file (`mrp sync` writes `{}`; the content is ignored). The sync service polls for it every second while idle and removes
+it before the cycle starts. Requests that arrive during a running cycle are combined into exactly one more cycle. The
+interval restarts after every cycle. `/run` is not part of backups.
+
+## Security notes
+
+- **GitHub token.** Use a fine-grained personal access token with `Contents: read-only` on the served repositories only.
+  Only the sync service uses it, at fetch time, and only through its process environment. It never appears in the log,
+  in a repository config, in the web server's environment or in the served data. An expired or revoked token shows up as
+  `auth_failed`.
+- **Access hashes.** No log line contains a full hash; the startup log masks hashes to their first 4 characters. Full
+  store URLs are printed only by `mrp users add` and `mrp users url`, to the terminal.
+- **Files.** `/data` has mode 0700, and `access.json` and `status.json` have mode 0600.
+- **Backups.** A backup of this add-on contains `/data`: the token (in the options) and every access hash. Treat these
+  backups as secret. Restoring one keeps all store URLs valid.
+- **Store URLs are capabilities.** Anyone on the `hassio` network who holds a URL can clone that repository. Hand URLs
+  out only to the instances that need them, and revoke a leaked URL (`mrp users revoke`); rotate it if the user still
+  needs access.
+- **Read-only.** Pushes are refused (403), and only the smart-HTTP read endpoints are served.
+- **No public exposure without TLS.** Keep port `8080` unpublished; the add-on serves plain HTTP.
+
+## Limitations
+
+- HACS cannot use these URLs; only the Home Assistant add-on store can.
+- Private git submodules in a served repository fail to clone.
+- Add-ons that use private container images still need registry credentials on the consuming host.
+- No TLS inside the add-on.
+- Publication through a reverse proxy (`public_url`) is documented in a later version.
+
+## Development
+
+`bash internal/verify-marketplace-repo-proxy.sh` builds the image and proves the add-on against a local upstream fixture
+(it never contacts GitHub). It starts containers and must never run in two worktrees at the same time.
