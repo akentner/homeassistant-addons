@@ -15,7 +15,7 @@
 - [x] **AUB-05**: Rule R-16 in `admin-ui/DOCS.md` (bearer gate, separate port, never routed through ingress or a public
   reverse proxy by default) with enforcing tests; library reference updated; `test_docs.py` and the lib contract test
   green.
-- [ ] **AUB-06**: Release: admin-ui version bump via `make update-version`, `make sync-admin-ui` for all consumers,
+- [x] **AUB-06**: Release: admin-ui version bump via `make update-version`, `make sync-admin-ui` for all consumers,
   consumer docker builds, `make check-admin-ui-sync`, `make check-admin-ui-rules`, `make test-admin-ui` green.
 
 ## Notes

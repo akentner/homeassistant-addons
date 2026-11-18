@@ -37,7 +37,7 @@ the same `Router`, `Request`, `ApiError` and error codes as the ingress GUI.
 5. admin-ui version bumped via `make update-version`, `make sync-admin-ui` run for all consumers, consumer docker
    builds and `make check-admin-ui-sync`, `make check-admin-ui-rules`, `make test-admin-ui` green.
 
-**Plans**: 5/6 plans executed (sequential waves 1-6)
+**Plans**: 6/6 plans executed (sequential waves 1-6)
 
 Plans:
 
@@ -47,11 +47,11 @@ Plans:
 - [x] 01-04-PLAN.md — `OptionToken` validation with the 16-character minimum (D-11), `GeneratedToken` (0600 SHA-256
       file, plaintext once, rotate), no secret in output
 - [x] 01-05-PLAN.md — Package exports, library reference, rule R-16 in DOCS and the demo rules view
-- [ ] 01-06-PLAN.md — admin-ui 0.4.0-0 via `make update-version`, lib 0.10.0 into all consumers via
+- [x] 01-06-PLAN.md — admin-ui 0.4.0-0 via `make update-version`, lib 0.10.0 into all consumers via
       `make sync-admin-ui`, subpatch bump (`NO_TAG=yes`) for every consumer the sync changes, builds, checks
 
 ## Progress
 
 | Phase                   | Plans Complete | Status      | Completed |
 | ----------------------- | -------------- | ----------- | --------- |
-| 1. Bearer API listener  | 5/6 | In Progress | -         |
+| 1. Bearer API listener  | 6/6 | In Progress | -         |

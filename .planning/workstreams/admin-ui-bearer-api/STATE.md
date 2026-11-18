@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 current_phase: 01
 current_plan: 6
-status: executing
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-11-18T13:55:20.740Z"
+status: verifying
+stopped_at: Completed 01-06-PLAN.md
+last_updated: "2026-11-18T14:13:45.004Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 01 execution started
-state_head: 1e1e50954b9ba49d9b75902b0b2dfca87cbafaec
+state_head: 1da09f4c14b34cb283cee785c8375f80cab3f41e
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 workstream: admin-ui-bearer-api
 created: 2026-11-17
@@ -23,7 +23,7 @@ current_phase_name: Bearer API listener
 
 ## Current Position
 
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Current Phase:** 01
 **Last Activity:** 2026-11-18 — Phase 01 execution started
 **Last Activity Description:** Phase 01 execution started
@@ -37,8 +37,8 @@ current_phase_name: Bearer API listener
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T13:55:20.717Z
-**Stopped At:** Completed 01-05-PLAN.md
+**Last session:** 2026-11-18T14:13:44.983Z
+**Stopped At:** Completed 01-06-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -50,6 +50,7 @@ current_phase_name: Bearer API listener
 | Phase 01 P03 | 2min | 2 tasks | 3 files |
 | Phase 01 P04 | 5min | 3 tasks | 5 files |
 | Phase 01 P05 | 4min | 2 tasks | 9 files |
+| Phase 01 P06 | 16min | 2 tasks | 41 files |
 
 ## Decisions
 
@@ -62,3 +63,4 @@ current_phase_name: Bearer API listener
 - [Phase 01]: OPTION_TOKEN_MIN_LENGTH = 16 (D-11): OptionToken requires printable ASCII 0x21..0x7E, fixed messages, __slots__; GeneratedToken stores one 'sha256 <hex>' line (0600, mkstemp + os.replace), malformed file -> ValueError without regeneration (A6)
 - [Phase 01]: _ApiServer.handle_error prints only 'api request failed: <ExceptionClassName>' to stdout; handler exceptions keep the shared _fail traceback on stdout
 - [Phase 01]: R-16 status review, pinned by test_docs_r16_exposure_stays_a_review_item; package root exports make_api_server, OptionToken, GeneratedToken, TokenVerifier (OPTION_TOKEN_MIN_LENGTH stays in tokens.py)
+- [Phase 01]: 01-06: images built with the make -n build-addon command minus --progress=plain (no docker buildx on host); Makefile fix deferred
