@@ -54,7 +54,7 @@ Plans:
 - [ ] 01-05-PLAN.md — (wave 3) Full verify script: criteria 1-5 (branches, matrix, revocation, auth failure, secrets)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 01-06-PLAN.md — (wave 4) Docs: translations en/de, DOCS.md contracts and usage, README, CHANGELOG [Unreleased]
+- [ ] 01-06-PLAN.md — (wave 4) Docs (translations, DOCS.md, README, CHANGELOG [0.1.0-1]), SPIKE fixes, bump 0.1.0-1
 
 ### Phase 2: Supervisor integration
 

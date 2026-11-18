@@ -537,7 +537,7 @@ the env dict only for the git child), not in `/srv/git`, not in `docker logs`, n
 | `fatal: unable to access '<url>': The requested URL returned error: 403` | 403 (e.g. SSO-blocked token, local fixture) | `auth_failed` |
 | `fatal: repository '<url>/' not found` | 404 (local fixture) | `not_found` |
 | `fatal: couldn't find remote ref refs/heads/<b>` / ls-remote rc 2 / empty ls-remote | branch or default branch missing | `not_found` |
-| `fatal: unable to access '<url>': Could not resolve host: ...` and anything else | network/other | `fetch_failed` (proposed, see Open Questions) |
+| `fatal: unable to access '<url>': Could not resolve host: ...` and anything else | network/other | `fetch_failed` (D-26) |
 
 Important: real github.com returns **401 for a nonexistent repository without credentials and for any invalid token,
 even on a public repository** (curl: `401` in all three probes, git: `could not read Username`). So a bad token is
@@ -1021,30 +1021,30 @@ fixture on it; use lighttpd [ASSUMED: from Python release notes, not re-checked]
 
 ## Open Questions (RESOLVED)
 
-All four items are resolved **provisionally** by the orchestrator as plan assumptions A-1, A-2, A-4 and A-5 (each
-plan's "Assumptions" section). None is confirmed by the user yet; each must be confirmed before execution. A-3 (no
-version bump) and A-6 (`stdin` trigger deferred) resolve items outside this list.
+All four items were first resolved provisionally as plan assumptions A-1, A-2, A-4 and A-5 and are now confirmed by
+the user 2026-11-18 as D-25, D-26, D-27 and D-28 (CONTEXT.md; each plan's "Confirmed decisions and remaining
+assumptions" section). Outside this list, A-6 (`stdin` trigger deferred) is confirmed as D-29, and A-3 (no version
+bump) is replaced by D-24: Phase 1 is released as `0.1.0-1` through `make update-version` as the last task of Plan
+01-06.
 
-1. **`source` value for CLI-created users** (MRP-04 / D-07 allow `gui`, `api`, `system`). (RESOLVED — provisional A-1,
-   pending user confirmation before execution)
+1. **`source` value for CLI-created users** (MRP-04 / D-07 allow `gui`, `api`, `system`). (RESOLVED — confirmed by the
+   user 2026-11-18 as D-25)
    - What we know: Phase 1 has no GUI/API; Phase 2's `system` user is label `local`.
    - Recommendation: add `cli` as a fourth value (additive, GUI shows a badge). Alternative within D-07: CLI writes
      `system`, which conflates operator-created users with the auto-managed `local` user.
-   - Resolution pointer: A-1 adopts `cli` (Plans 01-01, 01-03, 01-06 "Assumptions").
-2. **Additional status codes** beyond D-14's four. (RESOLVED — provisional A-2, pending user confirmation before
-   execution)
+   - Resolution pointer: D-25 (was A-1) adopts `cli` (Plans 01-01, 01-03, 01-06).
+2. **Additional status codes** beyond D-14's four. (RESOLVED — confirmed by the user 2026-11-18 as D-26)
    - Recommendation: add `pending` (configured, not yet attempted) and `fetch_failed` (network/other errors). Without
      them, DNS failures or timeouts would have to be shown as one of the four codes, which would be wrong. Branch
      missing / empty upstream → `not_found` with a message. Additive to D-14.
-   - Resolution pointer: A-2 adds `pending` and `fetch_failed` (Plans 01-02, 01-06 "Assumptions").
+   - Resolution pointer: D-26 (was A-2) adds `pending` and `fetch_failed` (Plans 01-02, 01-06).
 3. **Startup URL with `public_url`** in Phase 1: print masked public URLs too, or only internal? Recommendation: both
-   (masked), cheap; Phase 5 owns the documentation. (RESOLVED — provisional A-4, pending user confirmation before
-   execution)
-   - Resolution pointer: A-4 prints both, masked (Plan 01-04 "Assumptions").
+   (masked), cheap; Phase 5 owns the documentation. (RESOLVED — confirmed by the user 2026-11-18 as D-27)
+   - Resolution pointer: D-27 (was A-4) prints both, masked (Plan 01-04).
 4. **Container stop on `init` failure** (`S6_BEHAVIOUR_IF_STAGE2_FAILS=2`): recommendation: fail only on unreadable
    options or an invalid `access.json` schema version; invalid repository entries are logged and skipped. Planner's
-   call. (RESOLVED — provisional A-5, pending user confirmation before execution)
-   - Resolution pointer: A-5 adopts the recommendation (Plan 01-04 "Assumptions").
+   call. (RESOLVED — confirmed by the user 2026-11-18 as D-28)
+   - Resolution pointer: D-28 (was A-5) adopts the recommendation (Plan 01-04).
 
 ## Environment Availability
 
@@ -1138,6 +1138,11 @@ classification).
 | Backup contains PAT and hashes | Information disclosure | Inherent to HA backups (options.json too); document in DOCS.md |
 
 ## Docs, CHANGELOG, version (question 12)
+
+> **Superseded by D-24 (user decision 2026-11-18):** each finished phase is released on its own. Phase 1 ends with
+> `make update-version ADDON=marketplace-repo-proxy VERSION=0.1.0-1 NO_TAG=yes` as the last task of Plan 01-06, and
+> CHANGELOG.md gets the versioned section `## [0.1.0-1] - <date>`. The first two bullets below are the original
+> research recommendation and no longer apply; the remaining bullets still do.
 
 - **No version bump in Phase 1.** Phases 1-5 share `feat/marketplace-repo-proxy-v1`; CI builds images only on push to
   `main` (`build.yml` `on: push: branches: - main`), so nothing is published from this branch. ROADMAP Phase 5 /

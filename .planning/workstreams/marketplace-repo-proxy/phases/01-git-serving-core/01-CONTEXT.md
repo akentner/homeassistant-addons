@@ -5,6 +5,8 @@
 **Source:** Discuss step skipped by instruction. Decisions are taken from `marketplace-repo-proxy/SPIKE.md` (section
 "Decisions" is binding, the design sections are the agreed design). Items the spike does not answer are listed under
 "Claude's Discretion" or "Open questions"; they are not decided here.
+**Amended:** 2026-11-18 — user decisions D-24 to D-30 (release per phase, confirmed planning assumptions, SPIKE.md
+corrections).
 
 <domain>
 ## Phase Boundary
@@ -18,7 +20,7 @@ fixture (MRP-06).
 
 Out of scope (later phases): `hassio_api`/`hassio_role`, self-registration, `local` system user, store reload
 (Phase 2); ingress GUI, access-log sink, "last fetch" (Phase 3); provisioning API and its port (Phase 4); public URL
-docs, HTTPS clone test, release and version decision (Phase 5).
+docs, HTTPS clone test, `stage` decision (Phase 5). Each finished phase is released on its own (D-24).
 
 </domain>
 
@@ -107,6 +109,31 @@ docs, HTTPS clone test, release and version decision (Phase 5).
 - **D-22:** Versions only via `make update-version`; never edit the 3 version files by hand.
 - **D-23:** Docker verify scripts must not run in two worktrees at the same time.
 
+### Release per phase (user decision 2026-11-18, replaces planning assumption A-3)
+- **D-24:** Every finished phase is squash-merged into `main` with a subpatch bump through `make update-version`
+  (never by hand, D-22). Phase 1 bumps `0.1.0-0` to `0.1.0-1`
+  (`make update-version ADDON=marketplace-repo-proxy VERSION=0.1.0-1`). The bump is the last step of plan 01-06.
+  CHANGELOG.md gets a versioned section `## [0.1.0-1] - <date>` for the Phase 1 changes instead of `[Unreleased]`.
+  `build.yaml` `args.VERSION` and the README badge stay `0.1.0` (subpatch only lives in `config.yaml`).
+
+### Confirmed planning assumptions (user decision 2026-11-18)
+- **D-25 (was A-1):** Users created with the `mrp` CLI carry `source: "cli"`, a fourth value next to D-07's
+  `gui`/`api`/`system`. `system` stays reserved for Phase 2's `local` user.
+- **D-26 (was A-2):** `status.json` adds the codes `pending` (configured, never attempted) and `fetch_failed` (network,
+  timeout, anything unclassified) to D-14's four; the four keep their meaning.
+- **D-27 (was A-4):** The startup log prints masked internal store URLs and, when `public_url` is set, masked public
+  store URLs.
+- **D-28 (was A-5):** `init` stops the container only for unreadable or invalid options and for an `access.json`
+  schema version it does not know; everything else is logged and survived.
+- **D-29 (was A-6):** The `stdin` manual sync trigger is deferred; config.yaml gets no `stdin` key in Phase 1.
+
+### SPIKE.md corrections (user decision 2026-11-18)
+- **D-30:** Plan 01-06 corrects `marketplace-repo-proxy/SPIKE.md` with three findings from Phase 1 research:
+  `git-http-backend` ships in the Alpine package `git-daemon` (not `git`), so the package list is
+  `git git-daemon lighttpd`; `cgi.assign` works only as a global setting (inside the URL condition every request gets
+  403); `server.breakagelog = "/dev/null"` is required, because `git http-backend` writes the repository path (with the
+  hash) to stderr, which would otherwise reach the add-on log.
+
 ### Claude's Discretion
 - Language of the sync loop and the access-store writer (bash with `jq`, or Python). Python is already planned for the
   Phase 3 GUI (`apk add python3`), and D-20 favours one shared Python service module for `access.json`; the planner
@@ -118,8 +145,7 @@ docs, HTTPS clone test, release and version decision (Phase 5).
   should already carry what the Phase 3 Repositories view needs (status code, last sync, HEAD short SHA, add-ons found).
 - Mechanism of the test-only upstream override within D-18 (for example an environment variable that only `docker run`
   can set; add-on options cannot set container environment).
-- Masked URL format for the startup log.
-- Whether the manual trigger via `stdin: true` + `hassio.addon_stdin` with `sync` (SPIKE "Sync") lands now or later.
+- Masked URL format for the startup log (content decided in D-27).
 - Layout of s6-overlay service definitions (the base image ships s6-overlay; `init: false` already set in config.yaml).
 
 </decisions>
@@ -181,7 +207,10 @@ docs, HTTPS clone test, release and version decision (Phase 5).
 - Supervisor integration, `local` system user, store reload (Phase 2).
 - Access-log sink and "last fetch" (Phase 3).
 - Provisioning API, bearer token (Phase 4).
-- Public URL documentation, HTTPS clone test, version bump and stage decision (Phase 5).
+- Public URL documentation, HTTPS clone test and `stage` decision (Phase 5).
+- Manual sync trigger via `stdin` (D-29).
+- Git tag `marketplace-repo-proxy/v0.1.0-1`: not created in the plan (`NO_TAG=yes`), because the bump commit lives on
+  the feature branch and disappears in the squash merge; tagging after the merge is the user's call.
 - Per-repository deploy keys (SPIKE "Upstream authentication", later, optional).
 
 </deferred>
@@ -189,4 +218,4 @@ docs, HTTPS clone test, release and version decision (Phase 5).
 ---
 
 *Phase: 01-git-serving-core*
-*Context gathered: 2026-11-17 (from SPIKE.md, discuss step skipped)*
+*Context gathered: 2026-11-17 (from SPIKE.md, discuss step skipped); amended 2026-11-18 (D-24 to D-30)*
