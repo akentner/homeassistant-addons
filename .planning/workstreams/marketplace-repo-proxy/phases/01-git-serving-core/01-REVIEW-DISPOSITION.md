@@ -9,7 +9,7 @@ findings:
     title: "Branch change rewrites HEAD and refspec before the fetch succeeds, breaking the served mirror"
   - id: WR-01
     severity: warning
-    disposition: skipped
+    disposition: deferred
     title: "Protocol v2 serves unadvertised objects by SHA, defeating \"only this one branch is served\""
   - id: WR-02
     severity: warning
@@ -21,7 +21,7 @@ findings:
     title: "Credentials in `public_url` are written unmasked to the add-on log"
   - id: WR-04
     severity: warning
-    disposition: skipped
+    disposition: deferred
     title: "`access.json` is renamed to `.corrupt` on transient read errors and partial writes; an earlier `.corrupt` is overwritten"
   - id: WR-05
     severity: warning
@@ -65,10 +65,10 @@ recorded: 2026-11-18T16:06:21.054Z
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
 | CR-01 | critical | fixed | 01-REVIEW-FIX.md |
-| WR-01 | warning | skipped | 01-REVIEW-FIX.md |
+| WR-01 | warning | deferred | user decision 2026-11-18 |
 | WR-02 | warning | fixed | 01-REVIEW-FIX.md |
 | WR-03 | warning | fixed | 01-REVIEW-FIX.md |
-| WR-04 | warning | skipped | 01-REVIEW-FIX.md |
+| WR-04 | warning | deferred | user decision 2026-11-18 |
 | WR-05 | warning | fixed | 01-REVIEW-FIX.md |
 | IN-01 | info | deferred | user decision 2026-11-18 |
 | IN-02 | info | deferred | user decision 2026-11-18 |
