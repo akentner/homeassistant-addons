@@ -1,6 +1,4 @@
-#!/usr/bin/with-contenv bashio
-# shellcheck shell=bash
-# Scaffold: the proxy service is not implemented yet (see GOAL.md); keep the container alive for the store.
-bashio::log.level "$(bashio::config 'log_level')"
-bashio::log.warning "Marketplace Repo Proxy is a scaffold, no service is started yet"
-exec sleep infinity
+#!/bin/sh
+# s6 oneshot "init": directories, gitconfig and the access symlink tree (reads /data/options.json directly)
+cd /opt/marketplace-repo-proxy || exit 1
+exec env PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 python3 -m app.init
