@@ -8,6 +8,11 @@ per unconfigured repository whose store repository is still recorded (`configure
 `repository`, `registration` (exactly one of REGISTRATION_STATES, D-28) and an optional `message` from fixed templates.
 Callers report facts (`in_store`, `error`); `registration` and `message` are recomputed from them on every write, so no
 code path can store another value or free text.
+
+`reload` records the last `POST /store/reload` (MRP-09, D-08): `last_requested` (UTC), `last_result` (`ok`, `failed` or
+None), `pending` (a reload is still owed; survives a restart) and a masked `message`. The caller masks Supervisor text
+with `app.supervisor.mask_text`; this module masks every 32-hex run again with `app.gitops.sanitize` (the masker
+`mask_text` builds on) and never imports the client module (only registration and sync may, see test_supervisor).
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ import copy
 import re
 from typing import Any, Iterable, Sequence
 
+from app.gitops import sanitize
 from app.jsonio import atomic_write_json, read_json, utc_timestamp
 from app.options import RepoSpec
 from app.paths import Paths
@@ -27,6 +33,8 @@ UNSAFE_MESSAGE_RE = re.compile(r"https?://|/repo/|[0-9a-fA-F]{32}|github_pat_|gh
 MESSAGE_FALLBACK = "Details are in the add-on log"
 MESSAGE_LIMIT = 200
 _HEX32_RE = re.compile(r"[0-9a-fA-F]{32}")
+RELOAD_RESULTS = (None, "ok", "failed")
+_UNSET: Any = object()
 
 _ERROR_MESSAGES = {
     "add_rejected": "The Supervisor rejected the store URL (HTTP {status})",
@@ -136,6 +144,22 @@ def _carry(entry: dict[str, Any], old: dict) -> None:
             entry[key] = old[key]
 
 
+def _reload_section(old: Any) -> dict[str, Any]:
+    """The reload section of the previous file, ignoring values of the wrong type; the message is masked again."""
+    section: dict[str, Any] = {"last_requested": None, "last_result": None, "pending": False, "message": ""}
+    if not isinstance(old, dict):
+        return section
+    if isinstance(old.get("last_requested"), str):
+        section["last_requested"] = old["last_requested"]
+    if old.get("last_result") in RELOAD_RESULTS:
+        section["last_result"] = old["last_result"]
+    if isinstance(old.get("pending"), bool):
+        section["pending"] = old["pending"]
+    if isinstance(old.get("message"), str):
+        section["message"] = sanitize(old["message"])
+    return section
+
+
 def _dict_list(value: Any) -> list[dict] | None:
     if isinstance(value, list) and all(isinstance(item, dict) for item in value):
         return copy.deepcopy(value)
@@ -170,18 +194,13 @@ class SupervisorStateWriter:
             _carry(entry, old)
             self._entries[key] = entry
 
-        reload_doc = previous.get("reload")
         self._doc: dict[str, Any] = {
             "schema": SCHEMA,
             "updated": None,
             "register_local": bool(register_local),
             "hostname": hostname,
             "supervisor": {"last_contact": None, "last_status": None, "last_error": None},
-            "reload": (
-                copy.deepcopy(reload_doc)
-                if isinstance(reload_doc, dict)
-                else {"last_requested": None, "last_result": None, "pending": False, "message": ""}
-            ),
+            "reload": _reload_section(previous.get("reload")),
             "repositories": [],
             "leftovers": _dict_list(previous.get("leftovers")) or [],
             "requests": _dict_list(previous.get("requests")) or [],
@@ -275,4 +294,30 @@ class SupervisorStateWriter:
     def set_contact(self, status: int, error: str | None) -> None:
         """Result of the last Supervisor contact attempt (`status` 0: no HTTP answer); `error` is masked text."""
         self._doc["supervisor"] = {"last_contact": utc_timestamp(), "last_status": status, "last_error": error}
+        self._write()
+
+    def reload_state(self) -> dict:
+        """Copy of the `reload` section as last written."""
+        return copy.deepcopy(self._doc["reload"])
+
+    def set_reload(
+        self,
+        *,
+        last_requested: str | None = _UNSET,
+        last_result: str | None = _UNSET,
+        pending: bool = _UNSET,
+        message: str = _UNSET,
+    ) -> None:
+        """Update the given fields of the `reload` section; `message` is masked Supervisor text (hashes masked again)."""
+        if last_result is not _UNSET and last_result not in RELOAD_RESULTS:
+            raise ValueError(f"unknown reload result: {last_result}")
+        section = self._doc["reload"]
+        if last_requested is not _UNSET:
+            section["last_requested"] = last_requested if isinstance(last_requested, str) else None
+        if last_result is not _UNSET:
+            section["last_result"] = last_result
+        if pending is not _UNSET:
+            section["pending"] = bool(pending)
+        if message is not _UNSET:
+            section["message"] = sanitize(message) if isinstance(message, str) else ""
         self._write()

@@ -4,15 +4,23 @@ One system user `local` (source `system`) per configured repository. After every
 adds the internal store URL `http://{hostname}:8080/repo/{owner}/{repo}/{hash}` of every repository whose last sync is
 `ok` when `GET /store/repositories` does not list its store slug. The pass reports facts (`in_store`, `error`) to the
 state writer, which derives the registration value and message. A failing Supervisor never ends the pass; the next
-cycle starts again with `GET`. No store reload and no removal here.
+cycle starts again with `GET`. No removal here.
+
+Store reload (MRP-09, D-08): after the pass, one `POST /store/reload` when the served head of a repository whose
+`local` URL was in the store before the pass changed (D-28: `in_store`, whatever the registration value). At most one
+reload per sync interval: a change inside a closed window sets `pending`, which `run_due` sends from the sync wait loop
+once the window opens. `pending` is persisted in /data/supervisor.json; the window clock is in memory, so the first
+window after a restart is open.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+import time
+from typing import Any, Callable, Iterable
 
 from app.access import HASH_RE, AccessError, AccessStore
+from app.jsonio import utc_timestamp
 from app.options import Options, RepoSpec
 from app.paths import Paths
 from app.supervisor import CallResult, SupervisorClient, SupervisorRefused, mask_text, store_slug
@@ -46,6 +54,8 @@ class Registrar:
         log: logging.Logger | None = None,
         *,
         state: SupervisorStateWriter | None = None,
+        clock: Callable[[], float] = time.monotonic,
+        wall: Callable[[], float] = time.time,
     ) -> None:
         self.paths = paths
         self.options = options
@@ -58,6 +68,11 @@ class Registrar:
         self.state = state or SupervisorStateWriter(
             paths, hostname=hostname, register_local=options.register_local, specs=options.repositories
         )
+        self.clock = clock
+        self.wall = wall
+        self.interval_seconds = options.sync_interval * 60
+        self.last_reload_at: float | None = None
+        self.reload_pending = self.state.reload_state()["pending"] is True
 
     def local_entry(self, spec: RepoSpec) -> dict | None:
         """The repository's `local` access entry, only when its hash is valid."""
@@ -205,6 +220,52 @@ class Registrar:
                 "store: registration of %s failed: %s", spec.slug, mask_text(result.message) or f"http {result.status}"
             )
 
-    def after_cycle(self, status_doc: dict) -> None:
-        """Hook of the sync loop: runs after every cycle."""
+    def after_cycle(self, status_doc: dict, head_changes: Iterable[str] = frozenset()) -> None:
+        """Hook of the sync loop after every cycle: the registration pass, then at most one store reload.
+
+        Only a head change of a repository whose URL was in the store before the pass counts; one added in this pass
+        was cloned at its current head already.
+        """
+        in_store_before = set()
+        for spec in self.options.repositories:
+            current = self.state.repository(spec.slug)
+            if current is not None and current.get("in_store") is True:
+                in_store_before.add(spec.key)
         self.register_pass(status_doc)
+        changed = {key.lower() for key in head_changes} & in_store_before
+        if changed or (self.reload_pending and self.window_open()):
+            self.request_reload()
+
+    def window_open(self) -> bool:
+        """True when no reload was attempted yet or a full sync interval has passed since the last attempt."""
+        return self.last_reload_at is None or self.clock() - self.last_reload_at >= self.interval_seconds
+
+    def request_reload(self) -> None:
+        """Send a reload now when the window is open, else keep it as `pending` for the wait loop."""
+        if self.window_open():
+            self._send_reload()
+            return
+        self.reload_pending = True
+        self.state.set_reload(pending=True)
+        remaining = self.interval_seconds - (self.clock() - (self.last_reload_at or 0.0))
+        self.log.info("store reload: deferred until %s", utc_timestamp(self.wall() + remaining))
+
+    def _send_reload(self) -> None:
+        # The window closes before the call: an exception or a hung call never opens a reload storm (D-08)
+        self.last_reload_at = self.clock()
+        self.reload_pending = True
+        requested = utc_timestamp(self.wall())
+        try:
+            result = self.client.reload_store()
+        except SupervisorRefused as exc:
+            result = CallResult(False, 0, message=_refused_code(exc))
+        except Exception as exc:  # the reload stays owed; the next window retries it
+            result = CallResult(False, 0, message=f"internal error ({type(exc).__name__})")
+        if result.ok:
+            self.reload_pending = False
+            self.state.set_reload(last_requested=requested, last_result="ok", pending=False, message="")
+            self.log.info("store reload: ok")
+            return
+        message = mask_text(result.message) or f"http {result.status}"
+        self.state.set_reload(last_requested=requested, last_result="failed", pending=True, message=message)
+        self.log.warning("store reload: failed: %s", message)

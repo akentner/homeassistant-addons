@@ -209,7 +209,7 @@ class SyncService:
             self.next_due = self.clock() + self.interval_seconds
         if self.registrar is not None and not self.stop.is_set():
             try:
-                self.registrar.after_cycle(self.writer.snapshot())
+                self.registrar.after_cycle(self.writer.snapshot(), frozenset(self.writer.head_changes))
             except Exception as exc:  # a failing Supervisor or store pass never ends the sync loop
                 self.log.warning("store pass failed: %s", type(exc).__name__)
 
