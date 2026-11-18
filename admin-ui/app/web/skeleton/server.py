@@ -16,6 +16,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import FrameType
 from typing import Any, Callable
+from typing import ClassVar
 
 from .errors import ApiError
 from .headers import DEFAULT_CSP, security_headers
@@ -51,6 +52,93 @@ class _PublicHeaders:
 
     def items(self) -> list[tuple[str, Any]]:
         return [(k, v) for k, v in self._headers.items() if not k.lower().startswith(_IDENTITY_PREFIXES)]
+
+
+class _JsonHandler(BaseHTTPRequestHandler):
+    """Shared JSON response and body helpers of the ingress and the API handler."""
+
+    protocol_version = "HTTP/1.1"
+    csp: ClassVar[str | None] = None
+    mappers: ClassVar[dict[type[Exception], Callable[[Exception], ApiError]]] = {}
+
+    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - query strings and headers can carry secrets
+        return
+
+    def _send(
+        self,
+        status: int,
+        body: bytes,
+        ctype: str,
+        cache: str = "no-store",
+        extra: dict[str, str] | None = None,
+        kind: str = "api",
+    ) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", cache)
+        for key, value in security_headers(kind, self.csp).items():
+            self.send_header(key, value)
+        for key, value in (extra or {}).items():
+            self.send_header(key, value)
+        if self.close_connection:
+            self.send_header("Connection", "close")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def _json(self, status: int, payload: Any) -> None:
+        self._send(status, json.dumps(payload, sort_keys=True).encode(), "application/json; charset=utf-8")
+
+    def _error(self, exc: ApiError) -> None:
+        # The request body may be unread: do not reuse the connection
+        self.close_connection = True
+        self._json(exc.status, {"error": exc.code, "message": exc.message})
+
+    def _read_body(self) -> Any:
+        if self.headers.get("Transfer-Encoding"):
+            raise ApiError("bad_request", "chunked bodies are not supported")
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError as exc:
+            raise ApiError("bad_request", "invalid Content-Length") from exc
+        if length < 0:
+            raise ApiError("bad_request", "invalid Content-Length")
+        if length > MAX_BODY:
+            raise ApiError("payload_too_large", "request body too large")
+        if length == 0:
+            return None
+        if not (self.headers.get("Content-Type") or "").lower().startswith("application/json"):
+            raise ApiError("bad_request", "content type must be application/json")
+        raw = self.rfile.read(length)
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise ApiError("bad_request", "invalid JSON") from exc
+
+    def _fail(self, exc: Exception) -> None:
+        """Render an exception as an error response; call only from inside an `except` block (traceback)."""
+        if isinstance(exc, ApiError):
+            self._error(exc)
+            return
+        mapped = next((fn(exc) for cls, fn in self.mappers.items() if isinstance(exc, cls)), None)
+        if mapped is not None:
+            self._error(mapped)
+            return
+        # Never leak exception text to the client; the traceback goes to stdout only
+        print(traceback.format_exc(), flush=True)
+        self._error(ApiError("internal_error", "internal error"))
+
+    def _respond(self, result: Any) -> None:
+        if result is None:
+            self._send(204, b"", "application/json; charset=utf-8")
+        elif isinstance(result, Download):
+            disposition = {"Content-Disposition": f'attachment; filename="{result.filename}"'}
+            self._send(200, result.data, result.content_type, extra=disposition)
+        elif isinstance(result, tuple):
+            self._json(result[0], result[1])
+        else:
+            self._json(200, result)
 
 
 def make_handler(
