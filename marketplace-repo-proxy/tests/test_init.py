@@ -146,6 +146,14 @@ def test_credentials_in_public_url_never_reach_the_log(paths, users, caplog):
     assert any(line.startswith("ignoring option entry: public_url:") for line in lines(caplog, logging.WARNING))
 
 
+def test_malformed_public_url_is_rejected_without_a_traceback(paths, users, caplog):
+    write_options(paths, public_url="http://[x")
+    assert init(paths, caplog) == 0
+    assert "Traceback" not in caplog.text
+    assert not any("| public" in line for line in lines(caplog))
+    assert any(line.startswith("ignoring option entry: public_url:") for line in lines(caplog, logging.WARNING))
+
+
 def test_unconfigured_entries_are_summarised_and_stay_inactive(paths, users, caplog):
     assert init(paths, caplog) == 0
     info = lines(caplog)

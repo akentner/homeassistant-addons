@@ -143,6 +143,8 @@ def test_sync_interval_defaults_to_15():
         ("https://user@h.example", "", True),
         ("https://h.example/?k=v", "", True),
         ("https://h.example/#frag", "", True),
+        ("http://[x", "", True),
+        ("https://[::1", "", True),
     ],
 )
 def test_public_url_is_normalised_or_rejected(value, expected, rejected):

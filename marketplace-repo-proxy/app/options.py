@@ -89,11 +89,16 @@ def _public_url(value: Any, rejected: list[str]) -> str:
         return ""
     if isinstance(value, str):
         url = value.strip().rstrip("/")
-        parts = urlsplit(url)
+        try:
+            parts = urlsplit(url)
+            hostname = parts.hostname
+        except ValueError:  # e.g. an unclosed IPv6 bracket: reject like any other invalid URL, never crash
+            rejected.append(PUBLIC_URL_REJECTED)
+            return ""
         # No userinfo, query or fragment: the URL is logged at startup, so credentials in it would reach the log
         if (
             parts.scheme in ("http", "https")
-            and parts.hostname
+            and hostname
             and "@" not in parts.netloc
             and not parts.query
             and not parts.fragment
