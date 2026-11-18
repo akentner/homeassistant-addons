@@ -212,6 +212,14 @@ class _Handler(BaseHTTPRequestHandler):
         return self.rfile.read(length) if length > 0 else b""
 
     def _send(self, status: int, payload: bytes, content_type: str) -> None:
+        # Record (and save) before the answer leaves: a client that returns must find its request in the log
+        entry = getattr(self, "_entry", None)
+        if entry is not None:
+            self._entry = None
+            entry["status"] = status
+            self.state.record(entry)
+            if status == 200 and self.command in ("POST", "DELETE"):
+                self.state.save()
         try:
             self.send_response(status)
             self.send_header("Content-Type", content_type)
@@ -248,6 +256,7 @@ class _Handler(BaseHTTPRequestHandler):
         entry: dict[str, Any] = {"method": method, "path": path, "auth": self._auth()}
         if method in ("POST", "DELETE"):
             entry["slug"] = None
+        self._entry: dict[str, Any] | None = entry
         if entry["auth"] == "missing":
             entry["status"] = self._text(401, "401: Unauthorized")
         elif entry["auth"] == "wrong":
@@ -266,9 +275,6 @@ class _Handler(BaseHTTPRequestHandler):
             entry["status"] = self._text(405, "405: Method Not Allowed")
         else:
             entry["status"] = self._text(404, "404: Not Found")
-        self.state.record(entry)
-        if entry["status"] == 200 and method in ("POST", "DELETE"):
-            self.state.save()
 
     def _add(self, body: bytes, entry: dict[str, Any]) -> int:
         try:
