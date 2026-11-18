@@ -122,8 +122,96 @@ wait_reg() { # usage: wait_reg <seconds> <owner/repo> <expected registration>
     done
     fail "${repo}: supervisor.json registration is '${got}' after ${limit} s, expected '${want}'"
 }
+reload_of() { # usage: reload_of <key>  (supervisor.json reload section)
+    docker exec "${PROXY}" python3 -I -c '
+import json, sys
+value = json.load(open("/data/supervisor.json")).get("reload", {}).get(sys.argv[1])
+print("null" if value is None else str(value).lower() if isinstance(value, bool) else value)
+' "$1"
+}
+wait_reload() { # usage: wait_reload <seconds> <key> <expected>
+    local limit="$1" key="$2" want="$3" got="" i
+    for ((i = 0; i < limit; i++)); do
+        got="$(reload_of "${key}" 2>/dev/null || true)"
+        [ "${got}" = "${want}" ] && return 0
+        sleep 1
+    done
+    fail "supervisor.json reload.${key} is '${got}' after ${limit} s, expected '${want}'"
+}
 # Request log of the fake Supervisor (one JSON object per line; never a token or a URL)
 fake_requests() { docker exec "${SUPERVISOR_FAKE}" cat /tmp/fake/requests.jsonl; }
+fake_count() { # usage: fake_count <METHOD> <path regex>  (number of matching requests in the fake's log)
+    fake_requests | python3 -I -c '
+import json, re, sys
+method, pattern = sys.argv[1], re.compile(sys.argv[2])
+entries = [json.loads(line) for line in sys.stdin.read().splitlines() if line.strip()]
+print(sum(1 for e in entries if e.get("method") == method and pattern.search(e.get("path", ""))))
+' "$1" "$2"
+}
+fake_field() { # usage: fake_field <python expression on doc = store.json> [args...]; extra args are in `args`
+    docker exec "${SUPERVISOR_FAKE}" cat /tmp/fake/store.json | python3 -I -c '
+import json, sys
+doc, args = json.loads(sys.stdin.read()), sys.argv[2:]
+value = eval(sys.argv[1])
+print("null" if value is None else str(value).lower() if isinstance(value, bool) else value)
+' "$@"
+}
+wait_fake_field() { # usage: wait_fake_field <seconds> <expected> <expression> [args...]
+    local limit="$1" want="$2" got="" i
+    shift 2
+    for ((i = 0; i < limit; i++)); do
+        got="$(fake_field "$@" 2>/dev/null || true)"
+        [ "${got}" = "${want}" ] && return 0
+        sleep 1
+    done
+    fail "fake store: $1 is '${got}' after ${limit} s, expected '${want}'"
+}
+# Store list requests logged by the current proxy container (a pass logs one before its adds and its reload decision)
+supervisor_gets() { docker logs "${PROXY}" 2>&1 | grep -cF 'supervisor GET /store/repositories: ' || true; }
+wait_gets() { # usage: wait_gets <seconds> <minimum count>
+    local limit="$1" want="$2" got=0 i
+    for ((i = 0; i < limit; i++)); do
+        got="$(supervisor_gets)"
+        [ "${got}" -ge "${want}" ] && return 0
+        sleep 1
+    done
+    fail "only ${got} store list requests in the add-on log after ${limit} s, expected at least ${want}"
+}
+# `local` hashes of the given repositories from /data/access.json, one per line; never echoed by the callers
+local_hashes() {
+    docker exec "${PROXY}" python3 -I -c '
+import json, sys
+doc = json.load(open("/data/access.json"))
+for repo in sys.argv[1:]:
+    local = [e for e in doc["entries"] if e["repository"] == repo and e["user"] == "local"]
+    if len(local) != 1 or local[0].get("source") != "system":
+        sys.exit(1)
+    print(local[0]["hash"])
+' "$@"
+}
+# The proxy container; the same /data and hostname on every start, a fresh /srv/git after a recreate
+start_proxy() {
+    docker run -d --name "${PROXY}" --hostname "${PROXY}" --network "${NET}" \
+        -v "${WORK}/data:/data" \
+        -e "${OVERRIDE_VAR}=http://${UPSTREAM}:8080" \
+        -e "SUPERVISOR_TOKEN=${SUPERVISOR_SENTINEL}" \
+        -e "HASSIO_TOKEN=${SUPERVISOR_SENTINEL}" \
+        "${IMAGE_TAG}" >/dev/null
+}
+# Stand-in for an add-on restart or update on a host (the Supervisor recreates the container)
+recreate_proxy() {
+    docker rm -f "${PROXY}" >/dev/null
+    start_proxy
+    local i
+    for ((i = 0; i < 90; i++)); do
+        if [ "$(supervisor_gets)" -ge 1 ] && [ "$(status_of "${REPO}" 2>/dev/null || true)" = "ok" ] \
+            && [ "$(status_of "${REPO_BRANCHED}" 2>/dev/null || true)" = "ok" ]; then
+            return 0
+        fi
+        sleep 1
+    done
+    fail "recreated proxy: no store list request or a synced repository not ok after 90 s"
+}
 # D-29 shape of /data/supervisor.json; prints "d29 ok" or the first violation
 d29_check() {
     docker exec "${PROXY}" python3 -I -c '
@@ -372,12 +460,7 @@ docker run -d --name "${SUPERVISOR_FAKE}" --network "${NET}" --network-alias sup
     --host 0.0.0.0 --port 80 --state-dir /tmp/fake --in-use-file /tmp/fake/in-use >/dev/null
 wait_for 30 "fake Supervisor" docker exec "${SUPERVISOR_FAKE}" test -f /tmp/fake/store.json
 ok "fake Supervisor runs (network alias supervisor)"
-docker run -d --name "${PROXY}" --hostname "${PROXY}" --network "${NET}" \
-    -v "${WORK}/data:/data" \
-    -e "${OVERRIDE_VAR}=http://${UPSTREAM}:8080" \
-    -e "SUPERVISOR_TOKEN=${SUPERVISOR_SENTINEL}" \
-    -e "HASSIO_TOKEN=${SUPERVISOR_SENTINEL}" \
-    "${IMAGE_TAG}" >/dev/null
+start_proxy
 wait_field 90 "${REPO}" status ok
 ok "status.json: ${REPO} ok"
 wait_field 90 "${REPO_BRANCHED}" status ok
@@ -450,15 +533,7 @@ ok "/data/supervisor.json: mode 600, no full store URL"
 out="$(d29_check)" || fail "supervisor.json Phase 3 interface (D-29): ${out}"
 ok "supervisor.json Phase 3 interface (D-29): ${out}"
 # The two `local` hashes join the hash needles of step (14); never echoed
-HASH_LOCAL="$(docker exec "${PROXY}" python3 -I -c '
-import json, sys
-doc = json.load(open("/data/access.json"))
-for repo in sys.argv[1:]:
-    local = [e for e in doc["entries"] if e["repository"] == repo and e["user"] == "local"]
-    if len(local) != 1 or local[0].get("source") != "system":
-        sys.exit(1)
-    print(local[0]["hash"])
-' "${REPO}" "${REPO_BRANCHED}")" || fail "cannot read the local access entries"
+HASH_LOCAL="$(local_hashes "${REPO}" "${REPO_BRANCHED}")" || fail "cannot read the local access entries"
 HASH_LOCAL_1="$(sed -n 1p <<<"${HASH_LOCAL}")"
 HASH_LOCAL_2="$(sed -n 2p <<<"${HASH_LOCAL}")"
 if ! [[ "${HASH_LOCAL_1}" =~ ^[0-9a-f]{32}$ && "${HASH_LOCAL_2}" =~ ^[0-9a-f]{32}$ ]]; then
@@ -466,6 +541,23 @@ if ! [[ "${HASH_LOCAL_1}" =~ ^[0-9a-f]{32}$ && "${HASH_LOCAL_2}" =~ ^[0-9a-f]{32
 fi
 ok "access.json: one local entry (source system) per registered repository"
 echo "✓ tracer: the fake Supervisor cloned both registered local store URLs"
+
+echo "==> (4c) container recreate without upstream change"
+# Same /data and hostname, fresh /srv/git; must run before the first upstream change of the run
+recreate_proxy
+ok "recreated proxy: store list requested, ${REPO} and ${REPO_BRANCHED} ok"
+# Once the next pass has logged its store list request, the first pass and its reload decision are done
+[ "$(docker exec "${PROXY}" mrp sync)" = "sync requested" ] || fail "mrp sync did not request a sync"
+wait_gets 60 2
+[ "$(fake_count POST '^/store/repositories$')" = "2" ] || fail "the recreated proxy registered again"
+ok "fake Supervisor: still 2 POST /store/repositories after the recreate (no re-registration)"
+[ "$(fake_field 'doc["reloads"]')" = "0" ] || fail "the recreated proxy requested a store reload"
+ok "fake store: 0 reloads after the recreate and an unchanged upstream"
+[ "$(local_hashes "${REPO}" "${REPO_BRANCHED}")" = "${HASH_LOCAL}" ] || fail "a local hash changed after the recreate"
+ok "access.json: both local hashes unchanged after the recreate"
+LOGS="$(docker logs "${PROXY}" 2>&1)"
+if grep -qF 'store reload:' <<<"${LOGS}"; then fail "store reload line after the recreate (reload storm)"; fi
+ok "recreated proxy log: no store reload line (no reload storm on a fresh /srv/git)"
 
 echo "==> (5) users through mrp"
 URL_ALICE="http://${PROXY}:8080/repo/${REPO}/${HASH_ALICE}"
@@ -580,6 +672,46 @@ ok "fetch in the existing clone shows the new commit"
 csh 'git clone -q --depth 1 "$1" fresh && test -f fresh/UPDATED' "${URL_ALICE}" \
     || fail "fresh clone does not contain the new file"
 ok "a fresh clone contains the new file"
+PRIVATE_SLUG="$(reg_of "${REPO}" store_slug)"
+[[ "${PRIVATE_SLUG}" =~ ^[0-9a-f]{8}$ ]] || fail "${REPO}: store_slug is not 8 hex"
+wait_fake_field 30 1 'doc["reloads"]'
+[ "$(fake_field 'doc["heads"].get(args[0])' "${PRIVATE_SLUG}")" = "${NEW_SHA}" ] \
+    || fail "the fake's reload did not pull ${NEW_SHA:0:12} for ${REPO}"
+ok "fake store: exactly 1 reload; it pulled ${NEW_SHA:0:12} for ${REPO} through the proxy"
+wait_reload 30 last_result ok
+[ "$(reload_of pending)" = "false" ] || fail "supervisor.json reload.pending is not false after the reload"
+ok "supervisor.json: reload.last_result ok, reload.pending false"
+LOGS="$(docker logs "${PROXY}" 2>&1)"
+grep -qF 'supervisor POST /store/reload: 200' <<<"${LOGS}" || fail "no 'supervisor POST /store/reload: 200' log line"
+grep -qF 'store reload: ok' <<<"${LOGS}" || fail "no 'store reload: ok' log line"
+ok "add-on log: supervisor POST /store/reload: 200 and store reload: ok"
+
+echo "==> (9b) second upstream change inside the reload window"
+NEW_SHA_2="$(upstream_commit "${REPO}" UPDATED2 "update ${RANDOM}")"
+[[ "${NEW_SHA_2}" =~ ^[0-9a-f]{40}$ ]] || fail "second upstream commit failed"
+[ "$(docker exec "${PROXY}" mrp sync)" = "sync requested" ] || fail "mrp sync did not request a sync"
+wait_field 30 "${REPO}" head "${NEW_SHA_2:0:12}"
+ok "status.json: ${REPO} head ${NEW_SHA_2:0:12} after the second change"
+# pending is written by the pass's reload decision, after the head
+wait_reload 30 pending true
+ok "supervisor.json: reload.pending true (change inside the window)"
+[ "$(fake_field 'doc["reloads"]')" = "1" ] || fail "a second reload inside the window"
+ok "fake store: still 1 reload (at most one per sync interval, D-08)"
+LOGS="$(docker logs "${PROXY}" 2>&1)"
+grep -qF 'store reload: deferred until ' <<<"${LOGS}" || fail "no 'store reload: deferred until' log line"
+ok "add-on log: store reload: deferred until ..."
+
+echo "==> (9c) pending reload after a container recreate"
+recreate_proxy
+ok "recreated proxy: store list requested, ${REPO} and ${REPO_BRANCHED} ok"
+wait_fake_field 90 2 'doc["reloads"]'
+ok "fake store: the persisted pending reload was sent once after the recreate (2 reloads)"
+wait_reload 30 pending false
+[ "$(reload_of last_result)" = "ok" ] || fail "supervisor.json reload.last_result is not ok after the recreate"
+ok "supervisor.json: reload.pending false, last_result ok"
+[ "$(fake_field 'doc["heads"].get(args[0])' "${PRIVATE_SLUG}")" = "${NEW_SHA_2}" ] \
+    || fail "the fake's reload did not pull ${NEW_SHA_2:0:12} for ${REPO}"
+ok "fake store: the reload pulled ${NEW_SHA_2:0:12} for ${REPO}"
 
 echo "==> (10) revocation"
 [ "$(docker exec "${PROXY}" mrp users revoke "${REPO}" alice)" = "revoked alice from ${REPO}" ] \
@@ -620,6 +752,9 @@ ok "add-on log holds neither the PAT nor a full hash; override WARNING present"
 
 echo "==> (12) expired token: restart with a wrong PAT"
 WRONG_PAT="SENTINEL-WRONG-$RANDOM$RANDOM"
+# dave's masked startup line; step (9c) recreated the container after dave existed, so step (13) counts lines
+DAVE_LINE="user dave -> http://${PROXY}:8080/repo/${REPO}/[0-9a-f]{4}… [|] public ${PUBLIC_URL}/repo/${REPO}/[0-9a-f]{4}…"
+DAVE_LINES="$(docker logs "${PROXY}" 2>&1 | grep -cE -- "${DAVE_LINE}" || true)"
 # The new options travel on stdin, never in an argv
 options_json "${WRONG_PAT}" | docker exec -i "${PROXY}" python3 -I -c '
 import os, sys
@@ -637,9 +772,8 @@ grep -qF "sync ${REPO}: auth_failed" <<<"${LOGS}" || fail "no auth_failed warnin
 ok "add-on log has an auth_failed warning for ${REPO}"
 
 echo "==> (13) startup log after the restart (masked URLs only)"
-# Before the restart dave did not exist, so this line comes from the restart's init
-if ! grep -qE -- "user dave -> http://${PROXY}:8080/repo/${REPO}/[0-9a-f]{4}… [|] public ${PUBLIC_URL}/repo/${REPO}/[0-9a-f]{4}…" \
-    <<<"${LOGS}"; then
+# One more line than before the restart: this one comes from the restart's init
+if [ "$(grep -cE -- "${DAVE_LINE}" <<<"${LOGS}" || true)" -le "${DAVE_LINES}" ]; then
     fail "startup log lacks dave's masked internal and public URL"
 fi
 ok "startup log lists dave with masked internal and public URLs (4 hex chars + …)"
