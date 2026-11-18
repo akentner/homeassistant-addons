@@ -117,15 +117,20 @@ def run_git(
     return GitResult(proc.returncode, proc.stdout, proc.stderr)
 
 
-def default_branch(url: str, env: Mapping[str, str]) -> str | None:
-    """Upstream default branch from `ls-remote --symref`, None when the upstream has none."""
+def ls_remote_head(url: str, env: Mapping[str, str]) -> tuple[GitResult, str | None]:
+    """`ls-remote --symref <url> HEAD` result plus the default branch it names (None when there is none)."""
     result = run_git(["ls-remote", "--symref", url, "HEAD"], env)
     if result.returncode != 0:
-        return None
+        return result, None
     for line in result.stdout.splitlines():
         if line.startswith("ref: refs/heads/") and line.endswith("\tHEAD"):
-            return line[len("ref: refs/heads/") : -len("\tHEAD")] or None
-    return None
+            return result, line[len("ref: refs/heads/") : -len("\tHEAD")] or None
+    return result, None
+
+
+def default_branch(url: str, env: Mapping[str, str]) -> str | None:
+    """Upstream default branch from `ls-remote --symref`, None when the upstream has none."""
+    return ls_remote_head(url, env)[1]
 
 
 def configure_repo(repo_dir: Path, url: str, branch: str) -> None:

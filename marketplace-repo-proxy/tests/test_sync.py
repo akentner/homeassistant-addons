@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import http.server
+import itertools
 import logging
 import threading
 from pathlib import Path
@@ -10,13 +11,20 @@ from pathlib import Path
 import pytest
 from upstream import commit, file_upstream, git, make_upstream
 
-from app import gitops, sync
+from app import gitops, status, sync
 from app.gitops import Upstream
 from app.options import Options, RepoSpec
 from app.paths import Paths
 from app.status import StatusWriter, read_status
 
 GOOD = {"repository.yaml": "name: fixture\n", "demo/config.yaml": "name: demo\n"}
+
+
+@pytest.fixture(autouse=True)
+def _ticking_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Distinct status timestamps, so `last_change` moves are observable within one second."""
+    counter = itertools.count()
+    monkeypatch.setattr(status, "utc_timestamp", lambda ts=None: f"2026-11-18T11:{next(counter) % 60:02d}:00Z")
 
 
 def _token() -> str:
