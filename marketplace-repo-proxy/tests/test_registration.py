@@ -1320,3 +1320,48 @@ def test_carried_leftovers_and_requests_are_type_checked(paths: Paths) -> None:
     assert leftover["store_slug"] == "11223344" and leftover["revoked"] is False
     assert leftover["masked_url"] == "" and secret not in json.dumps(leftover)
     assert len(_requests(paths)) == 20
+
+
+def test_remove_request_with_another_delete_error_fails_and_changes_nothing(paths: Paths) -> None:
+    options = _options(SPEC_A, register_local=False)
+    client = _stub_registered(paths, options)
+    client.remove = CallResult(False, 500, message="boom")
+    before = read_supervisor_state(paths)
+    local = _local(paths, SPEC_A)
+    _request(paths)
+    _registrar(paths, options, client).run_due()
+    assert client.calls == ["GET", f"DELETE {before['repositories'][0]['store_slug']}"]
+    assert _outcome(paths) == ("failed", "remove_failed")
+    doc = _doc(paths, options)
+    assert doc["leftovers"] == [] and doc["repositories"] == before["repositories"]
+    assert _local(paths, SPEC_A) == local
+
+
+def test_remove_request_without_a_recorded_registration_is_not_registered(paths: Paths) -> None:
+    client = StubClient(CallResult(True, 200, []))
+    registrar = _registrar(paths, _options(SPEC_A, register_local=False), client)
+    _request(paths)
+    registrar.run_due()
+    assert client.calls == []
+    assert _outcome(paths) == ("rejected", "not_registered")
+
+
+def test_request_file_that_cannot_be_unlinked_never_runs_or_keeps_the_loop_busy(
+    paths: Paths, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    client = StubClient(CallResult(True, 200, []))
+    registrar = _registrar(paths, _options(SPEC_A, register_local=False), client)
+    id_ = _request(paths)
+    real_unlink = Path.unlink
+
+    def refusing(self: Path, missing_ok: bool = False) -> None:
+        if self.name == f"{id_}.json":
+            raise PermissionError("read-only")
+        real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", refusing)
+    caplog.set_level(logging.INFO)
+    registrar.run_due()
+    assert client.calls == [] and _requests(paths) == []
+    assert INVALID_REQUEST_LINE in _messages(caplog, logging.WARNING)
+    assert registrar.work_due() is False

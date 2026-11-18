@@ -4,24 +4,38 @@ One system user `local` (source `system`) per configured repository. After every
 adds the internal store URL `http://{hostname}:8080/repo/{owner}/{repo}/{hash}` of every repository whose last sync is
 `ok` when `GET /store/repositories` does not list its store slug. The pass reports facts (`in_store`, `error`) to the
 state writer, which derives the registration value and message. A failing Supervisor never ends the pass; the next
-cycle starts again with `GET`. No removal here.
+cycle starts again with `GET`. The pass never removes a store repository (D-27): it only drops leftovers and
+unconfigured repositories whose store slug is no longer listed and revokes their `local` labels.
 
 Store reload (MRP-09, D-08): after the pass, one `POST /store/reload` when the served head of a repository whose
 `local` URL was in the store before the pass changed (D-28: `in_store`, whatever the registration value). At most one
 reload per sync interval: a change inside a closed window sets `pending`, which `run_due` sends from the sync wait loop
 once the window opens. `pending` is persisted in /data/supervisor.json; the window clock is in memory, so the first
 window after a restart is open.
+
+Operator requests (MRP-10, D-02, D-03): `mrp` never calls the Supervisor. It writes
+`{supervisor_requests_dir}/{16 hex}.json` with exactly `id`, `action`, `repository`, `created`; `run_due` unlinks each
+file, validates it as untrusted input and executes it once, recording the result in supervisor.json `requests`.
+`remove` sends `DELETE` only for store slugs recorded in supervisor.json from the proxy's own `local` URLs (the current
+registration or a leftover), never for a slug taken from the store list. A refusal (`used by installed apps`) becomes
+a leftover that is never forced and never retried by the loop (D-09, D-10); only a new request tries again.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import os
+import re
+import stat
 import time
+from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from app.access import HASH_RE, AccessError, AccessStore
+from app.access import HASH_RE, AccessError, AccessStore, is_reserved
+from app.gitops import sanitize
 from app.jsonio import utc_timestamp
-from app.options import Options, RepoSpec
+from app.options import Options, RepoSpec, parse_repository
 from app.paths import Paths
 from app.supervisor import CallResult, SupervisorClient, SupervisorRefused, mask_text, store_slug
 from app.supervisor_state import SupervisorStateWriter
@@ -29,6 +43,14 @@ from app.urls import internal_base, masked_store_url, store_url
 
 LOCAL_USER = "local"
 LOG = logging.getLogger("mrp.store")
+REQUEST_ACTIONS = ("remove",)
+REQUEST_NAME_RE = re.compile(r"[0-9a-f]{16}\.json")
+REQUEST_KEYS = frozenset({"id", "action", "repository", "created"})
+REQUEST_MAX_BYTES = 4096
+_ID_RE = re.compile(r"[0-9a-f]{16}")
+_ACTION_RE = re.compile(r"[a-z][a-z_]{0,31}")
+_SLUG_RE = re.compile(r"[0-9a-f]{8}")
+INVALID_REQUEST = "ignored an invalid supervisor request file"
 
 
 def _failure(result: CallResult, http_code: str) -> tuple[str, int | None]:
@@ -73,6 +95,7 @@ class Registrar:
         self.interval_seconds = options.sync_interval * 60
         self.last_reload_at: float | None = None
         self.reload_pending = self.state.reload_state()["pending"] is True
+        self._stuck: set[str] = set()  # request entries that could not be unlinked: never wake the loop for them
 
     def local_entry(self, spec: RepoSpec) -> dict | None:
         """The repository's `local` access entry, only when its hash is valid."""
@@ -139,8 +162,9 @@ class Registrar:
         specs = self.options.repositories
         entries = {spec.key: self.local_entry(spec) for spec in specs}
         wants = {spec.key: self.options.register_local and statuses.get(spec.key) == "ok" for spec in specs}
+        recorded = bool(self.state.leftovers() or self.state.unconfigured_repositories())
 
-        if not any(entries.values()) and not any(wants.values()):
+        if not any(entries.values()) and not any(wants.values()) and not recorded:
             for spec in specs:
                 self.state.set_repository(spec.slug, in_store=False, error=None)
             return
@@ -165,6 +189,9 @@ class Registrar:
         present = {
             item["slug"] for item in result.data if isinstance(item, dict) and isinstance(item.get("slug"), str)
         }
+        if recorded:
+            self._resolve_gone(present)
+            entries = {spec.key: self.local_entry(spec) for spec in specs}
 
         for spec in specs:
             try:
@@ -220,6 +247,218 @@ class Registrar:
                 "store: registration of %s failed: %s", spec.slug, mask_text(result.message) or f"http {result.status}"
             )
 
+    def _to_register(self, repository: str) -> bool:
+        return self.options.register_local and self.options.find(repository) is not None
+
+    def _revoke_label(self, repository: str, user: Any) -> bool:
+        """Revoke a reserved label the proxy owns; anything else (a hand-edited user, None) is left alone."""
+        if not isinstance(user, str) or not is_reserved(user):
+            return False
+        return self.access.revoke(repository, user, specs=self.options.repositories, system=True)
+
+    def _resolve_gone(self, present: set[str]) -> None:
+        """Drop leftovers and unconfigured entries whose store slug is no longer listed; never sends DELETE."""
+        for item in self.state.leftovers():
+            slug, repository, user = item["store_slug"], item["repository"], item.get("user")
+            if slug in present:
+                continue
+            if user != LOCAL_USER or not self._to_register(repository):
+                self._revoke_label(repository, user)
+            self.state.drop_leftover(slug)
+            self.log.info("store: leftover %s of %s is gone; dropped", slug, repository)
+        for repository in self.state.unconfigured_repositories():
+            current = self.state.repository(repository) or {}
+            if current.get("store_slug") in present or self.state.leftovers(repository):
+                continue
+            self._revoke_label(repository, LOCAL_USER)
+            self.state.drop_repository(repository)
+            self.log.info(
+                "store: %s is no longer configured and its store repository is gone; local entry revoked", repository
+            )
+
+    # --- operator requests (MRP-10) ---------------------------------------------------------------------------------
+
+    def _request_files(self) -> tuple[list[Path], list[Path]]:
+        """(valid-named request files, other entries to delete); temporary files of a writer and directories are
+        skipped, so neither keeps the wait loop busy."""
+        directory = self.paths.supervisor_requests_dir
+        try:
+            names = os.listdir(directory)
+        except OSError:
+            return [], []
+        valid: list[tuple[int, str, Path]] = []
+        invalid: list[Path] = []
+        for name in names:
+            if name.startswith(".") or name in self._stuck:
+                continue
+            path = directory / name
+            try:
+                info = path.lstat()
+            except OSError:
+                continue
+            if stat.S_ISDIR(info.st_mode):
+                continue
+            if REQUEST_NAME_RE.fullmatch(name) and stat.S_ISREG(info.st_mode):
+                valid.append((info.st_mtime_ns, name, path))
+            else:
+                invalid.append(path)
+        return [path for _, _, path in sorted(valid)], invalid
+
+    def pending_requests(self) -> list[Path]:
+        """Request files with a valid name, oldest first (mtime, then name)."""
+        return self._request_files()[0]
+
+    def _unlink(self, path: Path) -> None:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            self._stuck.add(path.name)
+
+    def _drop_invalid(self, path: Path) -> None:
+        self._unlink(path)
+        self.log.warning(INVALID_REQUEST)
+
+    def _read_request(self, path: Path) -> dict | None:
+        """Read and unlink one request file; the parsed document when it is valid, else None (file already gone)."""
+        try:
+            fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            with os.fdopen(fd, "rb") as handle:
+                raw = handle.read(REQUEST_MAX_BYTES + 1)
+        except OSError:
+            raw = None
+        self._unlink(path)
+        if path.name in self._stuck:
+            return None  # never execute a request whose file stays: it would run again on the next call
+        if raw is None or len(raw) > REQUEST_MAX_BYTES:
+            return None
+        try:
+            doc = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            return None
+        if not isinstance(doc, dict) or set(doc) != REQUEST_KEYS:
+            return None
+        if not all(isinstance(doc[key], str) for key in REQUEST_KEYS):
+            return None
+        if not _ID_RE.fullmatch(doc["id"]) or path.name != f"{doc['id']}.json" or len(doc["repository"]) > 200:
+            return None
+        return doc
+
+    def _run_request(self, path: Path) -> None:
+        doc = self._read_request(path)
+        if doc is None:
+            self.log.warning(INVALID_REQUEST)
+            return
+        action = doc["action"] if _ACTION_RE.fullmatch(doc["action"]) else "invalid"
+        repository = sanitize(doc["repository"], 200) or "-"
+        try:
+            result, code = self.handle_request(doc)
+        except Exception as exc:  # the request is answered either way; the CLI must not wait in vain
+            self.log.warning("store: request %s %s failed: internal error (%s)", action, repository,
+                             type(exc).__name__)
+            result, code = "failed", "internal_error"
+        self.state.record_request(id=doc["id"], action=action, repository=repository, result=result, code=code)
+        self.log.info("store: request %s %s: %s", action, repository, result)
+
+    def handle_request(self, doc: dict) -> tuple[str, str]:
+        """Execute one validated request; returns (result, code) with result in REQUEST_RESULTS."""
+        if doc.get("action") not in REQUEST_ACTIONS:
+            return "rejected", "invalid_request"
+        return self._remove(doc["repository"])
+
+    def _remove(self, argument: str) -> tuple[str, str]:
+        try:
+            owner, name = parse_repository(argument)
+        except (TypeError, ValueError):
+            return "rejected", "repository_unknown"
+        spec = self.options.find(f"{owner}/{name}")
+        current = self.state.repository(f"{owner}/{name}")
+        leftovers = self.state.leftovers(f"{owner}/{name}")
+        if spec is None and current is None and not leftovers:
+            return "rejected", "repository_unknown"
+        repository = spec.slug if spec is not None else (current or leftovers[0])["repository"]
+
+        # Targets: slugs recorded from the proxy's own URLs only (never a slug from the store list)
+        targets: dict[str, dict[str, Any]] = {}
+        for item in leftovers:
+            targets[item["store_slug"]] = {
+                "user": item.get("user"), "masked_url": item.get("masked_url") or "",
+                "revoked": item.get("revoked") is True, "current": False,
+            }
+        removes_current = spec is None or not self.options.register_local
+        slug = current.get("store_slug") if current else None
+        if removes_current and isinstance(slug, str) and _SLUG_RE.fullmatch(slug):
+            target = targets.setdefault(
+                slug, {"user": LOCAL_USER, "masked_url": current.get("masked_url") or "", "revoked": False}
+            )
+            target["current"] = True
+        if not targets:
+            if spec is not None and self.options.register_local:
+                return "rejected", "register_local_enabled"
+            return "rejected", "not_registered"
+
+        try:
+            listing = self.client.list_repositories()
+        except SupervisorRefused:
+            return "failed", "store_list_unavailable"
+        if not listing.ok or not isinstance(listing.data, list):
+            return "failed", "store_list_unavailable"
+        present = {
+            item["slug"] for item in listing.data if isinstance(item, dict) and isinstance(item.get("slug"), str)
+        }
+
+        refused = failed = False
+        for slug, target in targets.items():
+            outcome = self._remove_one(repository, spec, slug, target, present)
+            refused = refused or outcome == "refused"
+            failed = failed or outcome == "failed"
+        if failed:
+            return "failed", "remove_failed"
+        if refused:
+            return "refused", "in_use"
+        return "done", ""
+
+    def _remove_one(
+        self, repository: str, spec: RepoSpec | None, slug: str, target: dict[str, Any], present: set[str]
+    ) -> str:
+        """DELETE one recorded slug; returns `removed`, `refused` or `failed`."""
+        if slug in present:
+            try:
+                result = self.client.remove_repository(slug)
+            except SupervisorRefused:
+                return "failed"
+            if result.in_use:
+                self.state.add_leftover(
+                    repository=repository,
+                    store_slug=slug,
+                    user=target["user"],
+                    masked_url=target["masked_url"],
+                    reason="in_use",
+                    message=mask_text(result.message),
+                    revoked=target["revoked"],
+                )
+                self.log.warning("store: %s leftover %s (%s)", repository, slug, "in_use")
+                return "refused"
+            if not (result.ok or result.not_found):
+                return "failed"
+        self._revoke_label(repository, target["user"])
+        self.state.drop_leftover(slug)
+        if target["current"]:
+            if spec is not None:
+                self.state.set_repository(
+                    spec.slug, in_store=False, error=None, store_slug=slug, masked_url=target["masked_url"]
+                )
+            elif self.state.leftovers(repository):
+                self.state.set_repository(
+                    repository, in_store=False, error=None, store_slug=slug, masked_url=target["masked_url"],
+                    configured=False,
+                )
+            else:
+                self.state.drop_repository(repository)
+        self.log.info("store: %s removed %s", repository, slug)
+        return "removed"
+
     def after_cycle(self, status_doc: dict, head_changes: Iterable[str] = frozenset()) -> None:
         """Hook of the sync loop after every cycle: the registration pass, then at most one store reload.
 
@@ -237,12 +476,20 @@ class Registrar:
             self.request_reload()
 
     def work_due(self) -> bool:
-        """True when the sync wait loop should wake for Supervisor work: a pending reload whose window is open."""
-        return self.reload_pending and self.window_open()
+        """True when the sync wait loop should wake for Supervisor work: a request file, or a pending reload whose
+        window is open."""
+        valid, invalid = self._request_files()
+        return bool(valid or invalid) or (self.reload_pending and self.window_open())
 
     def run_due(self) -> None:
-        """Supervisor work of the wait loop; never fetches. Sends the pending reload when it is due."""
-        if self.work_due():
+        """Supervisor work of the wait loop; never fetches. Operator requests first (each file once; a file created
+        meanwhile waits for the next call), then the pending reload when it is due."""
+        valid, invalid = self._request_files()
+        for path in invalid:
+            self._drop_invalid(path)
+        for path in valid:
+            self._run_request(path)
+        if self.reload_pending and self.window_open():
             self._send_reload()
 
     def window_open(self) -> bool:

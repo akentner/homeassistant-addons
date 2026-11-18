@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import argparse
 import re
+import secrets
 import socket
 import sys
+import time
 from typing import Any
 
 from app.access import HASH_RE, AccessError, AccessStore
-from app.jsonio import atomic_write_json
+from app.jsonio import atomic_write_json, utc_timestamp
 from app.options import Options, OptionsError, load_options, parse_repository
 from app.paths import Paths
 from app.supervisor_state import read_supervisor_state
@@ -26,6 +28,8 @@ from app.urls import mask_hash, store_urls
 
 USER_COMMANDS = ("add", "url", "revoke")  # take <owner/repo> <user>
 _HEX32_RE = re.compile(r"[0-9a-fA-F]{32}")
+LOCAL_WAIT_SECONDS = 30  # how long `mrp local remove` waits for the sync process before it prints `queued`
+LOCAL_POLL_SECONDS = 0.5
 
 EPILOG = """A store URL contains the user's access hash: treat the full URL as a secret. Only `users add` and
 `users url` print it, to this terminal; `users list` shows masked hashes.
@@ -45,6 +49,12 @@ examples:
   mrp sync
   mrp reconcile
   mrp local status [example-org/private-addons]
+  mrp local remove example-org/private-addons
+
+`mrp local remove` asks the sync process to remove the repository's `local` store repository; it waits up to 30
+seconds for the result. The current registration is removed only with `register_local: false` or when the repository
+is no longer configured; otherwise only old leftovers are retried. A store repository that installed add-ons still use
+is never removed: uninstall them first, then run the command again.
 """
 
 
@@ -79,6 +89,8 @@ def _parser() -> argparse.ArgumentParser:
     local_commands = local.add_subparsers(dest="local_command", required=True)
     status = local_commands.add_parser("status", help="show the store registration from /data/supervisor.json")
     status.add_argument("repository", nargs="?", default=None, help="only this repository (owner/repo)")
+    remove = local_commands.add_parser("remove", help="remove the local store repository (through the sync process)")
+    remove.add_argument("repository", help="repository as owner/repo")
 
     commands.add_parser("sync", help="request a sync of all repositories now")
     commands.add_parser("reconcile", help="rebuild the access symlink tree from access.json")
@@ -197,6 +209,58 @@ def _local_status(args: argparse.Namespace, paths: Paths) -> int:
     return 0
 
 
+def _request_id() -> str:
+    return secrets.token_hex(8)
+
+
+def _request_result(paths: Paths, request_id: str) -> dict | None:
+    doc = read_supervisor_state(paths)
+    items = doc.get("requests") if doc is not None else None
+    for item in reversed(items) if isinstance(items, list) else []:
+        if isinstance(item, dict) and item.get("id") == request_id:
+            return item
+    return None
+
+
+def _local_remove(args: argparse.Namespace, paths: Paths) -> int:
+    """Queue a remove request for the sync process and print its result; never calls the Supervisor (D-02, D-03)."""
+    try:
+        owner, name = parse_repository(args.repository)
+    except (TypeError, ValueError):
+        return _error("repository_unknown")
+    repository = f"{owner}/{name}"
+    if not paths.run_dir.is_dir():
+        paths.run_dir.mkdir(parents=True, exist_ok=True)
+        paths.run_dir.chmod(0o700)
+    directory = paths.supervisor_requests_dir
+    directory.mkdir(mode=0o700, exist_ok=True)
+    directory.chmod(0o700)  # explicit: mkdir modes are umask-bound
+    request_id = _request_id()
+    doc = {"id": request_id, "action": "remove", "repository": repository, "created": utc_timestamp()}
+    atomic_write_json(directory / f"{request_id}.json", doc)
+    deadline = time.monotonic() + LOCAL_WAIT_SECONDS
+    while True:
+        item = _request_result(paths, request_id)
+        if item is not None:
+            break
+        if time.monotonic() >= deadline:
+            print(f"queued: {request_id} (the sync process is busy; see mrp local status later)", flush=True)
+            return 0
+        time.sleep(LOCAL_POLL_SECONDS)
+    result, code = item.get("result"), item.get("code")
+    if result == "done":
+        print(f"removed: {repository}: store repository removed (see mrp local status)", flush=True)
+        return 0
+    if result == "refused":
+        print(
+            f"refused: in_use {repository}: the store repository is still used by installed add-ons; uninstall them, "
+            f"then run mrp local remove {repository} again",
+            flush=True,
+        )
+        return 1
+    return _error(code if isinstance(code, str) and re.fullmatch(r"[a-z_]{1,40}", code) else "remove_failed")
+
+
 def _sync(paths: Paths) -> int:
     """Create the D-12 trigger file; the sync service starts a full cycle within about a second."""
     if not paths.run_dir.is_dir():
@@ -220,6 +284,8 @@ def _dispatch(args: argparse.Namespace, paths: Paths, hostname: str) -> int:
     if args.command == "reconcile":
         return _reconcile(paths)
     if args.command == "local":
+        if args.local_command == "remove":
+            return _local_remove(args, paths)
         return _local_status(args, paths)
     if args.users_command == "list":
         return _users_list(args, paths)

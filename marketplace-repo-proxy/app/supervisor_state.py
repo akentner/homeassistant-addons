@@ -13,6 +13,12 @@ code path can store another value or free text.
 None), `pending` (a reload is still owed; survives a restart) and a masked `message`. The caller masks Supervisor text
 with `app.supervisor.mask_text`; this module masks every 32-hex run again with `app.gitops.sanitize` (the masker
 `mask_text` builds on) and never imports the client module (only registration and sync may, see test_supervisor).
+
+`leftovers` lists store repositories the proxy registered and could not remove (MRP-10, D-09, D-10): `repository`,
+`store_slug`, `user` (the access label that serves it, or None), `masked_url`, `since`, `reason` (one of
+LEFTOVER_REASONS), a masked `message` and `revoked`. A repository with a leftover has the registration `leftover` (D-28).
+`requests` keeps the results of the last MAX_REQUESTS operator requests (`id`, `action`, `repository`, `result`,
+`code`, `finished`); `mrp local` waits for its id there.
 """
 
 from __future__ import annotations
@@ -34,6 +40,10 @@ MESSAGE_FALLBACK = "Details are in the add-on log"
 MESSAGE_LIMIT = 200
 _HEX32_RE = re.compile(r"[0-9a-fA-F]{32}")
 RELOAD_RESULTS = (None, "ok", "failed")
+LEFTOVER_REASONS = ("in_use", "error", "interrupted", "orphaned")
+REQUEST_RESULTS = ("done", "refused", "failed", "rejected")
+MAX_REQUESTS = 20
+_SLUG_RE = re.compile(r"[0-9a-f]{8}")
 _UNSET: Any = object()
 
 _ERROR_MESSAGES = {
@@ -166,6 +176,30 @@ def _dict_list(value: Any) -> list[dict] | None:
     return None
 
 
+def _masked_url(value: Any) -> str:
+    return value if isinstance(value, str) and not _HEX32_RE.search(value) else ""
+
+
+def _leftover(old: Any) -> dict[str, Any] | None:
+    """A carried leftover with typed fields only, or None when it names no repository or no valid store slug."""
+    if not isinstance(old, dict) or not isinstance(old.get("repository"), str):
+        return None
+    slug = old.get("store_slug")
+    if not isinstance(slug, str) or not _SLUG_RE.fullmatch(slug):
+        return None
+    user = old.get("user")
+    return {
+        "repository": old["repository"],
+        "store_slug": slug,
+        "user": user if isinstance(user, str) and not _HEX32_RE.search(user) else None,
+        "masked_url": _masked_url(old.get("masked_url")),
+        "since": old["since"] if isinstance(old.get("since"), str) else None,
+        "reason": old["reason"] if old.get("reason") in LEFTOVER_REASONS else "error",
+        "message": sanitize(old["message"]) if isinstance(old.get("message"), str) else "",
+        "revoked": old.get("revoked") is True,
+    }
+
+
 class SupervisorStateWriter:
     """Owns supervisor.json for one sync process; seeded from the previous file and written once at construction."""
 
@@ -202,9 +236,14 @@ class SupervisorStateWriter:
             "supervisor": {"last_contact": None, "last_status": None, "last_error": None},
             "reload": _reload_section(previous.get("reload")),
             "repositories": [],
-            "leftovers": _dict_list(previous.get("leftovers")) or [],
-            "requests": _dict_list(previous.get("requests")) or [],
+            "leftovers": [],
+            "requests": (_dict_list(previous.get("requests")) or [])[-MAX_REQUESTS:],
         }
+        carried = previous.get("leftovers")
+        for old in carried if isinstance(carried, list) else []:
+            item = _leftover(old)
+            if item is not None and all(o["store_slug"] != item["store_slug"] for o in self._doc["leftovers"]):
+                self._doc["leftovers"].append(item)
         self._write()
 
     def _leftovers_of(self, key: str) -> list[dict]:
@@ -320,4 +359,81 @@ class SupervisorStateWriter:
             section["pending"] = bool(pending)
         if message is not _UNSET:
             section["message"] = sanitize(message) if isinstance(message, str) else ""
+        self._write()
+
+    # --- leftovers and operator requests (MRP-10) -------------------------------------------------------------------
+
+    def leftovers(self, repository: str | None = None) -> list[dict]:
+        """Copies of all leftovers, or of one repository's (case-insensitive)."""
+        items = self._doc["leftovers"] if repository is None else self._leftovers_of(repository.lower())
+        return copy.deepcopy(items)
+
+    def add_leftover(
+        self,
+        *,
+        repository: str,
+        store_slug: str,
+        user: str | None,
+        masked_url: str,
+        reason: str,
+        message: str = "",
+        revoked: bool = False,
+    ) -> None:
+        """Record (or replace, keeping `since`) the leftover of one store slug; `message` is masked Supervisor text."""
+        if reason not in LEFTOVER_REASONS:
+            raise ValueError(f"unknown leftover reason: {reason}")
+        if not isinstance(store_slug, str) or not _SLUG_RE.fullmatch(store_slug):
+            raise ValueError("invalid store slug")
+        items = self._doc["leftovers"]
+        since = next((o.get("since") for o in items if o.get("store_slug") == store_slug), None)
+        item = {
+            "repository": repository,
+            "store_slug": store_slug,
+            "user": user if isinstance(user, str) else None,
+            "masked_url": _masked_url(masked_url),
+            "since": since if isinstance(since, str) else utc_timestamp(),
+            "reason": reason,
+            "message": sanitize(message) if isinstance(message, str) else "",
+            "revoked": bool(revoked),
+        }
+        self._doc["leftovers"] = [o for o in items if o.get("store_slug") != store_slug] + [item]
+        self._write()
+
+    def drop_leftover(self, store_slug: str) -> bool:
+        """Remove the leftover of one store slug; False (no write) when there is none."""
+        items = self._doc["leftovers"]
+        kept = [o for o in items if o.get("store_slug") != store_slug]
+        if len(kept) == len(items):
+            return False
+        self._doc["leftovers"] = kept
+        self._write()
+        return True
+
+    def unconfigured_repositories(self) -> list[str]:
+        """Repository names of the recorded entries that are no longer configured."""
+        return [entry["repository"] for entry in self._entries.values() if not entry["configured"]]
+
+    def drop_repository(self, repository: str) -> bool:
+        """Remove an unconfigured entry from the document; a configured repository is never dropped."""
+        key = repository.lower()
+        entry = self._entries.get(key)
+        if entry is None or entry["configured"]:
+            return False
+        del self._entries[key]
+        self._write()
+        return True
+
+    def record_request(self, *, id: str, action: str, repository: str, result: str, code: str = "") -> None:
+        """Append the result of one operator request; keeps the last MAX_REQUESTS."""
+        if result not in REQUEST_RESULTS:
+            raise ValueError(f"unknown request result: {result}")
+        item = {
+            "id": id,
+            "action": action,
+            "repository": repository,
+            "result": result,
+            "code": code if isinstance(code, str) else "",
+            "finished": utc_timestamp(),
+        }
+        self._doc["requests"] = (self._doc["requests"] + [item])[-MAX_REQUESTS:]
         self._write()
