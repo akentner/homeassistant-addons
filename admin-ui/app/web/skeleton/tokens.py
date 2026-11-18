@@ -3,8 +3,16 @@ values are never logged, printed or put into messages."""
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import hmac
+import os
+import re
+import secrets
+import stat
+import tempfile
+import threading
+from pathlib import Path
 from typing import Protocol
 
 # Floor for operator-chosen option tokens, decided by the user (D-11); also binding for ntfy Phase 25
@@ -44,3 +52,100 @@ class OptionToken:
 
     def __repr__(self) -> str:
         return "OptionToken(<redacted>)"
+
+
+# The only accepted hash file content: one line, algorithm prefix plus 64 lowercase hex digits
+_HASH_LINE = re.compile(r"sha256 ([0-9a-f]{64})\n?")
+
+
+def _new_token() -> str:
+    """256 random bits as 43 URL-safe characters."""
+    return secrets.token_urlsafe(32)
+
+
+def _write_hash(path: Path, digest: bytes) -> None:
+    """Atomically replace `path` with the single line 'sha256 <hex>'; mode 0600, the plaintext is never written."""
+    # The temporary file is created with mode 0600 in the target directory, so os.replace stays on one file system
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="ascii", newline="\n") as handle:
+            handle.write(f"sha256 {digest.hex()}\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp)
+        raise
+    dir_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
+class GeneratedToken:
+    """Generated API token (D-06): 256 random bits, only its SHA-256 is stored, in a 0600 file.
+
+    The first start (file absent) creates a token; its plaintext is available exactly once through take_plaintext() and
+    is lost on restart by design. rotate() replaces the token at runtime and returns the new plaintext once; a failed
+    write keeps the old token valid. An unreadable or malformed file raises ValueError and is left untouched: a token is
+    never replaced on its own. Nothing here prints or logs."""
+
+    def __init__(self, path: Path, digest: bytes, plaintext: str | None) -> None:
+        # Internal: instances come from load_or_create
+        self._path = path
+        self._digest = digest
+        self._pending = plaintext
+        self._lock = threading.Lock()
+
+    @classmethod
+    def load_or_create(cls, path: str | os.PathLike[str]) -> GeneratedToken:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            plaintext = _new_token()
+            digest = hashlib.sha256(plaintext.encode("ascii")).digest()
+            _write_hash(path, digest)
+            return cls(path, digest, plaintext)
+        if stat.S_IMODE(path.stat().st_mode) & 0o077:
+            os.chmod(path, 0o600)
+        try:
+            match = _HASH_LINE.fullmatch(path.read_bytes().decode("ascii"))
+        except UnicodeDecodeError:
+            match = None
+        if match is None:
+            # The message names no file content; recovery is deleting the file (A6)
+            raise ValueError("API token file is malformed: delete it and restart to create a new token")
+        return cls(path, bytes.fromhex(match.group(1)), None)
+
+    @property
+    def path(self) -> Path:
+        return self._path
+
+    def take_plaintext(self) -> str | None:
+        """The plaintext of a freshly created token, once; afterwards None."""
+        with self._lock:
+            plaintext, self._pending = self._pending, None
+            return plaintext
+
+    def rotate(self) -> str:
+        """Replace the token; returns the new plaintext (the one time it is available) and clears a pending one."""
+        with self._lock:
+            plaintext = _new_token()
+            digest = hashlib.sha256(plaintext.encode("ascii")).digest()
+            _write_hash(self._path, digest)  # raises before the swap: the old token stays valid
+            self._digest = digest
+            self._pending = None
+            return plaintext
+
+    def verify(self, presented: str) -> bool:
+        digest = self._digest  # one read: a concurrent rotate swaps the reference, never a half-written value
+        try:
+            candidate = hashlib.sha256(presented.encode("ascii")).digest()
+        except (UnicodeEncodeError, AttributeError):
+            return False
+        return hmac.compare_digest(candidate, digest)
+
+    def __repr__(self) -> str:
+        return f"GeneratedToken(path={str(self._path)!r})"
