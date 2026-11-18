@@ -403,8 +403,8 @@ The prefix is `ctrl+b`.
 ### Copying text in the browser
 
 Select text inside a herdr pane **without Shift**. The browser receives herdr's selected pane text and tries to copy it
-automatically, without sidebar or pane borders. If the browser blocks clipboard access, click **Copy selection** in the
-top bar. If copying is still unavailable, a text dialog lets you copy manually with Ctrl+C or Cmd+C.
+automatically, without sidebar or pane borders. If the browser blocks clipboard writes inside ingress, nothing is
+copied; use herdr's copy mode below.
 
 If the program inside the pane handles the mouse itself, use **Ctrl+B, then [** for herdr's copy mode: start a selection
 with **v** or Space and copy with **y** or Enter. Custom herdr key bindings and `copy_on_select` settings still apply.
@@ -416,14 +416,19 @@ reloads. No extra backend endpoint or herdr configuration is required.
 ### Browser shell and shared Admin UI
 
 The outer browser shell uses this repository's shared Admin UI library: a Home Assistant-style topbar with compact
-navigation, German/English language switching and optional HA theme/layout synchronization. The header follows HA's
-header height (56 CSS px fallback, including its border); safe-area padding stays outside that height.
+navigation (with icons), a link to the add-on info page and optional HA theme/layout synchronization. The header follows
+HA's header height (56 CSS px fallback, including its border); safe-area padding stays outside that height.
 
-Terminal and Services remain separate embedded applications. Switching views or languages does not recreate their
-iframes or restart sessions. Services loads only on its first visit. The terminal keeps the font and theme from the
-add-on options; changing the outer HA theme does not change the terminal palette. OpenCode opens separately on
-port 4096. The Info view shows versions, services, documentation and terminal shortcuts; `info.html` still opens that
-view.
+Terminal and Services remain separate embedded applications. Switching views does not recreate their iframes or restart
+sessions. Services loads only on its first visit. The terminal keeps the font and theme from the add-on options;
+changing the outer HA theme does not change the terminal palette. OpenCode opens separately on port 4096. The Info view
+shows versions, services, documentation and terminal shortcuts; `info.html` still opens that view.
+
+**Old UI still visible after an update:** the HA ingress frame can hold a cached copy of the previous page (releases
+before 1.3.2-1 sent no cache headers). A hard reload of the HA tab does not always reach the frame. Open the add-on URL
+directly (`<HA URL>/api/hassio_ingress/<token>/`, copy it from the frame's context menu "Open frame in new tab"), hard
+reload there (Ctrl+Shift+R), or clear the site data of the HA origin once in the browser. Later updates revalidate
+automatically.
 
 Developer notes: `make sync-admin-ui ADDON=coding-assistants` creates the library and skeleton copies. Never edit
 `app/web/static/vendor/admin-ui/` or `app/web/admin_ui/` manually. The browser library runs with the existing nginx/ttyd

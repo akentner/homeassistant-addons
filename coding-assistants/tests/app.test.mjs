@@ -12,9 +12,8 @@ window.removeEventListener = (type, fn) => listeners.get(type)?.delete(fn);
 globalThis.location = { href: "https://ha.example/api/hassio_ingress/test/", hash: "" };
 const STATIC = new URL("../app/web/static/", import.meta.url);
 const { html, render } = await import(new URL("vendor/admin-ui/ui.mjs", STATIC));
-const { setLang, t } = await import(new URL("vendor/admin-ui/i18n.mjs", STATIC));
-const { installTerminalClipboard } = await import(new URL("terminal-clipboard.mjs", STATIC));
-const { App, openCodeUrl } = await import(new URL("app.mjs", STATIC));
+const { setLang } = await import(new URL("vendor/admin-ui/i18n.mjs", STATIC));
+const { App, infoPath } = await import(new URL("app.mjs", STATIC));
 const byId = (root, id) => findAll(root, n => prop(n, "id") === id)[0];
 const versions = { addon: "1.3.1-0", claude: "2.0.0", herdr: "0.9.3", opencode: "2.2.6", codex: "0.167.0" };
 
@@ -71,8 +70,7 @@ test("navigation lazy-loads Services and preserves both iframe instances across 
     await navigate("info");
     setLang("de");
     await settle();
-    assert.ok(state.root.textContent.includes("Auswahl kopieren"));
-    assert.ok(state.root.textContent.includes("Versionen"));
+        assert.ok(state.root.textContent.includes("Versionen"));
     await navigate("terminal");
     assert.equal(byId(state.root, "frameTerminal"), terminal);
     assert.equal(byId(state.root, "frameServices"), services);
@@ -95,39 +93,6 @@ test("the legacy Info entry shows version rows; untrusted version values remain 
   } finally { await state.close(); }
 });
 
-test("a real clipboard selection stays usable and its status translates after a shell rerender", async () => {
-  const originalClipboard = navigator.clipboard;
-  const writes = [];
-  navigator.clipboard = { writeText: async text => { writes.push(text); } };
-  let receive;
-  const state = await mount({ terminalSetup: () => {
-    const frame = doc.getElementById("frameTerminal");
-    frame.contentDocument = { readyState: "complete" };
-    frame.classList = { contains: name => (frame.className || "").split(" ").includes(name) };
-    frame.contentWindow = { term: { parser: { registerOscHandler(code, handler) {
-      assert.equal(code, 52);
-      receive = handler;
-      return { dispose() {} };
-    } } } };
-    return installTerminalClipboard(t);
-  } });
-  try {
-    receive(`c;${Buffer.from("pane text").toString("base64")}`);
-    await settle();
-    assert.deepEqual(writes, ["pane text"]);
-    assert.equal(byId(state.root, "clipboardStatus").textContent, "Copied");
-    assert.equal(byId(state.root, "copySelection").disabled, false);
-    setLang("de");
-    await settle();
-    assert.equal(byId(state.root, "clipboardStatus").textContent, "Kopiert");
-    assert.equal(byId(state.root, "copySelection").disabled, false);
-  } finally {
-    await state.close();
-    if (originalClipboard === undefined) delete navigator.clipboard;
-    else navigator.clipboard = originalClipboard;
-  }
-});
-
 test("versions use the relative shared API client and failure leaves the terminal mounted", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
@@ -143,7 +108,22 @@ test("versions use the relative shared API client and failure leaves the termina
   } finally { await state.close(); globalThis.fetch = originalFetch; }
 });
 
-test("OpenCode link preserves the host and clears ingress path, query and hash", () => {
-  assert.equal(openCodeUrl("https://ha.example:8123/api/hassio_ingress/secret/?x=1#/info"), "https://ha.example:4096/");
-  assert.equal(openCodeUrl("http://[::1]:8123/addon/"), "http://[::1]:4096/");
+test("the topbar has icons, no language switch, no terminal sub-bar and links the HA info page", async () => {
+  const state = await mount({ fetchVersions: async () => ({ ...versions, slug: "abc12345_coding_assistants" }) });
+  try {
+    assert.equal(findAll(state.root, n => n.localName === "select").length, 0);
+    assert.equal(byId(state.root, "copySelection"), undefined);
+    assert.equal(byId(state.root, "clipboardDialog"), undefined);
+    assert.ok(!state.root.textContent.includes("OpenCode ↗"));
+    assert.equal(findAll(state.root, n => n.localName === "svg" && prop(n, "class") === "nav-icon").length >= 3, true);
+    const info = findAll(state.root, n => n.localName === "a" && prop(n, "href") === "/config/app/abc12345_coding_assistants/info");
+    assert.equal(info.length > 0, true);
+  } finally { await state.close(); }
+});
+
+test("without a usable slug there is no info link", () => {
+  assert.equal(infoPath({ slug: "a/b" }), null);
+  assert.equal(infoPath({}), null);
+  assert.equal(infoPath(null), null);
+  assert.equal(infoPath({ slug: "x_coding_assistants" }), "/config/app/x_coding_assistants/info");
 });

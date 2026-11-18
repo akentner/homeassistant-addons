@@ -7,11 +7,25 @@ This add-on has no upstream — every entry below is hand-written by the maintai
 
 ## [Unreleased]
 
-## [1.3.2-1] - 2026-11-18
+## [1.3.2-2] - 2026-11-18
 
 ### Changed
 
 - Use admin-ui lib 0.10.0; no visible change
+
+## [1.3.2-1] - 2026-11-17
+
+### Changed
+
+- Top bar: navigation icons, a link to the add-on info page in HA, and no language switch (the language follows the
+  browser). The terminal sub-bar with the **Copy selection** button and the OpenCode link is gone; herdr selections
+  still reach the browser clipboard automatically through OSC 52.
+
+### Fixed
+
+- The web UI is served with `Cache-Control: no-cache`, so browsers revalidate it after an update. Before, a browser
+  could keep showing the previous UI inside the HA ingress frame. A browser that already holds the old page needs a
+  one-time cleanup, see DOCS.md.
 
 ## [1.3.2-0] - 2026-11-17
 
