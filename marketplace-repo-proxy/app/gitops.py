@@ -8,13 +8,15 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Mapping, Sequence
 from urllib.parse import urlsplit
 
+from app.logsetup import mask_hashes
 from app.options import RepoSpec
 from app.paths import Paths
 
@@ -168,19 +170,57 @@ def fetch(repo_dir: Path, env: Mapping[str, str]) -> GitResult:
     )
 
 
-def classify(result: GitResult) -> tuple[str, str]:
-    """RED stub."""
-    return "fetch_failed", ""
+AUTH_FAILED_MESSAGE = "upstream rejected the credentials (expired, revoked or missing access)"
+NOT_FOUND_MESSAGE = "repository or branch not found upstream"
+REPOSITORY_FILES = ("repository.yaml", "repository.yml", "repository.json")
+CONFIG_SUFFIXES = (".yaml", ".yml", ".json")
+
+# stderr is produced under LC_ALL=C; git never prints "401" for a prompt-less 401, it asks for a username instead
+_AUTH_RE = re.compile(
+    r"could not read (username|password)|terminal prompts disabled|returned error: 40[13]\b|authentication failed",
+    re.IGNORECASE,
+)
+_NOT_FOUND_RE = re.compile(
+    r"repository '[^']*' not found|couldn't find remote ref|returned error: 404\b"
+    r"|does not appear to be a git repository",
+    re.IGNORECASE,
+)
 
 
 def sanitize(text: str, limit: int = 300) -> str:
-    """RED stub."""
-    return text
+    """One human-readable line from git output: no `Authorization` line, 32-hex runs masked, at most `limit` chars."""
+    lines = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and "authorization" not in line.lower()
+    ]
+    if not lines:
+        return ""
+    chosen = next((line for line in lines if line.lower().startswith(("fatal:", "error:"))), lines[0])
+    chosen = mask_hashes(chosen)
+    if len(chosen) > limit:
+        chosen = chosen[: limit - 1] + "…"
+    return chosen
+
+
+def classify(result: GitResult) -> tuple[str, str]:
+    """Map a git result to a stable status code (D-14, D-26) and a secret-free one-line message."""
+    if result.returncode == 0:
+        return "ok", ""
+    if result.returncode == 124 and result.stderr.strip() == "timeout":
+        return "fetch_failed", "timeout"
+    if _AUTH_RE.search(result.stderr):
+        return "auth_failed", AUTH_FAILED_MESSAGE
+    if _NOT_FOUND_RE.search(result.stderr):
+        return "not_found", NOT_FOUND_MESSAGE
+    return "fetch_failed", sanitize(result.stderr) or f"git exited with status {result.returncode}"
 
 
 def check_branch_name(branch: str) -> bool:
-    """RED stub."""
-    return True
+    """True when git accepts `branch` as a branch name (`git check-ref-format --branch`)."""
+    if not branch or branch.startswith("-") or "@{" in branch:
+        return False
+    return run_git(["check-ref-format", "--branch", branch], local_env()).returncode == 0
 
 
 @dataclass(frozen=True)
@@ -190,29 +230,86 @@ class HeadInfo:
     addons: tuple[str, ...]
 
 
+def _is_addon_config(path: PurePosixPath) -> bool:
+    """Supervisor discovery rule: `**/config.*` with a yaml|yml|json suffix, no part hidden or named `rootfs`."""
+    if path.stem != "config" or path.suffix not in CONFIG_SUFFIXES:
+        return False
+    return not any(part.startswith(".") or part == "rootfs" for part in path.parts)
+
+
 def inspect_head(repo_dir: Path) -> HeadInfo:
-    """RED stub."""
-    return HeadInfo(None, False, ())
+    """HEAD commit, repository.yaml presence and add-on directories, read from the bare repository (no checkout)."""
+    env = local_env()
+    git_dir = ["--git-dir", str(repo_dir)]
+    rev = run_git([*git_dir, "rev-parse", "--verify", "--quiet", "--short=12", "HEAD"], env)
+    if rev.returncode != 0 or not rev.stdout.strip():
+        return HeadInfo(None, False, ())
+    head = rev.stdout.strip()
+    top = run_git([*git_dir, "ls-tree", "-z", "--name-only", "HEAD"], env)
+    names = set(top.stdout.split("\0")) if top.returncode == 0 else set()
+    tree = run_git([*git_dir, "ls-tree", "-r", "-z", "--name-only", "HEAD"], env)
+    addons: set[str] = set()
+    if tree.returncode == 0:
+        for name in tree.stdout.split("\0"):
+            if not name:
+                continue
+            path = PurePosixPath(name)
+            if _is_addon_config(path):
+                addons.add(str(path.parent))
+    return HeadInfo(head, any(name in names for name in REPOSITORY_FILES), tuple(sorted(addons)))
 
 
 def ref_snapshot(repo_dir: Path) -> dict[str, str]:
-    """RED stub."""
-    return {}
+    """Every ref with its object id plus the `HEAD` symbolic target; empty for a missing repository."""
+    if not Path(repo_dir).is_dir():
+        return {}
+    env = local_env()
+    git_dir = ["--git-dir", str(repo_dir)]
+    snapshot: dict[str, str] = {}
+    refs = run_git([*git_dir, "for-each-ref", "--format=%(refname) %(objectname)"], env)
+    if refs.returncode == 0:
+        for line in refs.stdout.splitlines():
+            name, _, oid = line.partition(" ")
+            if name:
+                snapshot[name] = oid
+    head = run_git([*git_dir, "symbolic-ref", "-q", "HEAD"], env)
+    if head.returncode == 0 and head.stdout.strip():
+        snapshot["HEAD"] = head.stdout.strip()
+    return snapshot
 
 
 def prune_foreign_refs(repo_dir: Path, branch: str) -> int:
-    """RED stub."""
-    return 0
+    """Delete every ref other than `refs/heads/{branch}` (`fetch --prune` only prunes inside the refspec, D-10)."""
+    env = local_env()
+    git_dir = ["--git-dir", str(repo_dir)]
+    keep = f"refs/heads/{branch}"
+    refs = run_git([*git_dir, "for-each-ref", "--format=%(refname)"], env)
+    if refs.returncode != 0:
+        return 0
+    removed = 0
+    for name in refs.stdout.split():
+        if name != keep and run_git([*git_dir, "update-ref", "-d", name], env).returncode == 0:
+            removed += 1
+    return removed
 
 
 def run_maintenance(repo_dir: Path) -> GitResult:
-    """RED stub."""
-    return GitResult(0, "", "")
+    """`git maintenance run --auto` with the credential-free environment only (D-08)."""
+    return run_git(["--git-dir", str(repo_dir), "maintenance", "run", "--auto"], local_env())
 
 
 def cleanup_stale_tmp(paths: Paths) -> int:
-    """RED stub."""
-    return 0
+    """Remove `{repos_root}/*/.*.git.tmp` left behind by a crash during a first fetch."""
+    if not paths.repos_root.is_dir():
+        return 0
+    removed = 0
+    for tmp in paths.repos_root.glob("*/.*.git.tmp"):
+        if tmp.is_symlink() or not tmp.is_dir():
+            tmp.unlink(missing_ok=True)
+        else:
+            shutil.rmtree(tmp, ignore_errors=True)
+        removed += 1
+    return removed
 
 
 def ensure_and_fetch(paths: Paths, spec: RepoSpec, url: str, branch: str, env: Mapping[str, str]) -> GitResult:

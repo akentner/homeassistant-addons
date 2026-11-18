@@ -50,7 +50,10 @@ def _token() -> str:
     ("result", "status"),
     [
         (GitResult(0, "", ""), "ok"),
-        (GitResult(128, "", "fatal: could not read Username for 'http://h': terminal prompts disabled\n"), "auth_failed"),
+        (
+            GitResult(128, "", "fatal: could not read Username for 'http://h': terminal prompts disabled\n"),
+            "auth_failed",
+        ),
         (
             GitResult(128, "", "fatal: unable to access 'http://h/o/r.git/': The requested URL returned error: 403\n"),
             "auth_failed",
