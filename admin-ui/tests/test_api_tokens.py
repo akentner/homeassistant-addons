@@ -241,6 +241,43 @@ def test_failed_replace_keeps_the_old_token(tmp_path: Path, monkeypatch: pytest.
     assert [p.name for p in tmp_path.iterdir()] == ["api-token"]
 
 
+def _fail_directory_sync(monkeypatch: pytest.MonkeyPatch, where: str) -> None:
+    """Make the directory fsync after os.replace fail, either at os.open of the directory or at os.fsync."""
+    real_open, real_fsync = os.open, os.fsync
+
+    def _open(path: Any, flags: int, *args: Any, **kwargs: Any) -> int:
+        if where == "open" and os.path.isdir(path):
+            raise OSError("directory open failed")
+        return real_open(path, flags, *args, **kwargs)
+
+    def _fsync(fd: int) -> None:
+        if where == "fsync" and stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError("directory fsync failed")
+        real_fsync(fd)
+
+    monkeypatch.setattr(tokens_module.os, "open", _open)
+    monkeypatch.setattr(tokens_module.os, "fsync", _fsync)
+
+
+@pytest.mark.parametrize("where", ["open", "fsync"])
+def test_failed_directory_sync_never_locks_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, where: str) -> None:
+    # WR-01: once os.replace has put a hash on disk, its plaintext must reach the caller and memory must match the disk
+    path = tmp_path / "api-token"
+    _fail_directory_sync(monkeypatch, where)
+    token = GeneratedToken.load_or_create(path)
+    first = token.take_plaintext()
+    assert first is not None
+    assert GeneratedToken.load_or_create(path).verify(first) is True
+
+    new = token.rotate()
+    assert token.verify(new) is True
+    assert token.verify(first) is False
+    reloaded = GeneratedToken.load_or_create(path)
+    assert reloaded.verify(new) is True
+    assert reloaded.verify(first) is False
+    assert [p.name for p in tmp_path.iterdir()] == ["api-token"]
+
+
 def test_concurrent_verify_during_rotate(tmp_path: Path) -> None:
     token = GeneratedToken.load_or_create(tmp_path / "api-token")
     first = token.take_plaintext()

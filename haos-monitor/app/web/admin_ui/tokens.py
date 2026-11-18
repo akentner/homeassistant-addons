@@ -77,11 +77,14 @@ def _write_hash(path: Path, digest: bytes) -> None:
         with contextlib.suppress(FileNotFoundError):
             os.unlink(tmp)
         raise
-    dir_fd = os.open(path.parent, os.O_RDONLY)
-    try:
-        os.fsync(dir_fd)
-    finally:
-        os.close(dir_fd)
+    # Best effort: the hash is already in `path`, so raising here would lose the plaintext of the token on disk
+    # (lockout) or leave memory and disk out of step; the file content itself was fsynced above
+    with contextlib.suppress(OSError):
+        dir_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
 
 
 class GeneratedToken:
@@ -134,7 +137,8 @@ class GeneratedToken:
         with self._lock:
             plaintext = _new_token()
             digest = hashlib.sha256(plaintext.encode("ascii")).digest()
-            _write_hash(self._path, digest)  # raises before the swap: the old token stays valid
+            # Raises only while the old hash is still on disk, before the swap: the old token stays valid
+            _write_hash(self._path, digest)
             self._digest = digest
             self._pending = None
             return plaintext
