@@ -1271,20 +1271,31 @@ asks for it.)
 | A6 | Forwarder RSS is about 10 MB (one more Python process) | Sink mechanism | Low: memory only |
 | A7 | Placing the ingress keys in `config.yaml` right after `ports_description` avoids Phase 2's insertion point | Coexistence | Low: a trivial rebase conflict at worst |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Registration shape (Q-1 refinement).**
+1. **Registration shape (Q-1 refinement).** RESOLVED
     - What we know: D-19 wants an isolated reader returning no data; R-06 forbids dynamic string keys.
     - What's unclear: the states Phase 2 will produce.
     - Recommendation: Phase 3 fixes the normalised shape (Pattern 6). Tell the manager so Phase 2's follow-up maps into
       it.
-2. **Should `fetchlog` also count `info/refs` 200 as "seen"?**
+    - **Resolution:** adopted. The normalised shape is `{state: registered|missing|leftover|error, detail?}`, keyed by
+      the lower-cased repository. Plan 03-01 Task 1 fixes it in `app/web/registration.py` (`REGISTRATION_STATES`,
+      `read_registration` returning None) and in the overview rows (`registration: null`), with a `costly`
+      reversibility note. Plan 03-01 Task 2 pins it in pytest. Plan 03-06 Task 2 adds the view side
+      (`REGISTRATION_KEYS`, `hasRegistration`, a column shown only with data). The manager passes the shape to the
+      Phase 2 owner (03-01 "Edge coverage", assumption A4).
+2. **Should `fetchlog` also count `info/refs` 200 as "seen"?** RESOLVED
     - What we know: protocol v2 already counts `ls-remote`.
     - Recommendation: no. Keep the single POST-200 definition and document it.
-3. **Topbar version text.**
+    - **Resolution:** adopted, `info/refs` does not count. Plan 03-02 Task 2 limits `fetchsink.LINE_RE` to
+      `POST …/git-upload-pack 200`, and Plan 03-02 Task 3 tests that `GET …/info/refs 200` is dropped. Plan 03-05
+      Task 2 documents the definition in DOCS.md "Contracts".
+3. **Topbar version text.** RESOLVED
     - Not available without the Supervisor token. The build arg `VERSION` lacks the subpatch.
     - Recommendation: omit. Revisit when Phase 2 provides a Supervisor-aware process that could write the version into
       a file.
+    - **Resolution:** adopted, the version is omitted. Plan 03-01 Task 1 renders `Topbar` without `version` and
+      `infoPath` (both need the Supervisor, D-07). Revisiting it is not part of Phase 3, so no Phase 3 task covers it.
 
 ## Sources
 

@@ -90,7 +90,24 @@ Plans:
 4. "Last fetch" per user is shown, fed by the lighttpd access-log sink, which never logs the hash.
 5. The GUI port is never published; requests outside ingress get 403.
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+**Wave 1**
+- [ ] 03-01-PLAN.md — (wave 1) Tracer: ingress page with the Repositories overview in the container; s6 `gui`, gate
+- [ ] 03-02-PLAN.md — (wave 1) Access-log sink programs and last-fetch contract (checkpoint: contract file name)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 03-06-PLAN.md — (wave 2) Sync now, registration slot, node tests, admin-ui consumer wiring, CI
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 03-03-PLAN.md — (wave 3) Access view: add, revoke, rotate (type-to-confirm), store URLs, source badge
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 03-04-PLAN.md — (wave 4) Sink in the container (lighttpd pipe, s6 `fetchlog`), last fetch in the Access view
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 03-05-PLAN.md — (wave 5) Info view, DOCS/README/CHANGELOG, version bump from origin/main (last step)
 
 ### Phase 4: Provisioning API
 

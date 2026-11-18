@@ -1,0 +1,1 @@
+No external API integration: Phase 3 builds the add-on's own ingress GUI (its internal `api/*` routes served by the vendored admin-ui skeleton to its own page), a lighttpd access-log sink and local contract files; it calls no external service (no GitHub, no Supervisor API, no third-party SDK).
