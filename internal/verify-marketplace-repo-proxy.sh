@@ -482,4 +482,135 @@ done
 grep -q "test upstream override active" <<<"${LOGS}" || fail "missing WARNING for the test upstream override"
 ok "add-on log holds neither the PAT nor a full hash; override WARNING present"
 
-echo "✓ marketplace-repo-proxy criteria 1-4 verified"
+echo "==> (12) expired token: restart with a wrong PAT"
+WRONG_PAT="SENTINEL-WRONG-$RANDOM$RANDOM"
+# The new options travel on stdin, never in an argv
+options_json "${WRONG_PAT}" | docker exec -i "${PROXY}" python3 -I -c '
+import os, sys
+tmp = "/data/options.json.verify-tmp"
+with open(tmp, "w") as fh:
+    fh.write(sys.stdin.read())
+os.replace(tmp, "/data/options.json")
+'
+docker restart "${PROXY}" >/dev/null
+wait_field 90 "${REPO}" status auth_failed
+ok "status.json: ${REPO} auth_failed after the restart with a wrong PAT"
+expect_code 200 "dave after the restart (last good mirror keeps serving)" "$(refs_url "${URL_DAVE}")"
+LOGS="$(docker logs "${PROXY}" 2>&1)"
+grep -qF "sync ${REPO}: auth_failed" <<<"${LOGS}" || fail "no auth_failed warning for ${REPO} in the add-on log"
+ok "add-on log has an auth_failed warning for ${REPO}"
+
+echo "==> (13) startup log after the restart (masked URLs only)"
+# Before the restart dave did not exist, so this line comes from the restart's init
+if ! grep -qE -- "user dave -> http://${PROXY}:8080/repo/${REPO}/[0-9a-f]{4}… [|] public ${PUBLIC_URL}/repo/${REPO}/[0-9a-f]{4}…" \
+    <<<"${LOGS}"; then
+    fail "startup log lacks dave's masked internal and public URL"
+fi
+ok "startup log lists dave with masked internal and public URLs (4 hex chars + …)"
+
+echo "==> (14) secret hygiene (PAT, hashes, environments)"
+sync_idle() { [ "$(sync_state)" = "idle" ]; }
+wait_for 60 "sync.state idle" sync_idle
+ok "status.json: sync.state idle (no git child holds the auth environment)"
+# Needles live in files and are read with grep -F -f, so no scanner ever has a secret in its argv (Pitfall 9)
+NEEDLES_PAT="${WORK}/needles-pat"
+NEEDLES_HASH="${WORK}/needles-hash"
+(
+    umask 077
+    for p in "${PAT}" "${WRONG_PAT}"; do
+        printf '%s\n' "${p}"
+        printf 'x-access-token:%s' "${p}" | base64 -w0
+        echo
+    done >"${NEEDLES_PAT}"
+    printf '%s\n' "${HASH_ALICE}" "${HASH_BOB}" "${HASH_CAROL}" "${HASH_DAVE}" "${HASH_ERIN}" >"${NEEDLES_HASH}"
+)
+if [ "$(wc -l <"${NEEDLES_PAT}")" != "4" ] || [ "$(wc -l <"${NEEDLES_HASH}")" != "5" ]; then
+    fail "needles files are incomplete"
+fi
+put_needles() { # usage: put_needles <container> <host file> <container path>; mode 0600 inside the container
+    docker exec -i "$1" sh -c 'umask 077; cat > "$1"' sh "$3" <"$2"
+}
+put_needles "${PROXY}" "${NEEDLES_PAT}" /tmp/needles-pat
+put_needles "${PROXY}" "${NEEDLES_HASH}" /tmp/needles-hash
+printf '%s\n' "${SUPERVISOR_SENTINEL}" | docker exec -i "${PROXY}" sh -c 'umask 077; cat > /tmp/needles-supervisor'
+printf 'app.watch\n' | docker exec -i "${PROXY}" sh -c 'umask 077; cat > /tmp/needles-probe'
+put_needles "${CLIENT}" "${NEEDLES_PAT}" /tmp/needles-pat
+[ "$(docker exec "${PROXY}" stat -c %a /tmp/needles-pat)" = "600" ] || fail "/tmp/needles-pat is not mode 0600"
+ok "needles: 2 PATs + 2 base64 headers, 5 full hashes (files, mode 0600)"
+
+LOGS="$(docker logs "${PROXY}" 2>&1)"
+if grep -qF -f "${NEEDLES_PAT}" <<<"${LOGS}"; then fail "PAT or base64 PAT header in docker logs"; fi
+ok "docker logs (stdout and stderr): no PAT, no base64 PAT header"
+if grep -qF -f "${NEEDLES_HASH}" <<<"${LOGS}"; then fail "full access hash in docker logs"; fi
+ok "docker logs: no full access hash (after 404 probes with valid-but-misplaced hashes)"
+if grep -qE '/repo/[^ ]*[0-9a-f]{32}' <<<"${LOGS}" || grep -qE '/access/[^ ]*[0-9a-f]{32}' <<<"${LOGS}"; then
+    fail "a 32-hex value after /repo/ or /access/ in docker logs"
+fi
+ok "docker logs: no 32-hex value after /repo/ or /access/"
+
+rc=0
+docker exec "${PROXY}" grep -rlaF -f /tmp/needles-pat /srv/git >/dev/null 2>&1 || rc=$?
+[ "${rc}" = "1" ] || fail "PAT needle found under /srv/git (or the scan failed, grep exit ${rc})"
+ok "/srv/git/** holds no PAT and no base64 PAT header"
+repos="$(docker exec "${PROXY}" sh -c 'ls -d /srv/git/repos/*/*.git')"
+[ "$(wc -l <<<"${repos}")" = "3" ] || fail "expected 3 bare repositories, found: $(tr '\n' ' ' <<<"${repos}")"
+for r in ${repos}; do
+    cfg="$(docker exec "${PROXY}" git --git-dir="${r}" config --local --list)" || fail "cannot read ${r}/config"
+    if grep -qi 'authorization' <<<"${cfg}"; then fail "${r}: Authorization in the repository config"; fi
+    if grep -qi 'mirror' <<<"${cfg}"; then fail "${r}: mirror setting in the repository config"; fi
+    url="$(sed -n 's/^remote\.origin\.url=//p' <<<"${cfg}")"
+    [ -n "${url}" ] || fail "${r}: no remote.origin.url"
+    if [[ "${url}" == *@* ]]; then fail "${r}: remote.origin.url carries userinfo"; fi
+    for want in remote.origin.pushurl=no-push://disabled http.receivepack=false http.getanyfile=false; do
+        grep -qxF "${want}" <<<"${cfg}" || fail "${r}: ${want} missing"
+    done
+    ok "${r#/srv/git/repos/} config: no Authorization, no mirror, url without @, push disabled, receivepack/getanyfile off"
+done
+STATUS_JSON="$(docker exec "${PROXY}" cat /data/status.json)"
+if grep -qF -f "${NEEDLES_PAT}" <<<"${STATUS_JSON}" || grep -qF -f "${NEEDLES_HASH}" <<<"${STATUS_JSON}"; then
+    fail "PAT or full hash in /data/status.json"
+fi
+ok "/data/status.json holds no PAT and no full hash"
+rc=0
+docker exec "${CLIENT}" grep -rlaF -f /tmp/needles-pat /tmp/full /tmp/a /tmp/query /tmp/hashmain /tmp/erin /tmp/fresh \
+    >/dev/null 2>&1 || rc=$?
+[ "${rc}" = "1" ] || fail "PAT needle in the served clones (or the scan failed, grep exit ${rc})"
+ok "served clones (working trees and .git) hold no PAT"
+
+WATCH_PID="$(docker exec "${PROXY}" pgrep -f 'python3 -m app[.]watch' | head -n 1)"
+SYNC_PID="$(docker exec "${PROXY}" pgrep -f 'python3 -m app[.]sync' | head -n 1)"
+LIGHTTPD_PID="$(docker exec "${PROXY}" pgrep -x lighttpd | head -n 1)"
+if [ -z "${WATCH_PID}" ] || [ -z "${SYNC_PID}" ] || [ -z "${LIGHTTPD_PID}" ]; then
+    fail "a service process (app.watch, app.sync or lighttpd) is missing"
+fi
+hits="$(docker exec "${PROXY}" sh -c 'grep -laF -f /tmp/needles-pat /proc/[0-9]*/cmdline 2>/dev/null' || true)"
+[ -z "${hits}" ] || fail "PAT needle in a process argv: ${hits}"
+hits="$(docker exec "${PROXY}" sh -c 'grep -laF -f /tmp/needles-probe /proc/[0-9]*/cmdline 2>/dev/null' || true)"
+grep -qxF "/proc/${WATCH_PID}/cmdline" <<<"${hits}" || fail "cmdline scan does not see the app.watch argv"
+ok "no /proc/*/cmdline holds a PAT needle (positive control: the scan sees the app.watch argv)"
+hits="$(docker exec --privileged "${PROXY}" sh -c 'grep -laF -f /tmp/needles-pat /proc/[0-9]*/environ 2>/dev/null' \
+    || true)"
+[ -z "${hits}" ] || fail "PAT needle in a process environment: ${hits}"
+hits="$(docker exec --privileged "${PROXY}" sh -c \
+    'grep -laF -f /tmp/needles-supervisor /proc/[0-9]*/environ 2>/dev/null' || true)"
+grep -qxF "/proc/${SYNC_PID}/environ" <<<"${hits}" || fail "environ scan does not see the sync service's environment"
+ok "no /proc/*/environ holds a PAT needle (positive control: the scan sees SUPERVISOR_TOKEN in sync's environment)"
+LIGHTTPD_ENV="$(docker exec --privileged "${PROXY}" cat "/proc/${LIGHTTPD_PID}/environ" | tr '\0' '\n')" \
+    || fail "cannot read lighttpd's environment"
+if grep -qF -f "${NEEDLES_PAT}" <<<"${LIGHTTPD_ENV}"; then fail "PAT needle in lighttpd's environment"; fi
+if grep -qF -- "${SUPERVISOR_SENTINEL}" <<<"${LIGHTTPD_ENV}"; then fail "SUPERVISOR_TOKEN in lighttpd's environment"; fi
+if grep -qF -- "${OVERRIDE_VAR}" <<<"${LIGHTTPD_ENV}"; then fail "test override in lighttpd's environment"; fi
+ok "lighttpd's environment: no PAT, no SUPERVISOR_TOKEN sentinel, no ${OVERRIDE_VAR}"
+WATCH_ENV="$(docker exec --privileged "${PROXY}" cat "/proc/${WATCH_PID}/environ" | tr '\0' '\n')" \
+    || fail "cannot read access-watch's environment"
+if grep -qF -- "${SUPERVISOR_SENTINEL}" <<<"${WATCH_ENV}"; then fail "SUPERVISOR_TOKEN in app.watch's environment"; fi
+if grep -qF -- "${OVERRIDE_VAR}" <<<"${WATCH_ENV}"; then fail "test override in app.watch's environment"; fi
+ok "access-watch (app.watch) environment: no SUPERVISOR_TOKEN sentinel, no ${OVERRIDE_VAR}"
+
+docker exec "${PROXY}" rm -f /tmp/needles-pat /tmp/needles-hash /tmp/needles-supervisor /tmp/needles-probe
+docker exec "${CLIENT}" rm -f /tmp/needles-pat
+rm -f "${NEEDLES_PAT}" "${NEEDLES_HASH}"
+if docker exec "${PROXY}" sh -c 'ls /tmp/needles-* 2>/dev/null' | grep -q .; then fail "needles left in the proxy"; fi
+ok "needles files removed from the containers and the host"
+
+echo "✓ marketplace-repo-proxy Phase 1 verified (criteria 1-5)"
