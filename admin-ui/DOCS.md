@@ -94,10 +94,12 @@ The gate runs first for every method and path, unknown methods and malformed req
 the same 401 `unauthorized` with `WWW-Authenticate: Bearer` and `Connection: close`. Handlers get `Request.public` set
 to true and a header view without `Authorization`, `X-Remote-User-*` and `X-Ingress-*`. The listener answers JSON only
 with the same body rules, `MAX_BODY`, `Cache-Control: no-store` and API headers; it serves no static files, index or
-icon and sends no CORS headers. A connection that sends nothing for 30 seconds is closed, and a request (line, headers
-and body) must arrive completely within 30 seconds of its first byte; a slow client is dropped without a response. At
-most 32 connections are served at once, a further one is closed before anything is read. `serve(gui_server, api_server)`
-runs both servers in one process; call it from the main thread.
+icon and sends no CORS headers. Unlike the ingress server, it accepts only one `Content-Length` of plain digits, and a
+`GET`, `HEAD` or `OPTIONS` that carries a body gets its response with `Connection: close`, because that body is never
+read. A connection that sends nothing for 30 seconds is closed, and a request (line, headers and body) must arrive
+completely within 30 seconds of its first byte; a slow client is dropped without a response. At most 32 connections are
+served at once, a further one is closed before anything is read. `serve(gui_server, api_server)` runs both servers in
+one process; call it from the main thread.
 
 The error code `unauthorized` is registered when `make_api_server` runs and is not in the import-time `ERROR_STATUS`. A
 consumer whose tests pin that table adds `unauthorized` (401) to it and an `errors.unauthorized` string to both string

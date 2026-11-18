@@ -163,6 +163,20 @@ def _make_api_handler(
             # request text is reflected and nothing bypasses the gate
             self._unauthorized()
 
+        def _carries_body(self) -> bool:
+            """True when the request announces body bytes (any Transfer-Encoding or a Content-Length other than 0)."""
+            if self.headers.get("Transfer-Encoding") is not None:
+                return True
+            return any(value.strip(" \t") != "0" for value in self.headers.get_all("Content-Length") or [])
+
+        def _read_body(self) -> Any:
+            # Stricter than the ingress handler, which stays unchanged: exactly one Content-Length of plain ASCII
+            # digits (no sign, no underscore, no second header that a proxy in front might read instead)
+            values = [value.strip(" \t") for value in self.headers.get_all("Content-Length") or []]
+            if len(values) > 1 or any(not (value.isascii() and value.isdigit()) for value in values):
+                raise ApiError("bad_request", "invalid Content-Length")
+            return super()._read_body()
+
         def _unauthorized(self) -> None:
             self.close_connection = True
             self._send(
@@ -179,6 +193,9 @@ def _make_api_handler(
             if token is None or not _verified(verifier, token):
                 self._unauthorized()
                 return
+            if self.command not in BODY_METHODS and self._carries_body():
+                # The body is never read: close, so its bytes are never parsed as the next request on this connection
+                self.close_connection = True
             parts = urllib.parse.urlsplit(self.path)
             try:
                 handler, params = router.match(self.command, parts.path)

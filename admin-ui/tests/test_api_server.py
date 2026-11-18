@@ -800,6 +800,68 @@ def test_unread_body_closes_the_connection(api: Callable[..., Client]) -> None:
     assert calls == []
 
 
+# --- bodies on non-body methods and strict Content-Length on the API port (WR-04) ---
+
+
+def _authorised_post(body: bytes, *length_lines: str) -> bytes:
+    lines = [
+        "POST /api/echo HTTP/1.1",
+        "Host: test",
+        "Content-Type: application/json",
+        f"Authorization: Bearer {TOKEN}",
+        *length_lines,
+        "Connection: close",
+    ]
+    return ("\r\n".join(lines) + "\r\n\r\n").encode() + body
+
+
+@pytest.mark.parametrize("method", ["GET", "HEAD", "OPTIONS"])
+def test_body_on_a_non_body_method_closes_the_connection(api: Callable[..., Client], method: str) -> None:
+    # The unread body must never be parsed as a second request (desync behind a pooling proxy)
+    calls: list[Any] = []
+    port = api(build_api_router(calls)).port
+    smuggled = _authorised_post(b"{}", "Content-Length: 2")
+    request = f"{method} /api/ping HTTP/1.1\r\nHost: test\r\nAuthorization: Bearer {TOKEN}\r\n"
+    for framing in (f"Content-Length: {len(smuggled)}", "Transfer-Encoding: chunked"):
+        resp = raw(port, (request + framing + "\r\n\r\n").encode() + smuggled)
+        assert resp.count(b"HTTP/1.") == 1, (framing, resp)
+        head = resp.partition(b"\r\n\r\n")[0]
+        assert head.startswith((b"HTTP/1.1 200 ", b"HTTP/1.1 405 ")), head
+        assert b"\r\nConnection: close" in head
+    assert calls == []
+
+
+def test_non_body_method_without_a_body_keeps_the_connection(api: Callable[..., Client]) -> None:
+    port = api().port
+    first = f"GET /api/ping HTTP/1.1\r\nHost: test\r\nAuthorization: Bearer {TOKEN}\r\nContent-Length: 0\r\n\r\n"
+    second = f"GET /api/ping HTTP/1.1\r\nHost: test\r\nAuthorization: Bearer {TOKEN}\r\nConnection: close\r\n\r\n"
+    resp = raw(port, (first + second).encode())
+    assert resp.count(b"HTTP/1.1 200 ") == 2, resp
+
+
+def test_content_length_must_be_one_plain_number(api: Callable[..., Client]) -> None:
+    calls: list[Any] = []
+    port = api(build_api_router(calls)).port
+    cases = [
+        (b"{}", ("Content-Length: +2",)),
+        (b'{"k": 123}', ("Content-Length: 1_0",)),
+        (b"{}", ("Content-Length: 2", "Content-Length: 2")),
+        (b"{}", ("Content-Length: 2", "Content-Length: 3")),
+    ]
+    for body, lines in cases:
+        resp = raw(port, _authorised_post(body, *lines))
+        head, _, data = resp.partition(b"\r\n\r\n")
+        assert head.startswith(b"HTTP/1.1 400 "), (lines, resp)
+        assert json.loads(data)["error"] == "bad_request", lines
+        assert b"\r\nConnection: close" in head
+    assert calls == []
+    # Plain digits, optionally with surrounding blanks, stay valid
+    for line in ("Content-Length: 2", "Content-Length:  2 "):
+        resp = raw(port, _authorised_post(b"{}", line))
+        assert resp.startswith(b"HTTP/1.1 201 "), (line, resp)
+    assert len(calls) == 2
+
+
 # --- no token, bearer value or stored digest ever reaches stdout or stderr (D-09, AUB-04) ---
 
 
