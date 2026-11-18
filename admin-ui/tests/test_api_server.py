@@ -13,6 +13,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Iterator
@@ -29,6 +30,7 @@ from app.web.skeleton import (
     make_server,
     serve,
 )
+from app.web.skeleton import api as api_module
 from app.web.skeleton.server import MAX_BODY
 from app.web.skeleton.api import _UNAUTHORIZED_BODY, make_api_server
 from app.web.skeleton.tokens import GeneratedToken, OptionToken
@@ -447,6 +449,140 @@ def test_api_handler_timeout(tmp_path: Path) -> None:
     finally:
         api_server.server_close()
         gui.server_close()
+
+
+# --- slow and excess clients are dropped (WR-03) ---
+
+
+@pytest.fixture
+def fast_api(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callable[..., tuple[Any, list[Any]]]]:
+    """Factory fast_api(max_connections=32) -> (server, echo calls) with a 2 s per-read timeout and a 1 s deadline."""
+    servers: list[Any] = []
+
+    def _start(max_connections: int = 32) -> tuple[Any, list[Any]]:
+        monkeypatch.setattr(api_module._ApiServer, "max_connections", max_connections)
+        calls: list[Any] = []
+        httpd = make_api_server(build_api_router(calls), 0, OptionToken(TOKEN), bind="127.0.0.1")
+        httpd.RequestHandlerClass.timeout = 2
+        httpd.RequestHandlerClass.request_deadline = 1.0
+        thread = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
+        thread.start()
+        servers.append((httpd, thread))
+        return httpd, calls
+
+    yield _start
+    for httpd, thread in servers:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+
+def _closed_after(sock: socket.socket, limit: float, drip: bytes = b"") -> float | None:
+    """Send `drip` every 0.2 s until the server closes; the seconds until then, or None if it was still open at `limit`.
+
+    Every gap stays far below the 2 s per-read timeout, so only a request deadline can end a dripping connection."""
+    start = time.monotonic()
+    sock.settimeout(0.2)
+    while time.monotonic() - start < limit:
+        try:
+            if drip:
+                sock.sendall(drip)
+            if sock.recv(65536) == b"":
+                return time.monotonic() - start
+        except (ConnectionResetError, BrokenPipeError):
+            return time.monotonic() - start
+        except TimeoutError:
+            continue
+    return None
+
+
+def test_api_read_limits() -> None:
+    server = make_api_server(build_api_router(), 0, OptionToken(TOKEN), bind="127.0.0.1")
+    try:
+        assert server.RequestHandlerClass.timeout == 30
+        assert server.RequestHandlerClass.request_deadline == 30
+        assert server.max_connections == 32
+    finally:
+        server.server_close()
+
+
+def test_slow_drip_request_head_is_dropped_at_the_deadline(fast_api: Callable[..., Any]) -> None:
+    httpd, calls = fast_api()
+    with socket.create_connection(("127.0.0.1", httpd.server_address[1]), timeout=5) as sock:
+        sock.sendall(b"GET /api/ping HTTP/1.1\r\nHost: test\r\nX-Slow: ")
+        elapsed = _closed_after(sock, 6, drip=b"a")
+    assert elapsed is not None, "a dripping client kept the connection past the deadline"
+    assert 0.5 <= elapsed < 4
+    assert calls == []
+
+
+def test_slow_drip_body_is_dropped_without_a_traceback(
+    fast_api: Callable[..., Any], capfd: pytest.CaptureFixture[str]
+) -> None:
+    httpd, calls = fast_api()
+    head = (
+        "POST /api/echo HTTP/1.1\r\nHost: test\r\nContent-Type: application/json\r\nContent-Length: 64\r\n"
+        f"Authorization: Bearer {TOKEN}\r\n\r\n"
+    ).encode()
+    with socket.create_connection(("127.0.0.1", httpd.server_address[1]), timeout=5) as sock:
+        sock.sendall(head)
+        elapsed = _closed_after(sock, 6, drip=b" ")
+    assert elapsed is not None
+    assert elapsed < 4
+    assert calls == []
+    out, err = capfd.readouterr()
+    assert "Traceback" not in out + err
+    assert TOKEN not in out + err
+
+
+def test_idle_connection_closes_after_the_read_timeout(fast_api: Callable[..., Any]) -> None:
+    httpd, _ = fast_api()
+    with socket.create_connection(("127.0.0.1", httpd.server_address[1]), timeout=5) as sock:
+        elapsed = _closed_after(sock, 6)
+    assert elapsed is not None
+    assert 1.5 <= elapsed < 4
+
+
+def test_deadline_starts_at_the_first_byte_of_each_request(fast_api: Callable[..., Any]) -> None:
+    # Keep-alive idle time between requests counts against the per-read timeout only, never against the deadline
+    httpd, _ = fast_api()
+    conn = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1], timeout=5)
+    try:
+        for _ in range(2):
+            conn.request("GET", "/api/ping", headers=AUTH)
+            resp = conn.getresponse()
+            assert resp.status == 200
+            assert resp.getheader("Connection") is None
+            resp.read()
+            time.sleep(1.4)
+    finally:
+        conn.close()
+
+
+def test_connections_beyond_the_cap_are_closed_at_once(fast_api: Callable[..., Any]) -> None:
+    httpd, _ = fast_api(max_connections=2)
+    port = httpd.server_address[1]
+    held = [socket.create_connection(("127.0.0.1", port), timeout=5) for _ in range(2)]
+    try:
+        for sock in held:
+            sock.sendall(b"G")
+        time.sleep(0.3)
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as extra:
+            elapsed = _closed_after(extra, 1.5)
+        assert elapsed is not None, "a connection beyond the cap was kept open"
+    finally:
+        for sock in held:
+            sock.close()
+    # Closed connections give their slots back
+    deadline = time.monotonic() + 3
+    while True:
+        try:
+            if Client(port).call("GET", "/api/ping", AUTH)[0] == 200:
+                break
+        except (ConnectionError, http.client.HTTPException):
+            pass
+        assert time.monotonic() < deadline, "slots were not released"
+        time.sleep(0.1)
 
 
 # --- every method token, parser error and HTTP/0.9 request reaches the gate (D-05, AUB-02) ---

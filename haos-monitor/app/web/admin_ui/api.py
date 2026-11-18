@@ -9,9 +9,13 @@ bind address explicitly, there is no default exposure.
 
 from __future__ import annotations
 
+import io
 import ipaddress
 import json
+import socket
 import sys
+import threading
+import time
 import urllib.parse
 from http.server import ThreadingHTTPServer
 from typing import Any, Callable
@@ -26,6 +30,48 @@ _UNAUTHORIZED_BODY: bytes = json.dumps({"error": "unauthorized", "message": "una
 
 # Credentials headers that consumer handlers on the API port never see.
 _HIDDEN = ("authorization", "proxy-authorization")
+
+# Read limits of the API port (the ingress handler keeps none). Seconds one read may wait for the next byte, an idle
+# keep-alive connection included; seconds from the first byte of a request until its line, headers and body are read
+# completely; connections open at once (one thread each), a further one is closed before anything is read.
+READ_TIMEOUT = 30
+REQUEST_DEADLINE = 30
+MAX_CONNECTIONS = 32
+
+
+class _DeadlineReader(io.RawIOBase):
+    """Socket reader with the per-read timeout plus a deadline per request, so a client that sends one byte just
+    before every per-read timeout is still dropped. A missed timeout or deadline raises TimeoutError."""
+
+    def __init__(self, sock: socket.socket, timeout: float, deadline: float) -> None:
+        self._sock = sock
+        self._timeout = timeout
+        self._seconds = deadline
+        self._deadline: float | None = None
+
+    def readable(self) -> bool:
+        return True
+
+    def start_request(self) -> None:
+        """Called before each request: its clock starts with the next byte received."""
+        self._deadline = None
+
+    def readinto(self, buffer: Any) -> int:
+        timeout = self._timeout
+        if self._deadline is not None:
+            remaining = self._deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("request deadline exceeded")
+            timeout = min(timeout, remaining)
+        self._sock.settimeout(timeout)
+        try:
+            count = self._sock.recv_into(buffer)
+        finally:
+            # Writes keep the plain per-read timeout
+            self._sock.settimeout(self._timeout)
+        if count and self._deadline is None:
+            self._deadline = time.monotonic() + self._seconds
+        return count
 
 
 class _ApiHeaders:
@@ -89,9 +135,21 @@ def _make_api_handler(
     error_mappers: dict[type[Exception], Callable[[Exception], ApiError]] | None,
 ) -> type[_JsonHandler]:
     class ApiHandler(_JsonHandler):
-        # Seconds; StreamRequestHandler applies it to the socket, so idle or slow clients are dropped (the largest body
-        # is 64 KiB). The ingress handler keeps no timeout.
-        timeout = 30
+        # Per-read timeout (StreamRequestHandler applies it to the socket) and the per-request deadline of
+        # _DeadlineReader: a connection that sends nothing, or a request that trickles in, is dropped without a
+        # response. The ingress handler keeps neither.
+        timeout = READ_TIMEOUT
+        request_deadline = REQUEST_DEADLINE
+
+        def setup(self) -> None:
+            super().setup()
+            self.rfile.close()
+            self._reader = _DeadlineReader(self.connection, self.timeout, self.request_deadline)
+            self.rfile = io.BufferedReader(self._reader)
+
+        def handle_one_request(self) -> None:
+            self._reader.start_request()
+            super().handle_one_request()
 
         def __getattr__(self, name: str) -> Any:
             # Any method token (TRACE, CONNECT, PROPFIND, FOO, lowercase get) reaches the gate instead of the stdlib
@@ -134,6 +192,14 @@ def _make_api_handler(
                     json=body,
                     public=True,
                 )
+            except TimeoutError:
+                # The body missed the read timeout or the deadline: drop the slow client like a slow request head
+                self.close_connection = True
+                return
+            except Exception as exc:  # noqa: BLE001 - mapped to a stable error code, never leaked
+                self._fail(exc)
+                return
+            try:
                 result = handler(request)
             except Exception as exc:  # noqa: BLE001 - mapped to a stable error code, never leaked
                 self._fail(exc)
@@ -149,9 +215,34 @@ def _make_api_handler(
 
 
 class _ApiServer(ThreadingHTTPServer):
-    """The API server; an exception escaping a request prints only its class name (no message, no traceback)."""
+    """The API server; an exception escaping a request prints only its class name (no message, no traceback).
+
+    At most `max_connections` connections are served at once; a further one is closed at once, before a thread starts
+    or anything is read, so unauthenticated clients cannot exhaust threads and memory."""
 
     daemon_threads = True
+    max_connections = MAX_CONNECTIONS
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self._slots = threading.BoundedSemaphore(self.max_connections)
+        super().__init__(*args, **kwargs)
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        if not self._slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            # No thread started, so nobody else gives the slot back
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
 
     def handle_error(self, request: Any, client_address: Any) -> None:
         # The stdlib default prints a full traceback to stderr, whose exception message could carry request data
