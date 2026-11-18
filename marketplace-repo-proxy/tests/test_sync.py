@@ -169,6 +169,28 @@ def test_branch_change_moves_head_and_drops_the_old_ref(tmp_path: Path) -> None:
     assert entry["addons"] == ["demo", "dev"]
 
 
+def test_failed_branch_change_keeps_serving_the_old_branch(tmp_path: Path) -> None:
+    make_upstream(tmp_path, "o", "good", GOOD)
+    good = _entry(_cycle(tmp_path, _options(RepoSpec("o", "good", "main"))), "o/good")
+    repo = Paths.under(tmp_path).repo_dir("o", "good")
+    before = git(["--git-dir", str(repo), "rev-parse", "HEAD"]).strip()
+    failed = _entry(_cycle(tmp_path, _options(RepoSpec("o", "good", "stabel"))), "o/good")  # typo: no such branch
+    assert failed["status"] == "not_found"
+    assert failed["branch"] == "stabel"
+    assert failed["head"] == good["head"]
+    assert failed["addons"] == good["addons"]
+    assert failed["last_success"] == good["last_success"]
+    gd = ["--git-dir", str(repo)]
+    assert git([*gd, "symbolic-ref", "HEAD"]).strip() == "refs/heads/main"
+    assert git([*gd, "rev-parse", "--verify", "HEAD"]).strip() == before
+    assert git([*gd, "for-each-ref", "--format=%(refname)"]).split() == ["refs/heads/main"]
+    assert git([*gd, "config", "--get-all", "remote.origin.fetch"]).split() == ["+refs/heads/main:refs/heads/main"]
+    clone = tmp_path / "clone"
+    git(["clone", "-q", str(repo), str(clone)])
+    assert (clone / "repository.yaml").read_text() == GOOD["repository.yaml"]
+    assert (clone / "demo" / "config.yaml").is_file()
+
+
 class _Unauthorized(http.server.BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         self.send_response(401)

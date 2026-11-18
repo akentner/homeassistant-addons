@@ -155,7 +155,8 @@ example `sync example-org/private-addons: ok (main @ 0123456789ab, changed)`. St
 | `fetch_failed`       | Anything else: network error, timeout, unexpected git error. The `message` field has a one-line reason.                                             | Check the network; the next cycle retries.                                                                 |
 
 A repository that fails keeps serving its last good state: the mirror is only replaced by a successful fetch, and
-`head`, `addons` and `last_success` in `status.json` keep their last good values.
+`head`, `addons` and `last_success` in `status.json` keep their last good values. This also holds after a change of
+`branch`: the mirror switches to the new branch only once it has been fetched.
 
 ## Contracts
 

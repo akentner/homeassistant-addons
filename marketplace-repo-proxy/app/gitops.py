@@ -152,8 +152,12 @@ def configure_repo(repo_dir: Path, url: str, branch: str) -> None:
             raise RuntimeError(f"git {args[0]} failed: {first}")
 
 
-def fetch(repo_dir: Path, env: Mapping[str, str]) -> GitResult:
-    """Full-history fetch of the configured refspec; maintenance stays out of the authenticated call."""
+def fetch(repo_dir: Path, url: str, branch: str, env: Mapping[str, str]) -> GitResult:
+    """Full-history fetch of one branch with an explicit refspec; maintenance stays out of the authenticated call.
+
+    The refspec is passed on the command line instead of read from the repository config, so a fetch of a new branch
+    never depends on (or changes) the served `HEAD`; `--prune` only acts inside this one refspec.
+    """
     return run_git(
         [
             "--git-dir",
@@ -169,7 +173,8 @@ def fetch(repo_dir: Path, env: Mapping[str, str]) -> GitResult:
             "fetch",
             "--prune",
             "--no-tags",
-            "origin",
+            url,
+            f"+refs/heads/{branch}:refs/heads/{branch}",
         ],
         env,
     )
@@ -318,11 +323,17 @@ def cleanup_stale_tmp(paths: Paths) -> int:
 
 
 def ensure_and_fetch(paths: Paths, spec: RepoSpec, url: str, branch: str, env: Mapping[str, str]) -> GitResult:
-    """Fetch into the bare repository; a new one is built in a temp dir and renamed only after a good fetch."""
+    """Fetch into the bare repository; a new one is built in a temp dir and renamed only after a good fetch.
+
+    For an existing repository, `HEAD` and the stored refspec move to `branch` only after its fetch succeeded: a failed
+    fetch after a branch change (typo, branch not pushed yet, expired token) leaves the previous branch served.
+    """
     final = paths.repo_dir(spec.owner, spec.name)
     if final.exists():
-        configure_repo(final, url, branch)
-        return fetch(final, env)
+        result = fetch(final, url, branch, env)
+        if result.returncode == 0:
+            configure_repo(final, url, branch)
+        return result
     final.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
     tmp = final.parent / f".{spec.name}.git.tmp"
     if tmp.exists() or tmp.is_symlink():
@@ -332,7 +343,7 @@ def ensure_and_fetch(paths: Paths, spec: RepoSpec, url: str, branch: str, env: M
         return created
     try:
         configure_repo(tmp, url, branch)
-        result = fetch(tmp, env)
+        result = fetch(tmp, url, branch, env)
     except BaseException:
         shutil.rmtree(tmp, ignore_errors=True)
         raise
