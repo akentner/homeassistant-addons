@@ -3,28 +3,39 @@
 Prints store URLs with print() to stdout only: this module never uses logging, so a full URL (with its access hash)
 reaches only the operator's terminal (D-17). `users list` shows masked hashes only. Domain errors print
 `error: <code>` to stderr and exit 1; usage errors exit 2.
+
+`mrp local ...` manages the add-on's own store registration. It never talks to the Supervisor (D-02, D-03: a
+`docker exec` process inherits the token, but only the sync process may use it): it reads /data/supervisor.json, which
+holds store slugs and masked URLs only.
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import socket
 import sys
 from typing import Any
 
 from app.access import HASH_RE, AccessError, AccessStore
 from app.jsonio import atomic_write_json
-from app.options import Options, OptionsError, load_options
+from app.options import Options, OptionsError, load_options, parse_repository
 from app.paths import Paths
+from app.supervisor_state import read_supervisor_state
 from app.urls import mask_hash, store_urls
 
 USER_COMMANDS = ("add", "url", "revoke")  # take <owner/repo> <user>
+_HEX32_RE = re.compile(r"[0-9a-fA-F]{32}")
 
 EPILOG = """A store URL contains the user's access hash: treat the full URL as a secret. Only `users add` and
 `users url` print it, to this terminal; `users list` shows masked hashes.
 
 Rotation: there is no in-place rotation. `users revoke` and then `users add` the same user; the new URL has a new
 hash, so the consumer must re-add the repository in the add-on store and reinstall its add-ons.
+
+Reserved labels: `local` and `local.*` belong to the add-on's own store registration with the Supervisor; `users add`
+and `users revoke` refuse them. `mrp local status` and `mrp local remove` manage that registration (and `mrp local
+rotate` from the next version of this module).
 
 examples:
   mrp users list [example-org/private-addons]
@@ -33,6 +44,7 @@ examples:
   mrp users revoke example-org/private-addons alice
   mrp sync
   mrp reconcile
+  mrp local status [example-org/private-addons]
 """
 
 
@@ -62,6 +74,11 @@ def _parser() -> argparse.ArgumentParser:
         sub.add_argument("user", nargs="?", help="user label")
         if name == "add":
             sub.add_argument("--hash", dest="hash_", default=None, help="use this 32-hex access hash")
+
+    local = commands.add_parser("local", help="the add-on's own store registration (user `local`)")
+    local_commands = local.add_subparsers(dest="local_command", required=True)
+    status = local_commands.add_parser("status", help="show the store registration from /data/supervisor.json")
+    status.add_argument("repository", nargs="?", default=None, help="only this repository (owner/repo)")
 
     commands.add_parser("sync", help="request a sync of all repositories now")
     commands.add_parser("reconcile", help="rebuild the access symlink tree from access.json")
@@ -135,6 +152,51 @@ def _users_revoke(args: argparse.Namespace, paths: Paths) -> int:
     return 0
 
 
+def _field(value: Any) -> str:
+    """One state field for output: `-` when empty, never a 32-hex run (the file holds masked values only)."""
+    if not isinstance(value, str) or not value:
+        return "-"
+    return _HEX32_RE.sub(lambda m: mask_hash(m.group(0).lower()), " ".join(value.split()))
+
+
+def _same_repository(item: dict, wanted: str | None) -> bool:
+    value = item.get("repository")
+    return wanted is None or (isinstance(value, str) and value.lower() == wanted)
+
+
+def _local_status(args: argparse.Namespace, paths: Paths) -> int:
+    wanted = None
+    if args.repository is not None:
+        try:
+            wanted = "/".join(parse_repository(args.repository)).lower()
+        except (TypeError, ValueError):
+            return _error("repository_unknown")
+    doc = read_supervisor_state(paths)
+    if doc is None:
+        print("no registration state yet", flush=True)
+        return 0
+    items = doc.get("repositories")
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict) or not _same_repository(item, wanted):
+            continue
+        fields = [_field(item.get(key)) for key in ("repository", "registration", "store_slug", "masked_url")]
+        if item.get("configured") is False:
+            fields.append("(unconfigured)")
+        print("\t".join(fields), flush=True)
+    reload = doc.get("reload") if isinstance(doc.get("reload"), dict) else {}
+    last = reload.get("last_requested")
+    pending = "yes" if reload.get("pending") is True else "no"
+    print(f"reload: last {_field(last) if last else 'never'} {_field(reload.get('last_result'))}, pending {pending}",
+          flush=True)
+    leftovers = doc.get("leftovers")
+    for item in leftovers if isinstance(leftovers, list) else []:
+        if not isinstance(item, dict) or not _same_repository(item, wanted):
+            continue
+        keys = ("repository", "store_slug", "reason", "user", "since")
+        print("\t".join(["leftover"] + [_field(item.get(key)) for key in keys]), flush=True)
+    return 0
+
+
 def _sync(paths: Paths) -> int:
     """Create the D-12 trigger file; the sync service starts a full cycle within about a second."""
     if not paths.run_dir.is_dir():
@@ -157,6 +219,8 @@ def _dispatch(args: argparse.Namespace, paths: Paths, hostname: str) -> int:
         return _sync(paths)
     if args.command == "reconcile":
         return _reconcile(paths)
+    if args.command == "local":
+        return _local_status(args, paths)
     if args.users_command == "list":
         return _users_list(args, paths)
     if args.users_command == "add":

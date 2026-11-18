@@ -53,6 +53,21 @@ def new_hash() -> str:
     return secrets.token_hex(16)
 
 
+def is_reserved(user: Any) -> bool:
+    """True for the add-on's own store labels: `local` and `local.*` (case-insensitive); only `system` may touch them."""
+    if not isinstance(user, str):
+        return False
+    lowered = user.lower()
+    return lowered in RESERVED_USERS or any(lowered.startswith(name + ".") for name in RESERVED_USERS)
+
+
+def _unique_hash(used: set[Any]) -> str:
+    hash_ = new_hash()
+    while hash_ in used:
+        hash_ = new_hash()
+    return hash_
+
+
 def _empty() -> dict[str, Any]:
     return {"schema": SCHEMA, "entries": []}
 
@@ -169,7 +184,7 @@ class AccessStore:
             raise AccessError("invalid_user")
         if source not in SOURCES:
             raise AccessError("invalid_source")
-        if user.lower() in RESERVED_USERS and source != "system":
+        if is_reserved(user) and source != "system":
             raise AccessError("user_reserved")
         if hash_ is not None and (not isinstance(hash_, str) or not HASH_RE.fullmatch(hash_)):
             raise AccessError("invalid_hash")
@@ -180,9 +195,7 @@ class AccessStore:
                 raise AccessError("user_exists")
             used = {e.get("hash") for e in entries}
             if hash_ is None:
-                hash_ = new_hash()
-                while hash_ in used:
-                    hash_ = new_hash()
+                hash_ = _unique_hash(used)
             elif hash_ in used:
                 raise AccessError("hash_conflict")
             entry = {
@@ -199,13 +212,18 @@ class AccessStore:
                 reconcile_tree(entries, specs, self.paths, self.log)
             return dict(entry)
 
-    def revoke(self, repository: str, user: str, specs: Iterable[RepoSpec] | None = None) -> bool:
+    def revoke(
+        self, repository: str, user: str, specs: Iterable[RepoSpec] | None = None, *, system: bool = False
+    ) -> bool:
         """Remove the entry and its symlink in one locked operation (D-06: 404 at the next request).
 
-        Returns False, writing nothing, when no entry matches. With `specs`, the tree is also reconciled.
+        Returns False, writing nothing, when no entry matches. With `specs`, the tree is also reconciled. A reserved
+        label (`local`, `local.*`) needs `system=True`: revoking it by hand would orphan the registered store repository.
         """
         if not isinstance(repository, str) or not isinstance(user, str):
             return False
+        if is_reserved(user) and not system:
+            raise AccessError("user_reserved")
         with self.locked():
             doc = self.load()
             removed = [e for e in doc["entries"] if _matches(e, repository, user)]
@@ -218,6 +236,78 @@ class AccessStore:
             if specs is not None:
                 reconcile_tree(doc["entries"], specs, self.paths, self.log)
             return True
+
+    def retire_and_replace(
+        self, repository: str, user: str, retired_user: str, *, specs: Iterable[RepoSpec] | None = None
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Rename the system entry `user` to `retired_user` (same hash, field `retired`) and add a new `user` entry.
+
+        One locked write; both hashes keep a link (with `specs`) until the caller revokes the retired label. Returns
+        copies of (retired entry, new entry).
+        """
+        self._check_retire_labels(repository, user, retired_user)
+        with self.locked():
+            doc = self.load()
+            entries = doc["entries"]
+            current = next((e for e in entries if _matches(e, repository, user)), None)
+            if current is None:
+                raise AccessError("user_unknown")
+            if any(_matches(e, repository, retired_user) for e in entries):
+                raise AccessError("user_exists")
+            if current.get("source") != "system":
+                raise AccessError("invalid_source")
+            current["user"] = retired_user
+            current["retired"] = utc_timestamp()
+            new = {
+                "repository": current.get("repository", repository),
+                "user": user,
+                "hash": _unique_hash({e.get("hash") for e in entries}),
+                "created": utc_timestamp(),
+                "source": "system",
+            }
+            entries.append(new)
+            atomic_write_json(self.paths.access_file, doc)
+            if specs is not None:
+                reconcile_tree(entries, specs, self.paths, self.log)
+            return copy.deepcopy(current), dict(new)
+
+    def undo_retire(
+        self, repository: str, user: str, retired_user: str, *, specs: Iterable[RepoSpec] | None = None
+    ) -> bool:
+        """Roll back `retire_and_replace`: drop the new `user` entry and its link, rename the retired entry back.
+
+        Returns False, writing nothing, when the retired entry is missing.
+        """
+        self._check_retire_labels(repository, user, retired_user)
+        with self.locked():
+            doc = self.load()
+            retired = next((e for e in doc["entries"] if _matches(e, repository, retired_user)), None)
+            if retired is None:
+                return False
+            dropped = [e for e in doc["entries"] if _matches(e, repository, user)]
+            doc["entries"] = [e for e in doc["entries"] if not _matches(e, repository, user)]
+            retired["user"] = user
+            retired.pop("retired", None)
+            atomic_write_json(self.paths.access_file, doc)
+            for entry in dropped:
+                if entry.get("hash") != retired.get("hash"):
+                    _unlink_hash(self.paths.access_root, entry.get("hash"))
+            if specs is not None:
+                reconcile_tree(doc["entries"], specs, self.paths, self.log)
+            return True
+
+    @staticmethod
+    def _check_retire_labels(repository: str, user: str, retired_user: str) -> None:
+        """Both labels must be reserved system labels: a retired entry must stay out of reach of the CLI."""
+        try:
+            parse_repository(repository)
+        except (TypeError, ValueError):
+            raise AccessError("repository_unknown") from None
+        for label in (user, retired_user):
+            if not isinstance(label, str) or not USER_RE.fullmatch(label) or not is_reserved(label):
+                raise AccessError("invalid_user")
+        if user.lower() == retired_user.lower():
+            raise AccessError("invalid_user")
 
     def reconcile(self, specs: Iterable[RepoSpec]) -> int:
         with self.locked():
