@@ -1,0 +1,3 @@
+#!/bin/sh
+# Let s6 restart the watcher; throttle a crash loop
+sleep 3
