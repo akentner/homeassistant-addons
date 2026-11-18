@@ -1,6 +1,6 @@
 name: "Marketplace Repo Proxy"
-description: "Serves private GitHub add-on repositories to the HA store under hashed URLs (scaffold)"
-version: "0.1.0-0"
+description: "Read-only git proxy that serves private GitHub add-on repositories to the HA store under per-user URLs"
+version: "0.1.0-1"
 stage: "experimental"
 slug: "marketplace_repo_proxy"
 init: false
