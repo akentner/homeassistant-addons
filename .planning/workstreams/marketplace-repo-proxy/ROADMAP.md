@@ -94,8 +94,8 @@ Plans:
 
 Plans:
 **Wave 1**
-- [ ] 03-01-PLAN.md — (wave 1) Tracer: ingress page with the Repositories overview in the container; s6 `gui`, gate
-- [ ] 03-02-PLAN.md — (wave 1) Access-log sink programs and last-fetch contract (checkpoint: contract file name)
+- [ ] 03-01-PLAN.md — (wave 1) Tracer: ingress page with the Repositories overview; s6 `gui`, gate, top-bar version
+- [ ] 03-02-PLAN.md — (wave 1) Access-log sink programs and the `/data/last-fetch.json` contract
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 03-06-PLAN.md — (wave 2) Sync now, registration slot, node tests, admin-ui consumer wiring, CI

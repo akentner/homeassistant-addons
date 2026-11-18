@@ -7,6 +7,8 @@
 "Read-only guarantees" are the agreed design), the Phase 1 contracts in `marketplace-repo-proxy/DOCS.md` and the
 manager brief for this phase (2026-11-18). Items those sources do not answer are listed under "Claude's Discretion" or
 "Open questions"; they are not decided here.
+**Amended:** 2026-11-18 — user decisions D-19 (registration source and states), D-21 (last-fetch file) and D-30 (version
+in the top bar), relayed by the manager after the first planning run.
 
 <domain>
 ## Phase Boundary
@@ -94,12 +96,15 @@ plain `api` source badge (Phase 4); reverse-proxy documentation and the HTTPS cl
   per repository. The view polls (`usePoll`) to show `running` and then the new result.
 
 ### Registration status slot (MRP-13, data from Phase 2)
-- **D-19:** The registration status is optional. One isolated reader (a single function in its own module) returns "no
-  data" in Phase 3; the GUI API carries an optional `registration` field per repository that is null/absent, and the
-  view shows the registration column or badge (and a leftover note) only when at least one value is present. No import
-  of Phase 2 code and no hard reference to its files. Phase 2 has not fixed where it writes the state
-  (`status.json` extension or a new file, Phase 2 CONTEXT "Claude's Discretion"); only this reader changes once both
-  phases are on `main`.
+- **D-19 (user decision 2026-11-18):** The registration status is optional and comes from Phase 2 in
+  `/data/supervisor.json` (Phase 2 is told so by the manager). It has a fixed set of states: `registered`, `missing`,
+  `leftover`, `error`. One isolated reader (a single function in its own module, no import of Phase 2 code) reads that
+  file and maps it to a per-repository `registration` value with one of the four states; a missing or unreadable file, a
+  repository without an entry and an unknown state all mean "no data" for that repository. The GUI API carries the
+  optional `registration` field per repository, and the view shows the registration column or badge (and a leftover
+  note) only when at least one repository has data. The exact field layout inside `/data/supervisor.json` is Phase 2's
+  contract; Phase 3 assumes one entry per repository (`repository` = `owner/repo`) with the state, keeps that
+  assumption inside the reader and its tests, and documents it as the interface Phase 2 has to meet.
 
 ### Access-log sink and last fetch (MRP-15)
 - **D-20:** lighttpd writes its access log to a pipe (`accesslog.filename = "|<sink>"`). The sink maps the hash in the
@@ -107,15 +112,28 @@ plain `api` source badge (Phase 4); reverse-proxy documentation and the HTTPS cl
   `fetch: <user> → <owner>/<repo>`. It never writes the hash or the raw request line anywhere: not to stdout or stderr,
   not to the add-on log, not to a file. `server.breakagelog = "/dev/null"` stays. Phase 1 T-01-02 ("no access log")
   changes to "access log only into the sink"; the security model is updated accordingly.
-- **D-21:** "Last fetch" is persisted in a new contract file under `/data` (survives restarts and is part of backups like
-  `access.json`): JSON with a `schema` field, mode 0600, atomic replace, exactly one writer. It is documented in
-  DOCS.md "Contracts" like the Phase 1 files (names, fields, write rules, timestamps in ISO 8601 UTC with `Z`). The GUI
-  reads it.
+- **D-21 (user decision 2026-11-18, option-a):** "Last fetch" is persisted in `/data/last-fetch.json` (survives restarts
+  and is part of backups like `access.json`) as a list:
+  `{"schema": 1, "updated": <timestamp>, "entries": [{"repository": "owner/repo", "user": "<label>", "last_fetch": <timestamp>}]}`.
+  Mode 0600, atomic replace, exactly one writer, no hash stored. It is documented in DOCS.md "Contracts" like the
+  Phase 1 files (names, fields, write rules, timestamps in ISO 8601 UTC with `Z`). The GUI reads it. This decision
+  replaces the blocking checkpoint that plan 03-02 had for the file name and layout.
 - **D-22:** The sink must not widen any permission: `/data` stays 0700, `access.json` 0600, access directories 0711
   (Phase 1 T-01-09, T-01-21). How the sink gets the hash-to-user mapping given that lighttpd runs as `lighttpd` is a
   research item (see Open questions); a design where the piped process forwards only (owner, repo, hash) over a private
   channel to a root-side component is acceptable when the hash is never logged and never persisted outside 0600 files in
   `/data`.
+
+### Version in the top bar (user decision 2026-11-18)
+- **D-30:** The top bar shows the full add-on version including the subpatch (for example `0.1.0-3`) through the
+  `Topbar` prop `version`. The value is written into the image at build time, without hand maintenance and without
+  touching the 3-file versioning: CI (`.github/workflows/_build-template.yml`) and `make build-addon` already pass the
+  standard build argument `BUILD_VERSION` with the `config.yaml` version (subpatch included), while `build.yaml` args
+  other than the standard ones never reach the CI build. The Dockerfile declares `ARG BUILD_VERSION` and stores the
+  value in a file in the image that the GUI reads (no Supervisor call, no token). `build.yaml` is not changed, and
+  `make update-version` keeps working as before. Without the argument (a plain `docker build`) the GUI shows no
+  version instead of a wrong one; the GUI verify script passes `BUILD_VERSION` from `config.yaml` and checks the shown
+  text.
 
 ### Info view (MRP-16)
 - **D-23:** Info view with static, translated text and no actions: how to add a store URL in Home Assistant (copy it from
@@ -163,8 +181,8 @@ plain `api` source badge (Phase 4); reverse-proxy documentation and the HTTPS cl
   handshake of `ls-remote`), and whether last fetch survives a rotation; documented either way.
 - Behaviour of the sink for an unknown or revoked hash (no line, or a line without the hash), log level and throttling of
   the `fetch:` lines.
-- Navigation (`Topbar` with `nav="topbar"` or tabs), poll intervals, panel icon and title in `config.yaml`, version text
-  in the top bar.
+- Navigation (`Topbar` with `nav="topbar"` or tabs), poll intervals, panel icon and title in `config.yaml`.
+- Path and format of the version file in the image, and how the GUI hands the version to the page (D-30).
 - Module layout under `app/web/` and of the sink, s6 service names other than `gui`.
 
 </decisions>
@@ -250,12 +268,11 @@ plain `api` source badge (Phase 4); reverse-proxy documentation and the HTTPS cl
 <open_questions>
 ## Open Questions (not decided; collected for the manager, not blocking planning)
 
-- **Q-1 (registration source):** Phase 2 writes the registration state to a place it has not fixed yet. Assumption:
-  Phase 3 ships the isolated reader returning "no data" (D-19); whichever phase merges second wires the reader to the
-  real source in a small follow-up.
-- **Q-2 (sink privileges):** Can a lighttpd piped logger read `/data/access.json` without widening permissions? Depends
-  on whether lighttpd spawns piped loggers before dropping to user `lighttpd` and on respawn behaviour. Research
-  decides the mechanism within D-22.
+- **Q-1 (registration source):** Resolved by D-19: `/data/supervisor.json` with the states `registered`, `missing`,
+  `leftover`, `error`. Still open: the exact field layout inside that file, which Phase 2 owns; Phase 3's reader states
+  its assumption, and whichever phase merges second aligns the reader if Phase 2's layout differs.
+- **Q-2 (sink privileges):** Answered by research: the piped logger runs as `lighttpd` and cannot read
+  `/data/access.json`; the forwarder plus root receiver design in 03-RESEARCH.md is used (D-22).
 - **Q-3 (rotation of `local`):** Assumption: the GUI never revokes or rotates the `local` system user (D-13). If the
   user wants that from the GUI, it needs a request path to the Supervisor-aware process from Phase 2, which this phase
   does not build.
@@ -277,4 +294,5 @@ plain `api` source badge (Phase 4); reverse-proxy documentation and the HTTPS cl
 ---
 
 *Phase: 03-management-gui*
-*Context gathered: 2026-11-18 (from SPIKE.md, Phase 1 contracts and the manager brief; discuss step skipped)*
+*Context gathered: 2026-11-18 (from SPIKE.md, Phase 1 contracts and the manager brief; discuss step skipped); amended
+2026-11-18 (D-19, D-21, D-30 user decisions)*

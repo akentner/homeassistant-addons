@@ -173,7 +173,9 @@ def read_status(paths: Paths) -> dict | None:
     return doc if isinstance(doc, dict) else None
 ```
 
-Phase 3 ships `read_registration(paths) -> None` with the same signature and docstring style.
+Phase 3 ships `read_registration(paths)` with the same signature and docstring style. Amended D-19 (user decision
+2026-11-18): it reads `/data/supervisor.json` like `read_status` reads `status.json` (no lock, never renames) and
+returns None for a missing, unreadable or malformed file; the assumed layout is stated in Plan 03-01.
 
 ---
 

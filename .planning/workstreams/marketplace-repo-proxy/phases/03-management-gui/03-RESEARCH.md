@@ -55,6 +55,10 @@ GUI reads raise the WR-04 exposure (rename to `.corrupt` on a transient read err
 
 ## User Constraints (from CONTEXT.md)
 
+> **Amended 2026-11-18:** user decisions D-19 (registration from `/data/supervisor.json`), D-21
+> (`/data/last-fetch.json`, option-a) and D-30 (version in the top bar) in 03-CONTEXT.md supersede the copies below and
+> every recommendation in this file that conflicts with them.
+
 ### Locked Decisions
 
 #### GUI server and blueprint (MRP-12)
@@ -477,6 +481,8 @@ Design rules for the plan:
 
 ### `/data/last-fetch.json` contract (proposal for DOCS.md "Contracts")
 
+> Adopted as D-21 (user decision 2026-11-18, option-a): name and layout below are fixed.
+
 ```json
 {
   "schema": 1,
@@ -814,6 +820,10 @@ def _sync(paths: Paths) -> int:
 
 ### Pattern 6: registration slot (D-19)
 
+> **Superseded in part by amended D-19 (user decision 2026-11-18):** `read_registration` reads `/data/supervisor.json`
+> (states `registered`, `missing`, `leftover`, `error`) instead of returning None; the assumed field layout is stated in
+> Plan 03-01. The normalised shape and the view rule below still apply.
+
 ```python
 # app/web/registration.py — the ONLY place that will change when Phase 2 lands
 """Registration status of each repository in the local add-on store (Phase 2 data); no data in Phase 3."""
@@ -838,7 +848,8 @@ def read_registration(paths: Paths) -> dict[str, dict] | None:
     - `Topbar` with `views`, `activeId` and `nav="topbar"`, plus `useHashRoute`. Three views: `repositories`
       (default), `access`, `info`.
     - No `icon.png` exists in the add-on, so pass `iconSrc={null}` and avoid a Dockerfile change.
-    - No `version`: reading the add-on version needs the Supervisor token, which the GUI must not have (D-07).
+    - ~~No `version`~~ superseded by D-30: the version comes from the build argument `BUILD_VERSION` written into the
+      image (Plan 03-01), not from the Supervisor, so the GUI still holds no token (D-07).
     - No `infoPath`: it needs the Supervisor slug.
 - **Access view:**
     - One card per configured repository, a `DataTable` of users (label, source `Badge`, created, last fetch), and an
@@ -1284,13 +1295,20 @@ asks for it.)
       reversibility note. Plan 03-01 Task 2 pins it in pytest. Plan 03-06 Task 2 adds the view side
       (`REGISTRATION_KEYS`, `hasRegistration`, a column shown only with data). The manager passes the shape to the
       Phase 2 owner (03-01 "Edge coverage", assumption A4).
+    - **Amended by D-19 (user decision 2026-11-18):** the four states are fixed and the source is
+      `/data/supervisor.json`; `read_registration` reads it (Plan 03-01) instead of returning None. Only the field layout
+      inside that file stays an assumption (Phase 2's contract).
 2. **Should `fetchlog` also count `info/refs` 200 as "seen"?** RESOLVED
     - What we know: protocol v2 already counts `ls-remote`.
     - Recommendation: no. Keep the single POST-200 definition and document it.
-    - **Resolution:** adopted, `info/refs` does not count. Plan 03-02 Task 2 limits `fetchsink.LINE_RE` to
-      `POST …/git-upload-pack 200`, and Plan 03-02 Task 3 tests that `GET …/info/refs 200` is dropped. Plan 03-05
+    - **Resolution:** adopted, `info/refs` does not count. Plan 03-02 Task 1 limits `fetchsink.LINE_RE` to
+      `POST …/git-upload-pack 200`, and Plan 03-02 Task 2 tests that `GET …/info/refs 200` is dropped. Plan 03-05
       Task 2 documents the definition in DOCS.md "Contracts".
-3. **Topbar version text.** RESOLVED
+3. **Topbar version text.** SUPERSEDED by D-30 (user decision 2026-11-18)
+    - **D-30:** the top bar shows the full add-on version with subpatch. The Dockerfile declares `ARG BUILD_VERSION`
+      (passed as the `config.yaml` version by CI `_build-template.yml` and `make build-addon`) and writes it into a file
+      in the image that the GUI reads; no Supervisor call, no token, `build.yaml` unchanged. Plan 03-01 implements it,
+      Plan 03-06 tests the rendering. The original resolution below is kept for the record only.
     - Not available without the Supervisor token. The build arg `VERSION` lacks the subpatch.
     - Recommendation: omit. Revisit when Phase 2 provides a Supervisor-aware process that could write the version into
       a file.
