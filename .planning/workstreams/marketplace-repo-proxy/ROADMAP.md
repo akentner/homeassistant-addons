@@ -90,7 +90,7 @@ Plans:
 4. "Last fetch" per user is shown, fed by the lighttpd access-log sink, which never logs the hash.
 5. The GUI port is never published; requests outside ingress get 403.
 
-**Plans**: 2/6 plans executed
+**Plans**: 3/6 plans executed
 
 Plans:
 **Wave 1**
@@ -98,7 +98,7 @@ Plans:
 - [x] 03-02-PLAN.md — (wave 1) Access-log sink programs and the `/data/last-fetch.json` contract
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 03-06-PLAN.md — (wave 2) Sync now, registration slot, node tests, admin-ui consumer wiring, CI
+- [x] 03-06-PLAN.md — (wave 2) Sync now, registration slot, node tests, admin-ui consumer wiring, CI
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 03-03-PLAN.md — (wave 3) Access view: add, revoke, rotate (type-to-confirm), store URLs, source badge
@@ -147,6 +147,6 @@ released.
 | ------------------------------ | -------------- | ----------- | --------- |
 | 1. Git serving core            | 6/6 | In Progress | -         |
 | 2. Supervisor integration      | 0/TBD          | Not started | -         |
-| 3. Management GUI              | 2/6 | In Progress | -         |
+| 3. Management GUI              | 3/6 | In Progress | -         |
 | 4. Provisioning API            | 0/TBD          | Not started | -         |
 | 5. Public exposure and release | 0/TBD          | Not started | -         |
