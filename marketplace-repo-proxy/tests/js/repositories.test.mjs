@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { install, findAll, prop, settle } from "./fakedom.mjs";
+import { auditNames, auditTables } from "./a11y_audit.mjs";
 
 const doc = install();
 const STATIC = new URL("../../app/web/static/", import.meta.url);
@@ -336,6 +337,25 @@ for (const [name, handler] of [
     assert.equal(cls(header(root), "notice").length, 0);
     assert.equal(tag(root, "table").length, 1);
     assert.equal(calls.filter((c) => c.url.endsWith("api/meta")).length, 1);
+    render(null, root);
+  });
+}
+
+// ---- accessibility audits ----
+
+for (const [name, rows] of [
+  ["all-null registration", [repo(), repo({ repository: "example-org/b", status: "fetch_failed", message: "x" })]],
+  [
+    "registration data",
+    [repo({ registration: { state: "leftover", detail: "x" } }), repo({ repository: "example-org/b", registration: null })],
+  ],
+]) {
+  test(`a11y: named controls and scoped table headers with ${name}`, async () => {
+    setRoutes({ overview: async () => reply(200, overview({ repositories: rows })) });
+    const root = await mountView();
+    assert.equal(tag(root, "table").length, 1);
+    assert.deepEqual(auditNames(root), []);
+    assert.deepEqual(auditTables(root), []);
     render(null, root);
   });
 }
