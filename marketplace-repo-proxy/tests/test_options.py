@@ -9,6 +9,7 @@ import pytest
 from app.options import (
     DEFAULT_INTERVAL,
     MIN_INTERVAL,
+    PUBLIC_URL_REJECTED,
     Options,
     OptionsError,
     RepoSpec,
@@ -138,13 +139,17 @@ def test_sync_interval_defaults_to_15():
         ("h.example", "", True),
         ("https://", "", True),
         (42, "", True),
+        ("https://user:pw@h.example", "", True),
+        ("https://user@h.example", "", True),
+        ("https://h.example/?k=v", "", True),
+        ("https://h.example/#frag", "", True),
     ],
 )
 def test_public_url_is_normalised_or_rejected(value, expected, rejected):
     data = {} if value is None else {"public_url": value}
     options = parse_options(data)
     assert options.public_url == expected
-    assert options.rejected == (("public_url: must be an http(s) URL with a host",) if rejected else ())
+    assert options.rejected == ((PUBLIC_URL_REJECTED,) if rejected else ())
 
 
 def test_unknown_log_level_falls_back_to_info():

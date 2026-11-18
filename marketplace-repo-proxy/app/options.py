@@ -15,6 +15,7 @@ LOG_LEVELS = ("debug", "info", "warning", "error")
 OWNER_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")
 REPO_RE = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,200}$")
+PUBLIC_URL_REJECTED = "public_url: must be an http(s) URL with a host, without credentials, query or fragment"
 
 
 class OptionsError(Exception):
@@ -89,9 +90,18 @@ def _public_url(value: Any, rejected: list[str]) -> str:
     if isinstance(value, str):
         url = value.strip().rstrip("/")
         parts = urlsplit(url)
-        if parts.scheme in ("http", "https") and parts.hostname:
+        # No userinfo, query or fragment: the URL is logged at startup, so credentials in it would reach the log
+        if (
+            parts.scheme in ("http", "https")
+            and parts.hostname
+            and "@" not in parts.netloc
+            and not parts.query
+            and not parts.fragment
+            and "?" not in url
+            and "#" not in url
+        ):
             return url
-    rejected.append("public_url: must be an http(s) URL with a host")
+    rejected.append(PUBLIC_URL_REJECTED)
     return ""
 
 

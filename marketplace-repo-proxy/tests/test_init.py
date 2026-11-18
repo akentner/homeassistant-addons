@@ -136,6 +136,16 @@ def test_startup_log_adds_masked_public_url(paths, users, caplog):
         assert hash_ not in caplog.text
 
 
+def test_credentials_in_public_url_never_reach_the_log(paths, users, caplog):
+    secret = "sentinel" + "-basic-" + "0002"
+    write_options(paths, public_url=f"https://operator:{secret}@addons.example.invalid/")
+    assert init(paths, caplog) == 0
+    assert secret not in caplog.text
+    assert "operator:" not in caplog.text
+    assert not any("| public" in line for line in lines(caplog))
+    assert any(line.startswith("ignoring option entry: public_url:") for line in lines(caplog, logging.WARNING))
+
+
 def test_unconfigured_entries_are_summarised_and_stay_inactive(paths, users, caplog):
     assert init(paths, caplog) == 0
     info = lines(caplog)

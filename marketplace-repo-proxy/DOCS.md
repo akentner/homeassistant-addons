@@ -43,7 +43,8 @@ base image only, 3-file version sync via `make update-version`, and a local `doc
 
 Users and their access hashes never appear in the options. They live in `/data/access.json` (see
 [Managing users](#managing-users) and [Contracts](#contracts)). An invalid or duplicate entry in `repositories` is
-skipped with a warning in the log; the other entries keep working.
+skipped with a warning in the log; the other entries keep working. A `public_url` with credentials (`user:password@`), a
+query or a fragment is ignored the same way, so no credentials reach the log.
 
 Example:
 
