@@ -42,6 +42,11 @@ class AccessSchemaError(AccessError):
     """access.json carries a schema version this code does not know."""
 
 
+def new_hash() -> str:
+    """RED stub; implemented in the GREEN step."""
+    return "0" * 32
+
+
 def _empty() -> dict[str, Any]:
     return {"schema": SCHEMA, "entries": []}
 
@@ -90,6 +95,10 @@ class AccessStore:
 
     def entries(self) -> list[dict[str, Any]]:
         return list(self.load()["entries"])
+
+    def add(self, repository: str, user: str, source: str = "cli", hash_: str | None = None) -> dict[str, Any]:
+        """RED stub; implemented in the GREEN step."""
+        raise AccessError("not_implemented")
 
     def reconcile(self, specs: Iterable[RepoSpec]) -> int:
         with self.locked():
