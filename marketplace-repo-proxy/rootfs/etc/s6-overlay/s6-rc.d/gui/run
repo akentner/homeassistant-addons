@@ -1,0 +1,4 @@
+#!/bin/sh
+# Deliberately NOT with-contenv: the GUI never sees the upstream token or the Supervisor token (D-07)
+cd /opt/marketplace-repo-proxy || exit 1
+exec env PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 python3 -m app.gui

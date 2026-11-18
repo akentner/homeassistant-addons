@@ -1,0 +1,3 @@
+#!/bin/sh
+# Let s6 restart the management page; throttle a crash loop (git serving continues meanwhile)
+sleep 3

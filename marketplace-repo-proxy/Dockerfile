@@ -12,3 +12,7 @@ COPY app/ ./app/
 COPY rootfs/ /
 # run.sh is the body of the s6 oneshot "init"; s6-overlay (PID 1) supervises the lighttpd and sync longruns
 COPY run.sh /etc/s6-overlay/s6-rc.d/init/run
+
+# Full add-on version (with subpatch) for the GUI top bar, passed by CI and make build-addon; empty without it
+ARG BUILD_VERSION
+RUN printf '%s\n' "${BUILD_VERSION}" > /opt/marketplace-repo-proxy/BUILD_VERSION

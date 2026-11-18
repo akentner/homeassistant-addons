@@ -1,0 +1,13 @@
+/* Marketplace Repo Proxy layout on top of vendor/admin-ui/base.css. Tokens only, no literal colours. */
+main { padding: 12px 16px; }
+.repo-card { min-width: 0; }
+.repo-card h2 { margin: 0 0 8px; font-size: 16px; }
+.repo-table { overflow-x: auto; }
+.repo-table table.data { width: 100%; }
+.repo-name { font-weight: 600; overflow-wrap: anywhere; }
+.repo-sub { display: block; color: var(--mut); font-size: 12px; }
+.repo-message { display: block; margin-top: 2px; color: var(--mut); font-size: 12px; overflow-wrap: anywhere; }
+.repo-sha { font-family: ui-monospace, monospace; font-size: 12px; }
+.sync-line { margin: 0 0 8px; color: var(--mut); font-size: 13px; }
+/* statusKind() returns "err"; same look as the lib's .badge.error */
+.badge.err { color: var(--err); border-color: var(--err); }
