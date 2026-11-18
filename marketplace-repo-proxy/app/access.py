@@ -26,6 +26,7 @@ SCHEMA = 1
 HASH_RE = re.compile(r"^[0-9a-f]{32}$")
 USER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SOURCES = ("gui", "api", "system", "cli")
+RESERVED_USERS: frozenset[str] = frozenset()  # RED stub
 
 LOG = logging.getLogger("mrp.access")
 _THREAD_LOCK = threading.RLock()
@@ -109,7 +110,14 @@ class AccessStore:
     def entries(self) -> list[dict[str, Any]]:
         return list(self.load()["entries"])
 
-    def add(self, repository: str, user: str, source: str = "cli", hash_: str | None = None) -> dict[str, Any]:
+    def add(
+        self,
+        repository: str,
+        user: str,
+        source: str = "cli",
+        hash_: str | None = None,
+        specs: Iterable[RepoSpec] | None = None,
+    ) -> dict[str, Any]:
         """Append one entry (re-reads the file under the lock); unknown keys and fields are kept untouched."""
         try:
             parse_repository(repository)
@@ -149,6 +157,15 @@ class AccessStore:
             self.paths.access_file.parent.mkdir(parents=True, exist_ok=True)
             atomic_write_json(self.paths.access_file, doc)
             return dict(entry)
+
+    def get(self, repository: str, user: str) -> dict[str, Any] | None:  # RED stub
+        return None
+
+    def list_entries(self, repository: str | None = None) -> list[dict[str, Any]]:  # RED stub
+        return []
+
+    def revoke(self, repository: str, user: str, specs: Iterable[RepoSpec] | None = None) -> bool:  # RED stub
+        return False
 
     def reconcile(self, specs: Iterable[RepoSpec]) -> int:
         with self.locked():
