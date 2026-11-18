@@ -1,4 +1,4 @@
-"""Service layer of the management page: token-free options, repository overview and build version.
+"""Service layer of the management page: token-free options, repository overview, Sync now and build version.
 
 The GUI keeps only non-secret options: `GuiConfig.options` always has `github_token == ""` (D-07). Sync state comes from
 `/data/status.json` (single writer `sync`, atomic replace, no lock needed; D-17) and the optional registration state
@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from app.jsonio import atomic_write_json
 from app.logsetup import mask_hashes
 from app.options import Options, load_options
 from app.paths import Paths
@@ -141,3 +142,12 @@ class GuiService:
 
     def meta(self) -> dict[str, Any]:
         return {"version": self.config.version}
+
+    def request_sync(self) -> dict[str, Any]:
+        """Create the Phase 1 trigger file (same as `mrp sync`); the sync service starts a full cycle within a second."""
+        if not self.paths.run_dir.is_dir():
+            self.paths.run_dir.mkdir(parents=True, exist_ok=True)
+            self.paths.run_dir.chmod(0o700)
+        atomic_write_json(self.paths.trigger_file, {})
+        LOG.info("gui: sync requested")
+        return {"requested": True}

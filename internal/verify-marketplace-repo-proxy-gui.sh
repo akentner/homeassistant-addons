@@ -359,4 +359,21 @@ ok "GUI environment holds neither the PAT nor SUPERVISOR_TOKEN (positive control
 docker exec "${PROXY}" rm -f /tmp/needles-pat /tmp/needles-supervisor
 
 ok "tracer: overview through ingress end to end"
+
+echo "==> (9) Sync now"
+SYNC_BEFORE="$(sync_field last_started)"
+[ "$(sync_field state)" = "idle" ] || fail "sync is not idle before Sync now"
+gui_call "${INGRESS_CLIENT}" "api/sync" -X POST -H "${INGRESS_HEADER}"
+[ "${GUI_CODE}" = "400" ] || fail "POST api/sync without body: HTTP ${GUI_CODE}, expected 400"
+[ "$(jget "${GUI_BODY}" 'd.get("error")')" = "bad_request" ] || fail "POST api/sync without body: not bad_request"
+ok "POST api/sync without body: 400 bad_request"
+gui_call "${INGRESS_CLIENT}" "api/sync" -X POST -H "${INGRESS_HEADER}" -H 'Content-Type: application/json' -d '{}'
+[ "${GUI_CODE}" = "202" ] || fail "POST api/sync with {}: HTTP ${GUI_CODE}, expected 202"
+[ "$(jget "${GUI_BODY}" 'd["requested"]')" = "true" ] || fail "POST api/sync with {}: requested is not true"
+ok "POST api/sync with {}: 202 requested"
+sync_requested_cycle() {
+    [ "$(sync_field reason)" = "request" ] && [ "$(sync_field last_started)" != "${SYNC_BEFORE}" ]
+}
+wait_for 30 "a sync cycle with reason request" sync_requested_cycle
+ok "status.json: sync.reason request, last_started advanced past ${SYNC_BEFORE}"
 echo "✓ GUI verify: all checks passed"

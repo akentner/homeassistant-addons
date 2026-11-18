@@ -74,9 +74,10 @@ def test_real_ingress_remote_refuses_loopback_with_header(serve: Any, paths: Pat
 
 def test_no_public_route(paths: Paths) -> None:
     router = build_router(make_service(paths))
-    assert router.routes
-    assert not any(router.is_public(method, pattern) for method, pattern in router.routes)
-    assert {("GET", "/api/overview"), ("GET", "/api/meta"), ("POST", "/api/sync")} <= set(router.routes)
+    routes = router.routes()
+    assert routes
+    assert not any(router.is_public(method, pattern) for method, pattern in routes)
+    assert {("GET", "/api/overview"), ("GET", "/api/meta"), ("POST", "/api/sync")} <= set(routes)
 
 
 def test_static_page_served_through_ingress(serve: Any, paths: Paths) -> None:

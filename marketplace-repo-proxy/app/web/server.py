@@ -36,8 +36,17 @@ def build_router(service: GuiService) -> Router:
     def api_meta(_req: Request) -> dict[str, Any]:
         return service.meta()
 
+    def api_sync(req: Request) -> tuple[int, dict[str, Any]]:
+        # A JSON object body is required: it forces a CORS preflight for cross-origin callers (CSRF hardening)
+        if not isinstance(req.json, dict):
+            raise ApiError("bad_request", "JSON object body required")
+        if req.json:
+            raise ApiError("bad_request", "unknown field")
+        return 202, service.request_sync()
+
     router.add("GET", "/api/overview", api_overview)
     router.add("GET", "/api/meta", api_meta)
+    router.add("POST", "/api/sync", api_sync)
     return router
 
 
