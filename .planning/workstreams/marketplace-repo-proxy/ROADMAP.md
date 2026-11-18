@@ -86,16 +86,16 @@ Plans:
 - [ ] 02-03-PLAN.md — (wave 3) Reserved `local` labels, `mrp local status|remove`, request queue, refusal as leftover
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 02-04-PLAN.md — (wave 4) `mrp local rotate` (add first, rollback), interrupted/orphaned leftover detection
+- [ ] 02-04-PLAN.md — (wave 4) `mrp local rotate --yes` (warning, add first, old URL revoked at once, rollback), interrupted/orphaned leftover detection
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 02-05-PLAN.md — (wave 5) Verify script: recreate, reload limit, rotation refusal and retry, removal, request audit, token hygiene
+- [ ] 02-05-PLAN.md — (wave 5) Verify script: recreate, reload limit, confirmed rotation with refusal and retry, all four registration values, removal, request audit, token hygiene
 
 **Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 02-06-PLAN.md — (wave 6) Docs (store registration, supervisor.json, manager-role note), CHANGELOG [0.1.0-2], bump 0.1.0-2
+- [ ] 02-06-PLAN.md — (wave 6) Docs (store registration, rotation warning, supervisor.json incl. registration values, manager-role note), CHANGELOG [0.1.0-2], bump 0.1.0-2
 
-**Wave 7** *(blocked on Wave 6 completion; checkpoints before every host action)*
-- [ ] 02-07-PLAN.md — (wave 7) Live E2E on the production host with full cleanup (`autonomous: false`)
+**Wave 7** *(executed after the squash merge of 02-01..02-06, as a separate follow-up step with the published `0.1.0-2`; checkpoints before every host and GitHub action)*
+- [ ] 02-07-PLAN.md — (wave 7) Live E2E on the production host with full cleanup (`autonomous: false`); precondition check, private test repository via `gh`
 
 ### Phase 3: Management GUI
 

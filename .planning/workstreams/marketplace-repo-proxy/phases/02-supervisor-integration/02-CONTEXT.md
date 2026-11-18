@@ -63,9 +63,26 @@ Phase 1 (WR-01, WR-04, IN-01 to IN-07) stay deferred unless a Phase 2 change tou
   loop. The proxy never calls anything that uninstalls add-ons.
 - **D-10:** A leftover (old URL still registered because the Supervisor refused) is recorded in a machine-readable place
   that the Phase 3 GUI can show (registration status, MRP-13), and logged at warning level.
-- **D-11:** The old access entry (and its symlink) of a rotated `local` user: SPIKE says "the old URL stops working right
-  away" for rotations. For the `local` user this would break the leftover store repository's updates for still-installed
-  add-ons. **Not decided here — see Open questions Q-2.**
+- **D-28 (user decision 2026-11-18, alignment with Phase 3):** The registration status of the `local` user in
+  `/data/supervisor.json` is one field per repository with exactly the fixed values `registered`, `missing`, `leftover`,
+  `error`. No other value is ever written there (no `pending`, `interrupted`, `orphaned`, ...); finer detail may live in
+  separate fields but never as a status value. Phase 3 renders the four values through fixed i18n keys, so the value set
+  is part of the `supervisor.json` contract and is documented in DOCS.md. The mapping of internal situations to the four
+  values (and the precedence when several apply, e.g. current URL registered while an old store repository is a
+  leftover) is defined once in the contract and tested.
+- **D-29 (user decision 2026-11-18, Phase 3 interface):** `/data/supervisor.json` always contains this structure, which
+  Phase 3 reads as is: a top-level key `repositories` holding a list of objects
+  `{"repository": "owner/repo", "registration": "registered|missing|leftover|error", "message": "..."}`. `message` is
+  optional, a plain human-readable string without secrets, URLs or hashes (no token, no store URL, no access hash, no
+  Supervisor error text that contains a URL). Further keys are allowed at the top level and inside each object, but this
+  structure must always be present and valid. The contract (DOCS.md) and the Phase 2 tests (pytest and the verify
+  script) assert exactly this shape, the D-28 value set and the absence of secrets, URLs and 32-hex values in `message`.
+- **D-11 (user decision 2026-11-18, Q-2):** Rotating the `local` user revokes the old URL **immediately**, like any user
+  rotation (SPIKE "Rotation is expensive"): the old access entry and its symlink are removed in the same rotation, so
+  the old URL gets 404 right away. Before rotating, the operator gets a clear warning that add-ons installed from the old
+  store repository get no updates until they are reinstalled from the new one. The leftover lifecycle of the old store
+  repository (D-09/D-10: removal attempted, refusal reported, never forced) stays unchanged. There is no
+  keep-old-URL-serving variant and no `--revoke-old` flag.
 
 ### Tests (manager brief)
 - **D-12:** No test talks to a real Supervisor. pytest uses a fake Supervisor (stdlib HTTP server or injected
@@ -79,6 +96,18 @@ Phase 1 (WR-01, WR-04, IN-01 to IN-07) stay deferred unless a Phase 2 change tou
 ### Live E2E (MRP-11, manager brief)
 - **D-14:** The live E2E is its own plan, `autonomous: false`, last in the phase. It runs on the production host
   (named only "production host" in every file and commit message) through the `ha` wrapper (SSH); tests never touch it.
+- **D-24 (user decision 2026-11-18, Q-1):** The E2E runs **after** the squash merge of Plans 02-01 to 02-06, with the CI
+  image `0.1.0-2` installed from this repository (install source as decided in SPIKE, hostname
+  `{repo-hash}-marketplace-repo-proxy`). Plan 02-07 is executed as a follow-up step after that merge, not together with
+  02-01 to 02-06; it has no install-source decision checkpoint and no local-copy variant. A defect found in the E2E is
+  fixed as a further subpatch (`0.1.0-3`).
+- **D-25 (user decision 2026-11-18, Q-5):** At E2E time the executing worker creates the private test repository with
+  `gh` under the user's GitHub account and pushes its content (`repository.yaml`, one trivial test add-on) and later the
+  update commit. The user creates the fine-grained PAT (Contents: read-only, selected repositories incl. the test
+  repository) and enters it in the proxy options; the worker never creates or handles the PAT. The test repository name
+  never appears in repository files, plan files, SUMMARYs or commit messages. After the E2E the test repository stays
+  until the user decides about deleting it; that decision is its own checkpoint, and deletion happens only on explicit
+  approval.
 - **D-15:** There is a checkpoint before **every** action on the host; the user approves each one through the manager.
   Sequence: add the store repository (via the proxy's self-registration) → install a test add-on from it → change
   upstream → update visible in the store (proves MRP-09 without waiting for the 3-hour Supervisor reload) → full
@@ -94,9 +123,13 @@ Phase 1 (WR-01, WR-04, IN-01 to IN-07) stay deferred unless a Phase 2 change tou
   `make update-version ADDON=marketplace-repo-proxy VERSION=0.1.0-2 NO_TAG=yes` (never by hand). CHANGELOG.md gets
   `## [0.1.0-2] - <date>`. No tag in the plan; the manager tags after the squash merge onto `main` (Phase 1 D-32).
 - **D-19:** DOCS.md documents `register_local` (now effective), self-registration, store reload, rotation/removal of the
-  `local` user and the leftover report, and replaces "No effect yet". Whether DOCS.md/README.md need an explicit warning
-  about `hassio_role: manager` and the security rating is a research item (manager brief); the recommendation is in
-  Open questions Q-4.
+  `local` user and the leftover report, and replaces "No effect yet".
+- **D-26 (user decision 2026-11-18, Q-4):** DOCS.md gets a security note on `hassio_role: manager`: what the role allows,
+  why the proxy needs it, the allow-list mitigation and the lower security rating (7 → 6 per research). README.md gets a
+  one-line pointer to that note.
+- **D-27 (user decision 2026-11-18, Q-3):** No automatic removal of a `local` store repository. `register_local: false`
+  only stops adding; removing a repository from `repositories` removes nothing in the store. Removal happens only as an
+  explicit operator action.
 
 ### Repository rules (CLAUDE.md)
 - **D-20:** HA base image only. Any Dockerfile change is verified with a local `docker build` before commit.
@@ -122,27 +155,19 @@ Phase 1 (WR-01, WR-04, IN-01 to IN-07) stay deferred unless a Phase 2 change tou
 </decisions>
 
 <open_questions>
-## Open Questions (not decided; do not guess)
+## Open Questions
 
-- **Q-1 (E2E install source and order):** CI builds and publishes images only from `main`. The production host can run
-  the Phase 2 code either (a) after the squash merge and CI image of `0.1.0-2` (install source as decided in SPIKE,
-  hostname `{repo-hash}-marketplace-repo-proxy`), or (b) before the merge as a local add-on copy built on the host
-  (different hostname and therefore a different store URL; local build). The E2E plan must start with a
-  `checkpoint:decision` for this, recommending (a), and must work for both.
-- **Q-2 (old `local` URL after rotation):** Keep serving the old `local` access entry while its store repository is a
-  leftover (installed add-ons keep getting updates until the operator reinstalls), or revoke it right away like any user
-  rotation (SPIKE "Rotation is expensive")? Planner: pick the variant that keeps installed add-ons working (keep until the
-  store repository is gone), mark it as an assumption in the plan, and expose it for confirmation.
-- **Q-3 (removal triggers):** Does `register_local: false`, or removing a repository from `repositories`, remove the
-  `local` store repository automatically? Planner assumption: no automatic removal; `register_local: false` only stops
-  adding; removal is an explicit operator action. Mark as assumption.
-- **Q-4 (manager-role warning):** Recommendation: yes — DOCS.md gets a security note on what `hassio_role: manager`
-  allows, why the proxy needs it, the allow-list mitigation and the lower security rating; README.md gets a one-line
-  pointer. Research confirms the rating effect from the Supervisor source.
-- **Q-5 (E2E test repository):** The E2E needs a private upstream repository with `repository.yaml` and one trivial test
-  add-on that the configured PAT can read, and a way to change it upstream (version bump commit). Which repository is
-  used, and who pushes the change, is a `checkpoint:human-action` in the E2E plan; no repository name is written into
-  files.
+All five questions were decided by the user on 2026-11-18 and are now decisions:
+
+- **Q-1 (E2E install source and order):** decided → D-24 (after the squash merge, CI image `0.1.0-2`).
+- **Q-2 (old `local` URL after rotation):** decided → D-11 (revoke immediately, warn before rotating).
+- **Q-3 (removal triggers):** decided → D-27 (no automatic removal).
+- **Q-4 (manager-role warning):** decided → D-26 (DOCS.md security note, README pointer).
+- **Q-5 (E2E test repository):** decided → D-25 (worker creates it with `gh` at E2E time, user creates the PAT, repo
+  kept until the user decides).
+
+Research questions Q-6 (token API over TCP, socket transport later) and Q-7 (only the four allow-listed calls, no
+pre-check before DELETE) stay planner assumptions as written in the plans.
 
 </open_questions>
 
@@ -196,4 +221,5 @@ Phase 1 (WR-01, WR-04, IN-01 to IN-07) stay deferred unless a Phase 2 change tou
 ---
 
 *Phase: 02-supervisor-integration*
-*Context gathered: 2026-11-18 (from SPIKE.md and the manager brief, discuss step skipped)*
+*Context gathered: 2026-11-18 (from SPIKE.md and the manager brief, discuss step skipped); amended 2026-11-18 (user
+decisions on Q-1 to Q-5: D-11 revised, D-24 to D-27 added)*
