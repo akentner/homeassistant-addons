@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 03
-current_plan: 4
+current_plan: 5
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-11-18T23:31:47.204Z"
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-11-18T23:49:44.512Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 03 execution started
-state_head: 956478e217079c8596384f24baf8192f00bc3a11
+state_head: 2507ee7dce2adcbdd1f9a9a1043b62747f3a00eb
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 12
-  completed_plans: 9
+  completed_plans: 10
   percent: 0
 workstream: marketplace-repo-proxy
 created: 2026-11-17
@@ -23,7 +23,7 @@ current_phase_name: Management GUI
 
 ## Current Position
 
-**Current Plan:** 4
+**Current Plan:** 5
 **Total Plans in Phase:** 6
 **Status:** Ready to execute
 **Current Phase:** 03
@@ -37,8 +37,8 @@ current_phase_name: Management GUI
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T21:46:59.844Z
-**Stopped At:** Completed 03-02-PLAN.md
+**Last session:** 2026-11-18T23:49:44.481Z
+**Stopped At:** Completed 03-03-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -53,6 +53,7 @@ current_phase_name: Management GUI
 | Phase 01 P06 | 6min | 4 tasks | 7 files |
 | Phase 03 P01 | 10min | 2 tasks | 54 files |
 | Phase 03 P02 | 8min | 2 tasks | 7 files |
+| Phase 03 P03 | 14min | 3 tasks | 14 files |
 
 ## Decisions
 
@@ -78,3 +79,7 @@ current_phase_name: Management GUI
 - [Phase 03]: 03-02: fetchsink drops access records over 512 bytes before decoding and matching (MAX_LINE)
 - [Phase 03]: 03-02: AccessMap records the access.json signature also when unavailable: one read and one content-free error line per change
 - [Phase 03]: 03-06: i18n scanner sanctions BRANCH_KEYS lookups; every *_KEYS value is checked against both string tables
+- [Phase 03]: 03-03: rotate = pre-validation, revoke and add in one AccessStore lock with compensation; created reset, source kept, unknown entry fields dropped, crash fails closed
+- [Phase 03]: 03-03: every GUI access write runs read_entries_safe inside the same lock first; unreadable access.json answers 503 access_unavailable and is never replaced
+- [Phase 03]: 03-03: repository path segments match configured specs case-insensitively without trimming; revoke accepts unconfigured repositories, add/URLs/rotate do not
+- [Phase 03]: 03-03: store URLs only in the add, URL and rotate responses; the polled api/access list carries label, source, created and protected only
