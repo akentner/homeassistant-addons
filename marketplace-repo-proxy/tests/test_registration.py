@@ -1558,3 +1558,149 @@ def test_rotate_request_for_an_unconfigured_repository_is_rejected(paths: Paths,
     assert _outcome(paths) == ("rejected", "repository_unknown")
     assert _local(paths, SPEC_A) == old and _link(paths, old).is_symlink()
     _doc(paths, options)
+
+
+# --- MRP-10: leftovers after a crash, a hand edit or a hostname change (D-10, D-11, D-28; Pitfalls 5-7) ------------
+
+OLD_HOST = "old-host"
+
+
+def _interrupt_rotation(paths: Paths, fake: Fake, options: Options) -> tuple[dict, str]:
+    """A registered repository whose rotation stopped between the retire write and the revoke."""
+    old = _register(paths, fake, SPEC_A)[SPEC_A.key]
+    old_slug = _slug_of(old)
+    AccessStore(paths).retire_and_replace(SPEC_A.slug, LOCAL_USER, f"local.{old_slug}", specs=options.repositories)
+    return old, old_slug
+
+
+def _leftover_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [m for m in _messages(caplog, logging.WARNING) if " leftover " in m]
+
+
+def test_interrupted_rotation_is_revoked_by_the_pass_and_reported(
+    paths: Paths, fake: Fake, caplog: pytest.LogCaptureFixture
+) -> None:
+    options = _options(SPEC_A)
+    old, old_slug = _interrupt_rotation(paths, fake, options)
+    assert _link(paths, old).is_symlink()
+    registrar = _registrar(paths, options, fake.client())
+    caplog.set_level(logging.INFO)
+    for _ in range(3):
+        registrar.register_pass(_ok_status(SPEC_A))
+    assert _retired_entries(paths) == [] and not os.path.lexists(_link(paths, old))
+    doc = _doc(paths, options)
+    (leftover,) = doc["leftovers"]
+    assert (leftover["repository"], leftover["store_slug"], leftover["user"]) == (
+        SPEC_A.slug, old_slug, f"local.{old_slug}")
+    assert (leftover["reason"], leftover["revoked"]) == ("interrupted", True)
+    assert "…" in leftover["masked_url"] and old["hash"] not in json.dumps(leftover)
+    new = _local(paths, SPEC_A)
+    assert new is not None and new["hash"] != old["hash"] and _slug_of(new) in fake.state.repos
+    entry = _entry(doc, SPEC_A)
+    assert (entry["registration"], entry["store_slug"]) == ("leftover", _slug_of(new))
+    assert _leftover_warnings(caplog) == [f"store: {SPEC_A.slug} leftover {old_slug} (interrupted)"]
+    assert _deletes(fake) == []
+    assert not HEX32_RE.search(caplog.text) and not HEX32_RE.search(paths.supervisor_state_file.read_text())
+
+
+def test_interrupted_rotation_whose_slug_is_gone_is_revoked_without_a_leftover(
+    paths: Paths, fake: Fake, caplog: pytest.LogCaptureFixture
+) -> None:
+    options = _options(SPEC_A)
+    old, old_slug = _interrupt_rotation(paths, fake, options)
+    fake.state.repos.pop(old_slug)
+    caplog.set_level(logging.INFO)
+    _registrar(paths, options, fake.client()).register_pass(_ok_status(SPEC_A))
+    assert _retired_entries(paths) == [] and not os.path.lexists(_link(paths, old))
+    doc = _doc(paths, options)
+    assert doc["leftovers"] == []
+    new = _local(paths, SPEC_A)
+    assert new is not None
+    assert (_entry(doc, SPEC_A)["registration"], _entry(doc, SPEC_A)["store_slug"]) == ("registered", _slug_of(new))
+    assert _leftover_warnings(caplog) == [] and _deletes(fake) == []
+
+
+def _hand_drop_local(paths: Paths, spec: RepoSpec = SPEC_A) -> None:
+    """Remove the `local` entry from access.json the way a hand edit would (no lock, no link cleanup)."""
+    doc = json.loads(paths.access_file.read_text())
+    doc["entries"] = [
+        e for e in doc["entries"] if not (e["repository"] == spec.slug and e["user"] == LOCAL_USER)
+    ]
+    paths.access_file.write_text(json.dumps(doc))
+
+
+def test_hand_edited_local_entry_reports_the_old_slug_as_orphaned(
+    paths: Paths, fake: Fake, caplog: pytest.LogCaptureFixture
+) -> None:
+    options = _options(SPEC_A)
+    old = _register(paths, fake, SPEC_A)[SPEC_A.key]
+    old_slug = _slug_of(old)
+    _hand_drop_local(paths)
+    registrar = _registrar(paths, options, fake.client())
+    caplog.set_level(logging.INFO)
+    for _ in range(3):
+        registrar.register_pass(_ok_status(SPEC_A))
+    new = _local(paths, SPEC_A)
+    assert new is not None and new["hash"] != old["hash"] and _slug_of(new) in fake.state.repos
+    doc = _doc(paths, options)
+    (leftover,) = doc["leftovers"]
+    assert (leftover["store_slug"], leftover["user"], leftover["reason"]) == (old_slug, None, "orphaned")
+    assert old["hash"] not in json.dumps(leftover)
+    entry = _entry(doc, SPEC_A)
+    assert (entry["registration"], entry["store_slug"]) == ("leftover", _slug_of(new))
+    assert _leftover_warnings(caplog) == [f"store: {SPEC_A.slug} leftover {old_slug} (orphaned)"]
+    assert _deletes(fake) == [] and old_slug in fake.state.repos
+
+
+def test_hostname_change_reports_the_old_slug_as_orphaned(
+    paths: Paths, fake: Fake, caplog: pytest.LogCaptureFixture
+) -> None:
+    options = _options(SPEC_A)
+    Registrar(paths, options, fake.client(), OLD_HOST, logging.getLogger("test.store")).register_pass(
+        _ok_status(SPEC_A)
+    )
+    entry = _local(paths, SPEC_A)
+    assert entry is not None
+    old_slug = store_slug(store_url(internal_base(OLD_HOST), SPEC_A.owner, SPEC_A.name, entry["hash"]))
+    assert old_slug in fake.state.repos
+    caplog.set_level(logging.INFO)
+    registrar = _registrar(paths, options, fake.client())
+    hostname_line = "store: hostname changed since the last run; earlier store URLs are reported as leftovers"
+    assert _messages(caplog, logging.WARNING).count(hostname_line) == 1
+    for _ in range(2):
+        registrar.register_pass(_ok_status(SPEC_A))
+    new_slug = _slug_of(entry)
+    assert new_slug != old_slug and new_slug in fake.state.repos
+    doc = _doc(paths, options)
+    (leftover,) = doc["leftovers"]
+    assert (leftover["store_slug"], leftover["user"], leftover["reason"]) == (old_slug, None, "orphaned")
+    assert (_entry(doc, SPEC_A)["registration"], _entry(doc, SPEC_A)["store_slug"]) == ("leftover", new_slug)
+    assert doc["hostname"] == HOST
+    assert _messages(caplog, logging.WARNING).count(hostname_line) == 1
+    assert _leftover_warnings(caplog) == [f"store: {SPEC_A.slug} leftover {old_slug} (orphaned)"]
+    assert _deletes(fake) == [] and _local(paths, SPEC_A) == entry
+
+
+def test_same_hostname_logs_no_hostname_warning(paths: Paths, fake: Fake, caplog: pytest.LogCaptureFixture) -> None:
+    _register(paths, fake, SPEC_A)
+    caplog.set_level(logging.INFO)
+    _registrar(paths, _options(SPEC_A), fake.client())
+    assert not any("hostname changed" in m for m in _messages(caplog))
+
+
+def test_remove_request_retries_an_orphaned_leftover(paths: Paths, fake: Fake) -> None:
+    options = _options(SPEC_A)
+    old = _register(paths, fake, SPEC_A)[SPEC_A.key]
+    old_slug = _slug_of(old)
+    _hand_drop_local(paths)
+    registrar = _registrar(paths, options, fake.client())
+    registrar.register_pass(_ok_status(SPEC_A))
+    new = _local(paths, SPEC_A)
+    assert _entry(_doc(paths, options), SPEC_A)["registration"] == "leftover"
+    _request(paths)
+    registrar.run_due()
+    assert _deletes(fake) == [old_slug] and old_slug not in fake.state.repos
+    assert _outcome(paths) == ("done", "")
+    doc = _doc(paths, options)
+    assert doc["leftovers"] == [] and _entry(doc, SPEC_A)["registration"] == "registered"
+    assert _local(paths, SPEC_A) == new and _link(paths, new).is_symlink()
