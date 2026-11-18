@@ -43,6 +43,10 @@ test("german texts are real german, not copied english (except names, symbols an
     "mrp.repo.col.head",
     "mrp.repo.col.addons",
     "mrp.status.ok",
+    "mrp.source.gui",
+    "mrp.source.cli",
+    "mrp.source.api",
+    "mrp.source.system",
   ]);
   assert.deepEqual(same.filter((key) => !allowed.has(key)), []);
 });

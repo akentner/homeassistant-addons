@@ -87,3 +87,36 @@ export function pollMs(overview) {
   if (sync && (sync.requested === true || sync.state === "running")) return POLL_BUSY_MS;
   return POLL_IDLE_MS;
 }
+
+// Source of an access entry (who created it, D-14). Literal table: the view indexes it only with an own key.
+export const SOURCE_KEYS = {
+  gui: "mrp.source.gui",
+  cli: "mrp.source.cli",
+  api: "mrp.source.api",
+  system: "mrp.source.system",
+};
+
+// True for one of the four known sources.
+export function isSource(source) {
+  return has(SOURCE_KEYS, source);
+}
+
+// Badge kind of a source: the add-on's own system user stands out, everything else is neutral.
+export function sourceKind(source) {
+  return source === "system" ? "info" : "muted";
+}
+
+// Same pattern as USER_RE in app/access.py: ASCII letter or digit first, then letters, digits, dot, underscore and
+// hyphen, at most 64 characters.
+export const USER_LABEL_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+export function validUser(label) {
+  return typeof label === "string" && USER_LABEL_RE.test(label);
+}
+
+// "owner/repo" -> ["owner", "repo"]; anything else -> null.
+export function splitRepository(slug) {
+  if (typeof slug !== "string") return null;
+  const parts = slug.split("/");
+  return parts.length === 2 && parts[0] !== "" && parts[1] !== "" ? parts : null;
+}

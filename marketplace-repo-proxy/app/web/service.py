@@ -1,9 +1,14 @@
-"""Service layer of the management page: token-free options, repository overview, Sync now and build version.
+"""Service layer of the management page: token-free options, repository overview, Sync now, build version, access.
 
 The GUI keeps only non-secret options: `GuiConfig.options` always has `github_token == ""` (D-07). Sync state comes from
 `/data/status.json` (single writer `sync`, atomic replace, no lock needed; D-17) and the optional registration state
 from the isolated reader in `app.web.registration` (D-19). The add-on version is read once at start from the file the
 image build writes (D-30); no Supervisor call and no environment variable are involved.
+
+Access (MRP-14): `/data/access.json` is written only through `AccessStore` (D-09, D-10). Every read goes through
+`read_entries_safe` (never renames the file, WR-04), and every write first runs it inside the same store lock, so an
+unreadable file is refused instead of replaced by a file holding only the new user. The list never carries a hash or a
+URL; store URLs are built with `app.urls.store_urls` only for the add, URL and rotate responses (D-16), never logged.
 """
 
 from __future__ import annotations
@@ -16,11 +21,14 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from app.access import HASH_RE, RESERVED_USERS, SOURCES, USER_RE, AccessError, AccessStore
+from app.accessread import read_entries_safe
 from app.jsonio import atomic_write_json
 from app.logsetup import mask_hashes
-from app.options import Options, load_options
+from app.options import Options, RepoSpec, load_options, parse_repository
 from app.paths import Paths
 from app.status import BRANCH_SOURCES, STATUS_CODES, read_status
+from app.urls import store_urls
 from app.web.registration import REGISTRATION_STATES, read_registration
 
 LOG = logging.getLogger("mrp.gui")
@@ -61,6 +69,28 @@ def load_gui_config(paths: Paths, hostname: str | None = None, version_file: Pat
 
 def _text(value: Any) -> str | None:
     return value if isinstance(value, str) else None
+
+
+def _label(value: Any) -> str:
+    """A user label for a log line: only labels that pass USER_RE (no control characters, no hash-like junk)."""
+    return value if isinstance(value, str) and USER_RE.fullmatch(value) else "<invalid>"
+
+
+def _matches(entry: dict[str, Any], key: str, user: str) -> bool:
+    """Stored repository equal to `key` case-insensitively, user label exact (same rule as AccessStore)."""
+    repository = entry.get("repository")
+    return isinstance(repository, str) and repository.lower() == key and entry.get("user") == user
+
+
+def _user_row(entry: dict[str, Any]) -> dict[str, Any]:
+    """Label, source, created and the protected flag; never the hash."""
+    user, source = entry["user"], entry.get("source")
+    return {
+        "user": user,
+        "source": source if source in SOURCES else None,
+        "created": _text(entry.get("created")),
+        "protected": source == "system" or user.lower() in RESERVED_USERS,
+    }
 
 
 class GuiService:
@@ -139,6 +169,84 @@ class GuiService:
             "sync": self._sync(doc),
             "repositories": rows,
         }
+
+    # --- access (MRP-14) --------------------------------------------------------------------------------------------
+
+    def _store(self) -> AccessStore:
+        return AccessStore(self.paths)
+
+    def _spec(self, repository: Any) -> RepoSpec | None:
+        """The configured spec for `owner/repo`, matched case-insensitively and without trimming."""
+        if not isinstance(repository, str):
+            return None
+        wanted = repository.lower()
+        return next((spec for spec in self.config.options.repositories if spec.key == wanted), None)
+
+    def _require_spec(self, repository: Any) -> RepoSpec:
+        spec = self._spec(repository)
+        if spec is None:
+            raise AccessError("repository_unknown")
+        return spec
+
+    def _urls(self, spec: RepoSpec, hash_: str) -> dict[str, str]:
+        return store_urls(self.config.options, self.config.hostname, spec.owner, spec.name, hash_)
+
+    def access_list(self) -> dict[str, Any]:
+        """Configured repositories in options order (active), then unconfigured ones found in access.json (inactive).
+
+        `AccessUnavailable` propagates (503 access_unavailable); the file is never renamed. No hash, no URL.
+        """
+        entries = read_entries_safe(self._store())
+        groups: dict[str, dict[str, Any]] = {
+            spec.key: {"repository": spec.slug, "active": True, "users": []}
+            for spec in self.config.options.repositories
+        }
+        inactive: dict[str, dict[str, Any]] = {}
+        for entry in entries:
+            repository, user = entry.get("repository"), entry.get("user")
+            if not isinstance(repository, str) or not isinstance(user, str):
+                continue
+            try:
+                parse_repository(repository)
+            except (TypeError, ValueError):
+                continue
+            key = repository.lower()
+            group = groups.get(key)
+            if group is None:
+                group = inactive.setdefault(key, {"repository": repository, "active": False, "users": []})
+            group["users"].append(_user_row(entry))
+        rows = list(groups.values()) + [inactive[key] for key in sorted(inactive)]
+        for row in rows:
+            row["users"].sort(key=lambda u: u["user"])
+        return {"now_ms": int(self.clock() * 1000), "repositories": rows}
+
+    def add_user(self, repository: str, user: Any) -> dict[str, Any]:
+        """New entry with source "gui" and a new random hash; the response carries its store URLs (D-08, D-16)."""
+        spec = self._require_spec(repository)
+        store = self._store()
+        with store.locked():
+            read_entries_safe(store)  # an unreadable file is refused, never replaced (03-RESEARCH Pitfall 2)
+            entry = store.add(spec.slug, user, source="gui", specs=self.config.options.repositories)
+        LOG.info("gui: added user %s to %s", _label(entry["user"]), spec.slug)
+        return {
+            "repository": spec.slug,
+            "user": entry["user"],
+            "source": entry["source"],
+            "created": entry["created"],
+            "urls": self._urls(spec, entry["hash"]),
+        }
+
+    def user_urls(self, repository: str, user: str) -> dict[str, str]:
+        """Store URLs of one user of a configured repository (on demand only, never in the list, never logged)."""
+        spec = self._require_spec(repository)
+        entries = read_entries_safe(self._store())
+        entry = next((e for e in entries if _matches(e, spec.key, user)), None)
+        if entry is None:
+            raise AccessError("user_unknown")
+        hash_ = entry.get("hash")
+        if not isinstance(hash_, str) or not HASH_RE.fullmatch(hash_):
+            raise AccessError("invalid_hash")
+        return self._urls(spec, hash_)
 
     def meta(self) -> dict[str, Any]:
         return {"version": self.config.version}

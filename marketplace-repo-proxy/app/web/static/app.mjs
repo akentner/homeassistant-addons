@@ -12,7 +12,10 @@ import en from "./strings.en.mjs";
 
 registerStrings({ de, en });
 
-export const VIEWS = [{ id: "repositories", titleKey: "view.repositories" }];
+export const VIEWS = [
+  { id: "repositories", titleKey: "view.repositories" },
+  { id: "access", titleKey: "view.access" },
+];
 const IDS = VIEWS.map((v) => v.id);
 const DEFAULT_VIEW = "repositories";
 

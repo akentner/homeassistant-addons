@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Docker end-to-end check of the marketplace-repo-proxy management page (Phase 3): the ingress gate seen from a real
 # ingress peer, the overview of a repository synced from a local, auth-checking upstream fixture (never GitHub), the
-# add-on version in the top bar and a token-free GUI process; later plans add the access actions and the fetch sink.
+# add-on version in the top bar, a token-free GUI process and the access actions (add, URLs); later plans add the
+# fetch sink.
 # One `✓`/`✗` line per check. Builds the add-on image locally. Manual invocation:
 #   bash internal/verify-marketplace-repo-proxy-gui.sh
 # Optional env: MRP_GUI_VERIFY_PREFIX (container/network name prefix, must start with mrp-, default mrp-gui-verify),
@@ -112,6 +113,7 @@ cleanup() {
     # data is root-owned: remove it through the image itself
     if [ -n "${WORK}" ] && [ -d "${WORK}" ]; then
         docker run --rm -v "${WORK}:/w" --entrypoint sh "${IMAGE_TAG}" -c 'rm -rf /w/data' >/dev/null 2>&1 || true
+        rm -f "${WORK}"/needles-*
         rmdir "${WORK}" 2>/dev/null || true
     fi
 }
@@ -376,4 +378,56 @@ sync_requested_cycle() {
 }
 wait_for 30 "a sync cycle with reason request" sync_requested_cycle
 ok "status.json: sync.reason request, last_started advanced past ${SYNC_BEFORE}"
+echo "==> (10) Access: add through the GUI"
+# Hashes the GUI hands out go into a 0600 needles file on the host; logs and list bodies are checked against it.
+NEEDLES_HASH="${WORK}/needles-hash"
+(umask 077 && : >"${NEEDLES_HASH}")
+# usage: gui_json <method> <path> <json body>  (ingress client with the header, JSON body)
+gui_json() {
+    gui_call "${INGRESS_CLIENT}" "$2" -X "$1" -H "${INGRESS_HEADER}" -H 'Content-Type: application/json' -d "$3"
+}
+# usage: expect_error <code> <error> <label>  (checks GUI_CODE and the error field of GUI_BODY)
+expect_error() {
+    [ "${GUI_CODE}" = "$1" ] || fail "$3: HTTP ${GUI_CODE}, expected $1"
+    [ "$(jget "${GUI_BODY}" 'd.get("error")')" = "$2" ] || fail "$3: error is not $2"
+    ok "$3: $1 $2"
+}
+ingress_get "static/views/access.mjs"
+ok "ingress client: views/access.mjs 200"
+gui_json POST "api/access/${REPO}" '{"user":"carol"}'
+[ "${GUI_CODE}" = "201" ] || fail "POST api/access/${REPO} carol: HTTP ${GUI_CODE}, expected 201"
+no_store || fail "add response lacks Cache-Control: no-store"
+URL_CAROL="$(jget "${GUI_BODY}" 'd["urls"]["internal"]')"
+PUBLIC_CAROL="$(jget "${GUI_BODY}" 'd["urls"].get("public")')"
+HASH_CAROL="${URL_CAROL##*/}"
+printf '%s\n' "${HASH_CAROL}" >>"${NEEDLES_HASH}"
+if ! [[ "${HASH_CAROL}" =~ ^[0-9a-f]{32}$ ]] || [ "${URL_CAROL}" != "http://${PROXY}:8080/repo/${REPO}/${HASH_CAROL}" ]; then
+    fail "add carol: urls.internal is not http://${PROXY}:8080/repo/${REPO}/<32 hex>"
+fi
+[ "${PUBLIC_CAROL}" = "${PUBLIC_URL}/repo/${REPO}/${HASH_CAROL}" ] || fail "add carol: urls.public is not ${PUBLIC_URL}/repo/${REPO}/<same hash>"
+[ "$(jget "${GUI_BODY}" 'd["source"]')" = "gui" ] || fail "add carol: source is not gui"
+ok "POST api/access/${REPO} carol: 201, source gui, internal URL on ${PROXY}:8080 and public URL with the same new hash"
+docker exec -w /tmp "${OUTSIDE_CLIENT}" sh -ec 'rm -rf carol; git clone -q --depth 1 "$1" carol; test -f carol/repository.yaml' \
+    sh "${URL_CAROL}" || fail "git clone --depth 1 of carol's GUI URL failed or repository.yaml missing"
+ok "outside client clones carol's GUI-added store URL at once (repository.yaml present)"
+ingress_get "api/access"
+no_store || fail "api/access lacks Cache-Control: no-store"
+[ "$(jget "${GUI_BODY}" '[(u["source"], u["protected"]) for r in d["repositories"] if r["repository"] == "'"${REPO}"'" for u in r["users"] if u["user"] == "carol"]')" = "[('gui', False)]" ] \
+    || fail "api/access: carol is not listed once with source gui and protected false"
+if grep -Eq '[0-9a-f]{32}' <<<"${GUI_BODY}"; then fail "api/access holds a 32-hex run"; fi
+if grep -qF 'http' <<<"${GUI_BODY}"; then fail "api/access holds a URL"; fi
+ok "api/access lists carol (source gui, not protected) without any hash or URL"
+ingress_get "api/access/${REPO}/carol/urls"
+no_store || fail "api/access/${REPO}/carol/urls lacks Cache-Control: no-store"
+[ "$(jget "${GUI_BODY}" 'd["internal"]')" = "${URL_CAROL}" ] || fail "URL route: internal URL differs from the add response"
+ok "GET api/access/${REPO}/carol/urls: 200, same internal URL, no-store"
+gui_json POST "api/access/${REPO}" '{"user":"carol"}'
+expect_error 409 user_exists "second add of carol"
+gui_json POST "api/access/${REPO}" '{"user":"local"}'
+expect_error 400 user_reserved "add of the reserved label local"
+gui_json POST "api/access/example-org/unknown" '{"user":"carol"}'
+expect_error 404 repository_unknown "add to the unconfigured repository example-org/unknown"
+docker logs "${PROXY}" 2>&1 | grep -qF "gui: added user carol to ${REPO}" || fail "add-on log lacks the add line for carol"
+if docker logs "${PROXY}" 2>&1 | grep -qF -f "${NEEDLES_HASH}"; then fail "an access hash appears in the add-on log"; fi
+ok "add-on log names carol and ${REPO} but holds no access hash"
 echo "✓ GUI verify: all checks passed"

@@ -4,6 +4,7 @@ export default {
   "app.title": "Marketplace Repo Proxy",
 
   "view.repositories": "Repositories",
+  "view.access": "Access",
 
   "mrp.repo.title": "Published repositories",
   "mrp.repo.caption": "Configured repositories and their sync state",
@@ -43,4 +44,39 @@ export default {
   "mrp.status.no_repository_yaml": "No repository.yaml",
   "mrp.status.fetch_failed": "Fetch failed",
   "mrp.status.none": "No status",
+
+  "mrp.access.empty": "No repositories are configured. Add them in the add-on configuration.",
+  "mrp.access.caption": "Users with access to {repository}",
+  "mrp.access.col.user": "User",
+  "mrp.access.col.source": "Source",
+  "mrp.access.col.created": "Created",
+  "mrp.access.col.urls": "Store URLs",
+  "mrp.access.created_unknown": "unknown",
+  "mrp.access.no_users": "No users yet. Add one below to get a store URL for this repository.",
+  "mrp.access.add.label": "New user label",
+  "mrp.access.add.hint": "Letters, digits, dot, underscore and hyphen, at most 64 characters, starting with a letter or digit.",
+  "mrp.access.add.invalid": "This label is not valid.",
+  "mrp.access.add.submit": "Add user",
+  "mrp.access.add.done": "User {user} added",
+  "mrp.access.urls.show": "Show URLs",
+  "mrp.access.urls.hide": "Hide URLs",
+  "mrp.access.urls.secret":
+    "These store URLs grant read access to the repository. Treat them like passwords: paste them only into the add-on store of the Home Assistant instance that should use them.",
+  "mrp.access.url.internal": "Internal store URL",
+  "mrp.access.url.public": "Public store URL",
+
+  "mrp.source.gui": "GUI",
+  "mrp.source.cli": "CLI",
+  "mrp.source.api": "API",
+  "mrp.source.system": "System",
+  "mrp.source.unknown": "Unknown source",
+
+  "errors.repository_unknown": "This repository is not configured",
+  "errors.user_unknown": "This user does not exist (any more)",
+  "errors.user_exists": "A user with this label already exists for this repository",
+  "errors.hash_conflict": "This access hash is already in use",
+  "errors.invalid_hash": "The stored access hash of this user is invalid",
+  "errors.invalid_user": "The user label is not valid",
+  "errors.user_reserved": "This label is reserved for the add-on's own system user",
+  "errors.access_unavailable": "The access store cannot be read right now; nothing was changed",
 };

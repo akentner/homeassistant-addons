@@ -4,6 +4,7 @@ export default {
   "app.title": "Marketplace Repo Proxy",
 
   "view.repositories": "Repositories",
+  "view.access": "Zugriff",
 
   "mrp.repo.title": "Veröffentlichte Repositories",
   "mrp.repo.caption": "Konfigurierte Repositories und ihr Sync-Zustand",
@@ -43,4 +44,39 @@ export default {
   "mrp.status.no_repository_yaml": "Keine repository.yaml",
   "mrp.status.fetch_failed": "Abruf fehlgeschlagen",
   "mrp.status.none": "Kein Status",
+
+  "mrp.access.empty": "Es sind keine Repositories konfiguriert. Trage sie in der Add-on-Konfiguration ein.",
+  "mrp.access.caption": "Benutzer mit Zugriff auf {repository}",
+  "mrp.access.col.user": "Benutzer",
+  "mrp.access.col.source": "Herkunft",
+  "mrp.access.col.created": "Angelegt",
+  "mrp.access.col.urls": "Store-URLs",
+  "mrp.access.created_unknown": "unbekannt",
+  "mrp.access.no_users": "Noch keine Benutzer. Lege unten einen an, um eine Store-URL für dieses Repository zu erhalten.",
+  "mrp.access.add.label": "Bezeichnung des neuen Benutzers",
+  "mrp.access.add.hint": "Buchstaben, Ziffern, Punkt, Unterstrich und Bindestrich, höchstens 64 Zeichen, beginnend mit einem Buchstaben oder einer Ziffer.",
+  "mrp.access.add.invalid": "Diese Bezeichnung ist ungültig.",
+  "mrp.access.add.submit": "Benutzer anlegen",
+  "mrp.access.add.done": "Benutzer {user} angelegt",
+  "mrp.access.urls.show": "URLs anzeigen",
+  "mrp.access.urls.hide": "URLs ausblenden",
+  "mrp.access.urls.secret":
+    "Diese Store-URLs gewähren Lesezugriff auf das Repository. Behandle sie wie Passwörter: Füge sie nur im Add-on-Store der Home-Assistant-Instanz ein, die sie nutzen soll.",
+  "mrp.access.url.internal": "Interne Store-URL",
+  "mrp.access.url.public": "Öffentliche Store-URL",
+
+  "mrp.source.gui": "GUI",
+  "mrp.source.cli": "CLI",
+  "mrp.source.api": "API",
+  "mrp.source.system": "System",
+  "mrp.source.unknown": "Unbekannte Herkunft",
+
+  "errors.repository_unknown": "Dieses Repository ist nicht konfiguriert",
+  "errors.user_unknown": "Diesen Benutzer gibt es nicht (mehr)",
+  "errors.user_exists": "Für dieses Repository gibt es bereits einen Benutzer mit dieser Bezeichnung",
+  "errors.hash_conflict": "Dieser Zugriffs-Hash ist bereits vergeben",
+  "errors.invalid_hash": "Der gespeicherte Zugriffs-Hash dieses Benutzers ist ungültig",
+  "errors.invalid_user": "Die Benutzerbezeichnung ist ungültig",
+  "errors.user_reserved": "Diese Bezeichnung ist dem Systembenutzer des Add-ons vorbehalten",
+  "errors.access_unavailable": "Der Zugriffsspeicher kann gerade nicht gelesen werden; es wurde nichts geändert",
 };
