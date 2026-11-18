@@ -64,6 +64,14 @@ def _bearer_token(headers: Any) -> str | None:
         return None
 
 
+def _verified(verifier: TokenVerifier, token: str) -> bool:
+    """True only when the verifier says exactly True; an exception is a failed check, never a crash or a traceback."""
+    try:
+        return verifier.verify(token) is True
+    except Exception:  # noqa: BLE001 - a broken verifier fails closed
+        return False
+
+
 def _make_api_handler(
     router: Router,
     verifier: TokenVerifier,
@@ -76,6 +84,18 @@ def _make_api_handler(
         # is 64 KiB). The ingress handler keeps no timeout.
         timeout = 30
 
+        def __getattr__(self, name: str) -> Any:
+            # Any method token (TRACE, CONNECT, PROPFIND, FOO, lowercase get) reaches the gate instead of the stdlib
+            # HTML 501; every other missing attribute (for example _headers_buffer) stays an AttributeError
+            if name.startswith("do_"):
+                return self._dispatch
+            raise AttributeError(name)
+
+        def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
+            # Parser errors (400, 414, 431, 505) never reach a method: answer them with the identical 401, so no
+            # request text is reflected and nothing bypasses the gate
+            self._unauthorized()
+
         def _unauthorized(self) -> None:
             self.close_connection = True
             self._send(
@@ -83,9 +103,13 @@ def _make_api_handler(
             )
 
         def _dispatch(self) -> None:
+            if self.request_version == "HTTP/0.9":
+                # No headers on 3.14, parsed headers on 3.12: always the 401 (body only, 0.9 has no status line)
+                self._unauthorized()
+                return
             # Gate first, for every method and path: nothing is routed or read before the token is valid
             token = _bearer_token(self.headers)
-            if token is None or verifier.verify(token) is not True:
+            if token is None or not _verified(verifier, token):
                 self._unauthorized()
                 return
             parts = urllib.parse.urlsplit(self.path)

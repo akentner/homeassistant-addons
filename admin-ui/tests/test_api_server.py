@@ -28,7 +28,7 @@ from app.web.skeleton import (
     serve,
 )
 from app.web.skeleton.server import MAX_BODY
-from app.web.skeleton.api import make_api_server
+from app.web.skeleton.api import _UNAUTHORIZED_BODY, make_api_server
 from app.web.skeleton.tokens import OptionToken
 from test_skeleton_server import Client, ForeignError, build_router, make_static
 
@@ -445,3 +445,101 @@ def test_api_handler_timeout(tmp_path: Path) -> None:
     finally:
         api_server.server_close()
         gui.server_close()
+
+
+# --- every method token, parser error and HTTP/0.9 request reaches the gate (D-05, AUB-02) ---
+
+
+def raw(port: int, data: bytes) -> bytes:
+    """Send raw bytes and read until the server closes (5 s timeout).
+
+    A reset after the response (the server closed with unread request bytes) ends the read like a close does."""
+    chunks: list[bytes] = []
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+        try:
+            sock.sendall(data)
+            while chunk := sock.recv(65536):
+                chunks.append(chunk)
+        except ConnectionResetError:
+            pass
+    return b"".join(chunks)
+
+
+def normalised(resp: bytes) -> bytes:
+    """The raw response without its Date and Server header lines (they vary by time and build), body kept."""
+    head, _, body = resp.partition(b"\r\n\r\n")
+    lines = [line for line in head.split(b"\r\n") if not line.lower().startswith((b"date:", b"server:"))]
+    return b"\r\n".join(lines) + b"\r\n\r\n" + body
+
+
+def _request(method: str, path: str, *lines: str) -> bytes:
+    """A raw HTTP/1.1 request that closes after the response; `lines` are extra header lines."""
+    head = [f"{method} {path} HTTP/1.1", "Host: test", *lines, "Content-Length: 0", "Connection: close"]
+    return ("\r\n".join(head) + "\r\n\r\n").encode("latin-1")
+
+
+def _reference_401(port: int) -> bytes:
+    """The normalised 401 of a GET without Authorization: every failure must equal it."""
+    ref = normalised(raw(port, _request("GET", "/api/ping")))
+    assert ref.startswith(b"HTTP/1.1 401 ")
+    assert ref.endswith(_UNAUTHORIZED_BODY)
+    return ref
+
+
+def test_unknown_methods_reach_the_gate(api: Callable[..., Client]) -> None:
+    port = api().port
+    ref = _reference_401(port)
+    for method in ("TRACE", "CONNECT", "PROPFIND", "FOO", "get"):
+        assert normalised(raw(port, _request(method, "/api/ping"))) == ref, method
+
+
+def test_unknown_method_with_the_token_is_405_json(api: Callable[..., Client]) -> None:
+    port = api().port
+    resp = raw(port, _request("FOO", "/api/ping", f"Authorization: Bearer {TOKEN}"))
+    head, _, body = resp.partition(b"\r\n\r\n")
+    assert head.startswith(b"HTTP/1.1 405 ")
+    assert b"text/html" not in resp
+    assert json.loads(body) == {"error": "method_not_allowed", "message": "method not allowed"}
+
+
+def test_parser_errors_answer_401(api: Callable[..., Client]) -> None:
+    port = api().port
+    long_target = b"/" + b"a" * 70000
+    many = b"".join(b"X-H%d: v\r\n" % n for n in range(101))
+    for data in (
+        b"GET\r\n\r\n",
+        b"GET / FOO/1.1\r\n\r\n",
+        b"GET / HTTP/9.9\r\n\r\n",
+        b"GET " + long_target + b" HTTP/1.1\r\nHost: test\r\nConnection: close\r\n\r\n",
+        b"GET /api/ping HTTP/1.1\r\nHost: test\r\nX-Long: " + b"a" * 70000 + b"\r\nConnection: close\r\n\r\n",
+        b"GET /api/ping HTTP/1.1\r\nHost: test\r\n" + many + b"Connection: close\r\n\r\n",
+    ):
+        resp = raw(port, data)
+        label = data[:40]
+        assert resp.endswith(_UNAUTHORIZED_BODY), label
+        assert b"text/html" not in resp, label
+        for reflected in (b"FOO/1.1", b"9.9", b"aaaaaaaaaa"):
+            assert reflected not in resp, label
+        if resp.startswith(b"HTTP/"):
+            assert resp.split(b" ", 2)[1] == b"401", label
+
+
+def test_http09_gets_only_the_401_body(api: Callable[..., Client]) -> None:
+    port = api().port
+    assert raw(port, b"GET /api/ping\r\n\r\n") == _UNAUTHORIZED_BODY
+    assert raw(port, f"GET /api/ping\r\nAuthorization: Bearer {TOKEN}\r\n\r\n".encode()) == _UNAUTHORIZED_BODY
+
+
+class _RaisingVerifier:
+    def verify(self, presented: str) -> bool:
+        raise RuntimeError("verifier broke")
+
+
+def test_raising_verifier_is_a_failed_check(api: Callable[..., Client], capfd: pytest.CaptureFixture[str]) -> None:
+    client = api(verifier=_RaisingVerifier())
+    status, resp, data = client.call("GET", "/api/ping", AUTH)
+    assert status == 401
+    assert data == _UNAUTHORIZED_BODY
+    assert resp.getheader("WWW-Authenticate") == "Bearer"
+    out, err = capfd.readouterr()
+    assert out == "" and err == ""
