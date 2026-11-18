@@ -249,7 +249,9 @@ class FakeTime:
             hook()
 
 
-def _service(tmp_path: Path, fake: FakeTime, monkeypatch: pytest.MonkeyPatch, *, during=None, max_cycles: int = 3):
+def _service(
+    tmp_path: Path, fake: FakeTime, monkeypatch: pytest.MonkeyPatch, *, during=None, max_cycles: int = 3, registrar=None
+):
     """SyncService with a fake run_cycle that records (start, reason, trigger present) and lasts CYCLE_S."""
     paths = Paths.under(tmp_path)
     paths.data_dir.mkdir(parents=True, exist_ok=True)
@@ -282,6 +284,7 @@ def _service(tmp_path: Path, fake: FakeTime, monkeypatch: pytest.MonkeyPatch, *,
         clock=fake.clock,
         sleep=fake.sleep,
         wall=fake.wall,
+        registrar=registrar,
     )
     holder["service"] = service
     return service, paths, cycles
@@ -364,6 +367,86 @@ def test_stop_event_ends_run_forever_within_one_poll(tmp_path: Path, monkeypatch
     assert len(cycles) == 1
     assert fake.sleeps == stopped["sleeps"]
     assert service.wait_reason() is None
+
+
+class StubRegistrar:
+    """Supervisor work due from `due_at` (fake clock) until `run_due` ran once; records every hook call."""
+
+    def __init__(self, fake: FakeTime, due_at: float | None = None, error: Exception | None = None) -> None:
+        self.fake = fake
+        self.due_at = due_at
+        self.error = error
+        self.runs: list[float] = []
+        self.cycles: list[frozenset] = []
+
+    def work_due(self) -> bool:
+        return self.due_at is not None and self.fake.now >= self.due_at
+
+    def run_due(self) -> None:
+        self.runs.append(self.fake.now)
+        self.due_at = None
+        if self.error is not None:
+            raise self.error
+
+    def after_cycle(self, status_doc: dict, head_changes: frozenset = frozenset()) -> None:
+        self.cycles.append(head_changes)
+
+
+def test_supervisor_work_runs_from_the_wait_loop_without_a_sync_cycle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeTime()
+    registrar = StubRegistrar(fake)
+    service, paths, cycles = _service(tmp_path, fake, monkeypatch, max_cycles=2, registrar=registrar)
+    reasons: list[str | None] = []
+    fake.on_sleep.append(lambda: reasons.append((read_status(paths) or {}).get("sync", {}).get("reason")))
+    registrar.due_at = fake.now + CYCLE_S + 30
+    _stop_after(fake, service, 2 * INTERVAL_S)
+    service.run_forever()
+    assert len(registrar.runs) == 1
+    assert [c["reason"] for c in cycles] == ["startup", "interval"]
+    assert CYCLE_S + 30 <= registrar.runs[0] - cycles[0]["start"] <= CYCLE_S + 31
+    gap = cycles[1]["start"] - cycles[0]["end"]
+    assert INTERVAL_S <= gap < INTERVAL_S + 1.0
+    assert "supervisor" not in reasons
+    assert len(registrar.cycles) == 2
+    doc = read_status(paths)
+    assert doc is not None and doc["sync"]["reason"] == "interval"
+
+
+def test_stop_ends_run_forever_within_one_poll_with_supervisor_work_pending(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeTime()
+    registrar = StubRegistrar(fake)
+    service, _, cycles = _service(tmp_path, fake, monkeypatch, registrar=registrar)
+
+    def stop_and_owe() -> None:
+        if fake.sleeps == 5:
+            service.stop.set()
+            registrar.due_at = fake.now  # due at the same poll: stop wins
+
+    fake.on_sleep.append(stop_and_owe)
+    service.run_forever()
+    assert fake.sleeps == 5
+    assert registrar.runs == []
+    assert len(cycles) == 1
+
+
+def test_supervisor_work_failure_is_logged_and_the_loop_goes_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    fake = FakeTime()
+    registrar = StubRegistrar(fake, due_at=fake.now + CYCLE_S + 5, error=RuntimeError("boom"))
+    service, _, cycles = _service(tmp_path, fake, monkeypatch, max_cycles=2, registrar=registrar)
+    _stop_after(fake, service, 2 * INTERVAL_S)
+    with caplog.at_level(logging.WARNING, logger="test.sync"):
+        service.run_forever()
+    assert len(registrar.runs) == 1
+    assert [c["reason"] for c in cycles] == ["startup", "interval"]
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings == ["store work failed: RuntimeError"]
+    assert "boom" not in caplog.text
 
 
 def test_stale_temp_dirs_are_removed_at_start(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

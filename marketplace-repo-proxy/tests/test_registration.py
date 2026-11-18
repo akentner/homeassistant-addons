@@ -783,3 +783,61 @@ def test_set_reload_validates_and_masks(paths: Paths) -> None:
     assert hash_ not in state["message"]
     state["pending"] = False
     assert writer.reload_state()["pending"] is True  # a copy
+
+
+def test_work_due_follows_pending_and_the_window(paths: Paths) -> None:
+    options = _gate_options(SPEC_A)
+    client = _registered_stub(paths, options)
+    clock = Clock()
+    registrar = _gated(paths, options, client, clock)
+    assert registrar.work_due() is False  # nothing owed
+    registrar.after_cycle(_status(a="ok"))
+    registrar.after_cycle(_status(a="ok"), frozenset({SPEC_A.key}))
+    clock.now += 10
+    registrar.after_cycle(_status(a="ok"), frozenset({SPEC_A.key}))
+    assert registrar.reload_pending is True
+    assert registrar.work_due() is False  # owed, window closed
+    registrar.run_due()
+    assert client.calls.count("RELOAD") == 1
+    clock.now += INTERVAL - 10
+    assert registrar.work_due() is True  # boundary
+    registrar.run_due()
+    assert client.calls.count("RELOAD") == 2
+    assert registrar.reload_pending is False and _reload_doc(paths)["pending"] is False
+    assert registrar.work_due() is False
+    registrar.run_due()
+    assert client.calls.count("RELOAD") == 2
+
+
+def test_restart_sends_a_persisted_pending_reload_after_the_first_cycle(paths: Paths) -> None:
+    options = _gate_options(SPEC_A)
+    client = _registered_stub(paths, options)
+    clock = Clock()
+    first = _gated(paths, options, client, clock)
+    first.after_cycle(_status(a="ok"))
+    first.after_cycle(_status(a="ok"), frozenset({SPEC_A.key}))
+    clock.now += 1
+    first.after_cycle(_status(a="ok"), frozenset({SPEC_A.key}))
+    assert _reload_doc(paths)["pending"] is True
+    restarted_client = StubClient(client.listing)
+    restarted = _gated(paths, options, restarted_client, Clock())
+    assert restarted.reload_pending is True and restarted.work_due() is True
+    restarted.after_cycle(_status(a="ok"), frozenset())
+    assert restarted_client.calls == ["GET", "RELOAD"]
+    assert _reload_doc(paths)["pending"] is False
+    restarted.after_cycle(_status(a="ok"), frozenset())
+    assert restarted_client.calls == ["GET", "RELOAD", "GET"]
+
+
+def test_restart_without_pending_and_unchanged_heads_sends_no_reload(paths: Paths) -> None:
+    options = _gate_options(SPEC_A)
+    client = _registered_stub(paths, options)
+    first = _gated(paths, options, client, Clock())
+    first.after_cycle(_status(a="ok"))
+    first.after_cycle(_status(a="ok"), frozenset({SPEC_A.key}))
+    assert _reload_doc(paths)["pending"] is False
+    restarted_client = StubClient(client.listing)
+    restarted = _gated(paths, options, restarted_client, Clock())
+    assert restarted.work_due() is False
+    restarted.after_cycle(_status(a="ok"), frozenset())
+    assert restarted_client.calls == ["GET"]
