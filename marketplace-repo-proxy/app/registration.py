@@ -24,6 +24,11 @@ a leftover that is never forced and never retried by the loop (D-09, D-10); only
 write, adds the new URL to the store first and, only after a 200/409, revokes the retired entry at once (the old URL
 answers 404 from the next request; nothing skips this step) and then tries to `DELETE` the old slug. A failed add rolls
 the rotation back in one locked write. A refusal leaves the old store repository as a leftover (`revoked: true`).
+
+Leftover detection (D-10, D-11, D-28; report only, never a DELETE): a retired `local.{slug}` entry found by a pass is
+the remnant of a rotation stopped between the retire write and the revoke; the pass revokes it and, while its slug is
+listed, records leftover `interrupted`. A recorded slug that differs from the slug the pass records now and is still
+listed (hand edit of access.json, hostname change) becomes leftover `orphaned`. Only `mrp local remove` deletes them.
 """
 
 from __future__ import annotations
@@ -55,6 +60,7 @@ REQUEST_MAX_BYTES = 4096
 _ID_RE = re.compile(r"[0-9a-f]{16}")
 _ACTION_RE = re.compile(r"[a-z][a-z_]{0,31}")
 _SLUG_RE = re.compile(r"[0-9a-f]{8}")
+RETIRED_RE = re.compile(LOCAL_USER + r"\.([0-9a-f]{8})")  # `local.{old store slug}`: only between retire and revoke
 INVALID_REQUEST = "ignored an invalid supervisor request file"
 
 
@@ -101,6 +107,9 @@ class Registrar:
         self.last_reload_at: float | None = None
         self.reload_pending = self.state.reload_state()["pending"] is True
         self._stuck: set[str] = set()  # request entries that could not be unlinked: never wake the loop for them
+        previous = self.state.previous_hostname
+        if previous is not None and previous.lower() != hostname.lower():
+            self.log.warning("store: hostname changed since the last run; earlier store URLs are reported as leftovers")
 
     def local_entry(self, spec: RepoSpec) -> dict | None:
         """The repository's `local` access entry, only when its hash is valid."""
@@ -168,8 +177,10 @@ class Registrar:
         entries = {spec.key: self.local_entry(spec) for spec in specs}
         wants = {spec.key: self.options.register_local and statuses.get(spec.key) == "ok" for spec in specs}
         recorded = bool(self.state.leftovers() or self.state.unconfigured_repositories())
+        remnants = {spec.key: self._retired_entries(spec) for spec in specs}
+        before = {spec.key: self.state.repository(spec.slug) or {} for spec in specs}
 
-        if not any(entries.values()) and not any(wants.values()) and not recorded:
+        if not any(entries.values()) and not any(wants.values()) and not recorded and not any(remnants.values()):
             for spec in specs:
                 self.state.set_repository(spec.slug, in_store=False, error=None)
             return
@@ -200,6 +211,7 @@ class Registrar:
 
         for spec in specs:
             try:
+                self._revoke_interrupted(spec, remnants[spec.key], present)
                 self._register_one(spec, wants[spec.key], entries[spec.key], present)
             except Exception as exc:  # one repository must not end the pass for the others
                 had_error = self._had_error(spec)
@@ -215,6 +227,61 @@ class Registrar:
                 if not had_error:
                     self.log.warning("store: registration of %s failed: internal error (%s)", spec.slug,
                                      type(exc).__name__)
+            try:
+                self._report_orphaned(spec, before[spec.key], present)
+            except Exception as exc:
+                self.log.warning("store: leftover check of %s failed: internal error (%s)", spec.slug,
+                                 type(exc).__name__)
+
+    def _retired_entries(self, spec: RepoSpec) -> list[dict]:
+        """Access entries `local.{slug}` of one repository: remnants of an interrupted rotation (a completed rotation
+        never leaves one, D-11)."""
+        return [
+            entry
+            for entry in self.access.list_entries(spec.slug)
+            if isinstance(entry.get("user"), str) and RETIRED_RE.fullmatch(entry["user"])
+        ]
+
+    def _has_leftover(self, slug: str) -> bool:
+        return any(item.get("store_slug") == slug for item in self.state.leftovers())
+
+    def _revoke_interrupted(self, spec: RepoSpec, remnants: list[dict], present: set[str]) -> None:
+        """Revoke every retired entry at once (D-11); a listed slug without a leftover becomes `interrupted`."""
+        for entry in remnants:
+            user = entry["user"]
+            slug = RETIRED_RE.fullmatch(user).group(1)  # type: ignore[union-attr]
+            hash_ = entry.get("hash")
+            masked = (
+                masked_store_url(self.base, spec.owner, spec.name, hash_)
+                if isinstance(hash_, str) and HASH_RE.fullmatch(hash_)
+                else ""
+            )
+            self.access.revoke(spec.slug, user, specs=self.options.repositories, system=True)
+            self.log.info("store: %s retired URL of an interrupted rotation revoked", spec.slug)
+            if slug in present and not self._has_leftover(slug):
+                self.state.add_leftover(
+                    repository=spec.slug, store_slug=slug, user=user, masked_url=masked, reason="interrupted",
+                    revoked=True,
+                )
+                self.log.warning("store: %s leftover %s (%s)", spec.slug, slug, "interrupted")
+
+    def _report_orphaned(self, spec: RepoSpec, before: dict, present: set[str]) -> None:
+        """A slug recorded before the pass that is still listed but no longer the current one becomes `orphaned`
+        (hand edit of access.json, hostname change); never deleted automatically."""
+        recorded = before.get("store_slug")
+        if not isinstance(recorded, str) or not _SLUG_RE.fullmatch(recorded) or recorded not in present:
+            return
+        current = (self.state.repository(spec.slug) or {}).get("store_slug")
+        if not isinstance(current, str) or current == recorded or self._has_leftover(recorded):
+            return
+        if self.access.get(spec.slug, f"{LOCAL_USER}.{recorded}") is not None:
+            return  # a retired entry covers it
+        masked = before.get("masked_url")
+        self.state.add_leftover(
+            repository=spec.slug, store_slug=recorded, user=None,
+            masked_url=masked if isinstance(masked, str) else "", reason="orphaned",
+        )
+        self.log.warning("store: %s leftover %s (%s)", spec.slug, recorded, "orphaned")
 
     def _register_one(self, spec: RepoSpec, wants_add: bool, entry: dict | None, present: set[str]) -> None:
         if not wants_add:
