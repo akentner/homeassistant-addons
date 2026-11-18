@@ -51,6 +51,8 @@ export default {
   "mrp.access.col.source": "Source",
   "mrp.access.col.created": "Created",
   "mrp.access.col.urls": "Store URLs",
+  "mrp.access.col.last_fetch": "Last fetch",
+  "mrp.access.never": "never",
   "mrp.access.created_unknown": "unknown",
   "mrp.access.no_users": "No users yet. Add one below to get a store URL for this repository.",
   "mrp.access.add.label": "New user label",

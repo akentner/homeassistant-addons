@@ -513,6 +513,8 @@ clone_as() {
     docker exec -w /tmp "${OUTSIDE_CLIENT}" sh -ec 'rm -rf "$1"; git clone -q --depth 1 "$2" "$1"; test -f "$1/repository.yaml"' \
         sh "$1" "$2"
 }
+# the GUI shows a fetch only when it is strictly newer than created (second resolution, section 13)
+sleep 2
 clone_as erin "${URL_ERIN}" || fail "git clone --depth 1 of erin's GUI URL failed"
 ok "outside client clones erin's store URL"
 # usage: last_fetch_of <user>  (last_fetch of <user> for REPO in /data/last-fetch.json, parsed on the host; "" if none)
@@ -536,4 +538,35 @@ LAST_FETCH_DOC="$(docker exec "${PROXY}" cat /data/last-fetch.json)"
 if grep -qF -f "${NEEDLES_HASH}" <<<"${LAST_FETCH_DOC}"; then fail "an access hash appears in /data/last-fetch.json"; fi
 if grep -qF -f "${NEEDLES_HASH}" <<<"${LOGS}"; then fail "an access hash appears in the add-on log"; fi
 ok "/data/last-fetch.json and the add-on log hold no access hash"
+echo "==> (13) Fetch sink: last fetch in the GUI"
+TS_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
+# usage: erin_last_fetch  (erin's last_fetch for REPO in the current GUI_BODY of GET api/access; "missing" if absent)
+erin_last_fetch() {
+    jget "${GUI_BODY}" 'next((u.get("last_fetch") for r in d["repositories"] if r["repository"] == "'"${REPO}"'" for u in r["users"] if u["user"] == "erin"), "missing")'
+}
+ingress_get "api/access"
+ERIN_SHOWN="$(erin_last_fetch)"
+[[ "${ERIN_SHOWN}" =~ ${TS_RE} ]] || fail "GET api/access: erin's last_fetch is '${ERIN_SHOWN}', expected a timestamp"
+ok "GET api/access shows erin's last fetch (${ERIN_SHOWN})"
+gui_json POST "api/access/${REPO}/erin/rotate" '{"confirm":"erin"}'
+[ "${GUI_CODE}" = "200" ] || fail "rotate erin: HTTP ${GUI_CODE}, expected 200"
+URL_ERIN_NEW="$(jget "${GUI_BODY}" 'd["urls"]["internal"]')"
+printf '%s\n' "${URL_ERIN_NEW##*/}" >>"${NEEDLES_HASH}"
+if [ "${URL_ERIN_NEW}" = "${URL_ERIN}" ] || ! [[ "${URL_ERIN_NEW##*/}" =~ ^[0-9a-f]{32}$ ]]; then
+    fail "rotate erin: no new 32-hex hash in the response"
+fi
+ingress_get "api/access"
+[ "$(erin_last_fetch)" = "null" ] || fail "after the rotation erin's last_fetch is '$(erin_last_fetch)', expected null"
+ok "after rotating erin, GET api/access shows erin's last_fetch null (never) until the new URL is used"
+# the record must be strictly newer than the rotation's created (second resolution)
+sleep 2
+clone_as erin-new "${URL_ERIN_NEW}" || fail "git clone --depth 1 of erin's rotated URL failed"
+ok "outside client clones erin's rotated URL"
+erin_fetch_lines() { docker logs "${PROXY}" 2>&1 | grep -cF "fetch: erin → ${REPO}" || true; }
+erin_shown_again() {
+    gui_call "${INGRESS_CLIENT}" "api/access" -H "${INGRESS_HEADER}"
+    [ "${GUI_CODE}" = "200" ] && [[ "$(erin_last_fetch)" =~ ${TS_RE} ]] && [ "$(erin_fetch_lines)" -ge 2 ]
+}
+wait_for 15 "erin's last fetch after the rotation" erin_shown_again
+ok "erin's last fetch after the rotation: GET api/access shows $(erin_last_fetch); 'fetch: erin → ${REPO}' logged $(erin_fetch_lines) times"
 echo "✓ GUI verify: all checks passed"

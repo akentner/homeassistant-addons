@@ -51,6 +51,8 @@ export default {
   "mrp.access.col.source": "Herkunft",
   "mrp.access.col.created": "Angelegt",
   "mrp.access.col.urls": "Store-URLs",
+  "mrp.access.col.last_fetch": "Letzter Abruf",
+  "mrp.access.never": "nie",
   "mrp.access.created_unknown": "unbekannt",
   "mrp.access.no_users": "Noch keine Benutzer. Lege unten einen an, um eine Store-URL für dieses Repository zu erhalten.",
   "mrp.access.add.label": "Bezeichnung des neuen Benutzers",

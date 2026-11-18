@@ -9,6 +9,10 @@ Access (MRP-14): `/data/access.json` is written only through `AccessStore` (D-09
 `read_entries_safe` (never renames the file, WR-04), and every write first runs it inside the same store lock, so an
 unreadable file is refused instead of replaced by a file holding only the new user. The list never carries a hash or a
 URL; store URLs are built with `app.urls.store_urls` only for the add, URL and rotate responses (D-16), never logged.
+
+Last fetch (MRP-15, D-21): `/data/last-fetch.json` has a single writer (`fetchlog`, atomic replace), so the list reads
+it without a lock, once per call, and never writes or renames it. A user's `last_fetch` is shown only when it is newer
+than the entry's `created` (rotation and re-creation reset `created`, so they show "never" until the new URL is used).
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from typing import Any, Callable
 from app.access import HASH_RE, RESERVED_USERS, SOURCES, USER_RE, AccessError, AccessStore
 from app.accessread import read_entries_safe
 from app.jsonio import atomic_write_json
+from app.lastfetch import TIMESTAMP_RE, LastFetchRecord, read_last_fetch
 from app.logsetup import mask_hashes
 from app.options import Options, RepoSpec, load_options, parse_repository
 from app.paths import Paths
@@ -108,14 +113,29 @@ def _check_not_protected(entry: dict[str, Any], user: str) -> None:
         raise ApiError("protected", "system users are managed by the add-on")
 
 
-def _user_row(entry: dict[str, Any]) -> dict[str, Any]:
-    """Label, source, created and the protected flag; never the hash."""
+def _shown_last_fetch(entry: dict[str, Any], record: LastFetchRecord | None) -> str | None:
+    """Display rule (D-21): the record when it is newer than `created`, or when `created` is not a valid timestamp.
+
+    Both values have the identical `YYYY-MM-DDTHH:MM:SSZ` format, so string order is time order; the same second
+    counts as "not newer", so a rotation or re-creation shows "never" until the new URL is used.
+    """
+    if record is None:
+        return None
+    created = entry.get("created")
+    if isinstance(created, str) and TIMESTAMP_RE.fullmatch(created) and record.last_fetch <= created:
+        return None
+    return record.last_fetch
+
+
+def _user_row(entry: dict[str, Any], record: LastFetchRecord | None = None) -> dict[str, Any]:
+    """Label, source, created, the protected flag and the shown last fetch; never the hash."""
     user, source = entry["user"], entry.get("source")
     return {
         "user": user,
         "source": source if source in SOURCES else None,
         "created": _text(entry.get("created")),
         "protected": _protected(entry, user),
+        "last_fetch": _shown_last_fetch(entry, record),
     }
 
 
@@ -223,6 +243,7 @@ class GuiService:
         `AccessUnavailable` propagates (503 access_unavailable); the file is never renamed. No hash, no URL.
         """
         entries = read_entries_safe(self._store())
+        fetches = read_last_fetch(self.paths)  # read-only; single writer is fetchlog (D-21)
         groups: dict[str, dict[str, Any]] = {
             spec.key: {"repository": spec.slug, "active": True, "users": []}
             for spec in self.config.options.repositories
@@ -240,7 +261,7 @@ class GuiService:
             group = groups.get(key)
             if group is None:
                 group = inactive.setdefault(key, {"repository": repository, "active": False, "users": []})
-            group["users"].append(_user_row(entry))
+            group["users"].append(_user_row(entry, fetches.get((key, user))))
         rows = list(groups.values()) + [inactive[key] for key in sorted(inactive)]
         for row in rows:
             row["users"].sort(key=lambda u: u["user"])

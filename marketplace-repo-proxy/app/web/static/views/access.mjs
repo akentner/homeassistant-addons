@@ -1,5 +1,5 @@
-// Access view: per configured repository the users with label, source badge and creation time (api/access, polled
-// every 15 s), store URLs on demand ("Show URLs" -> api/access/{owner}/{repo}/{user}/urls, shown only as text in
+// Access view: per configured repository the users with label, source badge, creation time and last fetch (api/access,
+// polled every 15 s; last_fetch is null until the current URL was used, D-21), store URLs on demand ("Show URLs" -> api/access/{owner}/{repo}/{user}/urls, shown only as text in
 // CopyField, D-16), an add form, and Rotate / Revoke behind type-to-confirm dialogs that state the consequences
 // (D-12). System users are read-only (D-13); entries of repositories that are no longer configured are listed in an
 // inactive group with Revoke only. The list never carries a hash or a URL. Text nodes only (R-03); errors through
@@ -81,6 +81,14 @@ function CreatedCell({ entry, nowMs }) {
   const lang = useLang();
   const ms = toMs(entry.created);
   return ms === null ? tt("mrp.access.created_unknown") : formatRelative(ms, lang, nowMs);
+}
+
+// Last successful git access with the current URL, relative to the server time; "never" when null.
+function LastFetchCell({ entry, nowMs }) {
+  const tt = useT();
+  const lang = useLang();
+  const ms = toMs(entry.last_fetch);
+  return ms === null ? tt("mrp.access.never") : formatRelative(ms, lang, nowMs);
 }
 
 // One CopyField per store URL (internal always, public when configured).
@@ -234,6 +242,11 @@ function RepositoryCard({ row, nowMs, fresh, onFresh, onAsk, onChange }) {
     { key: "source", titleKey: "mrp.access.col.source", render: (u) => html`<${SourceCell} entry=${u} />` },
     { key: "created", titleKey: "mrp.access.col.created", render: (u) => html`<${CreatedCell} entry=${u} nowMs=${nowMs} />` },
     {
+      key: "last_fetch",
+      titleKey: "mrp.access.col.last_fetch",
+      render: (u) => html`<${LastFetchCell} entry=${u} nowMs=${nowMs} />`,
+    },
+    {
       key: "urls",
       titleKey: "mrp.access.col.urls",
       // keyed by label and creation time: a rotation remounts it, so URLs shown before the rotation disappear
@@ -275,6 +288,11 @@ function InactiveCard({ rows, nowMs, onAsk }) {
     { key: "user", titleKey: "mrp.access.col.user", render: (u) => html`<span class="repo-name">${u.user}</span>` },
     { key: "source", titleKey: "mrp.access.col.source", render: (u) => html`<${SourceCell} entry=${u} />` },
     { key: "created", titleKey: "mrp.access.col.created", render: (u) => html`<${CreatedCell} entry=${u} nowMs=${nowMs} />` },
+    {
+      key: "last_fetch",
+      titleKey: "mrp.access.col.last_fetch",
+      render: (u) => html`<${LastFetchCell} entry=${u} nowMs=${nowMs} />`,
+    },
     {
       key: "actions",
       titleKey: "mrp.access.col.actions",
