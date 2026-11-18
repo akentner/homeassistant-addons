@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 02
-current_plan: 1
+current_plan: 2
 status: executing
-stopped_at: Completed 01-06-PLAN.md
-last_updated: "2026-11-18T21:23:50.478Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-11-18T21:40:35.255Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 02 execution started
-state_head: e4f6e3fb7ad8d3319fc258e0e1b78d91448d5c95
+state_head: 9f7ad666b24ca8f52ed109b70b8d749870e3bd22
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 13
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 workstream: marketplace-repo-proxy
 created: 2026-11-17
@@ -23,9 +23,9 @@ current_phase_name: Supervisor integration
 
 ## Current Position
 
-**Current Plan:** 1
+**Current Plan:** 2
 **Total Plans in Phase:** 7
-**Status:** Executing Phase 02
+**Status:** Ready to execute
 **Current Phase:** 02
 **Last Activity:** 2026-11-18 — Phase 02 execution started
 **Last Activity Description:** Phase 02 execution started
@@ -37,8 +37,8 @@ current_phase_name: Supervisor integration
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T14:27:10.299Z
-**Stopped At:** Completed 01-06-PLAN.md
+**Last session:** 2026-11-18T21:40:35.223Z
+**Stopped At:** Completed 02-01-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -51,6 +51,7 @@ current_phase_name: Supervisor integration
 | Phase 01 P04 | 4min | 2 tasks | 5 files |
 | Phase 01 P05 | 8min | 2 tasks | 1 files |
 | Phase 01 P06 | 6min | 4 tasks | 7 files |
+| Phase 02 P01 | 13min | 2 tasks | 11 files |
 
 ## Decisions
 
@@ -68,3 +69,6 @@ current_phase_name: Supervisor integration
 - [Phase 01]: 01-05: secrets reach verify containers only on stdin (options rewrite, needles files), never in an argv
 - [Phase 01]: 01-06: DOCS.md describes access-watch as its own s6 longrun (as built), not a thread in sync
 - [Phase 01]: 01-06: interim user commands documented with container addon_{repo-hash}_marketplace_repo_proxy; Phase 1 released as 0.1.0-1 without tag (manager tags after squash merge)
+- [Phase 02]: 02-01: Supervisor calls only in app.supervisor (four-call allow-list, no proxy, no redirects); token read only in app.sync
+- [Phase 02]: 02-01: supervisor.json registration/message are recomputed from facts (in_store, error) on every write; message only from fixed templates
+- [Phase 02]: 02-01: registration pass skipped while sync is stopping; Registrar construction failure disables registration, never the sync loop

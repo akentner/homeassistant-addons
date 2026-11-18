@@ -73,11 +73,11 @@ Plans:
 5. Live E2E on the production host: store add → install a test add-on → upstream change → update shown → cleanup
    (test add-on and store repository removed).
 
-**Plans**: 7 plans
+**Plans**: 1/7 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 02-01-PLAN.md — (wave 1) Tracer: manager role, allow-listed Supervisor client, self-registration of the `local` URL against a fake Supervisor
+- [x] 02-01-PLAN.md — (wave 1) Tracer: manager role, allow-listed Supervisor client, self-registration of the `local` URL against a fake Supervisor
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 02-02-PLAN.md — (wave 2) Store reload after a real head change, at most once per interval, pending reload persisted
@@ -151,7 +151,7 @@ released.
 | Phase                          | Plans Complete | Status      | Completed |
 | ------------------------------ | -------------- | ----------- | --------- |
 | 1. Git serving core            | 6/6 | In Progress | -         |
-| 2. Supervisor integration      | 0/7            | Planned     | -         |
+| 2. Supervisor integration      | 1/7 | In Progress | -         |
 | 3. Management GUI              | 0/TBD          | Not started | -         |
 | 4. Provisioning API            | 0/TBD          | Not started | -         |
 | 5. Public exposure and release | 0/TBD          | Not started | -         |
