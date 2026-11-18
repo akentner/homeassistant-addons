@@ -442,3 +442,111 @@ def test_local_status_masks_a_hash_planted_in_the_state_file(paths, capsys):
     assert run(paths, "local", "status") == 0
     out = capsys.readouterr().out
     assert planted not in out and not HEX32_RE.search(out)
+
+
+# --- `mrp local remove`: a request file for the sync process (D-02, D-03, D-11) ------------------------------------
+
+REQUEST_ID = "0123456789abcdef"
+
+
+@pytest.fixture
+def no_wait(monkeypatch):
+    monkeypatch.setattr(cli, "LOCAL_WAIT_SECONDS", 0)
+    monkeypatch.setattr(cli, "_request_id", lambda: REQUEST_ID)
+
+
+def seed_result(p: Paths, result: str, code: str = "") -> None:
+    seed_state(
+        p,
+        requests=[
+            {"id": REQUEST_ID, "action": "remove", "repository": REPO, "result": result, "code": code,
+             "finished": "2026-11-18T12:00:00Z"}
+        ],
+    )
+
+
+def request_files(p: Paths) -> list:
+    directory = p.supervisor_requests_dir
+    return sorted(directory.iterdir()) if directory.exists() else []
+
+
+def test_local_remove_writes_a_request_file_and_reports_queued(paths, capsys, no_wait):
+    assert cli.LOCAL_WAIT_SECONDS == 0
+    assert run(paths, "local", "remove", REPO) == 0
+    assert capsys.readouterr().out.strip().startswith(f"queued: {REQUEST_ID}")
+    (path,) = request_files(paths)
+    assert path.name == f"{REQUEST_ID}.json"
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert paths.supervisor_requests_dir.stat().st_mode & 0o777 == 0o700
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    assert set(doc) == {"id", "action", "repository", "created"}
+    assert (doc["id"], doc["action"], doc["repository"]) == (REQUEST_ID, "remove", REPO)
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", doc["created"])
+
+
+def test_local_remove_request_ids_are_16_hex(paths, capsys, monkeypatch):
+    monkeypatch.setattr(cli, "LOCAL_WAIT_SECONDS", 0)
+    assert cli.LOCAL_WAIT_SECONDS == 0
+    assert run(paths, "local", "remove", REPO) == 0
+    (path,) = request_files(paths)
+    assert re.fullmatch(r"[0-9a-f]{16}\.json", path.name)
+    capsys.readouterr()
+
+
+def test_local_remove_prints_removed_from_the_recorded_result(paths, capsys, no_wait):
+    seed_result(paths, "done")
+    assert run(paths, "local", "remove", REPO) == 0
+    assert capsys.readouterr().out.strip().startswith("removed: ")
+
+
+def test_local_remove_prints_refused_in_use(paths, capsys, no_wait):
+    seed_result(paths, "refused", "in_use")
+    assert run(paths, "local", "remove", REPO) == 1
+    captured = capsys.readouterr()
+    assert (captured.out + captured.err).strip().startswith("refused: in_use")
+
+
+@pytest.mark.parametrize(
+    ("result", "code"),
+    [("rejected", "register_local_enabled"), ("rejected", "not_registered"), ("failed", "store_list_unavailable"),
+     ("failed", "remove_failed"), ("rejected", "invalid_request")],
+)
+def test_local_remove_prints_the_error_code(paths, capsys, no_wait, result, code):
+    seed_result(paths, result, code)
+    assert run(paths, "local", "remove", REPO) == 1
+    assert capsys.readouterr().err.strip() == f"error: {code}"
+
+
+def test_local_remove_has_no_revoke_old_flag(paths, capsys, no_wait):
+    assert run(paths, "local", "remove", REPO, "--revoke-old") == 2
+    capsys.readouterr()
+    assert request_files(paths) == []
+
+
+@pytest.mark.parametrize("repository", ["not-a-repository", "a/b/c", "../x"])
+def test_local_remove_rejects_a_malformed_repository_without_a_request(paths, capsys, no_wait, repository):
+    assert run(paths, "local", "remove", repository) == 1
+    assert capsys.readouterr().err.strip() == "error: repository_unknown"
+    assert request_files(paths) == []
+
+
+def test_local_remove_request_never_logs(paths, capsys, no_wait):
+    seed_result(paths, "done")
+    records: list[logging.LogRecord] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    root = logging.getLogger()
+    handler = Capture(level=logging.DEBUG)
+    old_level = root.level
+    root.addHandler(handler)
+    root.setLevel(logging.DEBUG)
+    try:
+        assert run(paths, "local", "remove", REPO) == 0
+    finally:
+        root.removeHandler(handler)
+        root.setLevel(old_level)
+    capsys.readouterr()
+    assert records == []

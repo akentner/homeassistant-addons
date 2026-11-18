@@ -104,11 +104,16 @@ class StubClient:
     """Records calls and answers from preset results (only where the fake cannot express the case)."""
 
     def __init__(
-        self, listing: CallResult, add: CallResult | None = None, reload: CallResult | Exception | None = None
+        self,
+        listing: CallResult,
+        add: CallResult | None = None,
+        reload: CallResult | Exception | None = None,
+        remove: CallResult | None = None,
     ) -> None:
         self.listing = listing
         self.add = add or CallResult(True, 200, {})
         self.reload = reload or CallResult(True, 200, {})
+        self.remove = remove or CallResult(True, 200, {})
         self.calls: list[str] = []
 
     def list_repositories(self) -> CallResult:
@@ -118,6 +123,10 @@ class StubClient:
     def add_repository(self, url: str) -> CallResult:
         self.calls.append("POST")
         return self.add
+
+    def remove_repository(self, slug: str) -> CallResult:
+        self.calls.append(f"DELETE {slug}")
+        return self.remove
 
     def reload_store(self) -> CallResult:
         self.calls.append("RELOAD")
@@ -841,3 +850,473 @@ def test_restart_without_pending_and_unchanged_heads_sends_no_reload(paths: Path
     assert restarted.work_due() is False
     restarted.after_cycle(_status(a="ok"), frozenset())
     assert restarted_client.calls == ["GET"]
+
+
+# --- MRP-10: removal through the request queue (D-02, D-09, D-10, D-11, D-27, D-28, D-29) --------------------------
+
+HEX32_RE = re.compile(r"[0-9a-fA-F]{32}")
+INVALID_REQUEST_LINE = "ignored an invalid supervisor request file"
+
+
+def _ok_status(*specs: RepoSpec) -> dict:
+    return {"repositories": [{"repository": spec.slug, "status": "ok"} for spec in specs]}
+
+
+def _register(paths: Paths, fake: Fake, *specs: RepoSpec) -> dict[str, dict]:
+    """Register `specs` through the fake with register_local true; returns their `local` entries by key."""
+    _registrar(paths, _options(*specs), fake.client()).register_pass(_ok_status(*specs))
+    entries = {spec.key: _local(paths, spec) for spec in specs}
+    assert all(entries.values())
+    return entries  # type: ignore[return-value]
+
+
+def _slug_of(entry: dict, spec: RepoSpec = SPEC_A) -> str:
+    return store_slug(_url(entry["hash"], spec))
+
+
+def _request(paths: Paths, repository: str = SPEC_A.slug, action: str = "remove", **extra: Any) -> str:
+    """Write a request file like `mrp local remove` does; returns its id."""
+    id_ = secrets.token_hex(8)
+    directory = paths.supervisor_requests_dir
+    directory.mkdir(parents=True, exist_ok=True)
+    doc = {"id": id_, "action": action, "repository": repository, "created": "2026-11-18T12:00:00Z", **extra}
+    (directory / f"{id_}.json").write_text(json.dumps(doc))
+    return id_
+
+
+def _deletes(fake: Fake) -> list[str]:
+    return [r["slug"] for r in fake.state.requests if r["method"] == "DELETE"]
+
+
+def _requests(paths: Paths) -> list[dict]:
+    doc = read_supervisor_state(paths)
+    assert doc is not None
+    return doc["requests"]
+
+
+def _outcome(paths: Paths) -> tuple[str, str]:
+    last = _requests(paths)[-1]
+    return last["result"], last["code"]
+
+
+def _messages(caplog: pytest.LogCaptureFixture, level: int = logging.DEBUG) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.levelno >= level]
+
+
+def _link(paths: Paths, entry: dict, spec: RepoSpec = SPEC_A) -> Path:
+    return paths.link_path(spec.owner, spec.name, entry["hash"])
+
+
+def test_remove_request_deletes_the_recorded_slug_and_revokes_local(paths: Paths, fake: Fake) -> None:
+    old = _register(paths, fake, SPEC_A)[SPEC_A.key]
+    slug = _slug_of(old)
+    options = _options(SPEC_A, register_local=False)
+    registrar = _registrar(paths, options, fake.client())
+    id_ = _request(paths)
+    assert registrar.work_due() is True
+    registrar.run_due()
+    assert _deletes(fake) == [slug] and slug not in fake.state.repos
+    assert _local(paths, SPEC_A) is None and not os.path.lexists(_link(paths, old))
+    doc = _doc(paths, options)
+    entry = _entry(doc, SPEC_A)
+    assert (entry["registration"], entry["in_store"]) == ("missing", False)
+    last = doc["requests"][-1]
+    assert set(last) == {"id", "action", "repository", "result", "code", "finished"}
+    assert (last["id"], last["action"], last["repository"], last["result"], last["code"]) == (
+        id_, "remove", SPEC_A.slug, "done", "")
+    assert list(paths.supervisor_requests_dir.iterdir()) == []
+    assert registrar.work_due() is False
+
+
+def test_remove_request_with_register_local_enabled_is_rejected(paths: Paths, fake: Fake) -> None:
+    old = _register(paths, fake, SPEC_A)[SPEC_A.key]
+    sent = len(fake.state.requests)
+    options = _options(SPEC_A)
+    registrar = _registrar(paths, options, fake.client())
+    _request(paths)
+    registrar.run_due()
+    assert fake.state.requests[sent:] == []
+    assert _outcome(paths) == ("rejected", "register_local_enabled")
+    assert _local(paths, SPEC_A) == old
+    assert _entry(_doc(paths, options), SPEC_A)["registration"] == "registered"
+
+
+def test_unconfigured_repository_is_never_removed_by_a_pass_and_shows_leftover(paths: Paths, fake: Fake) -> None:
+    _register(paths, fake, SPEC_A, SPEC_B)
+    options = _options(SPEC_A)
+    registrar = _registrar(paths, options, fake.client())
+    for _ in range(3):
+        registrar.after_cycle(_ok_status(SPEC_A))
+    assert _deletes(fake) == []
+    doc = _doc(paths, options)
+    other = doc["repositories"][1]
+    assert (other["repository"], other["configured"], other["registration"]) == (SPEC_B.slug, False, "leftover")
+    assert _local(paths, SPEC_B) is not None
+
+
+def test_remove_request_for_an_unconfigured_repository_drops_it(paths: Paths, fake: Fake) -> None:
+    entries = _register(paths, fake, SPEC_A, SPEC_B)
+    slug_b = _slug_of(entries[SPEC_B.key], SPEC_B)
+    options = _options(SPEC_A)
+    registrar = _registrar(paths, options, fake.client())
+    _request(paths, SPEC_B.slug)
+    registrar.run_due()
+    assert _deletes(fake) == [slug_b]
+    assert _outcome(paths) == ("done", "")
+    doc = _doc(paths, options)
+    assert [e["repository"] for e in doc["repositories"]] == [SPEC_A.slug]
+    assert _local(paths, SPEC_B) is None
+    assert _local(paths, SPEC_A) == entries[SPEC_A.key]
+
+
+@pytest.mark.parametrize("repository", ["example-org/unknown", "not a repository", "../escape"])
+def test_remove_request_for_an_unknown_repository_is_rejected(paths: Paths, repository: str) -> None:
+    client = StubClient(CallResult(True, 200, []))
+    registrar = _registrar(paths, _options(SPEC_A, register_local=False), client)
+    _request(paths, repository)
+    registrar.run_due()
+    assert client.calls == []
+    assert _outcome(paths) == ("rejected", "repository_unknown")
+
+
+def test_remove_request_with_a_failed_store_list_changes_nothing(paths: Paths, fake: Fake) -> None:
+    old = _register(paths, fake, SPEC_A)[SPEC_A.key]
+    options = _options(SPEC_A, register_local=False)
+    before = read_supervisor_state(paths)
+    client = StubClient(CallResult(False, 503))
+    registrar = _registrar(paths, options, client)
+    _request(paths)
+    registrar.run_due()
+    assert client.calls == ["GET"]
+    assert _outcome(paths) == ("failed", "store_list_unavailable")
+    assert _local(paths, SPEC_A) == old
+    doc = _doc(paths, options)
+    assert doc["leftovers"] == [] and doc["repositories"] == before["repositories"]
+
+
+def _refused(paths: Paths, fake: Fake) -> tuple[Registrar, Options, dict, str]:
+    """A registered repository whose removal the fake refuses (in use); register_local is false."""
+    old = _register(paths, fake, SPEC_A)[SPEC_A.key]
+    slug = _slug_of(old)
+    fake.state.in_use.add(slug)
+    options = _options(SPEC_A, register_local=False)
+    registrar = _registrar(paths, options, fake.client())
+    _request(paths)
+    registrar.run_due()
+    return registrar, options, old, slug
+
+
+def test_refused_remove_records_a_leftover_and_is_never_retried(
+    paths: Paths, fake: Fake, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    registrar, options, old, slug = _refused(paths, fake)
+    assert _deletes(fake) == [slug]
+    assert _outcome(paths) == ("refused", "in_use")
+    doc = _doc(paths, options)
+    (leftover,) = doc["leftovers"]
+    assert (leftover["repository"], leftover["store_slug"], leftover["user"]) == (SPEC_A.slug, slug, LOCAL_USER)
+    assert (leftover["reason"], leftover["revoked"]) == ("in_use", False)
+    assert "…" in leftover["masked_url"] and old["hash"] not in leftover["masked_url"]
+    assert isinstance(leftover["since"], str) and leftover["since"].endswith("Z")
+    assert "used by installed apps" in leftover["message"] and old["hash"] not in leftover["message"]
+    entry = _entry(doc, SPEC_A)
+    assert (entry["registration"], entry["in_store"]) == ("leftover", True)
+    assert entry["message"] == "1 old store repository left (in_use); see mrp local status"
+    assert _local(paths, SPEC_A) == old and _link(paths, old).is_symlink()
+    store_warnings = [m for m in _messages(caplog, logging.WARNING) if m.startswith("store: ")]
+    assert store_warnings == [f"store: {SPEC_A.slug} leftover {slug} (in_use)"]
+    for _ in range(3):
+        registrar.after_cycle(_ok_status(SPEC_A))
+    assert _deletes(fake) == [slug]
+    assert _entry(_doc(paths, options), SPEC_A)["registration"] == "leftover"
+    assert not HEX32_RE.search(paths.supervisor_state_file.read_text())
+    assert not HEX32_RE.search(caplog.text)
+
+
+def test_dropping_a_leftover_while_listed_returns_to_registered(paths: Paths) -> None:
+    options = _options(SPEC_A)
+    writer = SupervisorStateWriter(paths, hostname=HOST, register_local=True, specs=options.repositories)
+    writer.set_repository(SPEC_A.slug, in_store=True, store_slug="0a1b2c3d", masked_url="masked")
+    writer.add_leftover(
+        repository=SPEC_A.slug, store_slug="11223344", user="local.11223344", masked_url="", reason="in_use"
+    )
+    assert _entry(_doc(paths, options), SPEC_A)["registration"] == "leftover"
+    assert writer.drop_leftover("11223344") is True
+    doc = _doc(paths, options)
+    assert doc["leftovers"] == [] and _entry(doc, SPEC_A)["registration"] == "registered"
+    assert writer.drop_leftover("11223344") is False
+
+
+def test_leftover_gone_from_the_store_is_dropped_by_the_pass_without_delete(
+    paths: Paths, fake: Fake, caplog: pytest.LogCaptureFixture
+) -> None:
+    registrar, options, old, slug = _refused(paths, fake)
+    # The operator uninstalled the add-ons and removed the store repository in the Supervisor UI
+    fake.state.in_use.discard(slug)
+    fake.state.repos.pop(slug)
+    caplog.set_level(logging.INFO)
+    registrar.register_pass(_ok_status(SPEC_A))
+    assert _deletes(fake) == [slug]
+    doc = _doc(paths, options)
+    assert doc["leftovers"] == []
+    entry = _entry(doc, SPEC_A)
+    assert (entry["registration"], entry["in_store"]) == ("missing", False)
+    assert _local(paths, SPEC_A) is None and not os.path.lexists(_link(paths, old))
+    assert f"store: leftover {slug} of {SPEC_A.slug} is gone; dropped" in _messages(caplog, logging.INFO)
+
+
+def test_unconfigured_repository_gone_from_the_store_is_dropped_without_delete_or_request(
+    paths: Paths, fake: Fake, caplog: pytest.LogCaptureFixture
+) -> None:
+    entry_b = _register(paths, fake, SPEC_B)[SPEC_B.key]
+    fake.state.repos.pop(_slug_of(entry_b, SPEC_B))
+    options = _options(SPEC_A, register_local=False)  # no `local` entry wanted or present for SPEC_A
+    registrar = _registrar(paths, options, fake.client())
+    assert len(_doc(paths, options)["repositories"]) == 2
+    caplog.set_level(logging.INFO)
+    sent = len(fake.state.requests)
+    registrar.register_pass(_ok_status(SPEC_A))
+    assert fake.calls()[sent:] == ["GET /store/repositories"]
+    assert _deletes(fake) == []
+    assert [e["repository"] for e in _doc(paths, options)["repositories"]] == [SPEC_A.slug]
+    assert _local(paths, SPEC_B) is None
+    line = f"store: {SPEC_B.slug} is no longer configured and its store repository is gone; local entry revoked"
+    assert line in _messages(caplog, logging.INFO)
+
+
+def test_repeated_remove_request_after_success_is_done_without_delete(paths: Paths, fake: Fake) -> None:
+    old = _register(paths, fake, SPEC_A)[SPEC_A.key]
+    registrar = _registrar(paths, _options(SPEC_A, register_local=False), fake.client())
+    _request(paths)
+    registrar.run_due()
+    _request(paths)
+    registrar.run_due()
+    assert _deletes(fake) == [_slug_of(old)]
+    assert [r["result"] for r in _requests(paths)] == ["done", "done"]
+
+
+def test_remove_request_with_register_local_enabled_retries_only_leftovers(paths: Paths, fake: Fake) -> None:
+    current = _register(paths, fake, SPEC_A)[SPEC_A.key]
+    old_url = _url(secrets.token_hex(16))
+    _seed_store(fake, old_url)
+    old_slug = store_slug(old_url)
+    options = _options(SPEC_A)
+    registrar = _registrar(paths, options, fake.client())
+    registrar.state.add_leftover(
+        repository=SPEC_A.slug, store_slug=old_slug, user="local." + old_slug, masked_url="", reason="in_use",
+        revoked=True,
+    )
+    assert _entry(_doc(paths, options), SPEC_A)["registration"] == "leftover"
+    _request(paths)
+    registrar.run_due()
+    assert _deletes(fake) == [old_slug]
+    assert _outcome(paths) == ("done", "")
+    doc = _doc(paths, options)
+    assert doc["leftovers"] == [] and _entry(doc, SPEC_A)["registration"] == "registered"
+    assert _local(paths, SPEC_A) == current and _slug_of(current) in fake.state.repos
+
+
+def _write_raw(paths: Paths, name: str, content: str) -> Path:
+    paths.supervisor_requests_dir.mkdir(parents=True, exist_ok=True)
+    path = paths.supervisor_requests_dir / name
+    path.write_text(content)
+    return path
+
+
+def _valid(id_: str, **changes: Any) -> str:
+    doc = {"id": id_, "action": "remove", "repository": SPEC_A.slug, "created": "2026-11-18T12:00:00Z"}
+    doc.update(changes)
+    return json.dumps({k: v for k, v in doc.items() if v is not None})
+
+
+@pytest.mark.parametrize(
+    "kind", ["bad_name", "not_json", "missing_key", "revoke_old_key", "id_mismatch", "repository_type", "array"]
+)
+def test_invalid_request_file_is_deleted_without_supervisor_calls(
+    paths: Paths, caplog: pytest.LogCaptureFixture, kind: str
+) -> None:
+    id_ = secrets.token_hex(8)
+    name, content = f"{id_}.json", _valid(id_)
+    if kind == "bad_name":
+        name = "remove-me.json"
+    elif kind == "not_json":
+        content = "{not json"
+    elif kind == "missing_key":
+        content = _valid(id_, created=None)
+    elif kind == "revoke_old_key":
+        content = json.dumps({**json.loads(_valid(id_)), "revoke_old": True})
+    elif kind == "id_mismatch":
+        content = _valid(secrets.token_hex(8))
+    elif kind == "repository_type":
+        content = json.dumps({**json.loads(_valid(id_)), "repository": 123})
+    else:
+        content = "[]"
+    path = _write_raw(paths, name, content)
+    client = StubClient(CallResult(True, 200, []))
+    registrar = _registrar(paths, _options(SPEC_A, register_local=False), client)
+    caplog.set_level(logging.INFO)
+    assert registrar.work_due() is True
+    registrar.run_due()
+    assert not path.exists()
+    assert client.calls == []
+    assert _requests(paths) == []
+    assert INVALID_REQUEST_LINE in _messages(caplog, logging.WARNING)
+    assert registrar.work_due() is False
+
+
+def test_symlinked_request_file_is_deleted_and_its_target_kept(paths: Paths, tmp_path: Path) -> None:
+    id_ = secrets.token_hex(8)
+    target = tmp_path / "target.json"
+    target.write_text(_valid(id_))
+    paths.supervisor_requests_dir.mkdir(parents=True)
+    link = paths.supervisor_requests_dir / f"{id_}.json"
+    link.symlink_to(target)
+    client = StubClient(CallResult(True, 200, []))
+    _registrar(paths, _options(SPEC_A, register_local=False), client).run_due()
+    assert not os.path.lexists(link) and target.exists()
+    assert client.calls == [] and _requests(paths) == []
+
+
+def test_request_with_an_unknown_action_is_rejected_as_invalid_request(paths: Paths) -> None:
+    client = StubClient(CallResult(True, 200, []))
+    registrar = _registrar(paths, _options(SPEC_A, register_local=False), client)
+    id_ = _request(paths, action="purge")
+    registrar.run_due()
+    assert client.calls == []
+    last = _requests(paths)[-1]
+    assert (last["id"], last["result"], last["code"]) == (id_, "rejected", "invalid_request")
+
+
+def _stub_registered(paths: Paths, options: Options) -> StubClient:
+    """`local` entries listed by a stub store, with the slugs recorded by one pass."""
+    client = _registered_stub(paths, options)
+    _registrar(paths, options, client).register_pass(_ok_status(*options.repositories))
+    client.calls.clear()
+    return client
+
+
+def test_request_file_is_unlinked_before_execution(paths: Paths) -> None:
+    options = _options(SPEC_A, register_local=False)
+    client = _stub_registered(paths, options)
+    id_ = _request(paths)
+    path = paths.supervisor_requests_dir / f"{id_}.json"
+    seen: list[bool] = []
+    listing = client.list_repositories
+
+    def checking() -> CallResult:
+        seen.append(path.exists())
+        return listing()
+
+    client.list_repositories = checking  # type: ignore[method-assign]
+    _registrar(paths, options, client).run_due()
+    assert seen == [False]
+    assert _outcome(paths) == ("done", "")
+
+
+def test_request_created_during_run_due_is_handled_in_the_next_run(paths: Paths) -> None:
+    options = _options(SPEC_A, register_local=False)
+    client = _stub_registered(paths, options)
+    listing = client.list_repositories
+    created: list[str] = []
+
+    def adding() -> CallResult:
+        if not created:
+            created.append(_request(paths))
+        return listing()
+
+    client.list_repositories = adding  # type: ignore[method-assign]
+    registrar = _registrar(paths, options, client)
+    first = _request(paths)
+    registrar.run_due()
+    assert [r["id"] for r in _requests(paths)] == [first]
+    assert registrar.work_due() is True
+    registrar.run_due()
+    assert [r["id"] for r in _requests(paths)] == [first, created[0]]
+    assert registrar.work_due() is False
+
+
+def test_work_due_follows_request_files_and_ignores_temporary_files(paths: Paths) -> None:
+    registrar = _registrar(paths, _options(SPEC_A, register_local=False), StubClient(CallResult(True, 200, [])))
+    assert registrar.work_due() is False
+    temporary = _write_raw(paths, ".0123456789abcdef.json.x1y2.tmp", "{}")
+    (paths.supervisor_requests_dir / "subdir").mkdir()
+    assert registrar.work_due() is False
+    assert registrar.pending_requests() == []
+    _request(paths)
+    assert registrar.work_due() is True
+    assert len(registrar.pending_requests()) == 1
+    registrar.run_due()
+    assert registrar.work_due() is False and temporary.exists()
+
+
+def test_pending_requests_are_sorted_by_mtime_then_name(paths: Paths) -> None:
+    registrar = _registrar(paths, _options(SPEC_A, register_local=False), StubClient(CallResult(True, 200, [])))
+    ids = [_request(paths) for _ in range(3)]
+    for offset, id_ in enumerate(ids):
+        stamp = 1_800_000_000 - offset
+        os.utime(paths.supervisor_requests_dir / f"{id_}.json", (stamp, stamp))
+    assert [p.stem for p in registrar.pending_requests()] == list(reversed(ids))
+
+
+def test_record_request_keeps_the_last_twenty_and_validates(paths: Paths) -> None:
+    writer = SupervisorStateWriter(paths, hostname=HOST, register_local=True, specs=(SPEC_A,))
+    for index in range(supervisor_state.MAX_REQUESTS + 5):
+        writer.record_request(id=f"{index:016x}", action="remove", repository=SPEC_A.slug, result="done")
+    requests = _requests(paths)
+    assert len(requests) == 20 and requests[0]["id"] == f"{5:016x}" and requests[-1]["id"] == f"{24:016x}"
+    assert requests[-1]["code"] == "" and requests[-1]["finished"].endswith("Z")
+    with pytest.raises(ValueError):
+        writer.record_request(id="0" * 16, action="remove", repository=SPEC_A.slug, result="maybe")
+    assert supervisor_state.REQUEST_RESULTS == ("done", "refused", "failed", "rejected")
+
+
+def test_add_leftover_keeps_since_validates_reason_and_masks(paths: Paths) -> None:
+    writer = SupervisorStateWriter(paths, hostname=HOST, register_local=True, specs=(SPEC_A,))
+    secret = secrets.token_hex(16)
+    writer.add_leftover(
+        repository=SPEC_A.slug, store_slug="11223344", user=LOCAL_USER, masked_url="masked", reason="in_use",
+        message=f"Can't remove 'http://{HOST}:8080/repo/example-org/private-addons/{secret}'",
+    )
+    (first,) = writer.leftovers(SPEC_A.slug.upper())
+    writer.add_leftover(
+        repository=SPEC_A.slug, store_slug="11223344", user=LOCAL_USER, masked_url="masked", reason="error"
+    )
+    (second,) = writer.leftovers()
+    assert second["since"] == first["since"] and second["reason"] == "error"
+    assert secret not in paths.supervisor_state_file.read_text()
+    assert writer.leftovers("example-org/other") == []
+    with pytest.raises(ValueError):
+        writer.add_leftover(repository=SPEC_A.slug, store_slug="11223344", user=None, masked_url="", reason="gone")
+    assert supervisor_state.LEFTOVER_REASONS == ("in_use", "error", "interrupted", "orphaned")
+
+
+def test_drop_repository_removes_only_an_unconfigured_leftover_entry(paths: Paths) -> None:
+    writer = SupervisorStateWriter(paths, hostname=HOST, register_local=True, specs=(SPEC_A,))
+    writer.set_repository(SPEC_B.slug, in_store=True, store_slug="0a1b2c3d", configured=False)
+    assert writer.unconfigured_repositories() == [SPEC_B.slug]
+    assert writer.drop_repository(SPEC_A.slug) is False
+    assert writer.drop_repository(SPEC_B.slug.upper()) is True
+    assert [e["repository"] for e in _doc(paths, _options(SPEC_A))["repositories"]] == [SPEC_A.slug]
+    assert writer.unconfigured_repositories() == []
+
+
+def test_carried_leftovers_and_requests_are_type_checked(paths: Paths) -> None:
+    secret = secrets.token_hex(16)
+    seeded = {
+        "schema": 1,
+        "repositories": [{"repository": SPEC_A.slug, "in_store": True, "store_slug": "0a1b2c3d"}],
+        "leftovers": [
+            {"repository": SPEC_A.slug, "store_slug": "11223344", "user": "local", "reason": "in_use",
+             "masked_url": f"http://x/{secret}", "message": secret, "revoked": "yes"},
+            {"repository": SPEC_A.slug, "store_slug": "not-a-slug", "reason": "in_use"},
+            {"repository": 7, "store_slug": "55667788", "reason": "in_use"},
+        ],
+        "requests": [{"id": f"{i:016x}", "result": "done"} for i in range(30)],
+    }
+    paths.supervisor_state_file.write_text(json.dumps(seeded))
+    writer = SupervisorStateWriter(paths, hostname=HOST, register_local=True, specs=(SPEC_A,))
+    (leftover,) = writer.leftovers()
+    assert leftover["store_slug"] == "11223344" and leftover["revoked"] is False
+    assert leftover["masked_url"] == "" and secret not in json.dumps(leftover)
+    assert len(_requests(paths)) == 20
