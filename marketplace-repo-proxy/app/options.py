@@ -61,16 +61,16 @@ def parse_repository(value: str) -> tuple[str, str]:
     if not isinstance(value, str) or value.count("/") != 1:
         raise ValueError("repository must be owner/repo")
     owner, name = value.strip().split("/")
-    if not OWNER_RE.match(owner):
+    if not OWNER_RE.fullmatch(owner):
         raise ValueError("invalid owner")
-    if not REPO_RE.match(name) or name in (".", "..") or name.lower().endswith(".git"):
+    if not REPO_RE.fullmatch(name) or name in (".", "..") or name.lower().endswith(".git"):
         raise ValueError("invalid repository name")
     return owner, name
 
 
 def _valid_branch(branch: str) -> bool:
     return bool(
-        BRANCH_RE.match(branch)
+        BRANCH_RE.fullmatch(branch)
         and not branch.startswith(("-", "/"))
         and not branch.endswith(("/", ".lock"))
         and ".." not in branch

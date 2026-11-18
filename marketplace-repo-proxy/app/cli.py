@@ -92,7 +92,7 @@ def _users_list(args: argparse.Namespace, paths: Paths) -> int:
         return 0
     for entry in entries:
         repository, hash_ = entry.get("repository"), entry.get("hash")
-        masked = mask_hash(hash_) if isinstance(hash_, str) and HASH_RE.match(hash_) else "<invalid>"
+        masked = mask_hash(hash_) if isinstance(hash_, str) and HASH_RE.fullmatch(hash_) else "<invalid>"
         active = isinstance(repository, str) and options.find(repository) is not None
         fields = [_text(repository), _text(entry.get("user")), _text(entry.get("source")), _text(entry.get("created"))]
         line = "\t".join(fields + [masked])
@@ -119,7 +119,7 @@ def _users_url(args: argparse.Namespace, paths: Paths, hostname: str) -> int:
     if entry is None:
         return _error("user_unknown")
     hash_ = entry.get("hash")
-    if not isinstance(hash_, str) or not HASH_RE.match(hash_):
+    if not isinstance(hash_, str) or not HASH_RE.fullmatch(hash_):
         return _error("invalid_hash")
     _print_urls(options, hostname, spec.owner, spec.name, hash_)
     return 0

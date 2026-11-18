@@ -165,13 +165,13 @@ class AccessStore:
             parse_repository(repository)
         except (TypeError, ValueError):
             raise AccessError("repository_unknown") from None
-        if not isinstance(user, str) or not USER_RE.match(user):
+        if not isinstance(user, str) or not USER_RE.fullmatch(user):
             raise AccessError("invalid_user")
         if source not in SOURCES:
             raise AccessError("invalid_source")
         if user.lower() in RESERVED_USERS and source != "system":
             raise AccessError("user_reserved")
-        if hash_ is not None and (not isinstance(hash_, str) or not HASH_RE.match(hash_)):
+        if hash_ is not None and (not isinstance(hash_, str) or not HASH_RE.fullmatch(hash_)):
             raise AccessError("invalid_hash")
         with self.locked():
             doc = self.load()
@@ -226,7 +226,7 @@ class AccessStore:
 
 def _unlink_hash(root: Path, hash_: Any) -> None:
     """Unlink every `{root}/*/*/{hash}` symlink; real directories only, never a glob built from file content."""
-    if not isinstance(hash_, str) or not HASH_RE.match(hash_) or not root.is_dir():
+    if not isinstance(hash_, str) or not HASH_RE.fullmatch(hash_) or not root.is_dir():
         return
     for owner in root.iterdir():
         if owner.is_symlink() or not owner.is_dir():
@@ -268,7 +268,7 @@ def reconcile_tree(
             repo_ok = True
         except (TypeError, ValueError):
             repo_ok = False
-        user_ok = isinstance(user, str) and bool(USER_RE.match(user))
+        user_ok = isinstance(user, str) and bool(USER_RE.fullmatch(user))
         label = (_log_label(repository, repo_ok), _log_label(user, user_ok))
         if not repo_ok:
             log.warning("access entry for %s/%s skipped: invalid repository", *label)
@@ -277,7 +277,7 @@ def reconcile_tree(
         if spec is None:
             log.debug("access entry for %s/%s skipped: repository not configured", *label)
             continue
-        if not isinstance(hash_, str) or not HASH_RE.match(hash_):
+        if not isinstance(hash_, str) or not HASH_RE.fullmatch(hash_):
             log.warning("access entry for %s/%s skipped: invalid hash", *label)
             continue
         target = paths.repo_dir(spec.owner, spec.name).absolute()

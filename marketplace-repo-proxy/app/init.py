@@ -33,9 +33,9 @@ def _active_users(entries: list[dict[str, Any]], spec: RepoSpec) -> list[tuple[s
             isinstance(repository, str)
             and repository.lower() == spec.key
             and isinstance(user, str)
-            and USER_RE.match(user)
+            and USER_RE.fullmatch(user)
             and isinstance(hash_, str)
-            and HASH_RE.match(hash_)
+            and HASH_RE.fullmatch(hash_)
         ):
             users.append((user, hash_))
     return sorted(users)

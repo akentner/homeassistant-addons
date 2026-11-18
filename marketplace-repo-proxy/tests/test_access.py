@@ -184,6 +184,24 @@ def test_malformed_client_hash_is_invalid(store):
     assert exc.value.code == "invalid_hash"
 
 
+def test_trailing_newline_in_user_or_hash_is_invalid(store, paths):
+    with pytest.raises(AccessError) as exc:
+        store.add(REPO, "alice\n")
+    assert exc.value.code == "invalid_user"
+    with pytest.raises(AccessError) as exc:
+        store.add(REPO, "alice", hash_=new_hash() + "\n")
+    assert exc.value.code == "invalid_hash"
+    assert not paths.access_file.exists()
+
+
+def test_reconcile_skips_a_hash_with_a_trailing_newline(store, paths, caplog):
+    write_doc(paths, {"schema": 1, "entries": [entry(REPO, "bob\n", new_hash() + "\n")]})
+    assert store.reconcile(SPECS) == 0
+    assert symlinks(paths) == set()
+    assert "bob\n" not in caplog.text
+    assert "example-org/private-addons/<invalid> skipped: invalid hash" in caplog.text
+
+
 def test_unknown_keys_and_fields_survive_add_and_revoke(store, paths):
     bob = entry(REPO, "bob", note="n")
     write_doc(paths, {"schema": 1, "x_future": 1, "entries": [bob]})

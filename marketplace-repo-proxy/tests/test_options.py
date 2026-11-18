@@ -12,6 +12,7 @@ from app.options import (
     Options,
     OptionsError,
     RepoSpec,
+    _valid_branch,
     load_options,
     parse_options,
     parse_repository,
@@ -69,6 +70,7 @@ def test_full_valid_document_parses():
         "owner/x/y",
         "owner/",
         "/x",
+        "evil\n/repo",
     ],
 )
 def test_invalid_repository_is_rejected(value):
@@ -94,6 +96,12 @@ def test_unsafe_branch_skips_the_whole_entry(branch):
     options = repos({"repository": "example-org/addons", "branch": branch})
     assert options.repositories == ()
     assert options.rejected == ("example-org/addons: invalid branch",)
+
+
+def test_validators_reject_a_trailing_newline():
+    # `$` also matches before a final newline; every validator must match the whole string
+    assert _valid_branch("main") is True
+    assert _valid_branch("main\n") is False
 
 
 @pytest.mark.parametrize("branch", [None, "", "   "])
