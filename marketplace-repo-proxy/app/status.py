@@ -55,12 +55,18 @@ def _carry(entry: dict, old: dict) -> None:
 
 
 class StatusWriter:
-    """Owns status.json for one sync process; seeded from the previous file at construction."""
+    """Owns status.json for one sync process; seeded from the previous file at construction.
+
+    `head_changes` holds the lower-case keys of the repositories whose served head moved in the current cycle (cleared
+    by `begin_cycle`). head_changes compares against the head carried from the previous status.json, so a fresh
+    /srv/git after a container start is not a change; a first-ever sync without a previous head is not one either.
+    """
 
     def __init__(
         self, paths: Paths, specs: Iterable[RepoSpec], upstream_overridden: bool, interval_minutes: int
     ) -> None:
         self._paths = paths
+        self.head_changes: set[str] = set()
         previous = _previous_entries(paths)
         self._entries: dict[str, dict[str, Any]] = {}
         for spec in specs:
@@ -109,6 +115,7 @@ class StatusWriter:
     def begin_cycle(self, reason: str) -> None:
         if reason not in REASONS:
             raise ValueError(f"unknown sync reason: {reason}")
+        self.head_changes.clear()
         self._doc["sync"].update({"state": "running", "last_started": utc_timestamp(), "reason": reason})
         self._write()
 
@@ -137,6 +144,7 @@ class StatusWriter:
         entry = self._entries.get(slug.lower())
         if entry is None:
             raise KeyError(f"repository not configured: {slug}")
+        previous_head = entry.get("head")
         now = utc_timestamp()
         entry.update(
             {
@@ -154,4 +162,6 @@ class StatusWriter:
             entry["addons"] = list(addons or [])
             if refs_changed:
                 entry["last_change"] = now
+            if isinstance(previous_head, str) and isinstance(head, str) and head != previous_head:
+                self.head_changes.add(slug.lower())
         self._write()
