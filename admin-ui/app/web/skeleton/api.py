@@ -50,16 +50,24 @@ class _ApiHeaders:
 
 
 def _bearer_token(headers: Any) -> str | None:
-    """The credential of an `Authorization: Bearer <token>` header, or None; never raises."""
+    """The credential of exactly one `Authorization: Bearer <token>` header, or None; never raises.
+
+    Only the Authorization header counts (never the query string, the body, a cookie or another header). The scheme is
+    case-insensitive and followed by 1*SP (RFC 6750); the token is non-empty printable ASCII (0x21..0x7E), which rejects
+    inner spaces, obs-fold remnants and non-ASCII bytes. Two Authorization headers fail whichever one is valid."""
     try:
-        value = headers.get("Authorization")
-        if not isinstance(value, str):
+        if not hasattr(headers, "get_all"):
             return None
-        scheme, _, rest = value.strip(" \t").partition(" ")
-        if scheme.lower() != "bearer":
+        values = headers.get_all("Authorization") or []
+        if len(values) != 1 or not isinstance(values[0], str):
+            return None
+        scheme, sep, rest = values[0].strip(" \t").partition(" ")
+        if not sep or scheme.lower() != "bearer":
             return None
         token = rest.lstrip(" ")
-        return token or None
+        if not token or not all("\x21" <= char <= "\x7e" for char in token):
+            return None
+        return token
     except Exception:  # noqa: BLE001 - any parsing problem is an authentication failure
         return None
 

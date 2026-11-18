@@ -543,3 +543,120 @@ def test_raising_verifier_is_a_failed_check(api: Callable[..., Client], capfd: p
     assert resp.getheader("WWW-Authenticate") == "Bearer"
     out, err = capfd.readouterr()
     assert out == "" and err == ""
+
+
+# --- strict Authorization parsing and one byte-identical 401 for every failed credential (D-05, AUB-02) ---
+
+FAIL_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "FOO")
+FAIL_PATHS = ("/api/ping", "/nope", "/", "/icon", "/static/app.css", f"/api/ping?access_token={TOKEN}")
+
+
+def _failure_variants() -> dict[str, tuple[str, ...]]:
+    """Every credential that must fail, as raw header lines (latin-1 strings carrying the exact bytes to send)."""
+    wrong = "wrong-" + secrets.token_hex(16)
+    return {
+        "missing": (),
+        "empty": ("Authorization:",),
+        "scheme only": ("Authorization: Bearer",),
+        "scheme and spaces": ("Authorization: Bearer    ",),
+        "wrong": (f"Authorization: Bearer {wrong}",),
+        "minus last char": (f"Authorization: Bearer {TOKEN[:-1]}",),
+        "plus one char": (f"Authorization: Bearer {TOKEN}x",),
+        "last char changed": (f"Authorization: Bearer {TOKEN[:-1]}{'0' if TOKEN[-1] != '0' else '1'}",),
+        "no separator": (f"Authorization: Bearer{TOKEN}",),
+        "basic": ("Authorization: Basic dGVzdDp0ZXN0",),
+        "other scheme": (f"Authorization: Token {TOKEN}",),
+        "inner space": (f"Authorization: Bearer {TOKEN} extra",),
+        "tab separator": (f"Authorization: Bearer\t{TOKEN}",),
+        "duplicate valid+wrong": (f"Authorization: Bearer {TOKEN}", f"Authorization: Bearer {wrong}"),
+        "duplicate wrong+valid": (f"Authorization: Bearer {wrong}", f"Authorization: Bearer {TOKEN}"),
+        "duplicate valid+valid": (f"Authorization: Bearer {TOKEN}", f"Authorization: Bearer {TOKEN}"),
+        "obs-fold": (f"Authorization: Bearer\r\n {TOKEN}",),
+        "non-ascii": ("Authorization: Bearer " + "ä".encode().decode("latin-1") + TOKEN,),
+        "cookie": (f"Cookie: access_token={TOKEN}",),
+        "other header": (f"X-Api-Token: {TOKEN}",),
+        "proxy-authorization": (f"Proxy-Authorization: Bearer {TOKEN}",),
+    }
+
+
+def test_every_failure_gets_the_identical_401(api: Callable[..., Client]) -> None:
+    port = api().port
+    ref = _reference_401(port)
+    seen: dict[bytes, str] = {}
+    for method in FAIL_METHODS:
+        for path in FAIL_PATHS:
+            for name, lines in _failure_variants().items():
+                seen.setdefault(normalised(raw(port, _request(method, path, *lines))), f"{method} {path} {name}")
+    assert list(seen) == [ref], sorted(seen.values())
+
+
+def test_head_failures_have_the_same_headers_and_no_body(api: Callable[..., Client]) -> None:
+    port = api().port
+    ref_head = _reference_401(port)[: -len(_UNAUTHORIZED_BODY)]
+    seen: dict[bytes, str] = {}
+    for path in FAIL_PATHS:
+        for name, lines in _failure_variants().items():
+            seen.setdefault(normalised(raw(port, _request("HEAD", path, *lines))), f"HEAD {path} {name}")
+    assert list(seen) == [ref_head], sorted(seen.values())
+
+
+def test_accepted_spellings(api: Callable[..., Client]) -> None:
+    port = api().port
+    for value in (f"bearer {TOKEN}", f"BEARER {TOKEN}", f"Bearer  {TOKEN}", f"Bearer {TOKEN}   "):
+        resp = raw(port, _request("GET", "/api/ping", f"Authorization: {value}"))
+        head, _, body = resp.partition(b"\r\n\r\n")
+        assert head.startswith(b"HTTP/1.1 200 "), value.replace(TOKEN, "TOKEN")
+        assert json.loads(body) == {"ok": True}
+
+
+def test_401_header_order_is_fixed(api: Callable[..., Client]) -> None:
+    port = api().port
+    expected = [
+        b"content-type",
+        b"content-length",
+        b"cache-control",
+        b"x-content-type-options",
+        b"referrer-policy",
+        b"www-authenticate",
+        b"connection",
+    ]
+    for name, lines in _failure_variants().items():
+        head = normalised(raw(port, _request("GET", "/api/ping", *lines))).partition(b"\r\n\r\n")[0]
+        names = [line.split(b":", 1)[0].lower() for line in head.split(b"\r\n")[1:]]
+        assert names == expected, name
+
+
+def test_token_only_from_the_authorization_header(api: Callable[..., Client]) -> None:
+    port = api().port
+    ref = _reference_401(port)
+    for data in (
+        _request("GET", f"/api/ping?access_token={TOKEN}"),
+        _request("GET", "/api/ping", f"Cookie: access_token={TOKEN}"),
+        _request("GET", "/api/ping", f"X-Api-Token: {TOKEN}"),
+        _request("GET", "/api/ping", f"Proxy-Authorization: Bearer {TOKEN}"),
+    ):
+        assert normalised(raw(port, data)) == ref
+    form = f"access_token={TOKEN}".encode()
+    post = (
+        "POST /api/echo HTTP/1.1\r\nHost: test\r\nContent-Type: application/x-www-form-urlencoded\r\n"
+        f"Content-Length: {len(form)}\r\nConnection: close\r\n\r\n"
+    ).encode() + form
+    assert normalised(raw(port, post)) == ref
+
+
+def test_unread_body_closes_the_connection(api: Callable[..., Client]) -> None:
+    calls: list[Any] = []
+    port = api(build_api_router(calls)).port
+    wrong = "wrong-" + secrets.token_hex(8)
+    data = (
+        "POST /api/echo HTTP/1.1\r\nHost: test\r\nContent-Type: application/json\r\nContent-Length: 5\r\n"
+        f"Authorization: Bearer {wrong}\r\n\r\nhello"
+        f"GET /api/ping HTTP/1.1\r\nHost: test\r\nAuthorization: Bearer {TOKEN}\r\n\r\n"
+    ).encode()
+    resp = raw(port, data)
+    assert resp.count(b"HTTP/1.") == 1, resp
+    head, _, body = resp.partition(b"\r\n\r\n")
+    assert head.startswith(b"HTTP/1.1 401 ")
+    assert b"\r\nConnection: close" in head
+    assert body == _UNAUTHORIZED_BODY
+    assert calls == []
