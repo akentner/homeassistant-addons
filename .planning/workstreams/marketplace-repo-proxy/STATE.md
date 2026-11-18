@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 01
-current_plan: 5
+current_plan: 6
 status: executing
-stopped_at: Completed 01-04-PLAN.md
-last_updated: "2026-11-18T14:07:09.706Z"
+stopped_at: Completed 01-05-PLAN.md
+last_updated: "2026-11-18T14:18:48.156Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 01 execution started
-state_head: ada94e6097ec471df614215782c7329b4dc70182
+state_head: 8b52bb80edded5a6f1f2cba62d98ea54b60424fc
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 workstream: marketplace-repo-proxy
 created: 2026-11-17
@@ -23,7 +23,7 @@ current_phase_name: Git serving core
 
 ## Current Position
 
-**Current Plan:** 5
+**Current Plan:** 6
 **Total Plans in Phase:** 6
 **Status:** Ready to execute
 **Current Phase:** 01
@@ -37,8 +37,8 @@ current_phase_name: Git serving core
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T14:07:09.682Z
-**Stopped At:** Completed 01-04-PLAN.md
+**Last session:** 2026-11-18T14:18:48.132Z
+**Stopped At:** Completed 01-05-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -49,6 +49,7 @@ current_phase_name: Git serving core
 | Phase 01 P02 | 10min | 3 tasks | 7 files |
 | Phase 01 P03 | 8min | 3 tasks | 11 files |
 | Phase 01 P04 | 4min | 2 tasks | 5 files |
+| Phase 01 P05 | 8min | 2 tasks | 1 files |
 
 ## Decisions
 
@@ -62,3 +63,5 @@ current_phase_name: Git serving core
 - [Phase 01]: 01-03: access-watch is its own s6 longrun without container env; it keeps only the repository list from options and never uses the PAT
 - [Phase 01]: 01-04: safe.directory write failure and symlink-tree OSError are logged and survived; only OptionsError and AccessSchemaError stop init (D-28)
 - [Phase 01]: 01-04: startup user count and user lines list only entries reconcile links (valid label, 32-hex hash)
+- [Phase 01]: 01-05: /proc scans in the verify script carry positive controls (cmdline scan must see app.watch, environ scan must see SUPERVISOR_TOKEN in sync's env)
+- [Phase 01]: 01-05: secrets reach verify containers only on stdin (options rewrite, needles files), never in an argv

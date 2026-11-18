@@ -39,7 +39,7 @@ Branch: `feat/marketplace-repo-proxy-v1` (worktree `feat-repo-proxy`). Phase 4 d
    hash appears in logs.
 6. `internal/verify-marketplace-repo-proxy.sh` builds the image and proves 1-5 against a local upstream fixture.
 
-**Plans**: 4/6 plans executed
+**Plans**: 5/6 plans executed
 
 Plans:
 **Wave 1**
@@ -51,7 +51,7 @@ Plans:
 - [x] 01-04-PLAN.md — (wave 2) Startup log with masked URLs, init failure policy, options/logging tests + CI job
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 01-05-PLAN.md — (wave 3) Full verify script: criteria 1-5 (branches, matrix, revocation, auth failure, secrets)
+- [x] 01-05-PLAN.md — (wave 3) Full verify script: criteria 1-5 (branches, matrix, revocation, auth failure, secrets)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 01-06-PLAN.md — (wave 4) Docs (translations, DOCS.md, README, CHANGELOG [0.1.0-1]), SPIKE fixes, bump 0.1.0-1
@@ -128,7 +128,7 @@ released.
 
 | Phase                          | Plans Complete | Status      | Completed |
 | ------------------------------ | -------------- | ----------- | --------- |
-| 1. Git serving core            | 4/6 | In Progress | -         |
+| 1. Git serving core            | 5/6 | In Progress | -         |
 | 2. Supervisor integration      | 0/TBD          | Not started | -         |
 | 3. Management GUI              | 0/TBD          | Not started | -         |
 | 4. Provisioning API            | 0/TBD          | Not started | -         |

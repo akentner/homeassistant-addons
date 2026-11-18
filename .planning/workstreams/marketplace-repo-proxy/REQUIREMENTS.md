@@ -11,14 +11,14 @@ Source of the design and its evidence: `marketplace-repo-proxy/SPIKE.md`.
   `git init --bare` and an explicit fetch refspec for the configured branch (no `--mirror`, no push config), `HEAD` set
   to it, `fetch --prune`, PAT passed only via `GIT_CONFIG_*` environment, interval plus trigger file, status written to
   `/data/status.json` with stable codes (`ok`, `auth_failed`, `not_found`, `no_repository_yaml`).
-- [ ] **MRP-03**: lighttpd + `git http-backend` as unprivileged user: allow-list for `info/refs` and `git-upload-pack`
+- [x] **MRP-03**: lighttpd + `git http-backend` as unprivileged user: allow-list for `info/refs` and `git-upload-pack`
   under `/repo/<owner>/<repo>/<32 hex>/`, rewrite rules that accept and ignore query parameters, empty docroot,
   `http.getanyfile=false`, `http.receivepack=false`, `safe.directory` in `/etc/gitconfig`.
 - [ ] **MRP-04**: Access store `/data/access.json` (repository, user label, hash, created, source `gui`/`api`/`system`),
   random 128-bit hashes, symlink tree `/srv/git/access/<owner>/<repo>/<hash>` rebuilt at every start.
-- [ ] **MRP-05**: Secret hygiene: PAT never in logs, repository config or lighttpd's environment; hashes never in logs
+- [x] **MRP-05**: Secret hygiene: PAT never in logs, repository config or lighttpd's environment; hashes never in logs
   (startup lists user labels and masked URLs only).
-- [ ] **MRP-06**: `internal/verify-marketplace-repo-proxy.sh`: builds the image, runs it against a local upstream fixture
+- [x] **MRP-06**: `internal/verify-marketplace-repo-proxy.sh`: builds the image, runs it against a local upstream fixture
   (test-only upstream override), proves clone, fetch, 404/403 matrix, query tolerance, revocation and secret hygiene.
 
 ## Phase 2: Supervisor integration
