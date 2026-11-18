@@ -12,7 +12,7 @@
   creation or rotation, `rotate()`); empty or missing token disables the API (startup refuses to listen).
 - [x] **AUB-04**: No secret in logs: the request log never contains the `Authorization` header or token values; the
   generated token is never written to stdout.
-- [ ] **AUB-05**: Rule R-16 in `admin-ui/DOCS.md` (bearer gate, separate port, never routed through ingress or a public
+- [x] **AUB-05**: Rule R-16 in `admin-ui/DOCS.md` (bearer gate, separate port, never routed through ingress or a public
   reverse proxy by default) with enforcing tests; library reference updated; `test_docs.py` and the lib contract test
   green.
 - [ ] **AUB-06**: Release: admin-ui version bump via `make update-version`, `make sync-admin-ui` for all consumers,
