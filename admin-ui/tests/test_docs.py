@@ -155,7 +155,8 @@ BROWSER_EXPORTS = {
 }
 SKELETON_EXPORTS = (
     "ApiError ERROR_STATUS register_error_code Request Router Download StaticFiles INGRESS_REMOTE is_ingress "
-    "ingress_user DEFAULT_CSP security_headers MAX_BODY make_handler make_server serve"
+    "ingress_user DEFAULT_CSP security_headers MAX_BODY make_handler make_server serve "
+    "make_api_server OptionToken GeneratedToken TokenVerifier"
 ).split()
 
 

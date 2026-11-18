@@ -55,14 +55,16 @@ mismatch between this page and the code is a bug and turns a test red.
 Package `app.web.skeleton` in this add-on, delivered to consumers as `app.web.admin_ui`. Standard library only, relative
 imports only.
 
-| Module       | Public names                                                                                                                             |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `errors.py`  | `ERROR_STATUS` (error code to HTTP status), `ApiError(code, message, status)`, `register_error_code(code, status)`                       |
-| `router.py`  | `Request` (`arg`, `body`), `Router` (`add(..., public=False)`, `is_public`, `routes`, `match`), `Download(filename, content_type, data)` |
-| `static.py`  | `StaticFiles(root)` with `resolve(path)`, `SEGMENT_RE`, `CONTENT_TYPES`; extension whitelist and containment check                       |
-| `ingress.py` | `INGRESS_REMOTE`, `is_ingress(peer, headers, remote)`, `ingress_user(headers)`                                                           |
-| `headers.py` | `DEFAULT_CSP`, `security_headers(kind, csp)`                                                                                             |
-| `server.py`  | `MAX_BODY`, `make_handler(router, static, ...)`, `make_server(router, static, port, ...)`, `serve(server)`                               |
+| Module       | Public names                                                                                                                                                                           |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `errors.py`  | `ERROR_STATUS` (error code to HTTP status), `ApiError(code, message, status)`, `register_error_code(code, status)`                                                                     |
+| `router.py`  | `Request` (`arg`, `body`), `Router` (`add(..., public=False)`, `is_public`, `routes`, `match`), `Download(filename, content_type, data)`                                               |
+| `static.py`  | `StaticFiles(root)` with `resolve(path)`, `SEGMENT_RE`, `CONTENT_TYPES`; extension whitelist and containment check                                                                     |
+| `ingress.py` | `INGRESS_REMOTE`, `is_ingress(peer, headers, remote)`, `ingress_user(headers)`                                                                                                         |
+| `headers.py` | `DEFAULT_CSP`, `security_headers(kind, csp)`                                                                                                                                           |
+| `server.py`  | `MAX_BODY`, `make_handler(router, static, ...)`, `make_server(router, static, port, ...)`, `serve(server, *more)`                                                                      |
+| `api.py`     | `make_api_server(router, port, verifier, *, bind, server_version, error_mappers)`                                                                                                      |
+| `tokens.py`  | `TokenVerifier` (`verify(presented)`), `OptionToken(value)`, `GeneratedToken.load_or_create(path)` with `take_plaintext()`, `rotate()`, `verify(presented)`, `OPTION_TOKEN_MIN_LENGTH` |
 
 A route registered with `Router.add(method, pattern, handler, public=True)` is the one exception to the gate: exactly
 that method and that literal path (for example a health check on an optionally published port) is served without
@@ -78,6 +80,33 @@ Handler results are a dict (200 JSON), a `(status, dict)` pair, `None` (204) or 
 every method and path. API responses carry `Cache-Control: no-store`, static files `no-cache`, all responses `nosniff`,
 and static files carry no `X-Frame-Options` because Home Assistant frames the page. Unexpected exceptions return
 `500 internal_error` with the traceback on stdout only.
+
+The bearer API listener is a second server on its own port with its own `Router`, next to the ingress server and never a
+second gate inside it. `make_api_server(router, port, verifier, bind=...)` raises `ValueError` when there is no verifier
+(no token, no listener), when `bind` is not an IPv4 literal, or when the router has a `public=True` route. `bind` has no
+default, so every consumer states its exposure: a bridge-network add-on binds `0.0.0.0` and lists the port as `null`
+under `ports` in `config.yaml`, so it stays unpublished until the operator enables it. A LAN or Tailscale address only
+exists inside the container with `host_network`. The API port is never routed through ingress or a public reverse proxy
+by default (R-16).
+
+The gate runs first for every method and path, unknown methods and malformed requests included, and every failure gets
+the same 401 `unauthorized` with `WWW-Authenticate: Bearer` and `Connection: close`. Handlers get `Request.public` set
+to true and a header view without `Authorization`, `X-Remote-User-*` and `X-Ingress-*`. The listener answers JSON only
+with the same body rules, `MAX_BODY`, `Cache-Control: no-store` and API headers; it serves no static files, index or
+icon and sends no CORS headers. Idle sockets time out after 30 seconds. `serve(gui_server, api_server)` runs both
+servers in one process; call it from the main thread.
+
+The error code `unauthorized` is registered when `make_api_server` runs and is not in the import-time `ERROR_STATUS`. A
+consumer whose tests pin that table adds `unauthorized` (401) to it and an `errors.unauthorized` string to both string
+files when it adopts the listener.
+
+Token sources: `OptionToken` wraps an add-on `password` option. The value must be printable ASCII without spaces and at
+least 16 characters long (`OPTION_TOKEN_MIN_LENGTH`); tokens are compared as SHA-256 digests with `hmac.compare_digest`.
+`GeneratedToken` creates a 256-bit token on first start and stores only one line `sha256 <hex>` with mode 0600 (for
+example in `/data/api-token`). The plaintext is available once from `take_plaintext()` after creation and as the return
+value of `rotate()`. A malformed file raises `ValueError` and is never replaced on its own: delete it to create a new
+token. The listener never logs the `Authorization` header or a token, and an exception escaping a request prints only
+its class name.
 
 Static caching: every static response (and `/`) carries `Cache-Control: no-cache` and a strong `ETag` (sha256 of the
 served bytes); a matching `If-None-Match` (list, `W/` prefix and `*` accepted) answers `304` without body. No
@@ -158,7 +187,10 @@ For a new or migrating add-on:
 5. Wire the server with `app.web.admin_ui`: build a `Router`, `StaticFiles` and call `make_server`. Never publish the
    GUI port in the manifest. Only if a health check must work on an optionally published port, register that one route
    with `public=True`.
-6. Run the rules scanner (`make check-admin-ui-rules`) and your node and pytest tests, and add them to CI.
+6. Optional provisioning API: build a second `Router` without public routes, choose `OptionToken` or `GeneratedToken`,
+   call `make_api_server(router, port, verifier, bind=...)`, keep the port `null` under `ports`, run both servers with
+   `serve(gui_server, api_server)` and follow R-16.
+7. Run the rules scanner (`make check-admin-ui-rules`) and your node and pytest tests, and add them to CI.
 
 ## Distribution
 
@@ -396,6 +428,9 @@ consumer APIs and static UI assets retain the ingress gate. Tests cover the publ
 - The `X-Remote-User-*` headers are informational only and never an authorisation decision.
 - Public routes are an explicit, exact opt-out of the gate (see the library reference). Keep them read-only status
   endpoints without secret values: anyone who can reach the published port can call them.
+- The bearer API (R-16) carries its token over plain HTTP. Keep the port unpublished, or publish it only to a LAN or
+  Tailscale address the operator chooses, or put an operator-run TLS reverse proxy in front. Never route it through
+  ingress or a public reverse proxy by default.
 
 ## Follow-up
 
