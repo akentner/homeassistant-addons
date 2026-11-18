@@ -144,6 +144,22 @@ def run_cycle(
             log.warning("sync %s: %s: %s", spec.slug, outcome.status, sanitize(message))
 
 
+class SyncService:
+    """RED stub."""
+
+    def __init__(self, paths: Paths, options: Options, upstream: Upstream, log: logging.Logger, **_: Any) -> None:
+        self.stop = threading.Event()
+
+    def wait_reason(self) -> str | None:
+        return None
+
+    def run_cycle_once(self, reason: str) -> None:
+        return None
+
+    def run_forever(self) -> None:
+        return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="app.sync",
