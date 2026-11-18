@@ -1,5 +1,5 @@
 """GUI service layer: token-free options, overview from status.json, registration reader, build version, Sync now,
-and the access actions (list, add, URLs, revoke, rotate) on AccessStore.
+the access actions (list, add, URLs, revoke, rotate) on AccessStore and the last fetch per user (read-only).
 
 Registration fixtures document the interface Phase 2 has to meet (D-19): /data/supervisor.json is a JSON object whose
 `repositories` list holds one object per repository with `repository` (`owner/repo`, matched case-insensitively),
@@ -395,9 +395,12 @@ def test_access_list_groups_sorts_flags_and_never_carries_hash_or_url(paths: Pat
     rows = data["repositories"]
     assert [(r["repository"], r["active"]) for r in rows] == [(REPO, True), (OTHER, True), (UNCONFIGURED, False)]
     assert rows[0]["users"] == [
-        {"user": "alice", "source": "gui", "created": rows[0]["users"][0]["created"], "protected": False},
-        {"user": "dave", "source": "cli", "created": rows[0]["users"][1]["created"], "protected": False},
-        {"user": "local", "source": "system", "created": rows[0]["users"][2]["created"], "protected": True},
+        {"user": "alice", "source": "gui", "created": rows[0]["users"][0]["created"], "protected": False,
+         "last_fetch": None},
+        {"user": "dave", "source": "cli", "created": rows[0]["users"][1]["created"], "protected": False,
+         "last_fetch": None},
+        {"user": "local", "source": "system", "created": rows[0]["users"][2]["created"], "protected": True,
+         "last_fetch": None},
     ]
     assert all(isinstance(u["created"], str) for u in rows[0]["users"])
     assert [u["user"] for u in rows[2]["users"]] == ["bob", "erin"]
@@ -418,8 +421,8 @@ def test_access_list_reserved_label_is_protected_and_unknown_source_is_none(path
     )
     users = service(paths).access_list()["repositories"][0]["users"]
     assert users == [
-        {"user": "LOCAL", "source": "cli", "created": None, "protected": True},
-        {"user": "x", "source": None, "created": None, "protected": False},
+        {"user": "LOCAL", "source": "cli", "created": None, "protected": True, "last_fetch": None},
+        {"user": "x", "source": None, "created": None, "protected": False, "last_fetch": None},
     ]
 
 
@@ -730,3 +733,125 @@ def test_access_log_lines_name_labels_only(paths: Paths, caplog: pytest.LogCaptu
     assert "gui: revoked user dave from example-org/private-addons" in text
     assert not HEX32.search(text)
     assert "http" not in text
+
+
+# last fetch per user (MRP-15, D-21): /data/last-fetch.json is read once per list, never written or renamed by the GUI
+
+LAST_FETCH = "2026-11-18T12:00:05Z"
+
+
+def last_fetch_file(paths: Paths) -> Path:
+    return paths.data_dir / "last-fetch.json"
+
+
+def write_last_fetch_doc(paths: Paths, entries: list[dict], schema: int = 1) -> None:
+    paths.data_dir.mkdir(parents=True, exist_ok=True)
+    doc = {"schema": schema, "updated": LAST_FETCH, "entries": entries}
+    last_fetch_file(paths).write_text(json.dumps(doc), encoding="utf-8")
+
+
+def fetched(user: str, repository: str = REPO, when: str = LAST_FETCH) -> dict:
+    return {"repository": repository, "user": user, "last_fetch": when}
+
+
+def access_entry(user: str, created: object, repository: str = REPO, hash_: str = HASH) -> dict:
+    entry = {"repository": repository, "user": user, "hash": hash_, "source": "gui"}
+    if created is not _MISSING:
+        entry["created"] = created
+    return entry
+
+
+_MISSING = object()
+
+
+def last_fetch_by_user(data: dict, repository: str = REPO) -> dict[str, object]:
+    row = rows_by_repo(data)[repository]
+    return {u["user"]: u["last_fetch"] for u in row["users"]}
+
+
+def test_last_fetch_is_none_without_last_fetch_file(paths: Paths) -> None:
+    seed(paths, REPO, "alice")
+    seed(paths, OTHER, "bob")
+    data = service(paths).access_list()
+    assert last_fetch_by_user(data) == {"alice": None}
+    assert last_fetch_by_user(data, OTHER) == {"bob": None}
+    assert not last_fetch_file(paths).exists()
+
+
+@pytest.mark.parametrize(
+    "created,expected",
+    [
+        ("2026-11-18T12:00:00Z", LAST_FETCH),  # fetched after creation
+        (LAST_FETCH, None),  # same second: not strictly newer
+        ("2026-11-18T12:00:06Z", None),  # created (or rotated) after the record
+        (_MISSING, LAST_FETCH),  # no created: the record is shown
+        (None, LAST_FETCH),
+        (5, LAST_FETCH),
+        ("yesterday", LAST_FETCH),
+        ("2026-11-18 12:00:00", LAST_FETCH),
+    ],
+)
+def test_last_fetch_display_rule(paths: Paths, created: object, expected: str | None) -> None:
+    write_access(paths, [access_entry("alice", created)])
+    write_last_fetch_doc(paths, [fetched("alice")])
+    assert last_fetch_by_user(service(paths).access_list()) == {"alice": expected}
+
+
+def test_last_fetch_matches_repository_case_insensitively_and_user_exactly(paths: Paths) -> None:
+    write_access(
+        paths,
+        [
+            access_entry("alice", "2026-11-18T12:00:00Z"),
+            access_entry("Alice", "2026-11-18T12:00:00Z", hash_="1" * 32),
+            access_entry("bob", "2026-11-18T12:00:00Z", hash_="2" * 32),
+        ],
+    )
+    write_last_fetch_doc(paths, [fetched("alice", "Example-Org/Private-Addons"), fetched("Bob")])
+    assert last_fetch_by_user(service(paths).access_list()) == {"Alice": None, "alice": LAST_FETCH, "bob": None}
+
+
+@pytest.mark.parametrize(
+    "content",
+    ["{not json", json.dumps({"schema": 2, "updated": LAST_FETCH, "entries": [fetched("alice")]}), "[]"],
+)
+def test_invalid_last_fetch_file_means_never_for_everyone_and_stays_untouched(paths: Paths, content: str) -> None:
+    write_access(paths, [access_entry("alice", "2026-11-18T12:00:00Z")])
+    last_fetch_file(paths).write_text(content, encoding="utf-8")
+    before = sorted(p.name for p in paths.data_dir.iterdir())
+    assert last_fetch_by_user(service(paths).access_list()) == {"alice": None}
+    assert last_fetch_file(paths).read_text(encoding="utf-8") == content
+    assert sorted(p.name for p in paths.data_dir.iterdir()) == before
+
+
+def test_last_fetch_for_inactive_repositories_follows_the_same_rule(paths: Paths) -> None:
+    write_access(
+        paths,
+        [
+            access_entry("erin", "2026-11-18T12:00:00Z", UNCONFIGURED),
+            access_entry("frank", "2026-11-18T12:00:09Z", UNCONFIGURED, "1" * 32),
+        ],
+    )
+    write_last_fetch_doc(paths, [fetched("erin", UNCONFIGURED), fetched("frank", UNCONFIGURED)])
+    data = service(paths).access_list()
+    assert rows_by_repo(data)[UNCONFIGURED]["active"] is False
+    assert last_fetch_by_user(data, UNCONFIGURED) == {"erin": LAST_FETCH, "frank": None}
+
+
+def test_rotation_shows_never_until_the_new_url_is_used(paths: Paths) -> None:
+    svc = service(paths)
+    svc.add_user(REPO, "carol")
+    write_last_fetch_doc(paths, [fetched("carol", when="2099-01-01T00:00:00Z")])
+    assert last_fetch_by_user(svc.access_list()) == {"carol": "2099-01-01T00:00:00Z"}
+    svc.rotate_user(REPO, "carol", "carol")
+    write_last_fetch_doc(paths, [fetched("carol", when="2000-01-01T00:00:00Z")])
+    assert last_fetch_by_user(svc.access_list()) == {"carol": None}
+
+
+def test_access_list_never_writes_the_last_fetch_file(paths: Paths) -> None:
+    write_access(paths, [access_entry("alice", "2026-11-18T12:00:00Z")])
+    write_last_fetch_doc(paths, [fetched("alice")])
+    before = last_fetch_file(paths).stat()
+    service(paths).access_list()
+    after = last_fetch_file(paths).stat()
+    assert (before.st_ino, before.st_mtime_ns, before.st_size) == (after.st_ino, after.st_mtime_ns, after.st_size)
+    assert not HEX32.search(json.dumps(service(paths).access_list()))

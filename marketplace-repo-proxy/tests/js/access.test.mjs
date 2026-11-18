@@ -302,6 +302,28 @@ test("add form: an invalid label shows the error and sends nothing; a valid one 
   render(null, root);
 });
 
+test("last fetch column: a timestamp renders relative to now_ms, null and a missing value render never", async () => {
+  const users = [
+    user({ user: "alice", last_fetch: "2026-11-18T11:55:00Z" }),
+    user({ user: "bob", last_fetch: null }),
+    user({ user: "carol" }),
+  ];
+  setRoutes({
+    "GET access": async () =>
+      reply(200, listing([active(users), inactive([user({ user: "dave", last_fetch: "2026-11-18T10:00:00Z" })])])),
+  });
+  const root = await mountView();
+  const headers = tag(root, "th").map((th) => th.textContent.trim());
+  assert.equal(headers.filter((h) => h === en["mrp.access.col.last_fetch"]).length, 2, "active and inactive tables");
+  const cells = (label) => tag(rowOf(root, label), "td").map((td) => td.textContent.trim());
+  // column order: user, source, created, last fetch
+  assert.equal(cells("alice")[3], "5 minutes ago");
+  assert.equal(cells("bob")[3], en["mrp.access.never"]);
+  assert.equal(cells("carol")[3], en["mrp.access.never"]);
+  assert.equal(cells("dave")[3], "2 hours ago");
+  render(null, root);
+});
+
 test("an unreadable access store shows the localised error", async () => {
   setRoutes({ "GET access": async () => reply(503, { error: "access_unavailable", message: "x" }) });
   const root = await mountView();
@@ -317,9 +339,12 @@ test("a11y: named controls and scoped table headers with active, protected and i
       reply(
         200,
         listing([
-          active([user(), user({ user: "local", source: "system", protected: true })]),
+          active([
+            user({ last_fetch: "2026-11-18T11:55:00Z" }),
+            user({ user: "local", source: "system", protected: true, last_fetch: null }),
+          ]),
           active([], "example-org/other"),
-          inactive([user({ user: "bob", source: "cli" })]),
+          inactive([user({ user: "bob", source: "cli", last_fetch: null })]),
         ]),
       ),
     "GET access/example-org/private-addons/alice/urls": async () => reply(200, urlsOf(HASH_A, true)),
