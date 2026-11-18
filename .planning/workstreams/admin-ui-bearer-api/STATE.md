@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 01
-current_plan: 4
+current_plan: 5
 status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-11-18T13:41:19.191Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-11-18T13:49:30.650Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 01 execution started
-state_head: 049f1137ba69e70bf18d5d959ccccee78287061f
+state_head: f815dd990c3190054dbfd3eb80cb635bda8e0d3e
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 6
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 workstream: admin-ui-bearer-api
 created: 2026-11-17
@@ -31,14 +31,14 @@ current_phase_name: Bearer API listener
 ## Progress
 
 **Phases Complete:** 0
-**Current Plan:** 4
+**Current Plan:** 5
 **Total Plans in Phase:** 6
 **Progress:** [░░░░░░░░░░] 0%
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T13:41:19.169Z
-**Stopped At:** Completed 01-03-PLAN.md
+**Last session:** 2026-11-18T13:49:30.628Z
+**Stopped At:** Completed 01-04-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -48,6 +48,7 @@ current_phase_name: Bearer API listener
 | Phase 01 P01 | 4min | 2 tasks | 7 files |
 | Phase 01 P02 | 4min | 2 tasks | 4 files |
 | Phase 01 P03 | 2min | 2 tasks | 3 files |
+| Phase 01 P04 | 5min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -57,3 +58,5 @@ current_phase_name: Bearer API listener
 - [Phase 01]: make_api_server validates verifier, IPv4-literal bind and no public routes before any socket; ApiHandler.timeout = 30 (A4)
 - [Phase 01]: Malformed requests on the API port get the identical 401, not a JSON 400 (A5); __getattr__ routes every do_* to the gate, send_error answers parser errors with the 401
 - [Phase 01]: _bearer_token: exactly one Authorization value via get_all, Bearer case-insensitive with 1*SP, token printable ASCII 0x21..0x7E; a raising verifier is a silent failed check (_verified)
+- [Phase 01]: OPTION_TOKEN_MIN_LENGTH = 16 (D-11): OptionToken requires printable ASCII 0x21..0x7E, fixed messages, __slots__; GeneratedToken stores one 'sha256 <hex>' line (0600, mkstemp + os.replace), malformed file -> ValueError without regeneration (A6)
+- [Phase 01]: _ApiServer.handle_error prints only 'api request failed: <ExceptionClassName>' to stdout; handler exceptions keep the shared _fail traceback on stdout
