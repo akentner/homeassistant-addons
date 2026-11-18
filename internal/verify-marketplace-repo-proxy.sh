@@ -3,6 +3,8 @@
 # Proves ROADMAP Phase 1 criteria 1-5 with one `✓`/`✗` line per check: clones of the upstream default branch and of a
 # configured non-default branch, query and `#branch` tolerance, the 404/403 matrix, push refusal, an upstream change
 # after `mrp sync`, revocation by CLI and by hand edit, status codes end to end and secret hygiene.
+# Phase 2: self-registration of the `local` store URLs with a fake Supervisor container (network alias `supervisor`,
+# tests/fake_supervisor.py) that clones every added URL through the proxy, like the real Supervisor (never a real one).
 # Builds the add-on image locally (D-21). Manual invocation: bash internal/verify-marketplace-repo-proxy.sh
 # Optional env: MRP_VERIFY_PREFIX (container/network name prefix, default mrp-verify), MRP_VERIFY_WORK (scratch dir).
 # Starts containers: never run it in two worktrees at the same time.
@@ -18,6 +20,7 @@ NET="${PREFIX}-net"
 PROXY="${PREFIX}-proxy"
 UPSTREAM="${PREFIX}-upstream"
 CLIENT="${PREFIX}-client"
+SUPERVISOR_FAKE="${PREFIX}-supervisor"
 PAT="SENTINEL-PAT-$RANDOM$RANDOM"
 SUPERVISOR_SENTINEL="SENTINEL-SUPERVISOR-$RANDOM$RANDOM"
 OVERRIDE_VAR="MRP_TEST_UPSTREAM_BASE"
@@ -46,7 +49,7 @@ PY
 }
 
 cleanup() {
-    docker rm -f "${PROXY}" "${UPSTREAM}" "${CLIENT}" >/dev/null 2>&1 || true
+    docker rm -f "${PROXY}" "${UPSTREAM}" "${CLIENT}" "${SUPERVISOR_FAKE}" >/dev/null 2>&1 || true
     docker network rm "${NET}" >/dev/null 2>&1 || true
     # data is root-owned: remove it through the image itself
     if [ -n "${WORK}" ] && [ -d "${WORK}" ]; then
@@ -96,6 +99,63 @@ wait_field() { # usage: wait_field <seconds> <owner/repo> <key> <expected>
         sleep 1
     done
     fail "${repo}: status.json ${key} is '${got}' after ${limit} s, expected '${want}'"
+}
+
+# /data/supervisor.json reader, like field_of
+reg_of() { # usage: reg_of <owner/repo> <key>
+    docker exec "${PROXY}" python3 -I -c '
+import json, sys
+doc = json.load(open("/data/supervisor.json"))
+for entry in doc.get("repositories", []):
+    if entry.get("repository") == sys.argv[1]:
+        value = entry.get(sys.argv[2])
+        print("null" if value is None else str(value).lower() if isinstance(value, bool) else value)
+        break
+' "$1" "$2"
+}
+wait_reg() { # usage: wait_reg <seconds> <owner/repo> <expected registration>
+    local limit="$1" repo="$2" want="$3" got="" i
+    for ((i = 0; i < limit; i++)); do
+        got="$(reg_of "${repo}" registration 2>/dev/null || true)"
+        [ "${got}" = "${want}" ] && return 0
+        sleep 1
+    done
+    fail "${repo}: supervisor.json registration is '${got}' after ${limit} s, expected '${want}'"
+}
+# Request log of the fake Supervisor (one JSON object per line; never a token or a URL)
+fake_requests() { docker exec "${SUPERVISOR_FAKE}" cat /tmp/fake/requests.jsonl; }
+# D-29 shape of /data/supervisor.json; prints "d29 ok" or the first violation
+d29_check() {
+    docker exec "${PROXY}" python3 -I -c '
+import json, re, sys
+doc = json.load(open("/data/supervisor.json"))
+opts = json.load(open("/data/options.json"))
+states = ("registered", "missing", "leftover", "error")
+unsafe = re.compile(r"https?://|/repo/|[0-9a-fA-F]{32}|github_pat_|gh[pousr]_")
+def bad(text):
+    print(text)
+    sys.exit(1)
+repos = doc.get("repositories")
+if not isinstance(repos, list):
+    bad("repositories is not a list")
+configured = [item["repository"] for item in opts.get("repositories", [])]
+head = [e.get("repository", "").lower() if isinstance(e, dict) else "" for e in repos[: len(configured)]]
+if head != [c.lower() for c in configured]:
+    bad("the first entries are not the configured repositories in options order")
+for index, entry in enumerate(repos):
+    if not isinstance(entry, dict) or not isinstance(entry.get("repository"), str):
+        bad(f"entry {index} has no repository string")
+    value = entry.get("registration")
+    if value not in states:
+        bad(f"entry {index}: registration {value!r} is not one of the D-28 values")
+    if "message" in entry:
+        message = entry["message"]
+        if not isinstance(message, str) or not message or unsafe.search(message):
+            bad(f"entry {index}: message is empty, not a string or unsafe")
+    if index >= len(configured) and entry.get("configured") is not False:
+        bad(f"entry {index}: an extra entry is not marked configured: false")
+print("d29 ok")
+'
 }
 
 # Commits <file> with <content> to the upstream main branch inside the fixture; prints the new full SHA
@@ -177,7 +237,7 @@ EOF
 ok "fixture image built (lighttpd-mod_auth)"
 
 echo "==> (3) network and upstream fixture"
-docker rm -f "${PROXY}" "${UPSTREAM}" "${CLIENT}" >/dev/null 2>&1 || true
+docker rm -f "${PROXY}" "${UPSTREAM}" "${CLIENT}" "${SUPERVISOR_FAKE}" >/dev/null 2>&1 || true
 docker network rm "${NET}" >/dev/null 2>&1 || true
 docker network create "${NET}" >/dev/null
 # The PAT is the fixture's basic-auth password; it reaches only the fixture container.
@@ -304,10 +364,19 @@ access = {
 }
 json.dump(access, open(f"{data}/access.json", "w"))
 PY
+# Fake Supervisor (the proxy image: python3 + git); reached by the proxy only through the network alias `supervisor`
+docker run -d --name "${SUPERVISOR_FAKE}" --network "${NET}" --network-alias supervisor \
+    -v "${PWD}/${ADDON_DIR}/tests/fake_supervisor.py:/opt/fake/fake_supervisor.py:ro" \
+    -e "FAKE_SUPERVISOR_TOKEN=${SUPERVISOR_SENTINEL}" \
+    --entrypoint python3 "${IMAGE_TAG}" -I /opt/fake/fake_supervisor.py \
+    --host 0.0.0.0 --port 80 --state-dir /tmp/fake --in-use-file /tmp/fake/in-use >/dev/null
+wait_for 30 "fake Supervisor" docker exec "${SUPERVISOR_FAKE}" test -f /tmp/fake/store.json
+ok "fake Supervisor runs (network alias supervisor)"
 docker run -d --name "${PROXY}" --hostname "${PROXY}" --network "${NET}" \
     -v "${WORK}/data:/data" \
     -e "${OVERRIDE_VAR}=http://${UPSTREAM}:8080" \
     -e "SUPERVISOR_TOKEN=${SUPERVISOR_SENTINEL}" \
+    -e "HASSIO_TOKEN=${SUPERVISOR_SENTINEL}" \
     "${IMAGE_TAG}" >/dev/null
 wait_field 90 "${REPO}" status ok
 ok "status.json: ${REPO} ok"
@@ -330,6 +399,73 @@ docker exec "${PROXY}" test -L "${LINK}" || fail "init did not link the seeded u
     || fail "seeded user's link does not resolve to the bare repository"
 [ "$(docker exec "${PROXY}" stat -c %a /srv/git/access)" = "711" ] || fail "/srv/git/access is not mode 711"
 ok "init linked the seeded user to the bare repository (access root 0711)"
+
+echo "==> (4b) self-registration with a fake Supervisor"
+wait_reg 60 "${REPO}" registered
+wait_reg 60 "${REPO_BRANCHED}" registered
+ok "supervisor.json: ${REPO} and ${REPO_BRANCHED} registered"
+for r in "${REPO_NO_META}" "${REPO_MISSING}"; do
+    [ "$(reg_of "${r}" registration)" = "missing" ] || fail "${r}: registration is not missing"
+    [ "$(reg_of "${r}" in_store)" = "false" ] || fail "${r}: in_store is not false"
+done
+ok "supervisor.json: ${REPO_NO_META} and ${REPO_MISSING} missing, not in the store (no ok sync, D-07)"
+FAKE_STORE="$(docker exec "${SUPERVISOR_FAKE}" cat /tmp/fake/store.json)"
+for pair in "${REPO}|Verify fixture" "${REPO_BRANCHED}|Verify fixture branched stable"; do
+    r="${pair%%|*}"
+    name="${pair#*|}"
+    slug="$(reg_of "${r}" store_slug)"
+    [[ "${slug}" =~ ^[0-9a-f]{8}$ ]] || fail "${r}: store_slug is not 8 hex"
+    python3 -I -c '
+import json, sys
+doc = json.loads(sys.stdin.read())
+names = {r["slug"]: r["name"] for r in doc["repositories"]}
+sys.exit(0 if names.get(sys.argv[1]) == sys.argv[2] else 1)
+' "${slug}" "${name}" <<<"${FAKE_STORE}" || fail "${r}: the fake store does not list ${slug} as '${name}'"
+    ok "fake store lists ${r} as ${slug} '${name}' (cloned through the proxy)"
+done
+REQUESTS="$(fake_requests)"
+python3 -I -c '
+import collections, json, sys
+lines = [json.loads(line) for line in sys.stdin.read().splitlines() if line.strip()]
+if any(entry.get("auth") != "ok" for entry in lines):
+    sys.exit("a request to the fake Supervisor without a valid token")
+calls = collections.Counter((entry["method"], entry["path"]) for entry in lines)
+if calls.pop(("POST", "/store/repositories"), 0) != 2:
+    sys.exit("expected exactly 2 POST /store/repositories")
+if calls.pop(("GET", "/store/repositories"), 0) < 1:
+    sys.exit("expected at least 1 GET /store/repositories")
+if calls:
+    sys.exit("unexpected requests: " + ", ".join(f"{m} {p}" for m, p in calls))
+' <<<"${REQUESTS}" || fail "fake Supervisor request log violates the allow-list expectations"
+ok "fake Supervisor saw only the token, 2 POST and >=1 GET /store/repositories, nothing else"
+LOGS="$(docker logs "${PROXY}" 2>&1)"
+grep -qF "supervisor POST /store/repositories: 200" <<<"${LOGS}" || fail "no 'supervisor POST' log line"
+grep -qF "store: ${REPO} registered as " <<<"${LOGS}" || fail "no 'store: ${REPO} registered as' log line"
+ok "add-on log: supervisor POST /store/repositories: 200 and store: ${REPO} registered as ..."
+[ "$(docker exec "${PROXY}" stat -c %a /data/supervisor.json)" = "600" ] || fail "/data/supervisor.json is not mode 600"
+if docker exec "${PROXY}" grep -qE '/repo/[^ "]*[0-9a-f]{32}' /data/supervisor.json; then
+    fail "a full store URL in /data/supervisor.json"
+fi
+ok "/data/supervisor.json: mode 600, no full store URL"
+out="$(d29_check)" || fail "supervisor.json Phase 3 interface (D-29): ${out}"
+ok "supervisor.json Phase 3 interface (D-29): ${out}"
+# The two `local` hashes join the hash needles of step (14); never echoed
+HASH_LOCAL="$(docker exec "${PROXY}" python3 -I -c '
+import json, sys
+doc = json.load(open("/data/access.json"))
+for repo in sys.argv[1:]:
+    local = [e for e in doc["entries"] if e["repository"] == repo and e["user"] == "local"]
+    if len(local) != 1 or local[0].get("source") != "system":
+        sys.exit(1)
+    print(local[0]["hash"])
+' "${REPO}" "${REPO_BRANCHED}")" || fail "cannot read the local access entries"
+HASH_LOCAL_1="$(sed -n 1p <<<"${HASH_LOCAL}")"
+HASH_LOCAL_2="$(sed -n 2p <<<"${HASH_LOCAL}")"
+if ! [[ "${HASH_LOCAL_1}" =~ ^[0-9a-f]{32}$ && "${HASH_LOCAL_2}" =~ ^[0-9a-f]{32}$ ]]; then
+    fail "local access entries have no valid hash"
+fi
+ok "access.json: one local entry (source system) per registered repository"
+echo "✓ tracer: the fake Supervisor cloned both registered local store URLs"
 
 echo "==> (5) users through mrp"
 URL_ALICE="http://${PROXY}:8080/repo/${REPO}/${HASH_ALICE}"
@@ -522,9 +658,10 @@ NEEDLES_HASH="${WORK}/needles-hash"
         printf 'x-access-token:%s' "${p}" | base64 -w0
         echo
     done >"${NEEDLES_PAT}"
-    printf '%s\n' "${HASH_ALICE}" "${HASH_BOB}" "${HASH_CAROL}" "${HASH_DAVE}" "${HASH_ERIN}" >"${NEEDLES_HASH}"
+    printf '%s\n' "${HASH_ALICE}" "${HASH_BOB}" "${HASH_CAROL}" "${HASH_DAVE}" "${HASH_ERIN}" \
+        "${HASH_LOCAL_1}" "${HASH_LOCAL_2}" >"${NEEDLES_HASH}"
 )
-if [ "$(wc -l <"${NEEDLES_PAT}")" != "4" ] || [ "$(wc -l <"${NEEDLES_HASH}")" != "5" ]; then
+if [ "$(wc -l <"${NEEDLES_PAT}")" != "4" ] || [ "$(wc -l <"${NEEDLES_HASH}")" != "7" ]; then
     fail "needles files are incomplete"
 fi
 put_needles() { # usage: put_needles <container> <host file> <container path>; mode 0600 inside the container
@@ -536,7 +673,7 @@ printf '%s\n' "${SUPERVISOR_SENTINEL}" | docker exec -i "${PROXY}" sh -c 'umask 
 printf 'app.watch\n' | docker exec -i "${PROXY}" sh -c 'umask 077; cat > /tmp/needles-probe'
 put_needles "${CLIENT}" "${NEEDLES_PAT}" /tmp/needles-pat
 [ "$(docker exec "${PROXY}" stat -c %a /tmp/needles-pat)" = "600" ] || fail "/tmp/needles-pat is not mode 0600"
-ok "needles: 2 PATs + 2 base64 headers, 5 full hashes (files, mode 0600)"
+ok "needles: 2 PATs + 2 base64 headers, 7 full hashes (files, mode 0600)"
 
 LOGS="$(docker logs "${PROXY}" 2>&1)"
 if grep -qF -f "${NEEDLES_PAT}" <<<"${LOGS}"; then fail "PAT or base64 PAT header in docker logs"; fi

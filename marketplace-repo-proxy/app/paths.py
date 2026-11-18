@@ -22,6 +22,8 @@ class Paths:
     lock_file: Path
     trigger_file: Path
     gitconfig_file: Path
+    supervisor_state_file: Path
+    supervisor_requests_dir: Path
 
     @classmethod
     def _build(cls, data_dir: Path, srv_git: Path, run_dir: Path, gitconfig_file: Path) -> "Paths":
@@ -36,6 +38,8 @@ class Paths:
             lock_file=run_dir / "access.lock",
             trigger_file=run_dir / "sync.request",
             gitconfig_file=gitconfig_file,
+            supervisor_state_file=data_dir / "supervisor.json",
+            supervisor_requests_dir=run_dir / "supervisor.requests",
         )
 
     @classmethod

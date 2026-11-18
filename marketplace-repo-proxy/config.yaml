@@ -4,6 +4,8 @@ version: "0.1.0-1"
 stage: "experimental"
 slug: "marketplace_repo_proxy"
 init: false
+hassio_api: true
+hassio_role: manager
 arch:
   - amd64
 image: "ghcr.io/akentner/homeassistant-addons/{arch}-marketplace_repo_proxy"

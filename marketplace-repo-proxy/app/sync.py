@@ -9,6 +9,7 @@ import argparse
 import logging
 import os
 import signal
+import socket
 import sys
 import threading
 import time
@@ -35,7 +36,9 @@ from app.gitops import (
 from app.logsetup import setup_logging
 from app.options import Options, OptionsError, RepoSpec, load_options
 from app.paths import Paths
+from app.registration import Registrar
 from app.status import StatusWriter
+from app.supervisor import SupervisorClient, read_token
 
 LOG = logging.getLogger("mrp.sync")
 
@@ -166,6 +169,7 @@ class SyncService:
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         wall: Callable[[], float] = time.time,
+        registrar: Registrar | None = None,
     ) -> None:
         self.paths = paths
         self.options = options
@@ -174,6 +178,7 @@ class SyncService:
         self.clock = clock
         self.sleep = sleep
         self.wall = wall
+        self.registrar = registrar
         self.stop = threading.Event()
         self.next_due: float | None = None
         self.writer = StatusWriter(paths, options.repositories, upstream.overridden, options.sync_interval)
@@ -202,6 +207,11 @@ class SyncService:
         finally:
             self.writer.end_cycle(self.wall() + self.interval_seconds)
             self.next_due = self.clock() + self.interval_seconds
+        if self.registrar is not None and not self.stop.is_set():
+            try:
+                self.registrar.after_cycle(self.writer.snapshot())
+            except Exception as exc:  # a failing Supervisor or store pass never ends the sync loop
+                self.log.warning("store pass failed: %s", type(exc).__name__)
 
     def run_forever(self) -> None:
         removed = cleanup_stale_tmp(self.paths)
@@ -269,7 +279,16 @@ def main(argv: list[str] | None = None) -> int:
     if upstream.overridden:
         LOG.warning("test upstream override active: %s", upstream.base)
 
-    service = SyncService(paths, options, upstream, LOG)
+    token = read_token(os.environ)
+    redactor.register([token])
+    registrar: Registrar | None = None
+    try:
+        client = SupervisorClient(token, log=logging.getLogger("mrp.supervisor"))
+        registrar = Registrar(paths, options, client, socket.gethostname(), logging.getLogger("mrp.store"))
+    except Exception as exc:  # serving and syncing go on without store registration
+        LOG.error("store registration disabled: %s", type(exc).__name__)
+
+    service = SyncService(paths, options, upstream, LOG, registrar=registrar)
     service.stop = stop
     if args.once:
         service.run_cycle_once("startup")
