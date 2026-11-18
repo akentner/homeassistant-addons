@@ -1,4 +1,5 @@
-"""GUI service layer: token-free options, overview from status.json, registration reader, build version, Sync now.
+"""GUI service layer: token-free options, overview from status.json, registration reader, build version, Sync now,
+and the access actions (list, add, URLs, revoke, rotate) on AccessStore.
 
 Registration fixtures document the interface Phase 2 has to meet (D-19): /data/supervisor.json is a JSON object whose
 `repositories` list holds one object per repository with `repository` (`owner/repo`, matched case-insensitively),
@@ -9,14 +10,21 @@ ignored, and a missing or unreadable file, a repository without an entry or any 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import stat
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
 
+from app.access import AccessError, AccessStore
+from app.accessread import AccessUnavailable
 from app.paths import Paths
+from app.web.admin_ui import ApiError
 from app.web.registration import FILE_NAME, REGISTRATION_STATES, read_registration
 from app.web.service import GuiConfig, GuiService, load_gui_config, read_build_version
 from guihelpers import write_options, write_status, write_supervisor
@@ -326,3 +334,399 @@ def test_request_sync_keeps_existing_run_dir_mode(paths: Paths) -> None:
     service(paths).request_sync()
     assert stat.S_IMODE(paths.run_dir.stat().st_mode) == 0o755
     assert paths.trigger_file.exists()
+
+
+# --- access (MRP-14) ----------------------------------------------------------------------------------------------
+
+ADDON_DIR = Path(__file__).resolve().parent.parent
+UNCONFIGURED = "example-org/gone"
+PUBLIC = "https://addons.example.invalid"
+
+
+def access_doc(paths: Paths) -> dict:
+    return json.loads(paths.access_file.read_text(encoding="utf-8"))
+
+
+def entry_of(paths: Paths, repository: str, user: str) -> dict | None:
+    return next(
+        (
+            e
+            for e in access_doc(paths)["entries"]
+            if e["repository"].lower() == repository.lower() and e["user"] == user
+        ),
+        None,
+    )
+
+
+def links(paths: Paths) -> set[str]:
+    root = paths.access_root
+    return {str(p.relative_to(root)) for p in root.rglob("*") if p.is_symlink()} if root.is_dir() else set()
+
+
+def write_access(paths: Paths, entries: list[dict]) -> None:
+    paths.data_dir.mkdir(parents=True, exist_ok=True)
+    paths.access_file.write_text(json.dumps({"schema": 1, "entries": entries}), encoding="utf-8")
+
+
+def seed(paths: Paths, repository: str, user: str, source: str = "cli") -> dict:
+    """An entry written through the real store, with its link (configured repositories only)."""
+    config = load_gui_config(paths, hostname="proxy-host", version_file=paths.data_dir / "nope")
+    return AccessStore(paths).add(repository, user, source=source, specs=config.options.repositories)
+
+
+def test_access_list_without_file_lists_configured_repositories(paths: Paths) -> None:
+    data = service(paths).access_list()
+    assert data["repositories"] == [
+        {"repository": REPO, "active": True, "users": []},
+        {"repository": OTHER, "active": True, "users": []},
+    ]
+    assert isinstance(data["now_ms"], int)
+    assert not paths.access_file.exists()
+
+
+def test_access_list_groups_sorts_flags_and_never_carries_hash_or_url(paths: Paths) -> None:
+    seed(paths, REPO, "dave", "cli")
+    seed(paths, REPO, "alice", "gui")
+    seed(paths, REPO, "local", "system")
+    seed(paths, OTHER, "carol", "api")
+    seed(paths, UNCONFIGURED, "bob")
+    seed(paths, "Example-Org/Gone", "erin")
+    data = service(paths).access_list()
+    rows = data["repositories"]
+    assert [(r["repository"], r["active"]) for r in rows] == [(REPO, True), (OTHER, True), (UNCONFIGURED, False)]
+    assert rows[0]["users"] == [
+        {"user": "alice", "source": "gui", "created": rows[0]["users"][0]["created"], "protected": False},
+        {"user": "dave", "source": "cli", "created": rows[0]["users"][1]["created"], "protected": False},
+        {"user": "local", "source": "system", "created": rows[0]["users"][2]["created"], "protected": True},
+    ]
+    assert all(isinstance(u["created"], str) for u in rows[0]["users"])
+    assert [u["user"] for u in rows[2]["users"]] == ["bob", "erin"]
+    text = json.dumps(data)
+    assert not HEX32.search(text)
+    assert "http" not in text
+
+
+def test_access_list_reserved_label_is_protected_and_unknown_source_is_none(paths: Paths) -> None:
+    write_access(
+        paths,
+        [
+            {"repository": REPO, "user": "LOCAL", "hash": HASH, "created": 5, "source": "cli"},
+            {"repository": REPO, "user": "x", "hash": "1" * 32, "source": "other"},
+            {"repository": REPO, "user": 5, "hash": "2" * 32},
+            {"repository": "not a repo", "user": "y", "hash": "3" * 32},
+        ],
+    )
+    users = service(paths).access_list()["repositories"][0]["users"]
+    assert users == [
+        {"user": "LOCAL", "source": "cli", "created": None, "protected": True},
+        {"user": "x", "source": None, "created": None, "protected": False},
+    ]
+
+
+@pytest.mark.parametrize("user", [None, "", 5, "a b", "-x", "ä", "x" * 65])
+def test_add_user_rejects_invalid_label(paths: Paths, user: object) -> None:
+    with pytest.raises(AccessError) as info:
+        service(paths).add_user(REPO, user)
+    assert info.value.code == "invalid_user"
+    assert not paths.access_file.exists()
+
+
+def test_add_user_reserved_label(paths: Paths) -> None:
+    with pytest.raises(AccessError) as info:
+        service(paths).add_user(REPO, "local")
+    assert info.value.code == "user_reserved"
+
+
+def test_add_user_twice_is_user_exists(paths: Paths) -> None:
+    svc = service(paths)
+    svc.add_user(REPO, "carol")
+    with pytest.raises(AccessError) as info:
+        svc.add_user(REPO, "carol")
+    assert info.value.code == "user_exists"
+
+
+def test_add_user_unknown_repository(paths: Paths) -> None:
+    with pytest.raises(AccessError) as info:
+        service(paths).add_user("example-org/unknown", "carol")
+    assert info.value.code == "repository_unknown"
+
+
+def test_add_user_matches_repository_case_insensitively_and_stores_configured_case(paths: Paths) -> None:
+    result = service(paths).add_user("Example-Org/Private-Addons", "carol")
+    assert result["repository"] == REPO and result["user"] == "carol" and result["source"] == "gui"
+    entry = entry_of(paths, REPO, "carol")
+    assert entry is not None and entry["repository"] == REPO and entry["source"] == "gui"
+    assert links(paths) == {f"{REPO}/{entry['hash']}"}
+    assert result["urls"] == {"internal": f"http://proxy-host:8080/repo/{REPO}/{entry['hash']}"}
+
+
+def test_add_user_with_public_url(paths: Paths) -> None:
+    write_options(paths, [{"repository": REPO}], public_url=PUBLIC)
+    result = service(paths).add_user(REPO, "carol")
+    hash_ = entry_of(paths, REPO, "carol")["hash"]
+    assert result["urls"] == {
+        "internal": f"http://proxy-host:8080/repo/{REPO}/{hash_}",
+        "public": f"{PUBLIC}/repo/{REPO}/{hash_}",
+    }
+
+
+def test_user_urls(paths: Paths) -> None:
+    svc = service(paths)
+    added = svc.add_user(REPO, "carol")
+    assert svc.user_urls("EXAMPLE-ORG/private-addons", "carol") == added["urls"]
+    for user in ("Carol", "nobody"):
+        with pytest.raises(AccessError) as info:
+            svc.user_urls(REPO, user)
+        assert info.value.code == "user_unknown"
+    with pytest.raises(AccessError) as info:
+        svc.user_urls(UNCONFIGURED, "carol")
+    assert info.value.code == "repository_unknown"
+
+
+def test_user_urls_invalid_stored_hash(paths: Paths) -> None:
+    write_access(paths, [{"repository": REPO, "user": "carol", "hash": "nope", "source": "cli"}])
+    with pytest.raises(AccessError) as info:
+        service(paths).user_urls(REPO, "carol")
+    assert info.value.code == "invalid_hash"
+
+
+# revoke
+
+
+@pytest.mark.parametrize("confirm", [None, "", "Carol", " carol", "carol ", "CAROL", 1, ["carol"]])
+def test_revoke_needs_exact_confirm(paths: Paths, confirm: object) -> None:
+    seed(paths, REPO, "carol")
+    before = paths.access_file.read_bytes()
+    with pytest.raises(ApiError) as info:
+        service(paths).revoke_user(REPO, "carol", confirm)
+    assert info.value.code == "confirmation_required"
+    assert paths.access_file.read_bytes() == before
+
+
+def test_revoke_removes_entry_and_link_then_user_unknown(paths: Paths) -> None:
+    seed(paths, REPO, "carol")
+    alice = seed(paths, REPO, "alice")
+    svc = service(paths)
+    assert svc.revoke_user("Example-Org/Private-Addons", "carol", "carol") is None
+    assert entry_of(paths, REPO, "carol") is None
+    assert links(paths) == {f"{REPO}/{alice['hash']}"}
+    with pytest.raises(AccessError) as info:
+        svc.revoke_user(REPO, "carol", "carol")
+    assert info.value.code == "user_unknown"
+
+
+def test_revoke_label_is_case_sensitive(paths: Paths) -> None:
+    seed(paths, REPO, "carol")
+    with pytest.raises(AccessError) as info:
+        service(paths).revoke_user(REPO, "Carol", "Carol")
+    assert info.value.code == "user_unknown"
+    assert entry_of(paths, REPO, "carol") is not None
+
+
+def test_revoke_works_for_unconfigured_repository(paths: Paths) -> None:
+    seed(paths, UNCONFIGURED, "bob")
+    service(paths).revoke_user("Example-Org/Gone", "bob", "bob")
+    assert access_doc(paths)["entries"] == []
+
+
+@pytest.mark.parametrize("user,source", [("local", "system"), ("helper", "system")])
+def test_revoke_of_system_user_is_protected(paths: Paths, user: str, source: str) -> None:
+    seed(paths, REPO, user, source)
+    before = paths.access_file.read_bytes()
+    with pytest.raises(ApiError) as info:
+        service(paths).revoke_user(REPO, user, user)
+    assert info.value.code == "protected"
+    assert paths.access_file.read_bytes() == before
+
+
+def test_revoke_of_reserved_label_with_other_source_is_protected(paths: Paths) -> None:
+    write_access(paths, [{"repository": REPO, "user": "Local", "hash": HASH, "source": "cli"}])
+    with pytest.raises(ApiError) as info:
+        service(paths).revoke_user(REPO, "Local", "Local")
+    assert info.value.code == "protected"
+
+
+# rotate
+
+
+def test_rotate_replaces_hash_keeps_source_and_resets_created(paths: Paths) -> None:
+    old = seed(paths, REPO, "carol", "cli")
+    doc = access_doc(paths)
+    doc["entries"][0]["created"] = "2020-01-01T00:00:00Z"
+    paths.access_file.write_text(json.dumps(doc), encoding="utf-8")
+    result = service(paths).rotate_user("Example-Org/Private-Addons", "carol", "carol")
+    entry = entry_of(paths, REPO, "carol")
+    assert entry["hash"] != old["hash"]
+    assert entry["source"] == "cli"
+    assert entry["created"] != "2020-01-01T00:00:00Z"
+    assert links(paths) == {f"{REPO}/{entry['hash']}"}
+    assert result == {
+        "repository": REPO,
+        "user": "carol",
+        "source": "cli",
+        "created": entry["created"],
+        "urls": {"internal": f"http://proxy-host:8080/repo/{REPO}/{entry['hash']}"},
+    }
+    assert len(access_doc(paths)["entries"]) == 1
+
+
+def test_second_rotate_gives_a_third_hash(paths: Paths) -> None:
+    first = seed(paths, REPO, "carol")["hash"]
+    svc = service(paths)
+    svc.rotate_user(REPO, "carol", "carol")
+    second = entry_of(paths, REPO, "carol")["hash"]
+    svc.rotate_user(REPO, "carol", "carol")
+    third = entry_of(paths, REPO, "carol")["hash"]
+    assert len({first, second, third}) == 3
+    assert links(paths) == {f"{REPO}/{third}"}
+
+
+@pytest.mark.parametrize("confirm", [None, "Carol", " carol", 1])
+def test_rotate_needs_exact_confirm(paths: Paths, confirm: object) -> None:
+    seed(paths, REPO, "carol")
+    before = paths.access_file.read_bytes()
+    with pytest.raises(ApiError) as info:
+        service(paths).rotate_user(REPO, "carol", confirm)
+    assert info.value.code == "confirmation_required"
+    assert paths.access_file.read_bytes() == before
+
+
+def test_rotate_of_unconfigured_repository_is_repository_unknown(paths: Paths) -> None:
+    seed(paths, UNCONFIGURED, "bob")
+    with pytest.raises(AccessError) as info:
+        service(paths).rotate_user(UNCONFIGURED, "bob", "bob")
+    assert info.value.code == "repository_unknown"
+
+
+def test_rotate_of_unknown_user(paths: Paths) -> None:
+    with pytest.raises(AccessError) as info:
+        service(paths).rotate_user(REPO, "nobody", "nobody")
+    assert info.value.code == "user_unknown"
+
+
+def test_rotate_of_system_user_is_protected(paths: Paths) -> None:
+    seed(paths, REPO, "local", "system")
+    before = paths.access_file.read_bytes()
+    with pytest.raises(ApiError) as info:
+        service(paths).rotate_user(REPO, "local", "local")
+    assert info.value.code == "protected"
+    assert paths.access_file.read_bytes() == before
+
+
+@pytest.mark.parametrize("source", ["other", None])
+def test_rotate_refuses_invalid_stored_source_before_any_write(paths: Paths, source: object) -> None:
+    write_access(paths, [{"repository": REPO, "user": "carol", "hash": HASH, "source": source}])
+    before = paths.access_file.read_bytes()
+    with pytest.raises(AccessError) as info:
+        service(paths).rotate_user(REPO, "carol", "carol")
+    assert info.value.code == "invalid_user"
+    assert paths.access_file.read_bytes() == before
+
+
+def test_rotate_restores_the_old_hash_when_add_fails(paths: Paths, monkeypatch: pytest.MonkeyPatch) -> None:
+    old = seed(paths, REPO, "carol", "gui")
+    real_add = AccessStore.add
+    calls = {"n": 0}
+
+    def flaky_add(self, *args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError(28, "No space left on device")
+        return real_add(self, *args, **kwargs)
+
+    monkeypatch.setattr(AccessStore, "add", flaky_add)
+    with pytest.raises(OSError):
+        service(paths).rotate_user(REPO, "carol", "carol")
+    entry = entry_of(paths, REPO, "carol")
+    assert entry is not None and entry["hash"] == old["hash"] and entry["source"] == "gui"
+    assert links(paths) == {f"{REPO}/{old['hash']}"}
+
+
+_READER = r"""
+import json, pathlib, sys
+sys.path.insert(0, sys.argv[1])
+from app.access import AccessStore
+from app.accessread import read_entries_safe
+from app.paths import Paths
+store = AccessStore(Paths.under(sys.argv[2]))
+ready, stop = pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4])
+reads = missing = double = 0
+while True:
+    done = stop.exists()
+    count = sum(1 for e in read_entries_safe(store) if e.get("user") == "carol")
+    reads += 1
+    missing += count == 0
+    double += count > 1
+    ready.touch()
+    if done:
+        break
+print(json.dumps({"reads": reads, "missing": missing, "double": double}))
+"""
+
+
+def test_rotate_is_atomic_for_a_locked_reader_in_another_process(paths: Paths, tmp_path: Path) -> None:
+    seed(paths, REPO, "carol")
+    ready, stop = tmp_path / "ready", tmp_path / "stop"
+    proc = subprocess.Popen(
+        [sys.executable, "-c", _READER, str(ADDON_DIR), str(tmp_path), str(ready), str(stop)],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        deadline = time.monotonic() + 20
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert ready.exists(), "reader did not start"
+        svc = service(paths)
+        hashes = set()
+        for _ in range(50):
+            svc.rotate_user(REPO, "carol", "carol")
+            hashes.add(entry_of(paths, REPO, "carol")["hash"])
+        stop.touch()
+        out, _err = proc.communicate(timeout=30)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+    result = json.loads(out)
+    assert result["reads"] > 1
+    assert result["missing"] == 0 and result["double"] == 0
+    assert len(hashes) == 50
+
+
+# unreadable access.json: refused everywhere, file untouched, never renamed
+
+UNREADABLE = ["{not json", '{"schema": 2, "entries": []}', '{"schema": 1, "entries": {}}']
+
+
+@pytest.mark.parametrize("content", UNREADABLE)
+@pytest.mark.parametrize("action", ["list", "add", "urls", "revoke", "rotate"])
+def test_unreadable_access_file_is_refused_and_left_alone(paths: Paths, content: str, action: str) -> None:
+    paths.data_dir.mkdir(parents=True, exist_ok=True)
+    paths.access_file.write_text(content, encoding="utf-8")
+    svc = service(paths)
+    calls = {
+        "list": lambda: svc.access_list(),
+        "add": lambda: svc.add_user(REPO, "carol"),
+        "urls": lambda: svc.user_urls(REPO, "carol"),
+        "revoke": lambda: svc.revoke_user(REPO, "carol", "carol"),
+        "rotate": lambda: svc.rotate_user(REPO, "carol", "carol"),
+    }
+    with pytest.raises(AccessUnavailable):
+        calls[action]()
+    assert paths.access_file.read_text(encoding="utf-8") == content
+    assert not paths.access_file.with_name("access.json.corrupt").exists()
+
+
+def test_access_log_lines_name_labels_only(paths: Paths, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.DEBUG)
+    svc = service(paths)
+    svc.add_user(REPO, "carol")
+    svc.add_user(REPO, "dave")
+    svc.rotate_user(REPO, "carol", "carol")
+    svc.revoke_user(REPO, "dave", "dave")
+    text = caplog.text
+    assert "gui: added user carol to example-org/private-addons" in text
+    assert "gui: rotated user carol of example-org/private-addons" in text
+    assert "gui: revoked user dave from example-org/private-addons" in text
+    assert not HEX32.search(text)
+    assert "http" not in text
