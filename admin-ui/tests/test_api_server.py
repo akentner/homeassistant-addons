@@ -5,6 +5,8 @@ from __future__ import annotations
 import inspect
 import json
 import secrets
+import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -13,10 +15,10 @@ from typing import Any, Callable, Iterator
 
 import pytest
 
-from app.web.skeleton import ERROR_STATUS, Request, Router
+from app.web.skeleton import ERROR_STATUS, Request, Router, make_server, serve
 from app.web.skeleton.api import make_api_server
 from app.web.skeleton.tokens import OptionToken
-from test_skeleton_server import Client
+from test_skeleton_server import Client, build_router, make_static
 
 # Generated per test run: obviously fake, never a real credential.
 TOKEN = "test-token-" + secrets.token_hex(16)
@@ -119,3 +121,97 @@ def test_unauthorized_is_not_in_the_import_time_error_table() -> None:
         assert ERROR_STATUS["unauthorized"] == 401
     finally:
         server.server_close()
+
+
+# --- serve(server, *more): several servers in one process ---
+
+
+class _FakeServer:
+    """Stand-in for ThreadingHTTPServer: serve_forever blocks until shutdown, unless `main` triggers the stop."""
+
+    def __init__(self, installed: dict[int, Callable[..., None]] | None = None, fail: bool = False) -> None:
+        self.installed = installed
+        self.fail = fail
+        self.stopped = threading.Event()
+        self.started = threading.Event()
+        self.returned = threading.Event()
+        self.shutdowns = 0
+        self.closed = False
+
+    def serve_forever(self) -> None:
+        self.started.set()
+        if self.fail:
+            raise RuntimeError("x")
+        if self.installed is not None:
+            self.installed[signal.SIGTERM](signal.SIGTERM, None)
+        assert self.stopped.wait(5)
+        self.returned.set()
+
+    def shutdown(self) -> None:
+        self.shutdowns += 1
+        self.stopped.set()
+
+    def server_close(self) -> None:
+        self.closed = True
+
+
+def _record_signals(monkeypatch: pytest.MonkeyPatch) -> dict[int, Callable[..., None]]:
+    from app.web.skeleton import server as srv
+
+    installed: dict[int, Callable[..., None]] = {}
+    monkeypatch.setattr(srv.signal, "signal", lambda signum, handler: installed.__setitem__(signum, handler))
+    return installed
+
+
+def test_serve_runs_and_stops_every_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    installed = _record_signals(monkeypatch)
+    main = _FakeServer(installed)
+    extra = _FakeServer()
+    serve(main, extra)  # type: ignore[arg-type]
+    assert signal.SIGTERM in installed and signal.SIGINT in installed
+    assert extra.started.is_set() and extra.returned.wait(5)
+    assert extra.shutdowns >= 1 and main.shutdowns >= 1
+    assert main.closed and extra.closed
+
+
+def test_serve_closes_every_server_when_the_first_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    _record_signals(monkeypatch)
+    main = _FakeServer(fail=True)
+    extra = _FakeServer()
+    with pytest.raises(RuntimeError):
+        serve(main, extra)  # type: ignore[arg-type]
+    assert extra.shutdowns >= 1 and extra.returned.wait(5)
+    assert main.closed and extra.closed
+
+
+def test_serve_real_gui_and_api_servers_stop_together(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    installed = _record_signals(monkeypatch)
+    gui = make_server(build_router(), make_static(tmp_path / "static"), 0, ingress_remote="127.0.0.1", host="127.0.0.1")
+    api_server = make_api_server(build_api_router(), 0, OptionToken(TOKEN), bind="127.0.0.1")
+    gui_port, api_port = gui.server_address[1], api_server.server_address[1]
+    errors: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            serve(gui, api_server)
+        except BaseException as exc:  # noqa: BLE001 - reported by the assertion below
+            errors.append(exc)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    try:
+        assert Client(gui_port).json("GET", "/api/health", {"X-Ingress-Path": "/x"}) == (200, {"ok": True})
+        assert Client(api_port).json("GET", "/api/ping", {"Authorization": f"Bearer {TOKEN}"}) == (200, {"ok": True})
+        assert signal.SIGTERM in installed
+        installed[signal.SIGTERM](signal.SIGTERM, None)
+        thread.join(timeout=5)
+        assert not thread.is_alive() and not errors
+        for port in (gui_port, api_port):
+            with pytest.raises(ConnectionRefusedError):
+                socket.create_connection(("127.0.0.1", port), timeout=2).close()
+    finally:
+        if thread.is_alive():
+            gui.shutdown()
+            api_server.shutdown()
+        gui.server_close()
+        api_server.server_close()

@@ -152,64 +152,7 @@ def make_handler(
 ) -> type[BaseHTTPRequestHandler]:
     mappers = dict(error_mappers or {})
 
-    class GuiHandler(BaseHTTPRequestHandler):
-        protocol_version = "HTTP/1.1"
-
-        def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - query strings can carry names
-            return
-
-        def _send(
-            self,
-            status: int,
-            body: bytes,
-            ctype: str,
-            cache: str = "no-store",
-            extra: dict[str, str] | None = None,
-            kind: str = "api",
-        ) -> None:
-            self.send_response(status)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", cache)
-            for key, value in security_headers(kind, csp).items():
-                self.send_header(key, value)
-            for key, value in (extra or {}).items():
-                self.send_header(key, value)
-            if self.close_connection:
-                self.send_header("Connection", "close")
-            self.end_headers()
-            if self.command != "HEAD":
-                self.wfile.write(body)
-
-        def _json(self, status: int, payload: Any) -> None:
-            self._send(status, json.dumps(payload, sort_keys=True).encode(), "application/json; charset=utf-8")
-
-        def _error(self, exc: ApiError) -> None:
-            # The request body may be unread: do not reuse the connection
-            self.close_connection = True
-            self._json(exc.status, {"error": exc.code, "message": exc.message})
-
-        def _read_body(self) -> Any:
-            if self.headers.get("Transfer-Encoding"):
-                raise ApiError("bad_request", "chunked bodies are not supported")
-            try:
-                length = int(self.headers.get("Content-Length") or 0)
-            except ValueError as exc:
-                raise ApiError("bad_request", "invalid Content-Length") from exc
-            if length < 0:
-                raise ApiError("bad_request", "invalid Content-Length")
-            if length > MAX_BODY:
-                raise ApiError("payload_too_large", "request body too large")
-            if length == 0:
-                return None
-            if not (self.headers.get("Content-Type") or "").lower().startswith("application/json"):
-                raise ApiError("bad_request", "content type must be application/json")
-            raw = self.rfile.read(length)
-            try:
-                return json.loads(raw.decode("utf-8"))
-            except (UnicodeDecodeError, ValueError) as exc:
-                raise ApiError("bad_request", "invalid JSON") from exc
-
+    class GuiHandler(_JsonHandler):
         def _dispatch(self) -> None:
             via_ingress = is_ingress(self.client_address[0], self.headers, ingress_remote)
             # The request target exactly as sent, without its query: compared literally, never normalised or decoded.
@@ -245,30 +188,17 @@ def make_handler(
                     public=not via_ingress,
                 )
                 result = handler(request)
-            except ApiError as exc:
-                self._error(exc)
-                return
             except Exception as exc:  # noqa: BLE001 - never leak exception text; traceback goes to stdout only
-                mapped = next((fn(exc) for cls, fn in mappers.items() if isinstance(exc, cls)), None)
-                if mapped is not None:
-                    self._error(mapped)
-                    return
-                print(traceback.format_exc(), flush=True)
-                self._error(ApiError("internal_error", "internal error"))
+                self._fail(exc)
                 return
-            if result is None:
-                self._send(204, b"", "application/json; charset=utf-8")
-            elif isinstance(result, Download):
-                disposition = {"Content-Disposition": f'attachment; filename="{result.filename}"'}
-                self._send(200, result.data, result.content_type, extra=disposition)
-            elif isinstance(result, tuple):
-                self._json(result[0], result[1])
-            else:
-                self._json(200, result)
+            self._respond(result)
 
         do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = do_HEAD = do_OPTIONS = _dispatch  # noqa: N815
 
+    # Assigned after the class statement: a class body does not see the enclosing function's variables
     GuiHandler.server_version = server_version
+    GuiHandler.csp = csp
+    GuiHandler.mappers = mappers
     return GuiHandler
 
 
@@ -288,16 +218,30 @@ def make_server(
     return server
 
 
-def serve(server: ThreadingHTTPServer) -> None:
-    """Run until SIGTERM or SIGINT, then close the socket."""
+def serve(server: ThreadingHTTPServer, *more: ThreadingHTTPServer) -> None:
+    """Run until SIGTERM or SIGINT; extra servers run in daemon threads and stop with the first; every socket is closed
+    at the end. Call it from the main thread (signal handlers)."""
+    servers = (server, *more)
 
     def stop(_signum: int, _frame: FrameType | None) -> None:
         # shutdown() blocks until serve_forever returns, so it must not run in the signal handler's thread
-        threading.Thread(target=server.shutdown, daemon=True).start()
+        for srv in servers:
+            threading.Thread(target=srv.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
+    threads = [threading.Thread(target=srv.serve_forever, daemon=True) for srv in more]
     try:
+        for thread in threads:
+            thread.start()
         server.serve_forever()
     finally:
-        server.server_close()
+        # shutdown() on a server whose serve_forever never ran would block forever: only stop started ones
+        for srv, thread in zip(more, threads):
+            if thread.ident is not None:
+                srv.shutdown()
+        for thread in threads:
+            if thread.ident is not None:
+                thread.join(timeout=5)
+        for srv in servers:
+            srv.server_close()
