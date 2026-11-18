@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 current_phase: 01
 current_plan: 6
-status: executing
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-11-18T14:18:48.156Z"
+status: verifying
+stopped_at: Completed 01-06-PLAN.md
+last_updated: "2026-11-18T14:27:10.324Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 01 execution started
-state_head: 8b52bb80edded5a6f1f2cba62d98ea54b60424fc
+state_head: 1cfc3d0892da20a9ede6da720adcdaa821ff1245
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 workstream: marketplace-repo-proxy
 created: 2026-11-17
@@ -25,7 +25,7 @@ current_phase_name: Git serving core
 
 **Current Plan:** 6
 **Total Plans in Phase:** 6
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Current Phase:** 01
 **Last Activity:** 2026-11-18 — Phase 01 execution started
 **Last Activity Description:** Phase 01 execution started
@@ -37,8 +37,8 @@ current_phase_name: Git serving core
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T14:18:48.132Z
-**Stopped At:** Completed 01-05-PLAN.md
+**Last session:** 2026-11-18T14:27:10.299Z
+**Stopped At:** Completed 01-06-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -50,6 +50,7 @@ current_phase_name: Git serving core
 | Phase 01 P03 | 8min | 3 tasks | 11 files |
 | Phase 01 P04 | 4min | 2 tasks | 5 files |
 | Phase 01 P05 | 8min | 2 tasks | 1 files |
+| Phase 01 P06 | 6min | 4 tasks | 7 files |
 
 ## Decisions
 
@@ -65,3 +66,5 @@ current_phase_name: Git serving core
 - [Phase 01]: 01-04: startup user count and user lines list only entries reconcile links (valid label, 32-hex hash)
 - [Phase 01]: 01-05: /proc scans in the verify script carry positive controls (cmdline scan must see app.watch, environ scan must see SUPERVISOR_TOKEN in sync's env)
 - [Phase 01]: 01-05: secrets reach verify containers only on stdin (options rewrite, needles files), never in an argv
+- [Phase 01]: 01-06: DOCS.md describes access-watch as its own s6 longrun (as built), not a thread in sync
+- [Phase 01]: 01-06: interim user commands documented with container addon_{repo-hash}_marketplace_repo_proxy; Phase 1 released as 0.1.0-1 without tag (manager tags after squash merge)

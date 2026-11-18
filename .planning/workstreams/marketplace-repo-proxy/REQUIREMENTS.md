@@ -4,17 +4,17 @@ Source of the design and its evidence: `marketplace-repo-proxy/SPIKE.md`.
 
 ## Phase 1: Git serving core
 
-- [ ] **MRP-01**: Options schema: `github_token` (password), `sync_interval` (minutes, default 15, minimum 5),
+- [x] **MRP-01**: Options schema: `github_token` (password), `sync_interval` (minutes, default 15, minimum 5),
   `public_url` (optional), `repositories` (list of `{repository: owner/repo, branch: optional}`), `register_local`
   (default true), `api_enabled` (default false), `log_level`.
-- [ ] **MRP-02**: Sync service (own s6 service, only holder of the PAT): one bare repository per source created with
+- [x] **MRP-02**: Sync service (own s6 service, only holder of the PAT): one bare repository per source created with
   `git init --bare` and an explicit fetch refspec for the configured branch (no `--mirror`, no push config), `HEAD` set
   to it, `fetch --prune`, PAT passed only via `GIT_CONFIG_*` environment, interval plus trigger file, status written to
   `/data/status.json` with stable codes (`ok`, `auth_failed`, `not_found`, `no_repository_yaml`).
 - [x] **MRP-03**: lighttpd + `git http-backend` as unprivileged user: allow-list for `info/refs` and `git-upload-pack`
   under `/repo/<owner>/<repo>/<32 hex>/`, rewrite rules that accept and ignore query parameters, empty docroot,
   `http.getanyfile=false`, `http.receivepack=false`, `safe.directory` in `/etc/gitconfig`.
-- [ ] **MRP-04**: Access store `/data/access.json` (repository, user label, hash, created, source `gui`/`api`/`system`),
+- [x] **MRP-04**: Access store `/data/access.json` (repository, user label, hash, created, source `gui`/`api`/`system`),
   random 128-bit hashes, symlink tree `/srv/git/access/<owner>/<repo>/<hash>` rebuilt at every start.
 - [x] **MRP-05**: Secret hygiene: PAT never in logs, repository config or lighttpd's environment; hashes never in logs
   (startup lists user labels and masked URLs only).
