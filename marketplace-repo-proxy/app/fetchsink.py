@@ -20,6 +20,9 @@ import sys
 
 LINE_RE = re.compile(r"^POST /repo/([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+)/([0-9a-f]{32})/git-upload-pack 200$")
 SOCKET_PATH = "/run/mrp-fetch/fetch.sock"
+# A valid record is at most about 200 bytes (owner <= 39, repo <= 100): longer lines are dropped before decoding and
+# matching, so a flood of huge lines costs no regex work. The receiver enforces its own 256-byte datagram limit.
+MAX_LINE = 512
 
 
 # Annotations are never evaluated (postponed), so `BinaryIO` needs no typing import: stdlib os/re/socket/sys only.
@@ -35,6 +38,8 @@ def main(argv: list[str] | None = None, stream: BinaryIO | None = None) -> int: 
         source = sys.stdin.buffer if stream is None else stream
         for raw in source:
             try:
+                if len(raw) > MAX_LINE:
+                    continue
                 match = LINE_RE.match(raw.decode("ascii", "replace").rstrip("\r\n"))
                 if match:
                     sock.sendto(" ".join(match.groups()).encode("ascii"), path)
