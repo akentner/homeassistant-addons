@@ -13,12 +13,13 @@ import fcntl
 import logging
 import os
 import re
+import secrets
 import threading
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
-from app.jsonio import atomic_write_json, read_json
-from app.options import RepoSpec
+from app.jsonio import atomic_write_json, read_json, utc_timestamp
+from app.options import RepoSpec, parse_repository
 from app.paths import Paths
 
 SCHEMA = 1
@@ -28,6 +29,7 @@ SOURCES = ("gui", "api", "system", "cli")
 
 LOG = logging.getLogger("mrp.access")
 _THREAD_LOCK = threading.RLock()
+_HELD = threading.local()  # lock depth per thread: a nested locked() must not flock a second fd (would deadlock)
 
 
 class AccessError(ValueError):
@@ -43,8 +45,8 @@ class AccessSchemaError(AccessError):
 
 
 def new_hash() -> str:
-    """RED stub; implemented in the GREEN step."""
-    return "0" * 32
+    """128 random bits from the OS CSPRNG as 32 lowercase hex (D-05)."""
+    return secrets.token_hex(16)
 
 
 def _empty() -> dict[str, Any]:
@@ -65,13 +67,24 @@ class AccessStore:
 
     @contextlib.contextmanager
     def locked(self) -> Iterator[None]:
+        """Exclusive across threads and processes; reentrant within one thread."""
         with _THREAD_LOCK:
+            depth = getattr(_HELD, "depth", 0)
+            if depth:
+                _HELD.depth = depth + 1
+                try:
+                    yield
+                finally:
+                    _HELD.depth = depth
+                return
             self.paths.lock_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             fd = os.open(self.paths.lock_file, os.O_RDWR | os.O_CREAT, 0o600)
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX)
+                _HELD.depth = 1
                 yield
             finally:
+                _HELD.depth = 0
                 os.close(fd)
 
     def load(self) -> dict[str, Any]:
@@ -97,8 +110,45 @@ class AccessStore:
         return list(self.load()["entries"])
 
     def add(self, repository: str, user: str, source: str = "cli", hash_: str | None = None) -> dict[str, Any]:
-        """RED stub; implemented in the GREEN step."""
-        raise AccessError("not_implemented")
+        """Append one entry (re-reads the file under the lock); unknown keys and fields are kept untouched."""
+        try:
+            parse_repository(repository)
+        except (TypeError, ValueError):
+            raise AccessError("repository_unknown") from None
+        if not isinstance(user, str) or not USER_RE.match(user):
+            raise AccessError("invalid_user")
+        if source not in SOURCES:
+            raise AccessError("invalid_source")
+        if hash_ is not None and (not isinstance(hash_, str) or not HASH_RE.match(hash_)):
+            raise AccessError("invalid_hash")
+        with self.locked():
+            doc = self.load()
+            entries = doc["entries"]
+            if any(
+                isinstance(e.get("repository"), str)
+                and e["repository"].lower() == repository.lower()
+                and e.get("user") == user
+                for e in entries
+            ):
+                raise AccessError("user_exists")
+            used = {e.get("hash") for e in entries}
+            if hash_ is None:
+                hash_ = new_hash()
+                while hash_ in used:
+                    hash_ = new_hash()
+            elif hash_ in used:
+                raise AccessError("invalid_hash")
+            entry = {
+                "repository": repository,
+                "user": user,
+                "hash": hash_,
+                "created": utc_timestamp(),
+                "source": source,
+            }
+            entries.append(entry)
+            self.paths.access_file.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_json(self.paths.access_file, doc)
+            return dict(entry)
 
     def reconcile(self, specs: Iterable[RepoSpec]) -> int:
         with self.locked():
