@@ -1365,3 +1365,196 @@ def test_request_file_that_cannot_be_unlinked_never_runs_or_keeps_the_loop_busy(
     assert client.calls == [] and _requests(paths) == []
     assert INVALID_REQUEST_LINE in _messages(caplog, logging.WARNING)
     assert registrar.work_due() is False
+
+
+# --- MRP-10: rotation of the `local` user (D-09, D-10, D-11, D-28, D-29) -------------------------------------------
+
+
+def _retired_entries(paths: Paths) -> list[dict]:
+    return [e for e in AccessStore(paths).list_entries() if str(e.get("user", "")).startswith("local.")]
+
+
+def _link_names(paths: Paths, spec: RepoSpec = SPEC_A) -> list[str]:
+    directory = paths.access_root / spec.owner / spec.name
+    return sorted(p.name for p in directory.iterdir()) if directory.is_dir() else []
+
+
+def _rotate_setup(paths: Paths, fake: Fake) -> tuple[Registrar, Options, dict, str]:
+    """A registered repository (register_local true) and a Registrar ready for a rotate request."""
+    old = _register(paths, fake, SPEC_A)[SPEC_A.key]
+    options = _options(SPEC_A)
+    return _registrar(paths, options, fake.client()), options, old, _slug_of(old)
+
+
+class CheckingClient:
+    """Wraps a real client; runs `check` right before the DELETE is sent."""
+
+    def __init__(self, inner: SupervisorClient, check: Callable[[], None]) -> None:
+        self.inner = inner
+        self.check = check
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.inner, name)
+
+    def remove_repository(self, slug: str) -> CallResult:
+        self.check()
+        return self.inner.remove_repository(slug)
+
+
+def test_rotate_request_adds_the_new_url_first_then_removes_the_old_slug(
+    paths: Paths, fake: Fake, caplog: pytest.LogCaptureFixture
+) -> None:
+    registrar, options, old, old_slug = _rotate_setup(paths, fake)
+    sent = len(fake.state.requests)
+    caplog.set_level(logging.INFO)
+    _request(paths, action="rotate")
+    registrar.run_due()
+    new = _local(paths, SPEC_A)
+    assert new is not None and new["hash"] != old["hash"] and new["source"] == "system"
+    new_slug = _slug_of(new)
+    assert fake.calls()[sent:] == [
+        "GET /store/repositories", "POST /store/repositories", f"DELETE /store/repositories/{old_slug}",
+    ]
+    assert _outcome(paths) == ("done", "")
+    assert _retired_entries(paths) == []
+    assert not os.path.lexists(_link(paths, old)) and _link(paths, new).is_symlink()
+    assert new_slug in fake.state.repos and old_slug not in fake.state.repos
+    doc = _doc(paths, options)
+    entry = _entry(doc, SPEC_A)
+    assert (entry["registration"], entry["in_store"], entry["store_slug"]) == ("registered", True, new_slug)
+    assert "message" not in entry and doc["leftovers"] == []
+    assert f"store: {SPEC_A.slug} rotated: new {new_slug} registered; old URL revoked" in _messages(caplog)
+    assert not HEX32_RE.search(caplog.text) and not HEX32_RE.search(paths.supervisor_state_file.read_text())
+
+
+def test_rotate_revokes_the_old_url_before_the_delete(paths: Paths, fake: Fake) -> None:
+    old = _register(paths, fake, SPEC_A)[SPEC_A.key]
+    options = _options(SPEC_A)
+    seen: list[tuple[bool, bool]] = []
+
+    def check() -> None:
+        new = _local(paths, SPEC_A)
+        seen.append((os.path.lexists(_link(paths, old)), new is not None and _link(paths, new).is_symlink()))
+
+    registrar = _registrar(paths, options, CheckingClient(fake.client(), check))
+    _request(paths, action="rotate")
+    registrar.run_due()
+    assert seen == [(False, True)]
+    assert _outcome(paths) == ("done", "")
+    _doc(paths, options)
+
+
+def test_refused_rotation_records_a_revoked_in_use_leftover_and_is_never_retried(
+    paths: Paths, fake: Fake, caplog: pytest.LogCaptureFixture
+) -> None:
+    registrar, options, old, old_slug = _rotate_setup(paths, fake)
+    fake.state.in_use.add(old_slug)
+    caplog.set_level(logging.DEBUG)
+    _request(paths, action="rotate")
+    registrar.run_due()
+    assert _outcome(paths) == ("refused", "in_use")
+    new = _local(paths, SPEC_A)
+    assert new is not None and new["hash"] != old["hash"]
+    new_slug = _slug_of(new)
+    doc = _doc(paths, options)
+    (leftover,) = doc["leftovers"]
+    assert (leftover["repository"], leftover["store_slug"], leftover["user"]) == (
+        SPEC_A.slug, old_slug, f"local.{old_slug}")
+    assert (leftover["reason"], leftover["revoked"]) == ("in_use", True)
+    assert "…" in leftover["masked_url"] and old["hash"] not in json.dumps(leftover)
+    assert _retired_entries(paths) == []
+    assert not os.path.lexists(_link(paths, old)) and _link(paths, new).is_symlink()
+    entry = _entry(doc, SPEC_A)
+    assert (entry["registration"], entry["in_store"], entry["store_slug"]) == ("leftover", True, new_slug)
+    assert entry["message"] == "1 old store repository left (in_use); see mrp local status"
+    store_warnings = [m for m in _messages(caplog, logging.WARNING) if m.startswith("store: ")]
+    assert store_warnings == [f"store: {SPEC_A.slug} leftover {old_slug} (in_use)"]
+    for _ in range(3):
+        registrar.after_cycle(_ok_status(SPEC_A))
+    assert _deletes(fake) == [old_slug]
+    doc = _doc(paths, options)
+    assert _entry(doc, SPEC_A)["registration"] == "leftover" and len(doc["leftovers"]) == 1
+    assert not HEX32_RE.search(paths.supervisor_state_file.read_text())
+    assert not HEX32_RE.search(caplog.text)
+
+
+def test_failed_add_rolls_the_rotation_back_and_keeps_the_old_url(
+    paths: Paths, fake: Fake, caplog: pytest.LogCaptureFixture
+) -> None:
+    registrar, options, old, old_slug = _rotate_setup(paths, fake)
+    before = _entry(_doc(paths, options), SPEC_A)
+    during: list[bool] = []
+
+    def failing(url: str) -> str:
+        during.append(_link(paths, old).is_symlink())
+        raise ValueError(f"Can't clone {url}: git clone exited with 128")
+
+    fake.clone_impl = failing
+    caplog.set_level(logging.INFO)
+    assert _link(paths, old).is_symlink()
+    _request(paths, action="rotate")
+    registrar.run_due()
+    assert during == [True]
+    assert _deletes(fake) == []
+    assert _outcome(paths) == ("failed", "add_failed")
+    assert _local(paths, SPEC_A) == old and _retired_entries(paths) == []
+    assert _link_names(paths) == [old["hash"]] and _link(paths, old).is_symlink()
+    after = _entry(_doc(paths, options), SPEC_A)
+    for key in ("registration", "in_store", "store_slug", "masked_url", "registered_at"):
+        assert after[key] == before[key]
+    assert f"store: rotation of {SPEC_A.slug} failed; old registration kept" in _messages(caplog, logging.WARNING)
+    assert not HEX32_RE.search(caplog.text)
+
+
+def test_rotation_with_another_delete_error_records_an_error_leftover(paths: Paths) -> None:
+    options = _options(SPEC_A)
+    client = _stub_registered(paths, options)
+    old = _local(paths, SPEC_A)
+    old_slug = _slug_of(old)
+    client.remove = CallResult(False, 500, message="boom")
+    _request(paths, action="rotate")
+    _registrar(paths, options, client).run_due()
+    assert client.calls == ["GET", "POST", f"DELETE {old_slug}"]
+    assert _outcome(paths) == ("failed", "remove_failed")
+    assert not os.path.lexists(_link(paths, old)) and _retired_entries(paths) == []
+    doc = _doc(paths, options)
+    (leftover,) = doc["leftovers"]
+    assert (leftover["store_slug"], leftover["reason"], leftover["revoked"]) == (old_slug, "error", True)
+    entry = _entry(doc, SPEC_A)
+    assert entry["registration"] == "leftover" and entry["store_slug"] == _slug_of(_local(paths, SPEC_A))
+
+
+def test_rotate_request_with_register_local_disabled_is_rejected(paths: Paths, fake: Fake) -> None:
+    old = _register(paths, fake, SPEC_A)[SPEC_A.key]
+    sent = len(fake.state.requests)
+    options = _options(SPEC_A, register_local=False)
+    _request(paths, action="rotate")
+    _registrar(paths, options, fake.client()).run_due()
+    assert fake.state.requests[sent:] == []
+    assert _outcome(paths) == ("rejected", "register_local_disabled")
+    assert _local(paths, SPEC_A) == old and _link(paths, old).is_symlink()
+    _doc(paths, options)
+
+
+def test_rotate_request_without_a_local_entry_is_not_registered(paths: Paths) -> None:
+    client = StubClient(CallResult(True, 200, []))
+    options = _options(SPEC_A)
+    _request(paths, action="rotate")
+    _registrar(paths, options, client).run_due()
+    assert client.calls == []
+    assert _outcome(paths) == ("rejected", "not_registered")
+    assert AccessStore(paths).list_entries() == []
+    _doc(paths, options)
+
+
+@pytest.mark.parametrize("repository", ["example-org/unknown", "not a repository"])
+def test_rotate_request_for_an_unconfigured_repository_is_rejected(paths: Paths, fake: Fake, repository: str) -> None:
+    old = _register(paths, fake, SPEC_A)[SPEC_A.key]
+    sent = len(fake.state.requests)
+    options = _options(SPEC_A)
+    _request(paths, repository, action="rotate")
+    _registrar(paths, options, fake.client()).run_due()
+    assert fake.state.requests[sent:] == []
+    assert _outcome(paths) == ("rejected", "repository_unknown")
+    assert _local(paths, SPEC_A) == old and _link(paths, old).is_symlink()
+    _doc(paths, options)

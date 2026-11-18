@@ -550,3 +550,99 @@ def test_local_remove_request_never_logs(paths, capsys, no_wait):
         root.setLevel(old_level)
     capsys.readouterr()
     assert records == []
+
+
+# --- `mrp local rotate`: D-11 warning, `--yes` confirmation (D-09, D-11, D-31) ---------------------------------------
+
+ROTATE_WARNING = (
+    f"warning: rotation revokes the current local URL of {REPO} at once; add-ons installed from its store repository "
+    "get no updates until they are reinstalled from the new one"
+)
+
+
+def seed_rotate_result(p: Paths, result: str, code: str = "", **overrides) -> None:
+    seed_state(
+        p,
+        requests=[
+            {"id": REQUEST_ID, "action": "rotate", "repository": REPO, "result": result, "code": code,
+             "finished": "2026-11-18T12:00:00Z"}
+        ],
+        **overrides,
+    )
+
+
+def test_local_rotate_without_yes_warns_and_writes_nothing(paths, capsys, no_wait):
+    seed_state(paths)
+    before = paths.supervisor_state_file.read_bytes()
+    assert run(paths, "local", "rotate", REPO) == 1
+    captured = capsys.readouterr()
+    err = captured.err.splitlines()
+    assert err[0] == ROTATE_WARNING
+    assert "error: confirmation_required" in err and "rerun with --yes to rotate" in err
+    assert captured.out == ""
+    assert request_files(paths) == []
+    assert paths.supervisor_state_file.read_bytes() == before
+
+
+def test_local_rotate_with_yes_writes_a_rotate_request(paths, capsys, no_wait):
+    assert run(paths, "local", "rotate", REPO, "--yes") == 0
+    captured = capsys.readouterr()
+    assert captured.err.splitlines()[0] == ROTATE_WARNING
+    assert captured.out.strip().startswith(f"queued: {REQUEST_ID}")
+    (path,) = request_files(paths)
+    assert path.stat().st_mode & 0o777 == 0o600
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    assert set(doc) == {"id", "action", "repository", "created"}
+    assert (doc["id"], doc["action"], doc["repository"]) == (REQUEST_ID, "rotate", REPO)
+
+
+def test_local_rotate_prints_rotated_with_the_new_slug(paths, capsys, no_wait):
+    seed_rotate_result(paths, "done")
+    assert run(paths, "local", "rotate", REPO, "--yes") == 0
+    captured = capsys.readouterr()
+    assert ROTATE_WARNING in captured.err
+    assert captured.out.strip() == "rotated: new store repository 0a1b2c3d registered; old URL revoked"
+
+
+def test_local_rotate_prints_refused_in_use_with_both_slugs(paths, capsys, no_wait):
+    leftover = {
+        "repository": REPO, "store_slug": "99887766", "user": "local.99887766",
+        "masked_url": f"http://{HOST}:8080/repo/{REPO}/aa11…", "since": "2026-11-18T10:00:00Z", "reason": "in_use",
+        "message": "masked", "revoked": True,
+    }
+    seed_rotate_result(paths, "refused", "in_use", leftovers=[leftover])
+    assert run(paths, "local", "rotate", REPO, "--yes") == 1
+    out = capsys.readouterr().out.strip()
+    assert out == (
+        "refused: in_use old store repository 99887766 is still used by installed add-ons; its URL is revoked; "
+        f"reinstall them from 0a1b2c3d, then run mrp local remove {REPO}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("result", "code"),
+    [("failed", "add_failed"), ("failed", "remove_failed"), ("failed", "store_list_unavailable"),
+     ("rejected", "register_local_disabled"), ("rejected", "not_registered"), ("rejected", "repository_unknown")],
+)
+def test_local_rotate_prints_the_error_code(paths, capsys, no_wait, result, code):
+    seed_rotate_result(paths, result, code)
+    assert run(paths, "local", "rotate", REPO, "--yes") == 1
+    assert capsys.readouterr().err.splitlines()[-1] == f"error: {code}"
+
+
+def test_local_rotate_has_no_revoke_old_flag(paths, capsys, no_wait):
+    assert run(paths, "local", "rotate", REPO, "--yes", "--revoke-old") == 2
+    capsys.readouterr()
+    assert request_files(paths) == []
+
+
+def test_local_rotate_rejects_a_malformed_repository_without_a_request(paths, capsys, no_wait):
+    assert run(paths, "local", "rotate", "not-a-repository", "--yes") == 1
+    assert capsys.readouterr().err.splitlines()[-1] == "error: repository_unknown"
+    assert request_files(paths) == []
+
+
+def test_help_explains_local_rotation(paths, capsys):
+    assert run(paths, "--help") == 0
+    out = capsys.readouterr().out
+    assert "mrp local rotate" in out and "--yes" in out and "reinstall" in out
