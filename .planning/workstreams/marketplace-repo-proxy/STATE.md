@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 01
-current_plan: 4
+current_plan: 5
 status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-11-18T14:00:47.406Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-11-18T14:07:09.706Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 01 execution started
-state_head: eedcd1937e91c8b6ee0ced01fbc0df71075c70b1
+state_head: ada94e6097ec471df614215782c7329b4dc70182
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 6
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 workstream: marketplace-repo-proxy
 created: 2026-11-17
@@ -23,7 +23,7 @@ current_phase_name: Git serving core
 
 ## Current Position
 
-**Current Plan:** 4
+**Current Plan:** 5
 **Total Plans in Phase:** 6
 **Status:** Ready to execute
 **Current Phase:** 01
@@ -37,8 +37,8 @@ current_phase_name: Git serving core
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T14:00:47.383Z
-**Stopped At:** Completed 01-03-PLAN.md
+**Last session:** 2026-11-18T14:07:09.682Z
+**Stopped At:** Completed 01-04-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -48,6 +48,7 @@ current_phase_name: Git serving core
 | Phase 01 P01 | 13 min | 2 tasks | 34 files |
 | Phase 01 P02 | 10min | 3 tasks | 7 files |
 | Phase 01 P03 | 8min | 3 tasks | 11 files |
+| Phase 01 P04 | 4min | 2 tasks | 5 files |
 
 ## Decisions
 
@@ -59,3 +60,5 @@ current_phase_name: Git serving core
 - [Phase 01]: 01-03: RESERVED_USERS ({local}) is matched case-insensitively and only source system may use it
 - [Phase 01]: 01-03: access.json reads also hold the store lock, so the corrupt-file rename never races a writer
 - [Phase 01]: 01-03: access-watch is its own s6 longrun without container env; it keeps only the repository list from options and never uses the PAT
+- [Phase 01]: 01-04: safe.directory write failure and symlink-tree OSError are logged and survived; only OptionsError and AccessSchemaError stop init (D-28)
+- [Phase 01]: 01-04: startup user count and user lines list only entries reconcile links (valid label, 32-hex hash)
