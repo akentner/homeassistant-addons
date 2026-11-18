@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Docker end-to-end check of the marketplace-repo-proxy management page (Phase 3): the ingress gate seen from a real
 # ingress peer, the overview of a repository synced from a local, auth-checking upstream fixture (never GitHub), the
-# add-on version in the top bar, a token-free GUI process and the access actions (add, URLs, revoke, rotate, protected
-# system user); later plans add the fetch sink.
+# add-on version in the top bar, a token-free GUI process, the access actions (add, URLs, revoke, rotate, protected
+# system user) and the fetch sink (lighttpd access log -> forwarder -> fetchlog -> last fetch per user).
 # One `✓`/`✗` line per check. Builds the add-on image locally. Manual invocation:
 #   bash internal/verify-marketplace-repo-proxy-gui.sh
 # Optional env: MRP_GUI_VERIFY_PREFIX (container/network name prefix, must start with mrp-, default mrp-gui-verify),
@@ -501,4 +501,39 @@ grep -qF "gui: revoked user dave from ${REPO}" <<<"${LOGS}" || fail "add-on log 
 if grep -qF -f "${NEEDLES_HASH}" <<<"${LOGS}"; then fail "an access hash appears in the add-on log"; fi
 if grep -Eq '/(repo|access)/[^[:space:]]*[0-9a-f]{32}' <<<"${LOGS}"; then fail "the add-on log holds a 32-hex run after /repo/ or /access/"; fi
 ok "add-on log names the actions but holds no access hash and no 32-hex run after /repo/ or /access/"
+echo "==> (12) Fetch sink: last fetch recorded"
+gui_json POST "api/access/${REPO}" '{"user":"erin"}'
+[ "${GUI_CODE}" = "201" ] || fail "POST api/access/${REPO} erin: HTTP ${GUI_CODE}, expected 201"
+URL_ERIN="$(jget "${GUI_BODY}" 'd["urls"]["internal"]')"
+printf '%s\n' "${URL_ERIN##*/}" >>"${NEEDLES_HASH}"
+[[ "${URL_ERIN##*/}" =~ ^[0-9a-f]{32}$ ]] || fail "add erin: urls.internal does not end in a 32-hex hash"
+ok "erin added through the GUI"
+# usage: clone_as <name> <store URL>  (git clone --depth 1 from the outside client)
+clone_as() {
+    docker exec -w /tmp "${OUTSIDE_CLIENT}" sh -ec 'rm -rf "$1"; git clone -q --depth 1 "$2" "$1"; test -f "$1/repository.yaml"' \
+        sh "$1" "$2"
+}
+clone_as erin "${URL_ERIN}" || fail "git clone --depth 1 of erin's GUI URL failed"
+ok "outside client clones erin's store URL"
+# usage: last_fetch_of <user>  (last_fetch of <user> for REPO in /data/last-fetch.json, parsed on the host; "" if none)
+last_fetch_of() {
+    docker exec "${PROXY}" cat /data/last-fetch.json | python3 -I -c '
+import json, sys
+doc = json.load(sys.stdin)
+for entry in doc.get("entries", []):
+    if entry.get("repository") == sys.argv[1] and entry.get("user") == sys.argv[2]:
+        print(entry.get("last_fetch") or "")
+        break
+' "${REPO}" "$1"
+}
+erin_recorded() { [[ "$(last_fetch_of erin)" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]; }
+wait_for 15 "erin's last fetch in /data/last-fetch.json" erin_recorded
+ok "/data/last-fetch.json records erin's last fetch of ${REPO} ($(last_fetch_of erin))"
+LOGS="$(docker logs "${PROXY}" 2>&1)"
+grep -qF "fetch: erin → ${REPO}" <<<"${LOGS}" || fail "add-on log lacks 'fetch: erin → ${REPO}'"
+ok "add-on log: fetch: erin → ${REPO}"
+LAST_FETCH_DOC="$(docker exec "${PROXY}" cat /data/last-fetch.json)"
+if grep -qF -f "${NEEDLES_HASH}" <<<"${LAST_FETCH_DOC}"; then fail "an access hash appears in /data/last-fetch.json"; fi
+if grep -qF -f "${NEEDLES_HASH}" <<<"${LOGS}"; then fail "an access hash appears in the add-on log"; fi
+ok "/data/last-fetch.json and the add-on log hold no access hash"
 echo "✓ GUI verify: all checks passed"
