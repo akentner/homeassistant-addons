@@ -21,7 +21,7 @@
     {
       "name": "Management GUI",
       "number": "3",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "name": "Provisioning API",
@@ -34,5 +34,5 @@
       "status": "pending"
     }
   ],
-  "updated_at": "2026-11-18T21:23:38.225Z"
+  "updated_at": "2026-11-18T21:37:09.881Z"
 }

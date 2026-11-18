@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 03
-current_plan: 1
+current_plan: 2
 status: executing
-stopped_at: Completed 01-06-PLAN.md
-last_updated: "2026-11-18T21:23:38.212Z"
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-11-18T21:37:10.815Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 03 execution started
-state_head: b80bab0cacf1f30dba171a2a0b7927c022dc7b0a
+state_head: ac539162107198a90342abe8016fa14fd4c99725
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 12
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 workstream: marketplace-repo-proxy
 created: 2026-11-17
@@ -23,9 +23,9 @@ current_phase_name: Management GUI
 
 ## Current Position
 
-**Current Plan:** 1
+**Current Plan:** 2
 **Total Plans in Phase:** 6
-**Status:** Executing Phase 03
+**Status:** Ready to execute
 **Current Phase:** 03
 **Last Activity:** 2026-11-18 — Phase 03 execution started
 **Last Activity Description:** Phase 03 execution started
@@ -37,8 +37,8 @@ current_phase_name: Management GUI
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T14:27:10.299Z
-**Stopped At:** Completed 01-06-PLAN.md
+**Last session:** 2026-11-18T21:37:10.785Z
+**Stopped At:** Completed 03-01-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -51,6 +51,7 @@ current_phase_name: Management GUI
 | Phase 01 P04 | 4min | 2 tasks | 5 files |
 | Phase 01 P05 | 8min | 2 tasks | 1 files |
 | Phase 01 P06 | 6min | 4 tasks | 7 files |
+| Phase 03 P01 | 10min | 2 tasks | 54 files |
 
 ## Decisions
 
@@ -68,3 +69,7 @@ current_phase_name: Management GUI
 - [Phase 01]: 01-05: secrets reach verify containers only on stdin (options rewrite, needles files), never in an argv
 - [Phase 01]: 01-06: DOCS.md describes access-watch as its own s6 longrun (as built), not a thread in sync
 - [Phase 01]: 01-06: interim user commands documented with container addon_{repo-hash}_marketplace_repo_proxy; Phase 1 released as 0.1.0-1 without tag (manager tags after squash merge)
+- [Phase 03]: 03-01: shortSha accepts a 7-40 hex SHA (status.json stores the 12-character short SHA); verify compares the first 12 characters
+- [Phase 03]: 03-01: POST api/sync requires exactly the empty JSON object body; anything else is 400 bad_request
+- [Phase 03]: 03-01: registration detail is masked with mask_hashes and cut to 200 characters in the service; reader assumes repositories[].repository/registration/message in /data/supervisor.json
+- [Phase 03]: 03-01: GUI version comes from /opt/marketplace-repo-proxy/BUILD_VERSION (Dockerfile ARG BUILD_VERSION), X.Y.Z-N only, else null
