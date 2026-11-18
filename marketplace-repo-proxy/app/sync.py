@@ -13,7 +13,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 from app.gitops import (
     Upstream,
@@ -21,6 +21,7 @@ from app.gitops import (
     auth_env,
     check_branch_name,
     classify,
+    cleanup_stale_tmp,
     ensure_and_fetch,
     inspect_head,
     ls_remote_head,
@@ -42,6 +43,8 @@ EMPTY_TOKEN_MESSAGE = "github_token is empty"
 INVALID_BRANCH_MESSAGE = "invalid branch name"
 NO_DEFAULT_BRANCH_MESSAGE = "upstream has no default branch"
 NO_REPOSITORY_YAML_MESSAGE = "repository.yaml missing at the branch root"
+INVALID_OVERRIDE_MESSAGE = "invalid test upstream override"
+INVALID_OVERRIDE_LOG = "invalid test upstream override; syncing disabled"
 
 
 def secret_forms(token: str) -> list[str]:
@@ -145,19 +148,88 @@ def run_cycle(
 
 
 class SyncService:
-    """RED stub."""
+    """Sync loop: a startup cycle, then a full cycle on the interval or when the trigger file appears (D-12).
 
-    def __init__(self, paths: Paths, options: Options, upstream: Upstream, log: logging.Logger, **_: Any) -> None:
+    The trigger file is polled every second while idle and unlinked before a cycle starts, so requests that arrive
+    during a cycle survive and coalesce into exactly one more cycle. The interval restarts after every cycle.
+    """
+
+    POLL_SECONDS = 1.0
+
+    def __init__(
+        self,
+        paths: Paths,
+        options: Options,
+        upstream: Upstream,
+        log: logging.Logger,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+        wall: Callable[[], float] = time.time,
+    ) -> None:
+        self.paths = paths
+        self.options = options
+        self.upstream = upstream
+        self.log = log
+        self.clock = clock
+        self.sleep = sleep
+        self.wall = wall
         self.stop = threading.Event()
+        self.next_due: float | None = None
+        self.writer = StatusWriter(paths, options.repositories, upstream.overridden, options.sync_interval)
+
+    @property
+    def interval_seconds(self) -> int:
+        return self.options.sync_interval * 60
 
     def wait_reason(self) -> str | None:
-        return None
+        """Block until the next cycle is due: `request`, `interval`, or None once `stop` is set."""
+        while True:
+            if self.stop.is_set():
+                return None
+            if self.paths.trigger_file.exists():
+                return "request"
+            if self.next_due is None or self.clock() >= self.next_due:
+                return "interval"
+            self.sleep(self.POLL_SECONDS)
 
     def run_cycle_once(self, reason: str) -> None:
-        return None
+        # Unlink before the cycle: a request created while it runs must survive and cause one more cycle
+        self.paths.trigger_file.unlink(missing_ok=True)
+        self.writer.begin_cycle(reason)
+        try:
+            run_cycle(self.paths, self.options, self.upstream, self.log, self.writer, self.stop)
+        finally:
+            self.writer.end_cycle(self.wall() + self.interval_seconds)
+            self.next_due = self.clock() + self.interval_seconds
 
     def run_forever(self) -> None:
-        return None
+        removed = cleanup_stale_tmp(self.paths)
+        if removed:
+            self.log.info("removed %d stale temporary repositories", removed)
+        if self.stop.is_set():
+            return
+        self.run_cycle_once("startup")
+        while True:
+            reason = self.wait_reason()
+            if reason is None:
+                return
+            self.run_cycle_once(reason)
+
+
+def run_disabled(paths: Paths, options: Options, stop: threading.Event | None) -> None:
+    """Fail closed on an invalid test override (D-18): never sync, never fall back to GitHub, idle until stopped."""
+    writer = StatusWriter(paths, options.repositories, True, options.sync_interval)
+    for spec in options.repositories:
+        writer.record(
+            spec.slug,
+            status="fetch_failed",
+            message=INVALID_OVERRIDE_MESSAGE,
+            branch=spec.branch,
+            branch_source="configured" if spec.branch else "upstream_default",
+        )
+    if stop is not None:
+        stop.wait()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -179,14 +251,6 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     redactor = setup_logging(options.log_level)
     redactor.register(secret_forms(options.github_token))
-    try:
-        upstream = resolve_upstream(os.environ)
-    except UpstreamOverrideError as exc:
-        LOG.error("%s", exc)
-        return 1
-    if upstream.overridden:
-        LOG.warning("test upstream override active: %s", upstream.base)
-    writer = StatusWriter(paths, options.repositories, upstream.overridden, options.sync_interval)
 
     stop = threading.Event()
 
@@ -196,17 +260,21 @@ def main(argv: list[str] | None = None) -> int:
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, _stop)
 
-    reason = "startup"
-    while not stop.is_set():
-        writer.begin_cycle(reason)
-        run_cycle(paths, options, upstream, LOG, writer, stop)
-        writer.end_cycle(time.time() + options.sync_interval * 60)
-        if args.once:
-            break
-        for _ in range(options.sync_interval * 60):
-            if stop.wait(1):
-                break
-        reason = "interval"
+    try:
+        upstream = resolve_upstream(os.environ)
+    except UpstreamOverrideError:
+        LOG.error("%s", INVALID_OVERRIDE_LOG)
+        run_disabled(paths, options, None if args.once else stop)
+        return 1 if args.once else 0
+    if upstream.overridden:
+        LOG.warning("test upstream override active: %s", upstream.base)
+
+    service = SyncService(paths, options, upstream, LOG)
+    service.stop = stop
+    if args.once:
+        service.run_cycle_once("startup")
+        return 0
+    service.run_forever()
     return 0
 
 
