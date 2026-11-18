@@ -5,8 +5,8 @@
 **Source:** Discuss step skipped by instruction. Decisions are taken from `marketplace-repo-proxy/SPIKE.md` (section
 "Decisions" is binding, the design sections are the agreed design). Items the spike does not answer are listed under
 "Claude's Discretion" or "Open questions"; they are not decided here.
-**Amended:** 2026-11-18 — user decisions D-24 to D-30 (release per phase, confirmed planning assumptions, SPIKE.md
-corrections).
+**Amended:** 2026-11-18 — user decisions D-24 to D-32 (release per phase, confirmed planning assumptions, SPIKE.md
+corrections, release description, tagging by the manager).
 
 <domain>
 ## Phase Boundary
@@ -115,6 +115,11 @@ docs, HTTPS clone test, `stage` decision (Phase 5). Each finished phase is relea
   (`make update-version ADDON=marketplace-repo-proxy VERSION=0.1.0-1`). The bump is the last step of plan 01-06.
   CHANGELOG.md gets a versioned section `## [0.1.0-1] - <date>` for the Phase 1 changes instead of `[Unreleased]`.
   `build.yaml` `args.VERSION` and the README badge stay `0.1.0` (subpatch only lives in `config.yaml`).
+- **D-31 (user decision 2026-11-18):** In the same bump task of plan 01-06, `config.yaml` `description` drops
+  "(scaffold)" and describes the git proxy; `stage: "experimental"` stays. The description is not a version field, so
+  it is edited directly; the version still changes only through `make update-version`.
+- **D-32 (user decision 2026-11-18):** No tag in the plan (`NO_TAG=yes`, no tag push). The manager sets release tags
+  after the squash merge onto `main`.
 
 ### Confirmed planning assumptions (user decision 2026-11-18)
 - **D-25 (was A-1):** Users created with the `mrp` CLI carry `source: "cli"`, a fourth value next to D-07's
@@ -210,7 +215,7 @@ docs, HTTPS clone test, `stage` decision (Phase 5). Each finished phase is relea
 - Public URL documentation, HTTPS clone test and `stage` decision (Phase 5).
 - Manual sync trigger via `stdin` (D-29).
 - Git tag `marketplace-repo-proxy/v0.1.0-1`: not created in the plan (`NO_TAG=yes`), because the bump commit lives on
-  the feature branch and disappears in the squash merge; tagging after the merge is the user's call.
+  the feature branch and disappears in the squash merge; the manager tags after the merge onto `main` (D-32).
 - Per-repository deploy keys (SPIKE "Upstream authentication", later, optional).
 
 </deferred>
@@ -218,4 +223,4 @@ docs, HTTPS clone test, `stage` decision (Phase 5). Each finished phase is relea
 ---
 
 *Phase: 01-git-serving-core*
-*Context gathered: 2026-11-17 (from SPIKE.md, discuss step skipped); amended 2026-11-18 (D-24 to D-30)*
+*Context gathered: 2026-11-17 (from SPIKE.md, discuss step skipped); amended 2026-11-18 (D-24 to D-32)*
