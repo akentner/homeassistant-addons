@@ -1,4 +1,31 @@
 configuration:
+  github_token:
+    name: GitHub token
+    description: Fine-grained personal access token with read-only "Contents" access to the repositories below. Never
+      logged.
+  sync_interval:
+    name: Sync interval (minutes)
+    description: Minutes between two syncs (minimum 5).
+  public_url:
+    name: Public URL
+    description: Optional base URL behind a reverse proxy, e.g. https://addons.example.com. Leave empty for internal
+      access only.
+  repositories:
+    name: Repositories
+    description: Private GitHub repositories to serve.
+    fields:
+      repository:
+        name: Repository
+        description: GitHub repository as owner/repo.
+      branch:
+        name: Branch
+        description: Optional branch; empty uses the repository's default branch.
+  register_local:
+    name: Register in the local store
+    description: Add the internal store URL to this Home Assistant's add-on store. Takes effect in a later version.
+  api_enabled:
+    name: Provisioning API
+    description: Enable the provisioning API for IaC tools. Takes effect in a later version.
   log_level:
     name: Log level
-    description: Verbosity of the add-on log.
+    description: Verbosity of the add-on log. Tokens and access hashes are never logged.
