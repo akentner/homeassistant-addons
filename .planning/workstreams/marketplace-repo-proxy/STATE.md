@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 02
-current_plan: 5
+current_plan: 6
 status: executing
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-11-18T23:40:58.963Z"
+stopped_at: Completed 02-05-PLAN.md
+last_updated: "2026-11-18T23:52:55.857Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 02 execution started
-state_head: 68fa4e23ec52c0e5999a707c8b5e96a8a82ff8ca
+state_head: 54a2149c914f4397ab34af8b49453b67eeb3b244
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 13
-  completed_plans: 10
+  completed_plans: 11
   percent: 0
 workstream: marketplace-repo-proxy
 created: 2026-11-17
@@ -23,7 +23,7 @@ current_phase_name: Supervisor integration
 
 ## Current Position
 
-**Current Plan:** 5
+**Current Plan:** 6
 **Total Plans in Phase:** 7
 **Status:** Ready to execute
 **Current Phase:** 02
@@ -37,8 +37,8 @@ current_phase_name: Supervisor integration
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T23:40:58.933Z
-**Stopped At:** Completed 02-04-PLAN.md
+**Last session:** 2026-11-18T23:52:55.827Z
+**Stopped At:** Completed 02-05-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -55,6 +55,7 @@ current_phase_name: Supervisor integration
 | Phase 02 P02 | 13min | 3 tasks | 8 files |
 | Phase 02 P03 | 11min | 2 tasks | 7 files |
 | Phase 02 P04 | 5min | 2 tasks | 4 files |
+| Phase 02 P05 | 9min | 2 tasks | 1 files |
 
 ## Decisions
 
@@ -85,3 +86,6 @@ current_phase_name: Supervisor integration
 - [Phase 02]: 02-04: rotation old slug = recorded store_slug when valid, else the current local URL's slug; retired label local.{old slug}; any add exception rolls back via undo_retire
 - [Phase 02]: 02-04: leftover detection is report-only: retired local.* entries are revoked by the pass (interrupted while listed); recorded-but-not-current listed slugs become orphaned with user null
 - [Phase 02]: 02-04: mrp local rotate always prints the D-11 warning; --yes required (confirmation_required otherwise); confirmation lives only in the CLI
+- [Phase 02]: 02-05: verify step (16b) restores the valid PAT before disconnecting the fake Supervisor: only repositories synced ok want a registration (D-07) and report error on a failed store list
+- [Phase 02]: 02-05: negative checks after a recreate or restart wait for the next pass's store-list log line; the deferred-reload check waits for reload.pending true first
+- [Phase 02]: 02-05: Phase 2 container proof needed no product change; the store-list failure log line stays 'store list unavailable: {cause}' as built in Plan 01
