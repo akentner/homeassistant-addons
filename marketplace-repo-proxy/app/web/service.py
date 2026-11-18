@@ -29,6 +29,7 @@ from app.options import Options, RepoSpec, load_options, parse_repository
 from app.paths import Paths
 from app.status import BRANCH_SOURCES, STATUS_CODES, read_status
 from app.urls import store_urls
+from app.web.admin_ui import ApiError
 from app.web.registration import REGISTRATION_STATES, read_registration
 
 LOG = logging.getLogger("mrp.gui")
@@ -76,10 +77,35 @@ def _label(value: Any) -> str:
     return value if isinstance(value, str) and USER_RE.fullmatch(value) else "<invalid>"
 
 
+def _repo_label(value: str) -> str:
+    """An unconfigured repository for a log line: only a valid `owner/repo`."""
+    try:
+        parse_repository(value)
+    except (TypeError, ValueError):
+        return "<invalid>"
+    return value
+
+
 def _matches(entry: dict[str, Any], key: str, user: str) -> bool:
     """Stored repository equal to `key` case-insensitively, user label exact (same rule as AccessStore)."""
     repository = entry.get("repository")
     return isinstance(repository, str) and repository.lower() == key and entry.get("user") == user
+
+
+def _protected(entry: dict[str, Any], user: str) -> bool:
+    """System users (Phase 2's `local`) and reserved labels belong to the add-on, never to the GUI (D-13)."""
+    return entry.get("source") == "system" or user.lower() in RESERVED_USERS
+
+
+def _check_confirm(user: str, confirm: Any) -> None:
+    """Type-to-confirm (D-12, R-04): the exact label, compared byte for byte; no trimming, no case folding."""
+    if not isinstance(confirm, str) or not isinstance(user, str) or confirm != user:
+        raise ApiError("confirmation_required", "type the user label to confirm")
+
+
+def _check_not_protected(entry: dict[str, Any], user: str) -> None:
+    if _protected(entry, user):
+        raise ApiError("protected", "system users are managed by the add-on")
 
 
 def _user_row(entry: dict[str, Any]) -> dict[str, Any]:
@@ -89,7 +115,7 @@ def _user_row(entry: dict[str, Any]) -> dict[str, Any]:
         "user": user,
         "source": source if source in SOURCES else None,
         "created": _text(entry.get("created")),
-        "protected": source == "system" or user.lower() in RESERVED_USERS,
+        "protected": _protected(entry, user),
     }
 
 
@@ -247,6 +273,63 @@ class GuiService:
         if not isinstance(hash_, str) or not HASH_RE.fullmatch(hash_):
             raise AccessError("invalid_hash")
         return self._urls(spec, hash_)
+
+    def revoke_user(self, repository: str, user: str, confirm: Any) -> None:
+        """Remove the entry and its link in one locked operation (D-09, D-11); unconfigured repositories too (as the CLI).
+
+        The URL answers 404 from the next request on. System users are refused with `protected` (D-13).
+        """
+        spec = self._spec(repository)
+        target = spec.slug if spec is not None else repository
+        _check_confirm(user, confirm)
+        store = self._store()
+        with store.locked():
+            entries = read_entries_safe(store)
+            entry = next((e for e in entries if _matches(e, target.lower(), user)), None)
+            if entry is None:
+                raise AccessError("user_unknown")
+            _check_not_protected(entry, user)
+            if not store.revoke(target, user, specs=self.config.options.repositories):
+                raise AccessError("user_unknown")
+        LOG.info("gui: revoked user %s from %s", _label(user), spec.slug if spec is not None else _repo_label(target))
+
+    def rotate_user(self, repository: str, user: str, confirm: Any) -> dict[str, Any]:
+        """A new random hash for an existing (repository, user): revoke + add inside ONE store lock (D-10, D-11).
+
+        Every check runs before the first write. A concurrent locked reader never sees the user missing; git clients
+        see the old link go before the new one exists, never both. When `add` fails after the revoke, the old hash is
+        re-added and the error re-raised. `created` is reset, `source` kept, unknown fields of the entry are dropped. A
+        process crash between the two writes leaves the user without access (fail closed); recovery is a new add.
+        """
+        spec = self._require_spec(repository)
+        _check_confirm(user, confirm)
+        specs = self.config.options.repositories
+        store = self._store()
+        with store.locked():
+            entries = read_entries_safe(store)
+            entry = next((e for e in entries if _matches(e, spec.key, user)), None)
+            if entry is None:
+                raise AccessError("user_unknown")
+            _check_not_protected(entry, user)
+            source = entry.get("source")
+            if source not in SOURCES or not USER_RE.fullmatch(user):
+                raise AccessError("invalid_user")  # validated BEFORE the revoke: add() must not fail afterwards
+            old_hash = entry.get("hash")
+            store.revoke(spec.slug, user, specs=specs)
+            try:
+                new = store.add(spec.slug, user, source=source, specs=specs)
+            except Exception:
+                if isinstance(old_hash, str) and HASH_RE.fullmatch(old_hash):
+                    store.add(spec.slug, user, source=source, hash_=old_hash, specs=specs)
+                raise
+        LOG.info("gui: rotated user %s of %s", _label(user), spec.slug)
+        return {
+            "repository": spec.slug,
+            "user": new["user"],
+            "source": new["source"],
+            "created": new["created"],
+            "urls": self._urls(spec, new["hash"]),
+        }
 
     def meta(self) -> dict[str, Any]:
         return {"version": self.config.version}

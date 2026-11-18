@@ -97,12 +97,22 @@ def build_router(service: GuiService) -> Router:
     def api_access_urls(req: Request) -> dict[str, Any]:
         return service.user_urls(_repository(req), req.params["user"])
 
+    def api_access_revoke(req: Request) -> None:
+        body = _strict_body(req, {"confirm"})
+        service.revoke_user(_repository(req), req.params["user"], body.get("confirm"))
+
+    def api_access_rotate(req: Request) -> dict[str, Any]:
+        body = _strict_body(req, {"confirm"})
+        return service.rotate_user(_repository(req), req.params["user"], body.get("confirm"))
+
     router.add("GET", "/api/overview", api_overview)
     router.add("GET", "/api/meta", api_meta)
     router.add("POST", "/api/sync", api_sync)
     router.add("GET", "/api/access", api_access)
     router.add("POST", "/api/access/{owner}/{repo}", api_access_add)
     router.add("GET", "/api/access/{owner}/{repo}/{user}/urls", api_access_urls)
+    router.add("DELETE", "/api/access/{owner}/{repo}/{user}", api_access_revoke)
+    router.add("POST", "/api/access/{owner}/{repo}/{user}/rotate", api_access_rotate)
     return router
 
 

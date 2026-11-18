@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Docker end-to-end check of the marketplace-repo-proxy management page (Phase 3): the ingress gate seen from a real
 # ingress peer, the overview of a repository synced from a local, auth-checking upstream fixture (never GitHub), the
-# add-on version in the top bar, a token-free GUI process and the access actions (add, URLs); later plans add the
-# fetch sink.
+# add-on version in the top bar, a token-free GUI process and the access actions (add, URLs, revoke, rotate, protected
+# system user); later plans add the fetch sink.
 # One `✓`/`✗` line per check. Builds the add-on image locally. Manual invocation:
 #   bash internal/verify-marketplace-repo-proxy-gui.sh
 # Optional env: MRP_GUI_VERIFY_PREFIX (container/network name prefix, must start with mrp-, default mrp-gui-verify),
@@ -430,4 +430,75 @@ expect_error 404 repository_unknown "add to the unconfigured repository example-
 docker logs "${PROXY}" 2>&1 | grep -qF "gui: added user carol to ${REPO}" || fail "add-on log lacks the add line for carol"
 if docker logs "${PROXY}" 2>&1 | grep -qF -f "${NEEDLES_HASH}"; then fail "an access hash appears in the add-on log"; fi
 ok "add-on log names carol and ${REPO} but holds no access hash"
+echo "==> (11) Access: revoke, rotate, system user"
+# usage: refs_code <store URL>  (HTTP status of the smart info/refs request from the outside client)
+refs_code() {
+    docker exec "${OUTSIDE_CLIENT}" curl -s -o /dev/null -w '%{http_code}' "$1/info/refs?service=git-upload-pack" || true
+}
+# Phase 2's system user, seeded through the real store inside the proxy (the GUI must never touch it)
+HASH_LOCAL="$(docker exec -w /opt/marketplace-repo-proxy "${PROXY}" python3 -c '
+from app.access import AccessStore
+from app.options import load_options
+from app.paths import Paths
+paths = Paths.default()
+options = load_options(paths.options_file)
+entry = AccessStore(paths).add("example-org/private-addons", "local", source="system", specs=options.repositories)
+print(entry["hash"])
+')"
+printf '%s\n' "${HASH_LOCAL}" >>"${NEEDLES_HASH}"
+[[ "${HASH_LOCAL}" =~ ^[0-9a-f]{32}$ ]] || fail "seeding the system user local failed"
+URL_LOCAL="http://${PROXY}:8080/repo/${REPO}/${HASH_LOCAL}"
+[ "$(refs_code "${URL_LOCAL}")" = "200" ] || fail "system user local: info/refs is not 200 after seeding"
+ok "system user local seeded through AccessStore (source system), its URL answers 200"
+gui_json POST "api/access/${REPO}" '{"user":"dave"}'
+[ "${GUI_CODE}" = "201" ] || fail "POST api/access/${REPO} dave: HTTP ${GUI_CODE}, expected 201"
+URL_DAVE="$(jget "${GUI_BODY}" 'd["urls"]["internal"]')"
+printf '%s\n' "${URL_DAVE##*/}" >>"${NEEDLES_HASH}"
+[ "$(refs_code "${URL_DAVE}")" = "200" ] || fail "dave: info/refs is not 200 after the add"
+ok "dave added through the GUI, info/refs 200"
+gui_call "${INGRESS_CLIENT}" "api/access/${REPO}/dave" -X DELETE -H "${INGRESS_HEADER}"
+expect_error 400 confirmation_required "DELETE dave without body"
+gui_json DELETE "api/access/${REPO}/dave" '{"confirm":"Dave"}'
+expect_error 400 confirmation_required "DELETE dave with confirm Dave"
+[ "$(refs_code "${URL_DAVE}")" = "200" ] || fail "dave lost access after a refused revoke"
+gui_json DELETE "api/access/${REPO}/dave" '{"confirm":"dave"}'
+[ "${GUI_CODE}" = "204" ] || fail "DELETE dave with confirm dave: HTTP ${GUI_CODE}, expected 204"
+[ "$(refs_code "${URL_DAVE}")" = "404" ] || fail "dave's URL still answers after the revoke"
+ok "DELETE dave with the exact confirm: 204, dave's info/refs 404 at once"
+gui_json DELETE "api/access/${REPO}/dave" '{"confirm":"dave"}'
+expect_error 404 user_unknown "second revoke of dave"
+gui_json POST "api/access/${REPO}/carol/rotate" '{"confirm":"Carol"}'
+expect_error 400 confirmation_required "rotate carol with confirm Carol"
+gui_json POST "api/access/${REPO}/carol/rotate" '{"confirm":"carol"}'
+[ "${GUI_CODE}" = "200" ] || fail "rotate carol: HTTP ${GUI_CODE}, expected 200"
+URL_CAROL_NEW="$(jget "${GUI_BODY}" 'd["urls"]["internal"]')"
+printf '%s\n' "${URL_CAROL_NEW##*/}" >>"${NEEDLES_HASH}"
+if [ "${URL_CAROL_NEW}" = "${URL_CAROL}" ] || ! [[ "${URL_CAROL_NEW##*/}" =~ ^[0-9a-f]{32}$ ]]; then
+    fail "rotate carol: no new 32-hex hash in the response"
+fi
+[ "$(jget "${GUI_BODY}" 'd["source"]')" = "gui" ] || fail "rotate carol: source is not kept"
+[ "$(refs_code "${URL_CAROL}")" = "404" ] || fail "carol's old URL still answers after the rotation"
+ok "rotate carol: 200, new hash, source kept, old URL info/refs 404 at once"
+docker exec -w /tmp "${OUTSIDE_CLIENT}" sh -ec 'rm -rf carol-new; git clone -q --depth 1 "$1" carol-new; test -f carol-new/repository.yaml' \
+    sh "${URL_CAROL_NEW}" || fail "git clone of carol's rotated URL failed"
+ok "outside client clones carol's rotated URL at once"
+gui_json DELETE "api/access/${REPO}/local" '{"confirm":"local"}'
+expect_error 409 protected "DELETE of the system user local"
+gui_json POST "api/access/${REPO}/local/rotate" '{"confirm":"local"}'
+expect_error 409 protected "rotate of the system user local"
+[ "$(refs_code "${URL_LOCAL}")" = "200" ] || fail "system user local lost access"
+ingress_get "api/access"
+[ "$(jget "${GUI_BODY}" '[(u["user"], u["source"], u["protected"]) for r in d["repositories"] for u in r["users"]]')" = "[('carol', 'gui', False), ('local', 'system', True)]" ] \
+    || fail "api/access: users are not exactly carol (gui) and local (system, protected)"
+ok "system user local untouched (URL 200) and listed as protected; dave gone"
+if grep -qF -f "${NEEDLES_HASH}" <<<"${GUI_BODY}"; then fail "api/access holds an access hash"; fi
+ingress_get "api/overview"
+if grep -qF -f "${NEEDLES_HASH}" <<<"${GUI_BODY}"; then fail "api/overview holds an access hash"; fi
+ok "api/access and api/overview hold no access hash"
+LOGS="$(docker logs "${PROXY}" 2>&1)"
+grep -qF "gui: rotated user carol of ${REPO}" <<<"${LOGS}" || fail "add-on log lacks the rotate line for carol"
+grep -qF "gui: revoked user dave from ${REPO}" <<<"${LOGS}" || fail "add-on log lacks the revoke line for dave"
+if grep -qF -f "${NEEDLES_HASH}" <<<"${LOGS}"; then fail "an access hash appears in the add-on log"; fi
+if grep -Eq '/(repo|access)/[^[:space:]]*[0-9a-f]{32}' <<<"${LOGS}"; then fail "the add-on log holds a 32-hex run after /repo/ or /access/"; fi
+ok "add-on log names the actions but holds no access hash and no 32-hex run after /repo/ or /access/"
 echo "✓ GUI verify: all checks passed"
