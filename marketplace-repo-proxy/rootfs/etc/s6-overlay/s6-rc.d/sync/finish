@@ -1,0 +1,3 @@
+#!/bin/sh
+# Let s6 restart the sync service (serving continues); throttle a crash loop
+sleep 3

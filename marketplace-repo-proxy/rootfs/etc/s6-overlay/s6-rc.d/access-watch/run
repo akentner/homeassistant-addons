@@ -1,0 +1,4 @@
+#!/bin/sh
+# Deliberately NOT with-contenv: the watcher needs no secret and never sees the container environment (D-13)
+cd /opt/marketplace-repo-proxy || exit 1
+exec env PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 python3 -m app.watch

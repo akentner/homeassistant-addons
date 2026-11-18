@@ -1,0 +1,4 @@
+#!/command/with-contenv sh
+# Needs the container environment (test upstream override now, Supervisor token in Phase 2)
+cd /opt/marketplace-repo-proxy || exit 1
+exec python3 -m app.sync

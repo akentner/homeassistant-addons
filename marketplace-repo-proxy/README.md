@@ -7,17 +7,20 @@ Makes private GitHub add-on repositories installable from the Home Assistant sto
 ## About
 
 The Home Assistant add-on store (and HACS) cannot add repositories that need authentication, so add-ons from private
-GitHub repositories cannot be installed. This add-on is planned as a small proxy: it holds the access credentials,
-fetches the private repository and serves it as a plain git repository under a hashed, unguessable URL. The store then
-adds that URL like any public repository. Access can optionally be restricted to the internal HA add-on network.
+GitHub repositories cannot be installed. This add-on is a small proxy: it holds the access credentials, fetches the
+private repository and serves it as a plain git repository under a hashed, unguessable URL. The store then adds that URL
+like any public repository. Access can optionally be restricted to the internal HA add-on network.
 
-**Status: scaffold.** No proxy service exists yet; see [GOAL.md][goal] for the goal, scope and open questions.
+**Status: experimental.** The add-on syncs the configured private repositories with a read-only GitHub token and serves
+them read-only under per-user store URLs on the internal Home Assistant network. Users are managed with the `mrp`
+command inside the container. A management page, self-registration in the local store, a provisioning API and documented
+public URLs follow in later versions; see [GOAL.md][goal] for the goal and scope.
 
 It is our own code, not an upstream wrapper (see [DOCS.md][docs]).
 
 ## Configuration
 
-Only `log_level` exists so far. See [DOCS.md][docs].
+Options, store URLs, user management, sync status and security notes are described in [DOCS.md][docs].
 
 [docs]: DOCS.md
 [goal]: GOAL.md

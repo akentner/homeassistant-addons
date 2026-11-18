@@ -76,9 +76,10 @@ production host (see [Decisions](#decisions)).
 
 ### Server: lighttpd + `git http-backend` (smart HTTP)
 
-Verified locally on `ghcr.io/home-assistant/amd64-base:3.24` with `apk add git lighttpd`: clone `--depth 1`, fetch,
-`ls-remote` OK, with the URL scheme from [URL scheme and access tokens](#url-scheme-and-access-tokens). Image grows by
-about 18 MB (git is most of it), lighttpd uses about 3 MB RSS.
+Verified locally on `ghcr.io/home-assistant/amd64-base:3.24` with `apk add git git-daemon lighttpd`: clone `--depth 1`,
+fetch, `ls-remote` OK, with the URL scheme from [URL scheme and access tokens](#url-scheme-and-access-tokens). Image
+grows by about 18 MB (git is most of it), lighttpd uses about 3 MB RSS. `git-http-backend`
+(`/usr/libexec/git-core/git-http-backend`) ships in the Alpine package `git-daemon`, not in `git`.
 
 ```lighttpd
 server.modules = ("mod_rewrite", "mod_alias", "mod_setenv", "mod_cgi")
@@ -87,6 +88,8 @@ server.document-root = "/var/empty"
 server.port = 8080
 server.username = "lighttpd"
 server.groupname = "lighttpd"
+# git http-backend writes the repository path, including the access hash, to stderr: drop CGI stderr
+server.breakagelog = "/dev/null"
 # git appends its endpoint after an existing query string (".../<hash>?ref=x/info/refs&service=..."),
 # so normalise that form back to the plain smart-HTTP paths; the client query is dropped here.
 url.rewrite-once = (
@@ -117,6 +120,10 @@ Observed responses (local, two access tokens on one repository):
 
 Pitfall found: a negated `url.access-deny` block does not work, because lighttpd re-evaluates conditions after splitting
 `PATH_INFO` (the URL becomes `/repo`) and denies everything. Map the alias only inside the positive condition.
+
+Second pitfall, same mechanism: `cgi.assign` works only as a global setting. Inside the `$HTTP["url"]` condition it no
+longer matches after the `PATH_INFO` split and every request gets 403, so it stays outside the condition as in the block
+above; the empty docroot makes that safe.
 
 Alternatives considered:
 
@@ -212,7 +219,8 @@ A GUI behind HA ingress lists the published repositories and manages users and h
   reverse proxy). The GUI runs on the ingress port (`ingress: true`, `ingress_port: 8099`), never published. The
   blueprint's ingress gate (R-01: peer `172.30.32.2` plus `X-Ingress-Path`) rejects everything else, so git traffic
   cannot run through the GUI server, and does not need to.
-- **Image**: `apk add python3` on top of git and lighttpd; the blueprint uses the same `amd64-base:3.24`.
+- **Image**: `apk add python3` on top of `git`, `git-daemon` and `lighttpd`; the blueprint uses the same
+  `amd64-base:3.24`.
 - **Process separation** (s6 services): `sync` is the only process with the GitHub token; `lighttpd` and `gui` never see
   it. The GUI reads sync state from `/data/status.json`, requests a sync through a trigger file the sync loop watches,
   and creates or removes the access symlinks itself.

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Operator CLI: docker exec <container> mrp users add <owner/repo> <user>
+cd /opt/marketplace-repo-proxy || exit 1
+exec env PYTHONDONTWRITEBYTECODE=1 python3 -m app.cli "$@"

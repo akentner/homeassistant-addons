@@ -1,0 +1,3 @@
+#!/bin/sh
+# Deliberately NOT with-contenv: lighttpd and its git-http-backend CGI never see container secrets
+exec lighttpd -D -f /etc/lighttpd/marketplace-repo-proxy.conf
