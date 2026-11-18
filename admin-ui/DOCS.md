@@ -105,9 +105,10 @@ Token sources: `OptionToken` wraps an add-on `password` option. The value must b
 least 16 characters long (`OPTION_TOKEN_MIN_LENGTH`); tokens are compared as SHA-256 digests with `hmac.compare_digest`.
 `GeneratedToken` creates a 256-bit token on first start and stores only one line `sha256 <hex>` with mode 0600 (for
 example in `/data/api-token`). The plaintext is available once from `take_plaintext()` after creation and as the return
-value of `rotate()`. A malformed file raises `ValueError` and is never replaced on its own: delete it to create a new
-token. The listener never logs the `Authorization` header or a token, and an exception escaping a request prints only
-its class name.
+value of `rotate()`. A malformed or unreadable file, and a path that is not a regular file (a symlink, a directory),
+raise `ValueError`, are left untouched and are never replaced on its own: delete the path to create a new token. Loose
+permissions are tightened to 0600 only on a valid file. The listener never logs the `Authorization` header or a token,
+and an exception escaping a request prints only its class name.
 
 Static caching: every static response (and `/`) carries `Cache-Control: no-cache` and a strong `ETag` (sha256 of the
 served bytes); a matching `If-None-Match` (list, `W/` prefix and `*` accepted) answers `304` without body. No

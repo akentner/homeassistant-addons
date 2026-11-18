@@ -224,6 +224,61 @@ def test_malformed_files_raise_and_stay_untouched(tmp_path: Path) -> None:
         assert [p.name for p in tmp_path.iterdir()] == ["api-token"]
 
 
+def test_malformed_file_with_loose_mode_is_not_chmodded(tmp_path: Path) -> None:
+    path = tmp_path / "api-token"
+    path.write_bytes(b"sha256 xyz\n")
+    os.chmod(path, 0o644)
+    with pytest.raises(ValueError):
+        GeneratedToken.load_or_create(path)
+    assert _mode(path) == 0o644
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a mode-000 file")
+def test_unreadable_file_raises_value_error_and_stays_untouched(tmp_path: Path) -> None:
+    # WR-02: the documented error type, not PermissionError; the mode is not changed
+    path = tmp_path / "api-token"
+    GeneratedToken.load_or_create(path)
+    before = path.read_bytes()
+    os.chmod(path, 0)
+    try:
+        with pytest.raises(ValueError) as info:
+            GeneratedToken.load_or_create(path)
+        assert str(path) not in str(info.value)
+        assert _mode(path) == 0
+    finally:
+        os.chmod(path, 0o600)
+    assert path.read_bytes() == before
+
+
+def test_non_regular_paths_raise_value_error_and_stay_untouched(tmp_path: Path) -> None:
+    # WR-02: a directory, a FIFO or a symlink at the path is neither chmodded nor followed nor replaced
+    valid = tmp_path / "valid-token"
+    GeneratedToken.load_or_create(valid)
+    os.chmod(valid, 0o644)
+    content = valid.read_bytes()
+
+    directory = tmp_path / "dir-token"
+    directory.mkdir(mode=0o755)
+    os.chmod(directory, 0o755)
+    fifo = tmp_path / "fifo-token"
+    os.mkfifo(fifo, 0o644)
+    os.chmod(fifo, 0o644)
+    link = tmp_path / "link-token"
+    link.symlink_to(valid)
+    dangling = tmp_path / "dangling-token"
+    dangling.symlink_to(tmp_path / "missing")
+
+    for path in (directory, fifo, link, dangling):
+        with pytest.raises(ValueError):
+            GeneratedToken.load_or_create(path)
+    assert _mode(directory) == 0o755
+    assert stat.S_ISFIFO(os.lstat(fifo).st_mode) and _mode(fifo) == 0o644
+    assert link.is_symlink() and _mode(valid) == 0o644 and valid.read_bytes() == content
+    assert dangling.is_symlink() and not (tmp_path / "missing").exists()
+    names = ["dangling-token", "dir-token", "fifo-token", "link-token", "valid-token"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == names
+
+
 def test_failed_replace_keeps_the_old_token(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "api-token"
     token = GeneratedToken.load_or_create(path)

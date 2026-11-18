@@ -92,8 +92,9 @@ class GeneratedToken:
 
     The first start (file absent) creates a token; its plaintext is available exactly once through take_plaintext() and
     is lost on restart by design. rotate() replaces the token at runtime and returns the new plaintext once; a failed
-    write keeps the old token valid. An unreadable or malformed file raises ValueError and is left untouched: a token is
-    never replaced on its own. Nothing here prints or logs."""
+    write keeps the old token valid. An unreadable or malformed file, and a path that is not a regular file (a symlink,
+    a directory, a FIFO), raise ValueError and are left untouched: a token is never replaced on its own, and loose
+    permissions are tightened to 0600 only on a valid file. Nothing here prints or logs."""
 
     def __init__(self, path: Path, digest: bytes, plaintext: str | None) -> None:
         # Internal: instances come from load_or_create
@@ -106,20 +107,38 @@ class GeneratedToken:
     def load_or_create(cls, path: str | os.PathLike[str]) -> GeneratedToken:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        if not path.exists():
+        try:
+            # One open, no symlink followed (a dangling one included), no block on a FIFO; the mode is not touched yet
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except FileNotFoundError:
             plaintext = _new_token()
             digest = hashlib.sha256(plaintext.encode("ascii")).digest()
             _write_hash(path, digest)
             return cls(path, digest, plaintext)
-        if stat.S_IMODE(path.stat().st_mode) & 0o077:
-            os.chmod(path, 0o600)
+        except OSError:
+            # Messages name neither the path nor any content; `from None` keeps the OSError (with the path) out
+            raise ValueError("API token file is unreadable or a symlink: fix or delete it and restart") from None
         try:
-            match = _HASH_LINE.fullmatch(path.read_bytes().decode("ascii"))
-        except UnicodeDecodeError:
-            match = None
-        if match is None:
-            # The message names no file content; recovery is deleting the file (A6)
-            raise ValueError("API token file is malformed: delete it and restart to create a new token")
+            mode = os.fstat(fd).st_mode
+            if not stat.S_ISREG(mode):
+                raise ValueError("API token path is not a regular file: delete it and restart")
+            # A valid file has 72 bytes, so 128 bytes are enough to reject anything longer
+            with os.fdopen(fd, "rb", closefd=False) as handle:
+                data = handle.read(128)
+            try:
+                match = _HASH_LINE.fullmatch(data.decode("ascii"))
+            except UnicodeDecodeError:
+                match = None
+            if match is None:
+                # The message names no file content; recovery is deleting the file (A6)
+                raise ValueError("API token file is malformed: delete it and restart to create a new token")
+            # Tightened only once the content is valid, through the fd: never the target of a swapped-in path
+            if stat.S_IMODE(mode) & 0o077:
+                os.fchmod(fd, 0o600)
+        except OSError:
+            raise ValueError("API token file is unreadable: fix or delete it and restart") from None
+        finally:
+            os.close(fd)
         return cls(path, bytes.fromhex(match.group(1)), None)
 
     @property
