@@ -68,9 +68,9 @@ created: "2026-11-18"
 | T-01-27 | Tampering | leftover root-owned files/containers | low | mitigate | Cleanup trap removes containers, network, data dir | closed |
 | T-01-28 | Information disclosure | hostnames/IPs/e-mail/tokens in docs | medium | mitigate | Placeholder-only docs, gitleaks | closed |
 | T-01-29 | Information disclosure | backups/URLs treated as non-secret | medium | mitigate | DOCS.md security notes | closed |
-| T-01-30 | Tampering | contract drift docs vs code | low | mitigate | DOCS.md written from code; remaining object-level drift tracked as AR-02 | closed |
+| T-01-30 | Tampering | contract drift docs vs code | low | mitigate | DOCS.md written from code; object-level reachability documented (AR-02) | closed |
 | T-01-31 | Information disclosure | startup log | high | mitigate | Labels + masked URLs only; credentials in `public_url` rejected (WR-03 fix) | closed |
-| T-01-32 | Denial of service | init oneshot halting the container | medium | mitigate | Only OptionsError/AccessSchemaError return 1; tested cases survive. Gaps: malformed `public_url` (`http://[x`) raises `ValueError` in `options.py`; `OSError` in init chmod/mkdir (IN-06, deferred) | open — below high threshold (non-blocking) |
+| T-01-32 | Denial of service | init oneshot halting the container | medium | mitigate | Only OptionsError/AccessSchemaError return 1; every other input problem is logged and survived. Unparseable `public_url` (`http://[x`) rejected since 7d748d8 (`test_malformed_public_url_is_rejected_without_a_traceback`). `OSError` in init chmod/mkdir is an environment failure, not input (IN-06, deferred) | closed |
 | T-01-33 | Tampering | `.github/workflows/lint.yml` | medium | mitigate | Appended job, `contents: read`, `persist-credentials: false`, existing pins, actionlint + zizmor | closed |
 | T-01-34 | Information disclosure | `mrp users add` output | medium | mitigate | `print` to stdout only; `cli.py` imports no `logging` | closed |
 | T-01-35 | Tampering | `make update-version` bump | medium | mitigate | 3-file sync, validate-versions exit 0, bump commit touches config.yaml only | closed |
@@ -89,7 +89,7 @@ created: "2026-11-18"
 | Risk ID | Threat Ref | Rationale | Accepted By | Date |
 |---------|------------|-----------|-------------|------|
 | AR-01 | T-01-SC | Only Alpine distro packages from the base image repositories (`git git-daemon lighttpd python3`); CI reuses existing `pytest`/`pyyaml` pins; nothing from PyPI or npm in the image | plan threat model | 2026-11-18 |
-| AR-02 | WR-01 (unregistered, medium) | Protocol v2 serves unadvertised objects by SHA until gc prunes them. Needs a valid capability URL for the same repository plus the exact object id; exposure limited to objects once fetched into that bare repo. DOCS.md "only this one branch is served" holds for refs, not objects | user (review disposition: deferred) | 2026-11-18 |
+| AR-02 | WR-01 (unregistered, medium) | Protocol v2 serves unadvertised objects by SHA until gc prunes them. Needs a valid capability URL for the same repository plus the exact object id; exposure limited to objects once fetched into that bare repo. Documented in DOCS.md security notes ("Old commits") since d53f52a | user (review disposition: deferred) | 2026-11-18 |
 | AR-03 | WR-04 (unregistered, low) | `access.json` moved aside on transient read errors; earlier `.corrupt` overwritten. Fail-closed, availability only | user (review disposition: deferred) | 2026-11-18 |
 
 *Accepted risks do not resurface in future audit runs.*
@@ -101,6 +101,7 @@ created: "2026-11-18"
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-11-18 | 38 | 37 | 1 (T-01-32, medium, non-blocking) | gsd-security-auditor at c6f9786 |
+| 2026-11-18 | 38 | 38 | 0 | orchestrator: T-01-32 closed by 7d748d8, AR-02 documented by d53f52a |
 
 ---
 
