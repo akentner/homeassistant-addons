@@ -212,12 +212,16 @@ class _Handler(BaseHTTPRequestHandler):
         return self.rfile.read(length) if length > 0 else b""
 
     def _send(self, status: int, payload: bytes, content_type: str) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(payload)))
-        self.end_headers()
-        if self.command != "HEAD":
-            self.wfile.write(payload)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(payload)
+        except (BrokenPipeError, ConnectionResetError):
+            # The client gave up (timeout); like the Supervisor's asyncio.shield, the change itself stays done
+            self.close_connection = True
 
     def _text(self, status: int, text: str) -> int:
         self._send(status, text.encode("utf-8"), "text/plain; charset=utf-8")
@@ -343,7 +347,7 @@ def _server(state: FakeState, host: str, port: int) -> ThreadingHTTPServer:
 def serve(state: FakeState, host: str = "127.0.0.1", port: int = 0) -> ThreadingHTTPServer:
     """Start serving in a daemon thread; the caller shuts it down (`shutdown()`, `server_close()`)."""
     server = _server(state, host, port)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
     return server
 
 
