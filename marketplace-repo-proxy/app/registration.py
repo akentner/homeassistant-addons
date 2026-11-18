@@ -19,6 +19,11 @@ file, validates it as untrusted input and executes it once, recording the result
 `remove` sends `DELETE` only for store slugs recorded in supervisor.json from the proxy's own `local` URLs (the current
 registration or a leftover), never for a slug taken from the store list. A refusal (`used by installed apps`) becomes
 a leftover that is never forced and never retried by the loop (D-09, D-10); only a new request tries again.
+
+`rotate` (D-09, D-11) renames the current `local` entry to `local.{old slug}` and adds a new `local` entry in one locked
+write, adds the new URL to the store first and, only after a 200/409, revokes the retired entry at once (the old URL
+answers 404 from the next request; nothing skips this step) and then tries to `DELETE` the old slug. A failed add rolls
+the rotation back in one locked write. A refusal leaves the old store repository as a leftover (`revoked: true`).
 """
 
 from __future__ import annotations
@@ -43,7 +48,7 @@ from app.urls import internal_base, masked_store_url, store_url
 
 LOCAL_USER = "local"
 LOG = logging.getLogger("mrp.store")
-REQUEST_ACTIONS = ("remove",)
+REQUEST_ACTIONS = ("remove", "rotate")
 REQUEST_NAME_RE = re.compile(r"[0-9a-f]{16}\.json")
 REQUEST_KEYS = frozenset({"id", "action", "repository", "created"})
 REQUEST_MAX_BYTES = 4096
@@ -363,9 +368,88 @@ class Registrar:
 
     def handle_request(self, doc: dict) -> tuple[str, str]:
         """Execute one validated request; returns (result, code) with result in REQUEST_RESULTS."""
-        if doc.get("action") not in REQUEST_ACTIONS:
+        action = doc.get("action")
+        if action not in REQUEST_ACTIONS:
             return "rejected", "invalid_request"
+        if action == "rotate":
+            return self._rotate(doc["repository"])
         return self._remove(doc["repository"])
+
+    def _rotate(self, argument: str) -> tuple[str, str]:
+        """Rotate the `local` URL of one configured repository: add the new URL first, revoke the old one at once,
+        then try to remove the old store repository (D-09, D-11); never forced, never retried by the loop."""
+        try:
+            owner, name = parse_repository(argument)
+        except (TypeError, ValueError):
+            return "rejected", "repository_unknown"
+        spec = self.options.find(f"{owner}/{name}")
+        if spec is None:
+            return "rejected", "repository_unknown"
+        if not self.options.register_local:
+            return "rejected", "register_local_disabled"
+        entry = self.local_entry(spec)
+        if entry is None:
+            return "rejected", "not_registered"
+        try:
+            listing = self.client.list_repositories()
+        except SupervisorRefused:
+            return "failed", "store_list_unavailable"
+        if not listing.ok or not isinstance(listing.data, list):
+            return "failed", "store_list_unavailable"
+
+        current = self.state.repository(spec.slug) or {}
+        recorded = current.get("store_slug")
+        old_slug = recorded if isinstance(recorded, str) and _SLUG_RE.fullmatch(recorded) else store_slug(
+            self.local_url(spec, entry["hash"])
+        )
+        retired = f"{LOCAL_USER}.{old_slug}"
+        old_masked = masked_store_url(self.base, spec.owner, spec.name, entry["hash"])  # the hash is gone after revoke
+
+        # One locked write: the new link exists before the Supervisor clones, the old one still serves during the add
+        _, new = self.access.retire_and_replace(spec.slug, LOCAL_USER, retired, specs=self.options.repositories)
+        new_url = self.local_url(spec, new["hash"])
+        new_slug = store_slug(new_url)
+        new_masked = masked_store_url(self.base, spec.owner, spec.name, new["hash"])
+        try:
+            result = self.client.add_repository(new_url)
+        except SupervisorRefused as exc:
+            result = CallResult(False, 0, message=_refused_code(exc))
+        except Exception:
+            self.access.undo_retire(spec.slug, LOCAL_USER, retired, specs=self.options.repositories)
+            self.log.warning("store: rotation of %s failed; old registration kept", spec.slug)
+            raise
+        if not (result.ok or result.duplicate):
+            self.access.undo_retire(spec.slug, LOCAL_USER, retired, specs=self.options.repositories)
+            self.log.warning("store: rotation of %s failed; old registration kept", spec.slug)
+            return "failed", "add_failed"
+
+        # D-11: the old URL stops serving right after the add, before the DELETE and whatever its answer is
+        self.access.revoke(spec.slug, retired, specs=self.options.repositories, system=True)
+        self.state.set_repository(spec.slug, in_store=True, error=None, store_slug=new_slug, masked_url=new_masked)
+        self.log.info("store: %s rotated: new %s registered; old URL revoked", spec.slug, new_slug)
+
+        try:
+            removal = self.client.remove_repository(old_slug)
+        except SupervisorRefused as exc:
+            removal = CallResult(False, 0, message=_refused_code(exc))
+        if removal.ok or removal.not_found:
+            self.state.drop_leftover(old_slug)
+            self.log.info("store: %s removed %s", spec.slug, old_slug)
+            return "done", ""
+        reason = "in_use" if removal.in_use else "error"
+        self.state.add_leftover(
+            repository=spec.slug,
+            store_slug=old_slug,
+            user=retired,
+            masked_url=old_masked,
+            reason=reason,
+            message=mask_text(removal.message),
+            revoked=True,
+        )
+        self.log.warning("store: %s leftover %s (%s)", spec.slug, old_slug, reason)
+        if removal.in_use:
+            return "refused", "in_use"
+        return "failed", "remove_failed"
 
     def _remove(self, argument: str) -> tuple[str, str]:
         try:

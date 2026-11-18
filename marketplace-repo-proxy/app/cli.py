@@ -34,12 +34,14 @@ LOCAL_POLL_SECONDS = 0.5
 EPILOG = """A store URL contains the user's access hash: treat the full URL as a secret. Only `users add` and
 `users url` print it, to this terminal; `users list` shows masked hashes.
 
-Rotation: there is no in-place rotation. `users revoke` and then `users add` the same user; the new URL has a new
-hash, so the consumer must re-add the repository in the add-on store and reinstall its add-ons.
+Rotation: a user's URL has no in-place rotation. `users revoke` and then `users add` the same user; the new URL has a
+new hash, so the consumer must re-add the repository in the add-on store and reinstall its add-ons.
+The add-on's own `local` URL rotates in place with `mrp local rotate <owner/repo> --yes`: the sync process registers
+the new URL first, revokes the old URL at once and then tries to remove the old store repository. Add-ons installed
+from the old store repository get no updates until you reinstall them from the new one.
 
 Reserved labels: `local` and `local.*` belong to the add-on's own store registration with the Supervisor; `users add`
-and `users revoke` refuse them. `mrp local status` and `mrp local remove` manage that registration (and `mrp local
-rotate` from the next version of this module).
+and `users revoke` refuse them. `mrp local status`, `mrp local remove` and `mrp local rotate` manage that registration.
 
 examples:
   mrp users list [example-org/private-addons]
@@ -50,6 +52,7 @@ examples:
   mrp reconcile
   mrp local status [example-org/private-addons]
   mrp local remove example-org/private-addons
+  mrp local rotate example-org/private-addons --yes
 
 `mrp local remove` asks the sync process to remove the repository's `local` store repository; it waits up to 30
 seconds for the result. The current registration is removed only with `register_local: false` or when the repository
@@ -91,6 +94,11 @@ def _parser() -> argparse.ArgumentParser:
     status.add_argument("repository", nargs="?", default=None, help="only this repository (owner/repo)")
     remove = local_commands.add_parser("remove", help="remove the local store repository (through the sync process)")
     remove.add_argument("repository", help="repository as owner/repo")
+    rotate = local_commands.add_parser(
+        "rotate", help="rotate the local store URL (through the sync process); revokes the old URL at once"
+    )
+    rotate.add_argument("repository", help="repository as owner/repo")
+    rotate.add_argument("--yes", action="store_true", help="confirm the rotation (required)")
 
     commands.add_parser("sync", help="request a sync of all repositories now")
     commands.add_parser("reconcile", help="rebuild the access symlink tree from access.json")
@@ -222,13 +230,11 @@ def _request_result(paths: Paths, request_id: str) -> dict | None:
     return None
 
 
-def _local_remove(args: argparse.Namespace, paths: Paths) -> int:
-    """Queue a remove request for the sync process and print its result; never calls the Supervisor (D-02, D-03)."""
-    try:
-        owner, name = parse_repository(args.repository)
-    except (TypeError, ValueError):
-        return _error("repository_unknown")
-    repository = f"{owner}/{name}"
+def _queue_request(paths: Paths, action: str, repository: str) -> tuple[str, dict | None]:
+    """Write one request file for the sync process and wait for its result; (id, result item or None when queued).
+
+    Never calls the Supervisor (D-02, D-03).
+    """
     if not paths.run_dir.is_dir():
         paths.run_dir.mkdir(parents=True, exist_ok=True)
         paths.run_dir.chmod(0o700)
@@ -236,17 +242,37 @@ def _local_remove(args: argparse.Namespace, paths: Paths) -> int:
     directory.mkdir(mode=0o700, exist_ok=True)
     directory.chmod(0o700)  # explicit: mkdir modes are umask-bound
     request_id = _request_id()
-    doc = {"id": request_id, "action": "remove", "repository": repository, "created": utc_timestamp()}
+    doc = {"id": request_id, "action": action, "repository": repository, "created": utc_timestamp()}
     atomic_write_json(directory / f"{request_id}.json", doc)
     deadline = time.monotonic() + LOCAL_WAIT_SECONDS
     while True:
         item = _request_result(paths, request_id)
         if item is not None:
-            break
+            return request_id, item
         if time.monotonic() >= deadline:
-            print(f"queued: {request_id} (the sync process is busy; see mrp local status later)", flush=True)
-            return 0
+            return request_id, None
         time.sleep(LOCAL_POLL_SECONDS)
+
+
+def _print_queued(request_id: str) -> int:
+    print(f"queued: {request_id} (the sync process is busy; see mrp local status later)", flush=True)
+    return 0
+
+
+def _result_error(code: Any, default: str) -> int:
+    return _error(code if isinstance(code, str) and re.fullmatch(r"[a-z_]{1,40}", code) else default)
+
+
+def _local_remove(args: argparse.Namespace, paths: Paths) -> int:
+    """Queue a remove request for the sync process and print its result."""
+    try:
+        owner, name = parse_repository(args.repository)
+    except (TypeError, ValueError):
+        return _error("repository_unknown")
+    repository = f"{owner}/{name}"
+    request_id, item = _queue_request(paths, "remove", repository)
+    if item is None:
+        return _print_queued(request_id)
     result, code = item.get("result"), item.get("code")
     if result == "done":
         print(f"removed: {repository}: store repository removed (see mrp local status)", flush=True)
@@ -258,7 +284,65 @@ def _local_remove(args: argparse.Namespace, paths: Paths) -> int:
             flush=True,
         )
         return 1
-    return _error(code if isinstance(code, str) and re.fullmatch(r"[a-z_]{1,40}", code) else "remove_failed")
+    return _result_error(code, "remove_failed")
+
+
+def _rotation_slugs(paths: Paths, repository: str) -> tuple[str, str]:
+    """(current store slug, old store slug of the latest rotation leftover) from supervisor.json; `-` when unknown."""
+    doc = read_supervisor_state(paths) or {}
+    wanted = repository.lower()
+    current = "-"
+    items = doc.get("repositories")
+    for item in items if isinstance(items, list) else []:
+        if isinstance(item, dict) and _same_repository(item, wanted):
+            current = _field(item.get("store_slug"))
+            break
+    old = "-"
+    leftovers = doc.get("leftovers")
+    for item in leftovers if isinstance(leftovers, list) else []:
+        if not isinstance(item, dict) or not _same_repository(item, wanted) or item.get("reason") != "in_use":
+            continue
+        user = item.get("user")
+        if isinstance(user, str) and user.startswith("local."):
+            old = _field(item.get("store_slug"))
+    return current, old
+
+
+def _local_rotate(args: argparse.Namespace, paths: Paths) -> int:
+    """Warn (D-11), require `--yes` (D-31), then queue a rotate request and print its result."""
+    try:
+        repository = "/".join(parse_repository(args.repository))
+    except (TypeError, ValueError):
+        repository = None
+    shown = repository or _field(args.repository)
+    print(
+        f"warning: rotation revokes the current local URL of {shown} at once; add-ons installed from its store "
+        "repository get no updates until they are reinstalled from the new one",
+        file=sys.stderr,
+        flush=True,
+    )
+    if not args.yes:
+        _error("confirmation_required")
+        print("rerun with --yes to rotate", file=sys.stderr, flush=True)
+        return 1
+    if repository is None:
+        return _error("repository_unknown")
+    request_id, item = _queue_request(paths, "rotate", repository)
+    if item is None:
+        return _print_queued(request_id)
+    result, code = item.get("result"), item.get("code")
+    current, old = _rotation_slugs(paths, repository)
+    if result == "done":
+        print(f"rotated: new store repository {current} registered; old URL revoked", flush=True)
+        return 0
+    if result == "refused":
+        print(
+            f"refused: in_use old store repository {old} is still used by installed add-ons; its URL is revoked; "
+            f"reinstall them from {current}, then run mrp local remove {repository}",
+            flush=True,
+        )
+        return 1
+    return _result_error(code, "rotate_failed")
 
 
 def _sync(paths: Paths) -> int:
@@ -286,6 +370,8 @@ def _dispatch(args: argparse.Namespace, paths: Paths, hostname: str) -> int:
     if args.command == "local":
         if args.local_command == "remove":
             return _local_remove(args, paths)
+        if args.local_command == "rotate":
+            return _local_rotate(args, paths)
         return _local_status(args, paths)
     if args.users_command == "list":
         return _users_list(args, paths)
