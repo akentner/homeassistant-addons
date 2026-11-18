@@ -39,11 +39,11 @@ Branch: `feat/marketplace-repo-proxy-v1` (worktree `feat-repo-proxy`). Phase 4 d
    hash appears in logs.
 6. `internal/verify-marketplace-repo-proxy.sh` builds the image and proves 1-5 against a local upstream fixture.
 
-**Plans**: 6 plans
+**Plans**: 1/6 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 01-01-PLAN.md — (wave 1) Tracer: one user clones one private repository end to end; `mrp users add`
+- [x] 01-01-PLAN.md — (wave 1) Tracer: one user clones one private repository end to end; `mrp users add`
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 01-02-PLAN.md — (wave 2) Sync: failure classification, status.json contract, "Sync now" trigger and interval loop
@@ -128,7 +128,7 @@ released.
 
 | Phase                          | Plans Complete | Status      | Completed |
 | ------------------------------ | -------------- | ----------- | --------- |
-| 1. Git serving core            | 0/6            | Planned     | -         |
+| 1. Git serving core            | 1/6 | In Progress | -         |
 | 2. Supervisor integration      | 0/TBD          | Not started | -         |
 | 3. Management GUI              | 0/TBD          | Not started | -         |
 | 4. Provisioning API            | 0/TBD          | Not started | -         |
