@@ -3,9 +3,9 @@
   "flavor": "core",
   "milestone": null,
   "next": {
-    "command": "/gsd-progress",
-    "label": "Show progress",
-    "reason": "Unsure of state \u2014 showing progress"
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 1 of 1 \u00b7 0% \u00b7 executing"
   },
   "phases": [
     {
@@ -14,5 +14,5 @@
       "status": "in_progress"
     }
   ],
-  "updated_at": "2026-11-17T21:37:31.871Z"
+  "updated_at": "2026-11-18T08:18:07.019Z"
 }
