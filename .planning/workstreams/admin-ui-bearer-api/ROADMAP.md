@@ -47,8 +47,8 @@ Plans:
 - [ ] 01-04-PLAN.md — `OptionToken` validation with the 16-character minimum (D-11), `GeneratedToken` (0600 SHA-256
       file, plaintext once, rotate), no secret in output
 - [ ] 01-05-PLAN.md — Package exports, library reference, rule R-16 in DOCS and the demo rules view
-- [ ] 01-06-PLAN.md — admin-ui 0.4.0-0 via `make update-version`, lib 0.10.0 into all consumers via `make sync-admin-ui`
-      (no consumer bumps), builds, checks
+- [ ] 01-06-PLAN.md — admin-ui 0.4.0-0 via `make update-version`, lib 0.10.0 into all consumers via
+      `make sync-admin-ui`, subpatch bump (`NO_TAG=yes`) for every consumer the sync changes, builds, checks
 
 ## Progress
 

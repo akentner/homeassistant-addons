@@ -117,7 +117,8 @@ registered; three package the Python skeleton, `coding-assistants` packages only
 
 **Primary recommendation:** New modules `skeleton/api.py` + `skeleton/tokens.py`, shared `_JsonHandler` base in
 `server.py` guarded by a pre-refactor characterisation test, lazy `register_error_code("unauthorized", 401)` in
-`make_api_server`, lib `0.10.0`, admin-ui `0.4.0-0`, no consumer add-on version bumps (no consumer behaviour change).
+`make_api_server`, lib `0.10.0`, admin-ui `0.4.0-0`, no consumer add-on version bumps (no consumer behaviour change;
+superseded by the user: D-12 revised 2026-11-18 bumps the subpatch of every consumer the sync changes, see Q1).
 
 ## Architectural Responsibility Map
 
@@ -809,16 +810,22 @@ in parallel with another worktree.
 ## Open Questions (RESOLVED)
 
 The user answered questions 1 and 2 and the version numbers on 2026-11-17 (01-CONTEXT.md "Release values", D-11 to
-D-13); question 3 is settled by the locked decision D-10. No plan has a checkpoint for any of them. The version numbers
+D-13) and revised the answer to question 1 on 2026-11-18 (D-12 revised); question 3 is settled by the locked decision
+D-10. No plan has a checkpoint for any of them. The version numbers
 (Assumptions Log A1) are decided as D-13: lib 0.10.0, admin-ui 0.4.0-0 via
 `make update-version ADDON=admin-ui VERSION=0.4.0 NO_TAG=yes`.
 
-1. **Consumer version bumps.** RESOLVED (decided by the user 2026-11-17, D-12)
+1. **Consumer version bumps.** RESOLVED (decided by the user 2026-11-18, D-12 revised: subpatch bump for every
+   consumer the sync changes)
    - What we know: precedent exists both ways (`172a1af` none, `e2e6f9d` all).
    - Unclear: whether the user wants CI to publish new consumer images for a not-yet-used skeleton addition.
    - Recommendation: no bumps now (A2).
-   - Resolution: no consumer version bump in this phase (D-12, plan label A1); consumer copies are refreshed only
-     through `make sync-admin-ui`. 01-06 task 2 syncs, 01-06 checks that no consumer version file changed.
+   - Resolution: every consumer whose files `make sync-admin-ui` changes gets a subpatch bump `X.Y.Z-N` to
+     `X.Y.Z-(N+1)` through `make update-version ADDON=<consumer> VERSION=X.Y.Z-(N+1) NO_TAG=yes`, never by hand, so CI
+     never overwrites an existing image tag; each bumped consumer keeps its local docker build (D-12 revised, plan
+     label A1). This replaces the 2026-11-17 answer "no consumer bump" and rejects Assumptions Log A2. Consumer copies
+     are refreshed only through `make sync-admin-ui`. 01-06 task 2 syncs, derives the bump set from `git status`,
+     bumps, adds CHANGELOG entries, builds the bumped images and checks every bumped consumer against the merge base.
 2. **Minimum length for option tokens.** RESOLVED (decided by the user 2026-11-17, D-11)
    - What we know: ntfy Phase 25 uses a `password` option; brute force over the network is limited by request cost.
    - Recommendation: enforce at least 16 characters in `OptionToken` with a `ValueError` (message without the value).

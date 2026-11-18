@@ -61,8 +61,11 @@ listener, add-on options such as `api_enabled`, the management-page UI that show
 ### Release values (decided by the user, 2026-11-17)
 - **D-11:** Option-token minimum length is 16 characters (`OPTION_TOKEN_MIN_LENGTH = 16`). This also binds ntfy
   Phase 25. No checkpoint asks for it again.
-- **D-12:** Consumer add-ons (`coding-assistants`, `haos-monitor`, `ntfy`, `secrets-sync`) get no version bump in this
-  phase. Their copies are only refreshed through the sync tooling (`make sync-admin-ui`), never by hand (R-15).
+- **D-12 (revised by the user, 2026-11-18; replaces "no consumer bump"):** Consumer copies are refreshed only through
+  the sync tooling (`make sync-admin-ui`), never by hand (R-15). Every consumer add-on whose files that sync changes
+  (`coding-assistants`, `haos-monitor`, `ntfy`, `secrets-sync`, as far as the sync touches them) gets a subpatch bump
+  (`X.Y.Z-N` to `X.Y.Z-(N+1)`) through `make update-version` with `NO_TAG=yes`, never by hand, so CI never overwrites
+  an existing image tag. Each bumped consumer keeps its local docker build.
 - **D-13:** Versions: lib `0.10.0`, admin-ui add-on `0.4.0-0` (via `make update-version ADDON=admin-ui VERSION=0.4.0`,
   no tag). No checkpoint asks for them again.
 
