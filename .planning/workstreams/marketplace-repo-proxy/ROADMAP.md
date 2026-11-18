@@ -73,7 +73,7 @@ Plans:
 5. Live E2E on the production host: store add → install a test add-on → upstream change → update shown → cleanup
    (test add-on and store repository removed).
 
-**Plans**: 3/7 plans executed
+**Plans**: 4/7 plans executed
 
 Plans:
 **Wave 1**
@@ -86,7 +86,7 @@ Plans:
 - [x] 02-03-PLAN.md — (wave 3) Reserved `local` labels, `mrp local status|remove`, request queue, refusal as leftover
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 02-04-PLAN.md — (wave 4) `mrp local rotate --yes` (warning, add first, old URL revoked at once, rollback), interrupted/orphaned leftover detection
+- [x] 02-04-PLAN.md — (wave 4) `mrp local rotate --yes` (warning, add first, old URL revoked at once, rollback), interrupted/orphaned leftover detection
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 02-05-PLAN.md — (wave 5) Verify script: recreate, reload limit, confirmed rotation with refusal and retry, all four registration values, removal, request audit, token hygiene
@@ -151,7 +151,7 @@ released.
 | Phase                          | Plans Complete | Status      | Completed |
 | ------------------------------ | -------------- | ----------- | --------- |
 | 1. Git serving core            | 6/6 | In Progress | -         |
-| 2. Supervisor integration      | 3/7 | In Progress | -         |
+| 2. Supervisor integration      | 4/7 | In Progress | -         |
 | 3. Management GUI              | 0/TBD          | Not started | -         |
 | 4. Provisioning API            | 0/TBD          | Not started | -         |
 | 5. Public exposure and release | 0/TBD          | Not started | -         |

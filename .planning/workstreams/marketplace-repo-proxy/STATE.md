@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 02
-current_plan: 4
+current_plan: 5
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-11-18T23:31:36.983Z"
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-11-18T23:40:58.963Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 02 execution started
-state_head: 0c1801027ac1933a36de5cb621f7de633fcbe1e4
+state_head: 68fa4e23ec52c0e5999a707c8b5e96a8a82ff8ca
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 13
-  completed_plans: 9
+  completed_plans: 10
   percent: 0
 workstream: marketplace-repo-proxy
 created: 2026-11-17
@@ -23,7 +23,7 @@ current_phase_name: Supervisor integration
 
 ## Current Position
 
-**Current Plan:** 4
+**Current Plan:** 5
 **Total Plans in Phase:** 7
 **Status:** Ready to execute
 **Current Phase:** 02
@@ -37,8 +37,8 @@ current_phase_name: Supervisor integration
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T23:31:36.953Z
-**Stopped At:** Completed 02-03-PLAN.md
+**Last session:** 2026-11-18T23:40:58.933Z
+**Stopped At:** Completed 02-04-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -54,6 +54,7 @@ current_phase_name: Supervisor integration
 | Phase 02 P01 | 13min | 2 tasks | 11 files |
 | Phase 02 P02 | 13min | 3 tasks | 8 files |
 | Phase 02 P03 | 11min | 2 tasks | 7 files |
+| Phase 02 P04 | 5min | 2 tasks | 4 files |
 
 ## Decisions
 
@@ -81,3 +82,6 @@ current_phase_name: Supervisor integration
 - [Phase 02]: 02-03: a refused DELETE becomes an in_use leftover (revoked kept) that the loop never retries; the pass drops leftovers and unconfigured repositories whose slug is gone, without DELETE
 - [Phase 02]: 02-03: local and local.* are reserved; AccessStore.revoke needs system=True for them; retire_and_replace/undo_retire accept reserved labels only
 - [Phase 02]: 02-03: supervisor_state masks leftover messages with gitops.sanitize (import boundary); the Registrar applies mask_text first
+- [Phase 02]: 02-04: rotation old slug = recorded store_slug when valid, else the current local URL's slug; retired label local.{old slug}; any add exception rolls back via undo_retire
+- [Phase 02]: 02-04: leftover detection is report-only: retired local.* entries are revoked by the pass (interrupted while listed); recorded-but-not-current listed slugs become orphaned with user null
+- [Phase 02]: 02-04: mrp local rotate always prints the D-11 warning; --yes required (confirmation_required otherwise); confirmation lives only in the CLI
