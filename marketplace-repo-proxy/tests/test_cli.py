@@ -281,3 +281,164 @@ def test_help_explains_secret_urls_and_rotation(paths, capsys):
     assert run(paths, "--help") == 0
     out = capsys.readouterr().out
     assert "secret" in out and "revoke" in out and "rotat" in out
+
+
+# --- reserved labels and `mrp local status` (Phase 2) --------------------------------------------------------------
+
+HEX32_RE = re.compile(r"[0-9a-fA-F]{32}")
+
+
+@pytest.mark.parametrize("user", ["local", "local.0a1b2c3d", "LOCAL"])
+def test_users_revoke_of_reserved_label_is_refused(paths, capsys, user):
+    created = AccessStore(paths).add(REPO, user, source="system")
+    before = paths.access_file.read_bytes()
+    assert run(paths, "users", "revoke", REPO, user) == 1
+    assert capsys.readouterr().err.strip() == "error: user_reserved"
+    assert paths.access_file.read_bytes() == before
+    assert AccessStore(paths).get(REPO, user)["hash"] == created["hash"]
+
+
+def test_users_add_of_reserved_dot_label_is_refused(paths, capsys):
+    assert run(paths, "users", "add", REPO, "local.x") == 1
+    assert capsys.readouterr().err.strip() == "error: user_reserved"
+    assert not paths.access_file.exists()
+
+
+def test_help_names_the_reserved_labels(paths, capsys):
+    assert run(paths, "--help") == 0
+    out = capsys.readouterr().out
+    assert "local.*" in out and "mrp local status" in out and "mrp local remove" in out
+
+
+def seed_state(p: Paths, **overrides) -> dict:
+    doc = {
+        "schema": 1,
+        "updated": "2026-11-18T12:00:00Z",
+        "register_local": True,
+        "hostname": HOST,
+        "supervisor": {"last_contact": None, "last_status": None, "last_error": None},
+        "reload": {"last_requested": "2026-11-18T11:00:00Z", "last_result": "ok", "pending": False, "message": ""},
+        "repositories": [
+            {
+                "repository": REPO,
+                "registration": "leftover",
+                "message": "1 old store repository left (in_use); see mrp local status",
+                "configured": True,
+                "in_store": True,
+                "store_slug": "0a1b2c3d",
+                "masked_url": f"http://{HOST}:8080/repo/{REPO}/3f9c…",
+            },
+            {
+                "repository": "example-org/retired",
+                "registration": "leftover",
+                "configured": False,
+                "in_store": True,
+                "store_slug": "4e5f6a7b",
+                "masked_url": f"http://{HOST}:8080/repo/example-org/retired/9a8b…",
+            },
+            {
+                "repository": "example-org/fresh",
+                "registration": "missing",
+                "configured": True,
+                "in_store": False,
+                "store_slug": None,
+                "masked_url": "",
+            },
+        ],
+        "leftovers": [
+            {
+                "repository": REPO,
+                "store_slug": "11223344",
+                "user": "local",
+                "masked_url": f"http://{HOST}:8080/repo/{REPO}/aa11…",
+                "since": "2026-11-18T10:00:00Z",
+                "reason": "in_use",
+                "message": "masked",
+                "revoked": False,
+            },
+            {
+                "repository": "example-org/retired",
+                "store_slug": "55667788",
+                "user": None,
+                "masked_url": "",
+                "since": "2026-11-18T09:00:00Z",
+                "reason": "orphaned",
+                "message": "",
+                "revoked": False,
+            },
+        ],
+        "requests": [],
+    }
+    doc.update(overrides)
+    p.supervisor_state_file.write_text(json.dumps(doc), encoding="utf-8")
+    return doc
+
+
+def test_local_status_without_state_file(paths, capsys):
+    assert run(paths, "local", "status") == 0
+    assert capsys.readouterr().out.strip() == "no registration state yet"
+
+
+def test_local_status_prints_registration_reload_and_leftovers(paths, capsys):
+    seed_state(paths)
+    assert run(paths, "local", "status") == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == f"{REPO}\tleftover\t0a1b2c3d\thttp://{HOST}:8080/repo/{REPO}/3f9c…"
+    assert lines[1] == (
+        f"example-org/retired\tleftover\t4e5f6a7b\thttp://{HOST}:8080/repo/example-org/retired/9a8b…\t(unconfigured)"
+    )
+    assert lines[2] == "example-org/fresh\tmissing\t-\t-"
+    assert lines[3] == "reload: last 2026-11-18T11:00:00Z ok, pending no"
+    assert lines[4] == f"leftover\t{REPO}\t11223344\tin_use\tlocal\t2026-11-18T10:00:00Z"
+    assert lines[5] == "leftover\texample-org/retired\t55667788\torphaned\t-\t2026-11-18T09:00:00Z"
+    assert len(lines) == 6
+
+
+def test_local_status_filters_by_repository(paths, capsys):
+    seed_state(paths, reload={"last_requested": None, "last_result": None, "pending": True, "message": ""})
+    assert run(paths, "local", "status", REPO.upper()) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith(f"{REPO}\tleftover\t")
+    assert lines[1] == "reload: last never -, pending yes"
+    assert lines[2].startswith(f"leftover\t{REPO}\t")
+    assert len(lines) == 3
+
+
+def test_local_status_rejects_a_malformed_repository(paths, capsys):
+    seed_state(paths)
+    assert run(paths, "local", "status", "not-a-repository") == 1
+    assert capsys.readouterr().err.strip() == "error: repository_unknown"
+
+
+def test_local_status_never_prints_a_hash_and_never_logs(paths, capsys):
+    seed_state(paths)
+    records: list[logging.LogRecord] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    root = logging.getLogger()
+    handler = Capture(level=logging.DEBUG)
+    old_level = root.level
+    root.addHandler(handler)
+    root.setLevel(logging.DEBUG)
+    try:
+        assert run(paths, "local", "status") == 0
+    finally:
+        root.removeHandler(handler)
+        root.setLevel(old_level)
+    out = capsys.readouterr().out
+    assert out and not HEX32_RE.search(out)
+    assert records == []
+
+
+def test_local_status_masks_a_hash_planted_in_the_state_file(paths, capsys):
+    planted = new_hash()
+    doc = seed_state(paths)
+    doc["repositories"][0]["masked_url"] = f"http://{HOST}:8080/repo/{REPO}/{planted}"
+    doc["leftovers"][0]["user"] = planted
+    paths.supervisor_state_file.write_text(json.dumps(doc), encoding="utf-8")
+    assert run(paths, "local", "status") == 0
+    out = capsys.readouterr().out
+    assert planted not in out and not HEX32_RE.search(out)

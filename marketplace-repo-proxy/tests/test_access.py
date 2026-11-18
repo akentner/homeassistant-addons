@@ -15,6 +15,7 @@ from app.access import (
     AccessError,
     AccessSchemaError,
     AccessStore,
+    is_reserved,
     new_hash,
 )
 from app.options import RepoSpec
@@ -333,3 +334,140 @@ def test_reconcile_invariant_one_link_per_valid_configured_entry(store, paths, c
     assert "other-org/tools/dave" in caplog.text
     for value in (alice["hash"], bob["hash"], carol["hash"], erin["hash"], bad_hash, bad_hash.lower()):
         assert value not in caplog.text
+
+
+# --- reserved labels and the retire primitives of the `local` rotation (Phase 2, RESEARCH Pitfall 6) ---------------
+
+RETIRED = "local.0a1b2c3d"
+
+
+@pytest.mark.parametrize(
+    ("user", "expected"),
+    [("local", True), ("LOCAL", True), ("local.0a1b2c3d", True), ("Local.X", True), ("locally", False),
+     ("alice", False), ("", False), (None, False)],
+)
+def test_is_reserved_matches_local_and_local_dot_labels(user, expected):
+    assert is_reserved(user) is expected
+
+
+@pytest.mark.parametrize("source", ["cli", "gui", "api"])
+def test_reserved_dot_label_is_refused_for_non_system_sources(store, paths, source):
+    with pytest.raises(AccessError) as exc:
+        store.add(REPO, "local.x", source=source)
+    assert exc.value.code == "user_reserved"
+    assert not paths.access_file.exists()
+
+
+def test_reserved_dot_label_is_accepted_for_system_source(store):
+    assert store.add(REPO, "local.x", source="system")["user"] == "local.x"
+
+
+@pytest.mark.parametrize("user", ["local", "local.x"])
+def test_revoke_of_reserved_label_without_system_is_refused(store, paths, user):
+    created = store.add(REPO, user, source="system", specs=SPECS)
+    before = paths.access_file.read_bytes()
+    with pytest.raises(AccessError) as exc:
+        store.revoke(REPO, user, specs=SPECS)
+    assert exc.value.code == "user_reserved"
+    assert paths.access_file.read_bytes() == before
+    assert link(paths, SPEC, created["hash"]).is_symlink()
+
+
+@pytest.mark.parametrize("user", ["local", "local.x"])
+def test_revoke_of_reserved_label_with_system_removes_entry_and_link(store, paths, user):
+    created = store.add(REPO, user, source="system", specs=SPECS)
+    assert store.revoke(REPO, user, specs=SPECS, system=True) is True
+    assert stored(paths)["entries"] == []
+    assert not os.path.lexists(link(paths, SPEC, created["hash"]))
+    assert store.revoke(REPO, user, specs=SPECS, system=True) is False
+
+
+def test_retire_and_replace_moves_the_old_hash_and_adds_a_new_local(store, paths):
+    old = store.add(REPO, "local", source="system", specs=SPECS)
+    retired, new = store.retire_and_replace(REPO, "local", RETIRED, specs=SPECS)
+    assert retired["user"] == RETIRED and retired["hash"] == old["hash"] and retired["source"] == "system"
+    assert isinstance(retired.get("retired"), str) and retired["retired"].endswith("Z")
+    assert new["user"] == "local" and new["source"] == "system" and "retired" not in new
+    assert HASH_RE.fullmatch(new["hash"]) and new["hash"] != old["hash"]
+    entries = stored(paths)["entries"]
+    assert sorted(e["user"] for e in entries) == ["local", RETIRED]
+    assert store.get(REPO, RETIRED) == retired and store.get(REPO, "local") == new
+    target = str(paths.repo_dir(SPEC.owner, SPEC.name))
+    assert os.readlink(link(paths, SPEC, old["hash"])) == target
+    assert os.readlink(link(paths, SPEC, new["hash"])) == target
+
+
+def test_retire_and_replace_is_one_write(store, paths, monkeypatch):
+    store.add(REPO, "local", source="system", specs=SPECS)
+    from app import access as access_module
+
+    writes = []
+    real = access_module.atomic_write_json
+    monkeypatch.setattr(access_module, "atomic_write_json", lambda path, doc: (writes.append(path), real(path, doc)))
+    store.retire_and_replace(REPO, "local", RETIRED, specs=SPECS)
+    assert writes == [paths.access_file]
+
+
+def test_retire_and_replace_keeps_unknown_keys_and_fields(store, paths):
+    old = entry(REPO, "local", source="system", note="kept")
+    write_doc(paths, {"schema": 1, "x_future": 1, "entries": [old, entry(REPO, "bob")]})
+    retired, _ = store.retire_and_replace(REPO, "local", RETIRED)
+    after = stored(paths)
+    assert after["x_future"] == 1
+    assert retired["note"] == "kept" and after["entries"][0]["note"] == "kept"
+    assert after["entries"][1]["user"] == "bob"
+
+
+@pytest.mark.parametrize(
+    ("setup", "retired_user", "code"),
+    [
+        ("none", RETIRED, "user_unknown"),
+        ("both", RETIRED, "user_exists"),
+        ("cli_source", RETIRED, "invalid_source"),
+        ("local", "local.bad/label", "invalid_user"),
+        ("local", "alice", "invalid_user"),
+    ],
+)
+def test_retire_and_replace_refusals_write_nothing(store, paths, setup, retired_user, code):
+    entries = [entry(REPO, "bob")]
+    if setup in ("local", "both"):
+        entries.append(entry(REPO, "local", source="system"))
+    if setup == "both":
+        entries.append(entry(REPO, RETIRED, source="system"))
+    if setup == "cli_source":
+        entries.append(entry(REPO, "local", source="cli"))
+    write_doc(paths, {"schema": 1, "entries": entries})
+    before = paths.access_file.read_bytes()
+    with pytest.raises(AccessError) as exc:
+        store.retire_and_replace(REPO, "local", retired_user, specs=SPECS)
+    assert exc.value.code == code
+    assert paths.access_file.read_bytes() == before
+
+
+def test_undo_retire_restores_the_original_state(store, paths):
+    old = store.add(REPO, "local", source="system", specs=SPECS)
+    store.add(REPO, "bob", specs=SPECS)
+    before = stored(paths)
+    _, new = store.retire_and_replace(REPO, "local", RETIRED, specs=SPECS)
+    assert store.undo_retire(REPO, "local", RETIRED, specs=SPECS) is True
+    assert stored(paths) == before
+    assert store.get(REPO, "local")["hash"] == old["hash"] and "retired" not in store.get(REPO, "local")
+    assert store.get(REPO, RETIRED) is None
+    assert link(paths, SPEC, old["hash"]).is_symlink()
+    assert not os.path.lexists(link(paths, SPEC, new["hash"]))
+
+
+def test_undo_retire_without_specs_still_unlinks_the_new_hash(store, paths):
+    store.add(REPO, "local", source="system", specs=SPECS)
+    _, new = store.retire_and_replace(REPO, "local", RETIRED, specs=SPECS)
+    assert store.undo_retire(REPO, "local", RETIRED) is True
+    assert not os.path.lexists(link(paths, SPEC, new["hash"]))
+
+
+def test_undo_retire_without_a_retired_entry_returns_false_and_writes_nothing(store, paths):
+    store.add(REPO, "local", source="system", specs=SPECS)
+    before = paths.access_file.read_bytes()
+    before_stat = paths.access_file.stat()
+    assert store.undo_retire(REPO, "local", RETIRED, specs=SPECS) is False
+    assert paths.access_file.read_bytes() == before
+    assert paths.access_file.stat().st_mtime_ns == before_stat.st_mtime_ns
