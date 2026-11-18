@@ -222,4 +222,4 @@ pre-check before DELETE) stay planner assumptions as written in the plans.
 
 *Phase: 02-supervisor-integration*
 *Context gathered: 2026-11-18 (from SPIKE.md and the manager brief, discuss step skipped); amended 2026-11-18 (user
-decisions on Q-1 to Q-5: D-11 revised, D-24 to D-27 added)*
+decisions on Q-1 to Q-5: D-11 revised, D-24 to D-27 added; A-17, A-18, A-22 confirmed as D-30 to D-32)*
