@@ -246,3 +246,70 @@ def test_atomic_write_survives_a_platform_that_refuses_directory_fsync(
     atomic_write_json(target, {"a": 2})
     assert json.loads(target.read_text(encoding="utf-8")) == {"a": 2}
     assert [p.name for p in tmp_path.iterdir()] == ["doc.json"]
+
+
+H1 = "1111111111aa"
+H2 = "2222222222bb"
+H3 = "3333333333cc"
+
+
+def _ok(writer: StatusWriter, slug: str, head: str, *, status: str = "ok", refs_changed: bool = True) -> None:
+    writer.record(
+        slug, status=status, message="", branch="main", branch_source="upstream_default", head=head, addons=[],
+        refs_changed=refs_changed,
+    )
+
+
+def test_head_changes_stay_empty_on_a_first_ever_sync(tmp_path: Path) -> None:
+    writer = StatusWriter(_paths(tmp_path), SPECS, False, 15)
+    assert writer.head_changes == set()
+    writer.begin_cycle("startup")
+    _ok(writer, "Org/one", H1)  # refs_changed is true on a fresh bare repo, but no previous head exists
+    assert writer.head_changes == set()
+    assert _entry(_doc(writer._paths), "Org/one")["refs_changed"] is True
+
+
+def test_head_changes_compare_against_the_previous_file(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    first = StatusWriter(paths, SPECS, False, 15)
+    _ok(first, "Org/one", H1)
+    # A new process or a recreated container: fresh /srv/git, same /data/status.json
+    restarted = StatusWriter(paths, SPECS, False, 15)
+    restarted.begin_cycle("startup")
+    _ok(restarted, "org/one", H1)
+    assert restarted.head_changes == set()
+    moved = StatusWriter(paths, SPECS, False, 15)
+    moved.begin_cycle("startup")
+    _ok(moved, "Org/one", H2)
+    assert moved.head_changes == {"org/one"}
+
+
+def test_head_changes_ignore_failures_and_count_no_repository_yaml(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    writer = StatusWriter(paths, SPECS, False, 15)
+    _ok(writer, "Org/one", H1)
+    _ok(writer, "other/three", H1, status="no_repository_yaml")
+    writer.begin_cycle("interval")
+    for code in ("auth_failed", "not_found", "fetch_failed"):
+        writer.record(
+            "Org/one", status=code, message="failed", branch="main", branch_source="upstream_default", head=H2
+        )
+        assert writer.head_changes == set()
+        assert _entry(_doc(paths), "Org/one")["head"] == H1
+    _ok(writer, "other/three", H2, status="no_repository_yaml", refs_changed=False)
+    assert writer.head_changes == {"other/three"}
+
+
+def test_head_changes_are_cleared_by_begin_cycle_and_hold_one_key_per_repository(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    writer = StatusWriter(paths, SPECS, False, 15)
+    _ok(writer, "Org/one", H1)
+    writer.begin_cycle("request")
+    _ok(writer, "Org/one", H2)
+    _ok(writer, "Org/one", H3)
+    assert writer.head_changes == {"org/one"}
+    writer.begin_cycle("interval")
+    assert writer.head_changes == set()
+    _ok(writer, "Org/one", H3)
+    assert writer.head_changes == set()
+    assert _entry(_doc(paths), "Org/one")["last_change"] is not None
