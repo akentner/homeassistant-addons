@@ -9,6 +9,7 @@ bind address explicitly, there is no default exposure.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import urllib.parse
 from http.server import ThreadingHTTPServer
@@ -71,6 +72,10 @@ def _make_api_handler(
     error_mappers: dict[type[Exception], Callable[[Exception], ApiError]] | None,
 ) -> type[_JsonHandler]:
     class ApiHandler(_JsonHandler):
+        # Seconds; StreamRequestHandler applies it to the socket, so idle or slow clients are dropped (the largest body
+        # is 64 KiB). The ingress handler keeps no timeout.
+        timeout = 30
+
         def _unauthorized(self) -> None:
             self.close_connection = True
             self._send(
@@ -121,9 +126,19 @@ def make_api_server(
 ) -> ThreadingHTTPServer:
     """Build the bearer-gated API server; `bind` has no default, the consumer states its exposure explicitly.
 
-    Raises ValueError without a usable verifier (no token: the API stays off) before any socket exists."""
+    Raises ValueError before any socket exists: without a usable verifier (no token: the API stays off), when `bind`
+    is not an IPv4 literal (ThreadingHTTPServer is AF_INET) and when the router has a public route."""
     if verifier is None or not callable(getattr(verifier, "verify", None)):
         raise ValueError("no API token: the API stays off")
+    try:
+        address = ipaddress.ip_address(bind)
+    except (TypeError, ValueError):
+        address = None
+    if not isinstance(address, ipaddress.IPv4Address):
+        # The message names no value
+        raise ValueError("bind must be an IPv4 address")
+    if any(router.is_public(method, pattern) for method, pattern in router.routes()):
+        raise ValueError("public routes are not allowed on the API router")
     # Lazy and idempotent: the import-time error table stays unchanged for consumers that pin it
     register_error_code("unauthorized", 401)
     handler = _make_api_handler(router, verifier, server_version=server_version, error_mappers=error_mappers)

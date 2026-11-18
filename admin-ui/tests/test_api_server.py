@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import http.client
+import http.server
 import inspect
 import json
 import secrets
@@ -15,24 +17,61 @@ from typing import Any, Callable, Iterator
 
 import pytest
 
-from app.web.skeleton import ERROR_STATUS, Request, Router, make_server, serve
+from app.web.skeleton import (
+    ERROR_STATUS,
+    ApiError,
+    Download,
+    Request,
+    Router,
+    ingress_user,
+    make_server,
+    serve,
+)
+from app.web.skeleton.server import MAX_BODY
 from app.web.skeleton.api import make_api_server
 from app.web.skeleton.tokens import OptionToken
-from test_skeleton_server import Client, build_router, make_static
+from test_skeleton_server import Client, ForeignError, build_router, make_static
 
 # Generated per test run: obviously fake, never a real credential.
 TOKEN = "test-token-" + secrets.token_hex(16)
 UNAUTHORIZED = {"error": "unauthorized", "message": "unauthorized"}
+AUTH = {"Authorization": f"Bearer {TOKEN}"}
+JSON_AUTH = {**AUTH, "Content-Type": "application/json"}
 
 
-def build_api_router() -> Router:
+def build_api_router(echo_calls: list[Any] | None = None) -> Router:
+    """Test router; every call of POST /api/echo is appended to `echo_calls` (proves "handler not called")."""
     router = Router()
     router.add("GET", "/api/ping", lambda req: {"ok": True})
 
     def headers(req: Request) -> Any:
         return {"authorization": req.headers.get("Authorization"), "public": req.public}
 
+    def echo(req: Request) -> Any:
+        if echo_calls is not None:
+            echo_calls.append(req.path)
+        return 201, req.body()
+
+    def boom(req: Request) -> Any:
+        raise RuntimeError("secret detail")
+
+    def api_error(req: Request) -> Any:
+        raise ApiError("protected", "nope")
+
+    def foreign(req: Request) -> Any:
+        raise ForeignError("exists")
+
+    def whoami(req: Request) -> Any:
+        return {"user": ingress_user(req.headers), "public": req.public, "id": req.headers.get("X-Remote-User-Id")}
+
     router.add("GET", "/api/headers", headers)
+    router.add("POST", "/api/echo", echo)
+    router.add("POST", "/api/nothing", lambda req: None)
+    router.add("GET", "/api/download", lambda req: Download("a.txt", "text/plain", b"data"))
+    router.add("GET", "/api/boom", boom)
+    router.add("GET", "/api/protected", api_error)
+    router.add("POST", "/api/foreign", foreign)
+    router.add("GET", "/api/whoami", whoami)
     return router
 
 
@@ -215,3 +254,194 @@ def test_serve_real_gui_and_api_servers_stop_together(monkeypatch: pytest.Monkey
             api_server.shutdown()
         gui.server_close()
         api_server.server_close()
+
+
+# --- request handling on the API port (D-02, D-03, D-04) ---
+
+
+def _raw_post(port: int, headers: dict[str, str], path: str = "/api/echo") -> tuple[int, Any]:
+    """POST with headers exactly as given and no body (for Content-Length and Transfer-Encoding edge cases)."""
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        conn.putrequest("POST", path)
+        for key, value in headers.items():
+            conn.putheader(key, value)
+        conn.endheaders()
+        resp = conn.getresponse()
+        data = resp.read()
+        return resp.status, (json.loads(data) if data else None)
+    finally:
+        conn.close()
+
+
+def test_errors_are_json_with_the_token(api: Callable[..., Client]) -> None:
+    client = api()
+    assert client.json("GET", "/nope", AUTH) == (404, {"error": "not_found", "message": "not found"})
+    status, body = client.json("PUT", "/api/ping", AUTH)
+    assert status == 405 and body["error"] == "method_not_allowed"
+    status, body = client.json("OPTIONS", "/api/ping", AUTH)
+    assert status == 405 and body["error"] == "method_not_allowed"
+
+
+def test_static_index_and_icon_paths_are_not_served(api: Callable[..., Client]) -> None:
+    client = api()
+    for path in ("/", "/icon", "/index.html", "/static/app.css"):
+        assert client.json("GET", path, AUTH) == (404, {"error": "not_found", "message": "not found"}), path
+
+
+def test_body_rules_with_the_token(api: Callable[..., Client]) -> None:
+    client = api()
+    assert client.json("POST", "/api/echo", JSON_AUTH, json.dumps({"k": 1}).encode()) == (201, {"k": 1})
+    assert client.json("POST", "/api/echo", JSON_AUTH, b"[1]")[0] == 400
+    assert client.json("POST", "/api/echo", JSON_AUTH, b"{not json")[0] == 400
+    assert client.json("POST", "/api/echo", {**AUTH, "Content-Type": "text/plain"}, b"{}")[0] == 400
+    status, body = _raw_post(client.port, {**JSON_AUTH, "Transfer-Encoding": "chunked"})
+    assert status == 400 and body["error"] == "bad_request"
+
+
+def test_max_body_boundary(api: Callable[..., Client]) -> None:
+    calls: list[Any] = []
+    client = api(build_api_router(calls))
+    prefix, suffix = b'{"k": "', b'"}'
+    exact = prefix + b"x" * (MAX_BODY - len(prefix) - len(suffix)) + suffix
+    assert len(exact) == MAX_BODY == 65536
+    status, body = client.json("POST", "/api/echo", JSON_AUTH, exact)
+    assert status == 201 and len(body["k"]) == MAX_BODY - len(prefix) - len(suffix)
+    assert len(calls) == 1
+    status, body = client.json("POST", "/api/echo", JSON_AUTH, exact[:-1] + b' }')
+    assert status == 413 and body["error"] == "payload_too_large"
+    assert len(calls) == 1
+
+
+def test_content_length_parsing(api: Callable[..., Client]) -> None:
+    calls: list[Any] = []
+    client = api(build_api_router(calls))
+    for length, expected in (("-1", 400), ("abc", 400), ("99999999999999999999", 413)):
+        status, body = _raw_post(client.port, {**JSON_AUTH, "Content-Length": length})
+        assert status == expected, length
+        assert body["error"] == ("payload_too_large" if expected == 413 else "bad_request"), length
+    assert calls == []
+
+
+def test_response_kinds(api: Callable[..., Client]) -> None:
+    client = api()
+    status, _, data = client.call("POST", "/api/nothing", AUTH)
+    assert status == 204 and data == b""
+    status, resp, data = client.call("GET", "/api/download", AUTH)
+    assert status == 200 and data == b"data" and "attachment" in resp.getheader("Content-Disposition")
+    assert client.json("POST", "/api/echo", JSON_AUTH, b'{"a": 1}') == (201, {"a": 1})
+
+
+def test_exception_mapping_on_the_api(api: Callable[..., Client], capsys: pytest.CaptureFixture[str]) -> None:
+    client = api(error_mappers={ForeignError: lambda exc: ApiError("conflict", "exists")})
+    assert client.json("GET", "/api/protected", AUTH) == (409, {"error": "protected", "message": "nope"})
+    assert client.json("POST", "/api/foreign", JSON_AUTH, b"{}") == (409, {"error": "conflict", "message": "exists"})
+    status, body = client.json("GET", "/api/boom", AUTH)
+    assert status == 500 and body == {"error": "internal_error", "message": "internal error"}
+    assert "secret detail" not in json.dumps(body)
+    out = capsys.readouterr().out
+    assert "RuntimeError" in out and "secret detail" in out
+
+
+def test_headers_on_every_api_response(api: Callable[..., Client]) -> None:
+    client = api()
+    origin = {"Origin": "https://example.invalid"}
+    for method, path, headers, body in (
+        ("GET", "/api/ping", AUTH, None),
+        ("GET", "/nope", AUTH, None),
+        ("PUT", "/api/ping", AUTH, None),
+        ("POST", "/api/nothing", AUTH, None),
+        ("GET", "/api/download", AUTH, None),
+        ("POST", "/api/echo", JSON_AUTH, b"{nope"),
+        ("GET", "/api/ping", {}, None),
+        ("OPTIONS", "/api/ping", {**AUTH, **origin, "Access-Control-Request-Method": "POST"}, None),
+        ("OPTIONS", "/api/ping", origin, None),
+        ("GET", "/api/ping", {**AUTH, **origin}, None),
+    ):
+        _, resp, _ = client.call(method, path, headers, body)
+        label = f"{method} {path} {sorted(headers)}"
+        assert resp.getheader("Cache-Control") == "no-store", label
+        assert resp.getheader("X-Content-Type-Options") == "nosniff", label
+        assert resp.getheader("Referrer-Policy") == "same-origin", label
+        assert resp.getheader("Content-Security-Policy") is None, label
+        assert resp.getheader("X-Frame-Options") is None, label
+        assert not [k for k, _ in resp.getheaders() if k.lower().startswith("access-control-")], label
+
+
+def test_router_with_a_public_route_is_rejected() -> None:
+    router = build_api_router()
+    router.add("GET", "/api/health", lambda req: {"ok": True}, public=True)
+    with pytest.raises(ValueError, match="public routes"):
+        make_api_server(router, 0, OptionToken(TOKEN), bind="127.0.0.1")
+
+
+def test_bind_must_be_an_ipv4_literal(monkeypatch: pytest.MonkeyPatch) -> None:
+    for bind in ("127.0.0.1", "0.0.0.0"):
+        server = make_api_server(build_api_router(), 0, OptionToken(TOKEN), bind=bind)
+        try:
+            assert server.server_address[0] == bind
+        finally:
+            server.server_close()
+
+    def no_bind(self: Any) -> None:
+        pytest.fail("a socket was bound for a rejected bind value")
+
+    monkeypatch.setattr(http.server.HTTPServer, "server_bind", no_bind)
+    for bind in ("::1", "localhost", ""):
+        with pytest.raises(ValueError, match="IPv4"):
+            make_api_server(build_api_router(), 0, OptionToken(TOKEN), bind=bind)
+
+
+def test_two_listeners_in_one_process(api: Callable[..., Client]) -> None:
+    first, second = api(), api()
+    assert first.port != second.port
+    for client in (first, second):
+        assert client.json("GET", "/api/ping", AUTH) == (200, {"ok": True})
+    assert ERROR_STATUS["unauthorized"] == 401
+
+
+def test_concurrent_requests_get_their_own_status(api: Callable[..., Client]) -> None:
+    client = api()
+    count = 20
+    barrier = threading.Barrier(count)
+    results: dict[int, int] = {}
+    errors: list[BaseException] = []
+
+    def worker(index: int) -> None:
+        token = TOKEN if index % 2 == 0 else "wrong-" + secrets.token_hex(8)
+        try:
+            barrier.wait(timeout=5)
+            results[index] = client.call("GET", "/api/ping", {"Authorization": f"Bearer {token}"})[0]
+        except BaseException as exc:  # noqa: BLE001 - reported by the assertion below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(i,), daemon=True) for i in range(count)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+    assert not errors
+    assert results == {i: (200 if i % 2 == 0 else 401) for i in range(count)}
+
+
+def test_identity_headers_are_hidden(api: Callable[..., Client]) -> None:
+    client = api()
+    forged = {
+        **AUTH,
+        "X-Remote-User-Id": "forged-id",
+        "X-Remote-User-Name": "forged",
+        "X-Remote-User-Groups": "system-admin",
+        "X-Ingress-Path": "/api/hassio_ingress/forged",
+    }
+    assert client.json("GET", "/api/whoami", forged) == (200, {"id": None, "public": True, "user": None})
+
+
+def test_api_handler_timeout(tmp_path: Path) -> None:
+    api_server = make_api_server(build_api_router(), 0, OptionToken(TOKEN), bind="127.0.0.1")
+    gui = make_server(build_router(), make_static(tmp_path / "static"), 0, host="127.0.0.1")
+    try:
+        assert api_server.RequestHandlerClass.timeout == 30
+        assert gui.RequestHandlerClass.timeout is None
+    finally:
+        api_server.server_close()
+        gui.server_close()
