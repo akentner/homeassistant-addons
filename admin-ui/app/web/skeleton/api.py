@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import sys
 import urllib.parse
 from http.server import ThreadingHTTPServer
 from typing import Any, Callable
@@ -147,6 +148,17 @@ def _make_api_handler(
     return ApiHandler
 
 
+class _ApiServer(ThreadingHTTPServer):
+    """The API server; an exception escaping a request prints only its class name (no message, no traceback)."""
+
+    daemon_threads = True
+
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        # The stdlib default prints a full traceback to stderr, whose exception message could carry request data
+        exc = sys.exc_info()[1]
+        print(f"api request failed: {type(exc).__name__}", flush=True)
+
+
 def make_api_server(
     router: Router,
     port: int,
@@ -174,6 +186,4 @@ def make_api_server(
     # Lazy and idempotent: the import-time error table stays unchanged for consumers that pin it
     register_error_code("unauthorized", 401)
     handler = _make_api_handler(router, verifier, server_version=server_version, error_mappers=error_mappers)
-    server = ThreadingHTTPServer((bind, port), handler)
-    server.daemon_threads = True
-    return server
+    return _ApiServer((bind, port), handler)

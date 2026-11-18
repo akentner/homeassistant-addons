@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import http.client
 import http.server
 import inspect
@@ -12,6 +13,7 @@ import socket
 import subprocess
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -29,7 +31,7 @@ from app.web.skeleton import (
 )
 from app.web.skeleton.server import MAX_BODY
 from app.web.skeleton.api import _UNAUTHORIZED_BODY, make_api_server
-from app.web.skeleton.tokens import OptionToken
+from app.web.skeleton.tokens import GeneratedToken, OptionToken
 from test_skeleton_server import Client, ForeignError, build_router, make_static
 
 # Generated per test run: obviously fake, never a real credential.
@@ -660,3 +662,71 @@ def test_unread_body_closes_the_connection(api: Callable[..., Client]) -> None:
     assert b"\r\nConnection: close" in head
     assert body == _UNAUTHORIZED_BODY
     assert calls == []
+
+
+# --- no token, bearer value or stored digest ever reaches stdout or stderr (D-09, AUB-04) ---
+
+
+def test_handle_error_prints_only_the_exception_class(capfd: pytest.CaptureFixture[str]) -> None:
+    server = make_api_server(build_api_router(), 0, OptionToken(TOKEN), bind="127.0.0.1")
+    try:
+        try:
+            raise RuntimeError(f"Bearer {TOKEN}")
+        except RuntimeError:
+            server.handle_error(None, ("127.0.0.1", 0))
+    finally:
+        server.server_close()
+    out, err = capfd.readouterr()
+    assert out == "api request failed: RuntimeError\n"
+    assert err == ""
+    assert TOKEN not in out + err
+
+
+def test_no_secret_reaches_stdout_or_stderr(
+    api: Callable[..., Client], tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    generated = GeneratedToken.load_or_create(tmp_path / "api-token")
+    option_client = api()
+    generated_client = api(verifier=generated)
+    first = generated.take_plaintext()
+    assert first is not None
+    wrong = "wrong-" + secrets.token_hex(16)
+    rotated: list[str] = []
+
+    def _calls(client: Client, token: str) -> list[Callable[[], Any]]:
+        auth = {"Authorization": f"Bearer {token}"}
+        return [
+            lambda: client.call("GET", "/api/ping", auth),
+            lambda: client.call("GET", "/api/ping", {"Authorization": f"Bearer {wrong}"}),
+            lambda: client.call("GET", f"/api/ping?access_token={token}"),
+            lambda: raw(
+                client.port,
+                _request("GET", "/api/ping", f"Authorization: Bearer {token}", f"Authorization: Bearer {wrong}"),
+            ),
+            lambda: client.call("GET", "/api/boom", auth),
+        ]
+
+    calls = _calls(option_client, TOKEN) + _calls(generated_client, first)
+    jobs: list[Callable[[], Any]] = [calls[i % len(calls)] for i in range(48)]
+    # Token lifecycle events run in the same pool as the requests
+    jobs.insert(10, generated.take_plaintext)
+    jobs.insert(25, lambda: rotated.append(generated.rotate()))
+    assert len(jobs) == 50
+    with ThreadPoolExecutor(8) as pool:
+        for future in [pool.submit(job) for job in jobs]:
+            future.result()
+    assert len(rotated) == 1
+    new = rotated[0]
+    # The rotated token works on the live server; the old one is gone
+    assert generated_client.call("GET", "/api/ping", {"Authorization": f"Bearer {new}"})[0] == 200
+    assert generated_client.call("GET", "/api/boom", {"Authorization": f"Bearer {new}"})[0] == 500
+    assert generated_client.call("GET", "/api/ping", {"Authorization": f"Bearer {first}"})[0] == 401
+
+    out, err = capfd.readouterr()
+    secrets_to_hide = [TOKEN, f"Bearer {TOKEN}", first, f"Bearer {first}", new, f"Bearer {new}"]
+    secrets_to_hide += [hashlib.sha256(value.encode("ascii")).hexdigest() for value in (TOKEN, first, new)]
+    for secret in secrets_to_hide:
+        assert secret not in out
+        assert secret not in err
+    # The capture is not vacuous: the handler traceback of /api/boom reached it
+    assert "Traceback" in out
