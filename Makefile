@@ -131,6 +131,7 @@ test-admin-ui-consumers: ## Test each consumer separately (their Python app pack
 	uv run --with pytest --with pyyaml python3 -m pytest ntfy/tests -q
 	uv run --with pytest --with pyyaml --with jinja2 python3 -m pytest secrets-sync/tests/web -q
 	uv run --with pytest --with pyyaml python3 -m pytest haos-monitor/tests -q
+	uv run --with pytest --with pyyaml python3 -m pytest marketplace-repo-proxy/tests -q
 
 test-ntfy: ## Run the ntfy Node and pytest suites
 	node --test ntfy/tests/js/*.test.mjs

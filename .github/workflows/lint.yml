@@ -310,8 +310,22 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
       - name: Install test dependencies
         run: python -m pip install 'pytest==9.1.1' 'pyyaml==6.0.3'
 
+      - name: GUI unit tests (node)
+        run: node --test marketplace-repo-proxy/tests/js/*.test.mjs
+
       - name: Add-on tests (pytest)
         run: python -m pytest marketplace-repo-proxy/tests -q
+
+      - name: Lib copies in sync
+        run: make check-admin-ui-sync
+
+      - name: Blueprint rules
+        run: make check-admin-ui-rules

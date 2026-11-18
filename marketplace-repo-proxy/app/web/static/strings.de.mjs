@@ -23,6 +23,9 @@ export default {
   "mrp.repo.sync_idle": "Sync wartet, alle {minutes} min",
   "mrp.repo.sync_running": "Sync läuft",
 
+  "mrp.sync.now": "Jetzt synchronisieren",
+  "mrp.sync.requested": "Sync angefordert",
+
   "mrp.status.pending": "Ausstehend",
   "mrp.status.ok": "OK",
   "mrp.status.auth_failed": "Anmeldung fehlgeschlagen",

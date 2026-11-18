@@ -1,9 +1,10 @@
 // Repositories view: every configured repository with branch, sync status, last sync, HEAD and found add-ons, read from
-// api/overview every 15 s. The last good data stays on screen while a refresh runs or fails. Text nodes only (R-03).
-import { html, useCallback, useEffect, useRef, useState, usePoll, Badge, DataTable, ErrorNote, Loading } from "../vendor/admin-ui/ui.mjs";
-import { useLang, useT, tp } from "../vendor/admin-ui/i18n.mjs";
+// api/overview every 15 s, plus one global "Sync now" button (the sync trigger covers all repositories, D-18). The last
+// good data stays on screen while a refresh runs or fails. Text nodes only (R-03).
+import { html, useCallback, useEffect, useRef, useState, usePoll, toast, Badge, DataTable, ErrorNote, Loading } from "../vendor/admin-ui/ui.mjs";
+import { useLang, useT, t, tp, tError } from "../vendor/admin-ui/i18n.mjs";
 import { formatRelative } from "../vendor/admin-ui/format.mjs";
-import { get } from "../vendor/admin-ui/api.mjs";
+import { get, post } from "../vendor/admin-ui/api.mjs";
 import { statusKey, statusKind, shortSha, toMs } from "../model.mjs";
 
 export const POLL_MS = 15000;
@@ -59,6 +60,29 @@ function SyncLine({ sync }) {
   return html`<p class="sync-line">${text}</p>`;
 }
 
+// One button for all repositories: POST api/sync with the empty JSON object (the server rejects any other body), then
+// refresh the overview so the requested/running state shows at once.
+function SyncNow({ onDone }) {
+  const tt = useT();
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await post("sync", { body: {} });
+      toast("ok", t("mrp.sync.requested"));
+    } catch (err) {
+      toast("error", tError(err));
+    } finally {
+      setBusy(false);
+    }
+    onDone();
+  };
+  return html`<div class="sync-actions">
+    <button class="btn" type="button" disabled=${busy} onClick=${run}>${tt("mrp.sync.now")}</button>
+  </div>`;
+}
+
 export default function Repositories() {
   const tt = useT();
   const lang = useLang();
@@ -106,6 +130,7 @@ export default function Repositories() {
     html`<section class="card repo-card">
       <h2>${tt("mrp.repo.title")}</h2>
       <${SyncLine} sync=${data.sync} />
+      <${SyncNow} onDone=${reload} />
       ${!data.status_available && html`<p class="hint">${tt("mrp.repo.no_status")}</p>`}
       <div class="repo-table">
         <${DataTable}
