@@ -68,21 +68,21 @@ created: "2026-11-18"
 | T-01-30   | Denial of service      | consumer contracts                         | medium   | mitigate    | `errors.py` unchanged; all consumer suites green after the WR re-syncs                                            | closed                                  |
 | T-01-31   | Tampering              | image content                              | medium   | mitigate    | Five images rebuilt serially at `fdc0067`; `api.py` hash in four images equals HEAD; scaffold verify passed       | closed                                  |
 | T-01-32   | Denial of service      | concurrent Docker use                      | low      | mitigate    | Builds one at a time with `docker ps` empty before each                                                           | closed                                  |
-| T-01-33   | Tampering              | published consumer image tags              | medium   | mitigate    | Gap: coding-assistants `1.3.2-1` is already released on `main`; the branch bumps to the same version (see notes) | open — below high threshold (non-blocking) |
+| T-01-33 | Tampering | published consumer image tags | medium | mitigate | `origin/main` merged (`455eac6`); coding-assistants bumped to next free subpatch `1.3.2-2` (`0d1ae7a`) | closed |
 | T-01-SC   | Tampering              | package installs                           | high     | mitigate    | Skeleton imports stdlib only (test); no dependency or Dockerfile change                                           | closed                                  |
 
 _Status: open · closed · open — below high threshold (non-blocking)_ _Severity: critical > high > medium > low — only open
 threats at or above workflow.security_block_on count toward threats_open_ _Disposition: mitigate (implementation
 required) · accept (documented risk) · transfer (third-party)_
 
-### Open threat notes
+### Resolved threat notes
 
-- **T-01-33:** `origin/main` already carries `coding-assistants` `1.3.2-1` (its own CHANGELOG section, published by CI on
-  push to `main`). Plan 06 bumped this branch to the same version, because the bump gate counted from the merge base and
-  checked git tags only. `git merge-tree HEAD origin/main` conflicts in `coding-assistants/CHANGELOG.md`. A merge as-is
-  would let CI rebuild `coding-assistants:1.3.2-1` with different content. Resolution needs an owner decision before
-  merge: integrate `origin/main` and bump `coding-assistants` to `1.3.2-2` via `make update-version ... NO_TAG=yes`. The
-  other consumers and admin-ui do not collide with the current `origin/main`.
+- **T-01-33:** `origin/main` already carried `coding-assistants` `1.3.2-1` (released by CI on push to `main`), and the
+  branch had bumped to the same version. Resolved by owner decision on 2026-11-18: `origin/main` merged into the branch
+  (no rebase, no force-push), the CHANGELOG conflict resolved by keeping both sections, and `coding-assistants` bumped
+  to `1.3.2-2` via `make update-version ... NO_TAG=yes`. After the merge, no other consumer version changed on `main`
+  (haos-monitor, ntfy and secrets-sync stay at their `-1` bump; admin-ui at `0.4.0-0`). The `coding-assistants` image
+  was rebuilt locally at the new version.
 
 ---
 
@@ -101,6 +101,7 @@ _Accepted risks do not resurface in future audit runs._
 | Audit Date | Threats Total | Closed | Open | Run By                                                         |
 | ---------- | ------------- | ------ | ---- | -------------------------------------------------------------- |
 | 2026-11-18 | 34            | 33     | 1    | gsd-security-auditor + orchestrator (T-01-31 rebuild, T-01-27) |
+| 2026-11-18 | 34            | 34     | 0    | orchestrator (T-01-33 closed after merge and bump)             |
 
 ---
 
@@ -108,7 +109,7 @@ _Accepted risks do not resurface in future audit runs._
 
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log
-- [x] `threats_open: 0` confirmed (one non-blocking medium threat open: T-01-33)
+- [x] `threats_open: 0` confirmed (no open threats)
 - [x] `status: verified` set in frontmatter
 
-**Approval:** verified 2026-11-18 (blocking gate); T-01-33 needs an owner decision before merge
+**Approval:** verified 2026-11-18
