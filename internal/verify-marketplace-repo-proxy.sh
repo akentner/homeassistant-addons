@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Docker end-to-end check of marketplace-repo-proxy against a local, auth-checking upstream fixture (never GitHub).
-# Proves ROADMAP Phase 1 criteria 1-5 with one `✓`/`✗` line per check: clones of the upstream default branch and of a
-# configured non-default branch, query and `#branch` tolerance, the 404/403 matrix, push refusal, an upstream change
-# after `mrp sync`, revocation by CLI and by hand edit, status codes end to end and secret hygiene.
+# Proves ROADMAP Phase 1 criteria 1-5 and Phase 2 criteria 1-4 with one `✓`/`✗` line per check. Phase 1: clones of
+# the upstream default branch and of a configured non-default branch, query and `#branch` tolerance, the 404/403
+# matrix, push refusal, an upstream change after `mrp sync`, revocation by CLI and by hand edit, status codes end to end
+# and secret hygiene.
 # Phase 2: self-registration of the `local` store URLs with a fake Supervisor container (network alias `supervisor`,
-# tests/fake_supervisor.py) that clones every added URL through the proxy, like the real Supervisor (never a real one).
+# tests/fake_supervisor.py) that clones every added URL through the proxy, like the real Supervisor (never a real one):
+# no re-registration after a container recreate, one store reload per interval (pending across a recreate), rotation
+# with its confirmation and a refusal, the retry, removal with register_local false, the four registration values, a
+# request audit and token/hash hygiene. Never contacts a real Supervisor or GitHub.
 # Builds the add-on image locally (D-21). Manual invocation: bash internal/verify-marketplace-repo-proxy.sh
 # Optional env: MRP_VERIFY_PREFIX (container/network name prefix, default mrp-verify), MRP_VERIFY_WORK (scratch dir).
 # Starts containers: never run it in two worktrees at the same time.
@@ -413,11 +417,12 @@ echo "==> (4) proxy: four repositories, alice seeded in access.json"
 if [ -z "${WORK}" ]; then WORK="$(mktemp -d)"; else mkdir -p "${WORK}"; fi
 mkdir -p "${WORK}/data"
 HASH_ALICE="$(python3 -I -c 'import secrets; print(secrets.token_hex(16))')"
-# usage: options_json <pat>  (prints options.json; the same repositories in every run)
+# usage: options_json <pat> [register_local]  (prints options.json; the same repositories in every run)
 options_json() {
-    python3 -I - "$1" "${PUBLIC_URL}" "${REPO}" "${REPO_BRANCHED}" "${REPO_NO_META}" "${REPO_MISSING}" <<'PY'
+    python3 -I - "$1" "${PUBLIC_URL}" "${REPO}" "${REPO_BRANCHED}" "${REPO_NO_META}" "${REPO_MISSING}" "${2:-true}" \
+        <<'PY'
 import json, sys
-pat, public_url, repo, branched, no_meta, missing = sys.argv[1:7]
+pat, public_url, repo, branched, no_meta, missing, register_local = sys.argv[1:8]
 print(json.dumps({
     "github_token": pat,
     "sync_interval": 5,
@@ -428,7 +433,7 @@ print(json.dumps({
         {"repository": no_meta},
         {"repository": missing},
     ],
-    "register_local": True,
+    "register_local": register_local == "true",
     "api_enabled": False,
     "log_level": "debug",
 }))
@@ -756,13 +761,16 @@ WRONG_PAT="SENTINEL-WRONG-$RANDOM$RANDOM"
 DAVE_LINE="user dave -> http://${PROXY}:8080/repo/${REPO}/[0-9a-f]{4}… [|] public ${PUBLIC_URL}/repo/${REPO}/[0-9a-f]{4}…"
 DAVE_LINES="$(docker logs "${PROXY}" 2>&1 | grep -cE -- "${DAVE_LINE}" || true)"
 # The new options travel on stdin, never in an argv
-options_json "${WRONG_PAT}" | docker exec -i "${PROXY}" python3 -I -c '
+write_options() { # usage: options_json ... | write_options
+    docker exec -i "${PROXY}" python3 -I -c '
 import os, sys
 tmp = "/data/options.json.verify-tmp"
 with open(tmp, "w") as fh:
     fh.write(sys.stdin.read())
 os.replace(tmp, "/data/options.json")
 '
+}
+options_json "${WRONG_PAT}" | write_options
 docker restart "${PROXY}" >/dev/null
 wait_field 90 "${REPO}" status auth_failed
 ok "status.json: ${REPO} auth_failed after the restart with a wrong PAT"
@@ -885,3 +893,282 @@ if docker exec "${PROXY}" sh -c 'ls /tmp/needles-* 2>/dev/null' | grep -q .; the
 ok "needles files removed from the containers and the host"
 
 echo "✓ marketplace-repo-proxy Phase 1 verified (criteria 1-5)"
+
+echo "==> (15) rotation with a refusal (D-09, D-10, D-11, D-28)"
+OLD_SLUG="$(reg_of "${REPO}" store_slug)"
+[[ "${OLD_SLUG}" =~ ^[0-9a-f]{8}$ ]] || fail "${REPO}: store_slug is not 8 hex"
+# The old local URL carries the step (4b) hash; neither URL is ever echoed
+URL_LOCAL_OLD="http://${PROXY}:8080/repo/${REPO}/${HASH_LOCAL_1}"
+expect_code 200 "old local URL before the rotation" "$(refs_url "${URL_LOCAL_OLD}")"
+LINES_BEFORE="$(fake_requests | wc -l)"
+rc=0
+out="$(docker exec "${PROXY}" mrp local rotate "${REPO}" 2>&1)" || rc=$?
+[ "${rc}" = "1" ] || fail "mrp local rotate without --yes exited ${rc}, expected 1"
+grep -qF 'no updates until they are reinstalled' <<<"${out}" || fail "mrp local rotate printed no D-11 warning"
+grep -qxF 'error: confirmation_required' <<<"${out}" || fail "mrp local rotate without --yes: no confirmation_required"
+ok "mrp local rotate without --yes: D-11 warning, error: confirmation_required, exit 1"
+[ "$(fake_requests | wc -l)" = "${LINES_BEFORE}" ] || fail "the unconfirmed rotation reached the fake Supervisor"
+[ "$(reg_of "${REPO}" store_slug)" = "${OLD_SLUG}" ] || fail "the unconfirmed rotation changed the store slug"
+ok "unconfirmed rotation: no Supervisor request, store_slug unchanged"
+expect_code 200 "old local URL after the unconfirmed rotation" "$(refs_url "${URL_LOCAL_OLD}")"
+
+printf '%s\n' "${OLD_SLUG}" | docker exec -i "${SUPERVISOR_FAKE}" sh -c 'cat > /tmp/fake/in-use'
+rc=0
+out="$(docker exec "${PROXY}" mrp local rotate "${REPO}" --yes 2>&1)" || rc=$?
+[ "${rc}" = "1" ] || fail "mrp local rotate --yes with the old slug in use exited ${rc}, expected 1"
+grep -q '^refused: in_use' <<<"${out}" || fail "mrp local rotate --yes printed no 'refused: in_use' line"
+grep -qF "warning: rotation revokes the current local URL of ${REPO} at once" <<<"${out}" \
+    || fail "mrp local rotate --yes printed no D-11 warning"
+ok "mrp local rotate --yes with the old store repository in use: warning, refused: in_use, exit 1"
+fake_requests | python3 -I -c '
+import json, sys
+lines = [json.loads(line) for line in sys.stdin.read().splitlines() if line.strip()]
+posts = [i for i, e in enumerate(lines) if e["method"] == "POST" and e["path"] == "/store/repositories"]
+deletes = [i for i, e in enumerate(lines) if e["method"] == "DELETE"]
+if not posts or not deletes:
+    sys.exit("no POST /store/repositories or no DELETE in the log")
+if posts[-1] > deletes[-1]:
+    sys.exit("the DELETE of the old slug came before the POST of the new URL")
+last = lines[deletes[-1]]
+if last.get("slug") != sys.argv[1] or last.get("status") != 400:
+    sys.exit("the last DELETE is not the refused DELETE of the old slug")
+' "${OLD_SLUG}" || fail "fake Supervisor request order after the rotation"
+ok "fake Supervisor: POST of the new URL before the refused DELETE of the old slug ${OLD_SLUG} (add first, D-09)"
+docker exec "${PROXY}" python3 -I -c '
+import json, sys
+doc = json.load(open("/data/supervisor.json"))
+repo, old = sys.argv[1:3]
+leftovers = doc.get("leftovers", [])
+if len(leftovers) != 1:
+    sys.exit(f"{len(leftovers)} leftovers, expected 1")
+item = leftovers[0]
+if (item.get("repository"), item.get("store_slug"), item.get("reason")) != (repo, old, "in_use"):
+    sys.exit("the leftover is not the in_use leftover of the old slug")
+if item.get("user") != "local." + old or item.get("revoked") is not True:
+    sys.exit("the leftover is not the revoked label local.{old slug}")
+' "${REPO}" "${OLD_SLUG}" || fail "supervisor.json leftovers after the refused rotation"
+ok "supervisor.json: one leftover in_use for ${OLD_SLUG}, user local.${OLD_SLUG}, revoked true"
+[ "$(reg_of "${REPO}" registration)" = "leftover" ] || fail "${REPO}: registration is not leftover"
+[ "$(reg_of "${REPO}" in_store)" = "true" ] || fail "${REPO}: in_store is not true after the rotation"
+NEW_SLUG="$(reg_of "${REPO}" store_slug)"
+if ! [[ "${NEW_SLUG}" =~ ^[0-9a-f]{8}$ ]] || [ "${NEW_SLUG}" = "${OLD_SLUG}" ]; then
+    fail "${REPO}: no new store slug"
+fi
+[ "$(fake_field 'any(r["slug"] == args[0] for r in doc["repositories"])' "${NEW_SLUG}")" = "true" ] \
+    || fail "the fake store does not list the new slug ${NEW_SLUG}"
+ok "supervisor.json: ${REPO} leftover, in_store true, new slug ${NEW_SLUG} listed in the fake store"
+docker exec "${PROXY}" python3 -I -c '
+import json, sys
+doc = json.load(open("/data/access.json"))
+sys.exit(any(e["repository"] == sys.argv[1] and e["user"].startswith("local.") for e in doc["entries"]))
+' "${REPO}" || fail "access.json still holds a local.* label for ${REPO}"
+ok "access.json: no local.* label left for ${REPO} (retired label revoked)"
+HASH_LOCAL_NEW="$(local_hashes "${REPO}")" || fail "cannot read the new local access entry"
+if ! [[ "${HASH_LOCAL_NEW}" =~ ^[0-9a-f]{32}$ ]] || [ "${HASH_LOCAL_NEW}" = "${HASH_LOCAL_1}" ]; then
+    fail "the rotation did not issue a new local hash"
+fi
+URL_LOCAL_NEW="http://${PROXY}:8080/repo/${REPO}/${HASH_LOCAL_NEW}"
+expect_code 404 "old local URL right after the refused rotation (revoked at once, D-11)" \
+    "$(refs_url "${URL_LOCAL_OLD}")"
+expect_code 200 "new local URL after the rotation" "$(refs_url "${URL_LOCAL_NEW}")"
+LOGS="$(docker logs "${PROXY}" 2>&1)"
+grep -qF "store: ${REPO} rotated: new " <<<"${LOGS}" || fail "no 'store: ${REPO} rotated: new' log line"
+grep -qF "store: ${REPO} leftover ${OLD_SLUG} (in_use)" <<<"${LOGS}" || fail "no leftover log line for ${OLD_SLUG}"
+ok "add-on log: store: ${REPO} rotated: new ... and store: ${REPO} leftover ${OLD_SLUG} (in_use)"
+STATUS_OUT="$(docker exec "${PROXY}" mrp local status)" || fail "mrp local status failed"
+grep -q '^leftover' <<<"${STATUS_OUT}" || fail "mrp local status prints no leftover line"
+ok "mrp local status prints a leftover line"
+SUPERVISOR_JSON="$(docker exec "${PROXY}" cat /data/supervisor.json)"
+for text in "${LOGS}" "${SUPERVISOR_JSON}" "${STATUS_OUT}"; do
+    if grep -qE '/repo/[^ "]*[0-9a-f]{32}' <<<"${text}"; then
+        fail "a full store URL in the add-on log, supervisor.json or mrp local status (refusal text)"
+    fi
+done
+ok "add-on log, supervisor.json and mrp local status: no full store URL after the refusal with the full URL"
+out="$(d29_check)" || fail "supervisor.json Phase 3 interface after the refusal (D-29): ${out}"
+ok "supervisor.json Phase 3 interface after the refusal (D-29): ${out}"
+
+echo "==> (16) retry after the add-ons are gone"
+docker exec "${SUPERVISOR_FAKE}" sh -c ': > /tmp/fake/in-use'
+out="$(docker exec "${PROXY}" mrp local remove "${REPO}")" || fail "mrp local remove ${REPO} failed: ${out}"
+grep -q '^removed:' <<<"${out}" || fail "mrp local remove ${REPO} printed no 'removed:' line"
+ok "mrp local remove ${REPO}: removed (leftover retried)"
+expect_code 404 "old local URL after the retry" "$(refs_url "${URL_LOCAL_OLD}")"
+expect_code 200 "new local URL after the retry" "$(refs_url "${URL_LOCAL_NEW}")"
+[ "$(docker exec "${PROXY}" python3 -I -c '
+import json
+print(len(json.load(open("/data/supervisor.json")).get("leftovers", [])))
+')" = "0" ] || fail "supervisor.json still holds a leftover after the retry"
+[ "$(reg_of "${REPO}" registration)" = "registered" ] || fail "${REPO}: registration is not registered after the retry"
+ok "supervisor.json: no leftover, ${REPO} registered"
+[ "$(fake_field 'any(r["slug"] == args[0] for r in doc["repositories"])' "${OLD_SLUG}")" = "false" ] \
+    || fail "the fake store still lists ${OLD_SLUG}"
+ok "fake store: ${OLD_SLUG} removed"
+
+echo "==> (16b) Supervisor unreachable (D-28 error)"
+# Only repositories whose last sync is ok want a registration (D-07) and report a failed store list; step (12) left
+# the wrong PAT in place, so the valid one comes back first
+GETS="$(supervisor_gets)"
+options_json "${PAT}" | write_options
+docker restart "${PROXY}" >/dev/null
+wait_field 90 "${REPO}" status ok
+wait_field 90 "${REPO_BRANCHED}" status ok
+wait_gets 90 "$((GETS + 1))"
+ok "restart with the valid PAT: ${REPO} and ${REPO_BRANCHED} ok, store list requested"
+POSTS="$(fake_count POST '^/store/repositories$')"
+docker network disconnect "${NET}" "${SUPERVISOR_FAKE}"
+[ "$(docker exec "${PROXY}" mrp sync)" = "sync requested" ] || fail "mrp sync did not request a sync"
+wait_reg 60 "${REPO}" error
+wait_reg 60 "${REPO_BRANCHED}" error
+for r in "${REPO}" "${REPO_BRANCHED}"; do
+    [ "$(reg_of "${r}" error)" = "unreachable" ] || fail "${r}: error is not unreachable"
+    [ "$(reg_of "${r}" message)" = "The Supervisor is unreachable" ] || fail "${r}: message is not the unreachable text"
+    [ "$(reg_of "${r}" in_store)" = "true" ] || fail "${r}: in_store changed while the Supervisor is unreachable"
+done
+ok "supervisor.json: ${REPO} and ${REPO_BRANCHED} error (unreachable), fixed message, in_store still true"
+LOGS="$(docker logs "${PROXY}" 2>&1)"
+grep -qF 'store list unavailable: unreachable' <<<"${LOGS}" || fail "no 'store list unavailable: unreachable' log line"
+ok "add-on log: store list unavailable: unreachable"
+expect_code 200 "new local URL while the Supervisor is unreachable (serving unaffected)" \
+    "$(refs_url "${URL_LOCAL_NEW}")"
+out="$(d29_check)" || fail "supervisor.json Phase 3 interface while unreachable (D-29): ${out}"
+ok "supervisor.json Phase 3 interface while the Supervisor is unreachable (D-29): ${out}"
+docker network connect --alias supervisor "${NET}" "${SUPERVISOR_FAKE}"
+[ "$(docker exec "${PROXY}" mrp sync)" = "sync requested" ] || fail "mrp sync did not request a sync"
+wait_reg 60 "${REPO}" registered
+wait_reg 60 "${REPO_BRANCHED}" registered
+for r in "${REPO}" "${REPO_BRANCHED}"; do
+    [ "$(reg_of "${r}" error)" = "null" ] || fail "${r}: error is not null after the reconnect"
+done
+[ "$(fake_count POST '^/store/repositories$')" = "${POSTS}" ] || fail "the reconnect added a store repository again"
+ok "reconnected: both registered, error null, no new POST /store/repositories (URLs still listed)"
+
+echo "==> (17) removal with register_local false (D-27, D-28)"
+POSTS="$(fake_count POST '^/store/repositories$')"
+GETS="$(supervisor_gets)"
+options_json "${PAT}" false | write_options
+docker restart "${PROXY}" >/dev/null
+wait_gets 90 "$((GETS + 1))"
+ok "restart with register_local false: store list requested"
+[ "$(fake_count POST '^/store/repositories$')" = "${POSTS}" ] || fail "a POST after the restart (register_local false)"
+ok "fake Supervisor: no POST /store/repositories after the restart with register_local false"
+[ "$(reg_of "${REPO}" registration)" = "registered" ] || fail "${REPO}: registration is not registered (URL listed)"
+ok "supervisor.json: ${REPO} registered (register_local false, URL still listed)"
+BRANCHED_SLUG="$(reg_of "${REPO_BRANCHED}" store_slug)"
+[[ "${BRANCHED_SLUG}" =~ ^[0-9a-f]{8}$ ]] || fail "${REPO_BRANCHED}: store_slug is not 8 hex"
+out="$(docker exec "${PROXY}" mrp local remove "${REPO_BRANCHED}")" \
+    || fail "mrp local remove ${REPO_BRANCHED} failed: ${out}"
+grep -q '^removed:' <<<"${out}" || fail "mrp local remove ${REPO_BRANCHED} printed no 'removed:' line"
+ok "mrp local remove ${REPO_BRANCHED}: removed"
+URL_LOCAL_BRANCHED="http://${PROXY}:8080/repo/${REPO_BRANCHED}/${HASH_LOCAL_2}"
+expect_code 404 "${REPO_BRANCHED} local URL after the removal" "$(refs_url "${URL_LOCAL_BRANCHED}")"
+[ "$(fake_field 'any(r["slug"] == args[0] for r in doc["repositories"])' "${BRANCHED_SLUG}")" = "false" ] \
+    || fail "the fake store still lists ${BRANCHED_SLUG}"
+ok "fake store: ${BRANCHED_SLUG} removed"
+[ "$(reg_of "${REPO_BRANCHED}" registration)" = "missing" ] || fail "${REPO_BRANCHED}: registration is not missing"
+[ "$(reg_of "${REPO_BRANCHED}" in_store)" = "false" ] || fail "${REPO_BRANCHED}: in_store is not false"
+ok "supervisor.json: ${REPO_BRANCHED} missing, in_store false"
+[ "$(fake_count POST '^/store/repositories$')" = "${POSTS}" ] || fail "a POST after the removal"
+ok "fake Supervisor: POST /store/repositories count unchanged since the restart"
+
+echo "==> (18) Supervisor request audit (D-02)"
+fake_requests | python3 -I -c '
+import collections, json, re, sys
+lines = [json.loads(line) for line in sys.stdin.read().splitlines() if line.strip()]
+allowed = {
+    "get": ("GET", re.compile(r"^/store/repositories$")),
+    "post": ("POST", re.compile(r"^/store/repositories$")),
+    "delete": ("DELETE", re.compile(r"^/store/repositories/[0-9a-f]{8}$")),
+    "reload": ("POST", re.compile(r"^/store/reload$")),
+}
+counts = collections.Counter()
+for entry in lines:
+    if entry.get("auth") != "ok":
+        sys.exit("a request without a valid token")
+    method, path = entry.get("method"), entry.get("path", "")
+    kind = next((k for k, (m, p) in allowed.items() if method == m and p.fullmatch(path)), None)
+    if kind is None:
+        sys.exit(f"a request outside the allow-list: {method} {path}")
+    counts[kind] += 1
+want = {"post": 3, "delete": 3, "reload": 2}
+for kind, number in want.items():
+    if counts[kind] != number:
+        sys.exit(f"{counts[kind]} {kind} requests, expected {number}")
+' >/dev/null || fail "fake Supervisor request log violates the allow-list or the exact counts"
+ok "fake Supervisor: every request allow-listed with a valid token; exactly 3 POST repositories, 3 DELETE, 2 reloads"
+docker exec "${PROXY}" python3 -I -c '
+import json, sys
+doc = json.load(open("/data/supervisor.json"))
+values = {e.get("registration") for e in doc.get("repositories", [])}
+sys.exit(not values <= {"registered", "missing", "leftover", "error"})
+' || fail "supervisor.json holds a registration value outside the D-28 set"
+ok "supervisor.json: every registration value is one of registered, missing, leftover, error (D-28)"
+out="$(d29_check)" || fail "final supervisor.json Phase 3 interface (D-29): ${out}"
+ok "final supervisor.json Phase 3 interface (D-29): ${out}"
+
+echo "==> (19) Phase 2 secret hygiene (Supervisor token, local hashes)"
+# Needles live in files and are read with grep -F -f, so no scanner ever has a secret in its argv
+NEEDLES_SUP="${WORK}/needles-supervisor"
+NEEDLES_SUPENV="${WORK}/needles-supenv"
+NEEDLES_HASH="${WORK}/needles-hash"
+(
+    umask 077
+    printf '%s\n' "${SUPERVISOR_SENTINEL}" >"${NEEDLES_SUP}"
+    printf 'SUPERVISOR_TOKEN=%s\nHASSIO_TOKEN=%s\n' "${SUPERVISOR_SENTINEL}" "${SUPERVISOR_SENTINEL}" \
+        >"${NEEDLES_SUPENV}"
+    printf '%s\n' "${HASH_ALICE}" "${HASH_BOB}" "${HASH_CAROL}" "${HASH_DAVE}" "${HASH_ERIN}" \
+        "${HASH_LOCAL_1}" "${HASH_LOCAL_2}" "${HASH_LOCAL_NEW}" >"${NEEDLES_HASH}"
+)
+if [ "$(wc -l <"${NEEDLES_SUP}")" != "1" ] || [ "$(wc -l <"${NEEDLES_SUPENV}")" != "2" ] \
+    || [ "$(wc -l <"${NEEDLES_HASH}")" != "8" ]; then
+    fail "Phase 2 needles files are incomplete"
+fi
+put_needles "${PROXY}" "${NEEDLES_SUP}" /tmp/needles-supervisor
+put_needles "${PROXY}" "${NEEDLES_SUPENV}" /tmp/needles-supenv
+put_needles "${PROXY}" "${NEEDLES_HASH}" /tmp/needles-hash
+[ "$(docker exec "${PROXY}" stat -c %a /tmp/needles-supenv)" = "600" ] || fail "/tmp/needles-supenv is not mode 0600"
+ok "needles: Supervisor sentinel, its two NAME=value lines, 8 full hashes incl. every local hash (files, mode 0600)"
+LOGS="$(docker logs "${PROXY}" 2>&1)"
+if grep -qF -f "${NEEDLES_SUP}" <<<"${LOGS}"; then fail "Supervisor sentinel in docker logs"; fi
+rc=0
+docker exec "${PROXY}" grep -qF -f /tmp/needles-supervisor /data/status.json /data/supervisor.json /data/access.json \
+    || rc=$?
+[ "${rc}" = "1" ] || fail "Supervisor sentinel in a /data state file (or the scan failed, grep exit ${rc})"
+ok "docker logs, status.json, supervisor.json and access.json: no Supervisor sentinel"
+if grep -qF -f "${NEEDLES_HASH}" <<<"${LOGS}"; then fail "full access hash in docker logs"; fi
+rc=0
+docker exec "${PROXY}" grep -qF -f /tmp/needles-hash /data/supervisor.json || rc=$?
+[ "${rc}" = "1" ] || fail "full access hash in /data/supervisor.json (or the scan failed, grep exit ${rc})"
+ok "docker logs and supervisor.json: no full access hash (every local hash of the run included)"
+[ "$(docker exec "${PROXY}" stat -c %a /data/supervisor.json)" = "600" ] || fail "/data/supervisor.json is not mode 600"
+ok "/data/supervisor.json: mode 600"
+# PIDs again: the container was restarted since step (14)
+WATCH_PID="$(docker exec "${PROXY}" pgrep -f 'python3 -m app[.]watch' | head -n 1)"
+SYNC_PID="$(docker exec "${PROXY}" pgrep -f 'python3 -m app[.]sync' | head -n 1)"
+LIGHTTPD_PID="$(docker exec "${PROXY}" pgrep -x lighttpd | head -n 1)"
+if [ -z "${WATCH_PID}" ] || [ -z "${SYNC_PID}" ] || [ -z "${LIGHTTPD_PID}" ]; then
+    fail "a service process (app.watch, app.sync or lighttpd) is missing"
+fi
+env_hits() { # usage: env_hits <pid> <needles file in the container>; prints the distinct matching NAME=value lines
+    docker exec --privileged "${PROXY}" sh -c 'tr "\0" "\n" < "/proc/$1/environ" | grep -xF -f "$2" | sort -u | wc -l' \
+        sh "$1" "$2"
+}
+[ "$(env_hits "${SYNC_PID}" /tmp/needles-supenv)" = "2" ] \
+    || fail "the sync process environment lacks SUPERVISOR_TOKEN or HASSIO_TOKEN (positive control)"
+ok "app.sync environment: the sentinel under SUPERVISOR_TOKEN and HASSIO_TOKEN (positive control)"
+for pair in "lighttpd|${LIGHTTPD_PID}" "app.watch|${WATCH_PID}"; do
+    name="${pair%%|*}"
+    pid="${pair#*|}"
+    hits="$(docker exec --privileged "${PROXY}" sh -c '
+tr "\0" "\n" < "/proc/$1/environ" | grep -E "^(SUPERVISOR_TOKEN|HASSIO_TOKEN)=" | cut -d= -f1
+tr "\0" "\n" < "/proc/$1/environ" | grep -cF -f /tmp/needles-supervisor || true' sh "${pid}")" \
+        || fail "cannot read ${name}'s environment"
+    [ "${hits}" = "0" ] || fail "${name}'s environment holds SUPERVISOR_TOKEN, HASSIO_TOKEN or the sentinel"
+    ok "${name} environment: no SUPERVISOR_TOKEN, no HASSIO_TOKEN, no Supervisor sentinel"
+done
+docker exec "${PROXY}" rm -f /tmp/needles-supervisor /tmp/needles-supenv /tmp/needles-hash
+rm -f "${NEEDLES_SUP}" "${NEEDLES_SUPENV}" "${NEEDLES_HASH}"
+if docker exec "${PROXY}" sh -c 'ls /tmp/needles-* 2>/dev/null' | grep -q .; then fail "needles left in the proxy"; fi
+ok "Phase 2 needles files removed from the proxy and the host"
+
+echo "✓ marketplace-repo-proxy Phase 2 verified (Supervisor integration, criteria 1-4)"
