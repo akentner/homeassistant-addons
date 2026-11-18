@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import itertools
 import json
+import os
 import stat
 from pathlib import Path
 
 import pytest
 
-from app import status
+from app import jsonio, status
 from app.jsonio import atomic_write_json
 from app.options import RepoSpec
 from app.paths import Paths
@@ -213,3 +214,35 @@ def test_read_status_without_file_is_none(tmp_path: Path) -> None:
     assert read_status(paths) is None
     paths.status_file.write_text(json.dumps([1, 2]), encoding="utf-8")
     assert read_status(paths) is None
+
+
+def test_atomic_write_fsyncs_the_directory_after_the_rename(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    target = tmp_path / "doc.json"
+    calls: list[tuple[str, bool]] = []
+    real_fsync = os.fsync
+
+    def spy(fd: int) -> None:
+        calls.append(("fsync", stat.S_ISDIR(os.fstat(fd).st_mode)))
+        real_fsync(fd)
+
+    monkeypatch.setattr(jsonio.os, "fsync", spy)
+    atomic_write_json(target, {"a": 1})
+    assert calls == [("fsync", False), ("fsync", True)]  # the file before the rename, then its directory
+    assert json.loads(target.read_text(encoding="utf-8")) == {"a": 1}
+
+
+def test_atomic_write_survives_a_platform_that_refuses_directory_fsync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "doc.json"
+    real_fsync = os.fsync
+
+    def refuse_dirs(fd: int) -> None:
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError(22, "Invalid argument")
+        real_fsync(fd)
+
+    monkeypatch.setattr(jsonio.os, "fsync", refuse_dirs)
+    atomic_write_json(target, {"a": 2})
+    assert json.loads(target.read_text(encoding="utf-8")) == {"a": 2}
+    assert [p.name for p in tmp_path.iterdir()] == ["doc.json"]

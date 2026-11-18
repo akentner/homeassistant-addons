@@ -1,4 +1,4 @@
-"""Atomic JSON files (temp file in the same directory, fsync, rename) and UTC timestamps."""
+"""Atomic JSON files (temp file in the same directory, fsync, rename, directory fsync) and UTC timestamps."""
 
 from __future__ import annotations
 
@@ -27,6 +27,24 @@ def atomic_write_json(path: Path, doc: object) -> None:
         except OSError:
             pass
         raise
+    _fsync_dir(path.parent)
+
+
+def _fsync_dir(directory: Path) -> None:
+    """Make the rename durable (a revocation must survive a power loss); best effort where a platform refuses it.
+
+    The new file is already in place, so a failure here must not report the write as failed.
+    """
+    try:
+        fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
 
 
 def read_json(path: Path) -> object | None:
