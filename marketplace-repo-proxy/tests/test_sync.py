@@ -409,7 +409,7 @@ def test_supervisor_work_runs_from_the_wait_loop_without_a_sync_cycle(
     gap = cycles[1]["start"] - cycles[0]["end"]
     assert INTERVAL_S <= gap < INTERVAL_S + 1.0
     assert "supervisor" not in reasons
-    assert len(registrar.cycles) == 2
+    assert registrar.cycles == [frozenset()]  # the last fake cycle sets stop, which skips the store pass
     doc = read_status(paths)
     assert doc is not None and doc["sync"]["reason"] == "interval"
 

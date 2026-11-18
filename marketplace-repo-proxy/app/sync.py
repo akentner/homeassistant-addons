@@ -155,6 +155,10 @@ class SyncService:
 
     The trigger file is polled every second while idle and unlinked before a cycle starts, so requests that arrive
     during a cycle survive and coalesce into exactly one more cycle. The interval restarts after every cycle.
+
+    The loop also wakes for Supervisor work (`supervisor`, e.g. a store reload deferred to the next window); that work
+    runs in this thread through `Registrar.run_due`, never fetches and is never a sync cycle, so `status.json`
+    `sync.reason` stays one of `startup`, `interval`, `request`.
     """
 
     POLL_SECONDS = 1.0
@@ -188,12 +192,17 @@ class SyncService:
         return self.options.sync_interval * 60
 
     def wait_reason(self) -> str | None:
-        """Block until the next cycle is due: `request`, `interval`, or None once `stop` is set."""
+        """Block until the next cycle or Supervisor work is due.
+
+        Returns `request`, `supervisor`, `interval`, or None once `stop` is set.
+        """
         while True:
             if self.stop.is_set():
                 return None
             if self.paths.trigger_file.exists():
                 return "request"
+            if self.registrar is not None and self.registrar.work_due():
+                return "supervisor"
             if self.next_due is None or self.clock() >= self.next_due:
                 return "interval"
             self.sleep(self.POLL_SECONDS)
@@ -224,7 +233,19 @@ class SyncService:
             reason = self.wait_reason()
             if reason is None:
                 return
+            if reason == "supervisor":
+                self.run_supervisor_work()
+                continue
             self.run_cycle_once(reason)
+
+    def run_supervisor_work(self) -> None:
+        """Due Supervisor work between cycles; a failure is logged with its type and never ends the loop."""
+        if self.registrar is None:
+            return
+        try:
+            self.registrar.run_due()
+        except Exception as exc:
+            self.log.warning("store work failed: %s", type(exc).__name__)
 
 
 def run_disabled(paths: Paths, options: Options, stop: threading.Event | None) -> None:

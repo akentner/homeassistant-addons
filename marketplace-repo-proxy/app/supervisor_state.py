@@ -308,7 +308,7 @@ class SupervisorStateWriter:
         pending: bool = _UNSET,
         message: str = _UNSET,
     ) -> None:
-        """Update the given fields of the `reload` section; `message` is masked Supervisor text (hashes masked again)."""
+        """Update the given fields of the `reload` section; `message` is masked Supervisor text, masked again here."""
         if last_result is not _UNSET and last_result not in RELOAD_RESULTS:
             raise ValueError(f"unknown reload result: {last_result}")
         section = self._doc["reload"]

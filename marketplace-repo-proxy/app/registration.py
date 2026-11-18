@@ -236,6 +236,15 @@ class Registrar:
         if changed or (self.reload_pending and self.window_open()):
             self.request_reload()
 
+    def work_due(self) -> bool:
+        """True when the sync wait loop should wake for Supervisor work: a pending reload whose window is open."""
+        return self.reload_pending and self.window_open()
+
+    def run_due(self) -> None:
+        """Supervisor work of the wait loop; never fetches. Sends the pending reload when it is due."""
+        if self.work_due():
+            self._send_reload()
+
     def window_open(self) -> bool:
         """True when no reload was attempted yet or a full sync interval has passed since the last attempt."""
         return self.last_reload_at is None or self.clock() - self.last_reload_at >= self.interval_seconds
