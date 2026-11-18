@@ -103,9 +103,12 @@ def fake() -> Iterator[Fake]:
 class StubClient:
     """Records calls and answers from preset results (only where the fake cannot express the case)."""
 
-    def __init__(self, listing: CallResult, add: CallResult | None = None) -> None:
+    def __init__(
+        self, listing: CallResult, add: CallResult | None = None, reload: CallResult | Exception | None = None
+    ) -> None:
         self.listing = listing
         self.add = add or CallResult(True, 200, {})
+        self.reload = reload or CallResult(True, 200, {})
         self.calls: list[str] = []
 
     def list_repositories(self) -> CallResult:
@@ -115,6 +118,12 @@ class StubClient:
     def add_repository(self, url: str) -> CallResult:
         self.calls.append("POST")
         return self.add
+
+    def reload_store(self) -> CallResult:
+        self.calls.append("RELOAD")
+        if isinstance(self.reload, Exception):
+            raise self.reload
+        return self.reload
 
 
 def _options(*specs: RepoSpec, register_local: bool = True) -> Options:
@@ -560,3 +569,217 @@ def test_registration_message_is_safe_for_every_combination() -> None:
                                 continue
                             assert isinstance(message, str) and message
                             assert safe_message(message) == message
+
+
+# --- MRP-09: store reload gate (D-08, D-28) ------------------------------------------------------------------------
+
+WALL = 1_800_000_000.0
+INTERVAL = 300  # sync_interval 5 minutes
+
+
+class Clock:
+    """Monotonic fake clock for the reload window."""
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def _gated(paths: Paths, options: Options, client: Any, clock: Clock) -> Registrar:
+    return Registrar(paths, options, client, HOST, logging.getLogger("test.store"), clock=clock, wall=lambda: WALL)
+
+
+def _gate_options(*specs: RepoSpec, register_local: bool = True) -> Options:
+    return Options(repositories=specs or (SPEC_A, SPEC_B), register_local=register_local, sync_interval=5)
+
+
+@pytest.fixture
+def quiet_reload(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The fake's reload runs `git ls-remote` per store URL; the internal host does not exist here."""
+    monkeypatch.setattr(fake_supervisor, "_ls_remote_head", lambda source: None)
+
+
+def _registered_stub(paths: Paths, options: Options, reload: CallResult | Exception | None = None) -> StubClient:
+    """A stub whose store lists the `local` URL of every configured repository."""
+    store = AccessStore(paths)
+    items = []
+    for spec in options.repositories:
+        local = store.add(spec.slug, LOCAL_USER, source="system", specs=options.repositories)
+        items.append({"slug": store_slug(_url(local["hash"], spec))})
+    return StubClient(CallResult(True, 200, items), reload=reload)
+
+
+def _reload_doc(paths: Paths) -> dict:
+    doc = read_supervisor_state(paths)
+    assert doc is not None
+    return doc["reload"]
+
+
+def _store_lines(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.getMessage().startswith("store reload: ")]
+
+
+@pytest.mark.usefixtures("quiet_reload")
+def test_reload_after_a_head_change_of_a_registered_repository(
+    paths: Paths, fake: Fake, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    options = _gate_options(SPEC_A)
+    registrar = _gated(paths, options, fake.client(), Clock())
+    registrar.after_cycle(_status(a="ok"))
+    assert fake.calls() == ["GET /store/repositories", "POST /store/repositories"]
+    registrar.after_cycle(_status(a="ok"), frozenset({SPEC_A.key}))
+    assert fake.calls()[2:] == ["GET /store/repositories", "POST /store/reload"]
+    assert fake.state.reloads == 1
+    state = _reload_doc(paths)
+    assert (state["last_result"], state["pending"], state["message"]) == ("ok", False, "")
+    assert state["last_requested"] == "2027-01-15T08:00:00Z"
+    assert registrar.reload_pending is False
+    assert _store_lines(caplog) == ["store reload: ok"]
+
+
+@pytest.mark.usefixtures("quiet_reload")
+def test_no_reload_for_repositories_outside_the_store_before_the_pass(paths: Paths, fake: Fake) -> None:
+    # Added in this very pass: the add already cloned the current head
+    options = _gate_options(SPEC_A)
+    registrar = _gated(paths, options, fake.client(), Clock())
+    registrar.after_cycle(_status(a="ok"), frozenset({SPEC_A.key}))
+    assert fake.calls() == ["GET /store/repositories", "POST /store/repositories"]
+    # Registration off and nothing listed: missing
+    other = Paths.under(paths.data_dir.parent / "other")
+    other.data_dir.mkdir(parents=True)
+    off = _gate_options(SPEC_B, register_local=False)
+    client = StubClient(CallResult(True, 200, []))
+    _gated(other, off, client, Clock()).after_cycle(_status(b="ok"), frozenset({SPEC_B.key}))
+    assert "RELOAD" not in client.calls
+    assert _entry(_doc(other, off), SPEC_B)["registration"] == "missing"
+    assert fake.state.reloads == 0
+
+
+def test_no_reload_for_an_error_without_a_listed_url(paths: Paths) -> None:
+    options = _gate_options(SPEC_A)
+    failing = StubClient(CallResult(False, 503))
+    registrar = _gated(paths, options, failing, Clock())
+    registrar.after_cycle(_status(a="ok"))
+    assert _entry(_doc(paths, options), SPEC_A)["registration"] == "error"
+    registrar.after_cycle(_status(a="ok"), frozenset({SPEC_A.key}))
+    assert "RELOAD" not in failing.calls
+
+
+def test_reload_for_a_leftover_repository_whose_url_is_in_the_store(paths: Paths) -> None:
+    options = _gate_options(SPEC_A)
+    client = _registered_stub(paths, options)
+    current = client.listing.data[0]["slug"]
+    seeded = {
+        "schema": 1,
+        "repositories": [{"repository": SPEC_A.slug, "in_store": True, "store_slug": current}],
+        "leftovers": [{"repository": SPEC_A.slug, "store_slug": "89abcdef", "user": "local.89abcdef",
+                       "reason": "in_use"}],
+    }
+    paths.supervisor_state_file.write_text(json.dumps(seeded))
+    registrar = _gated(paths, options, client, Clock())
+    assert _entry(_doc(paths, options), SPEC_A)["registration"] == "leftover"
+    registrar.after_cycle(_status(a="ok"), frozenset({SPEC_A.key}))
+    assert client.calls == ["GET", "RELOAD"]
+
+
+def test_two_changed_repositories_give_one_reload(paths: Paths) -> None:
+    options = _gate_options()
+    client = _registered_stub(paths, options)
+    registrar = _gated(paths, options, client, Clock())
+    registrar.after_cycle(_status(a="ok", b="ok"))
+    assert client.calls == ["GET"]
+    registrar.after_cycle(_status(a="ok", b="ok"), frozenset({SPEC_A.key, SPEC_B.key}))
+    assert client.calls == ["GET", "GET", "RELOAD"]
+
+
+def test_no_reload_without_change_and_no_calls_without_repositories(paths: Paths) -> None:
+    options = _gate_options()
+    client = _registered_stub(paths, options)
+    registrar = _gated(paths, options, client, Clock())
+    registrar.after_cycle(_status(a="ok", b="ok"))
+    registrar.after_cycle(_status(a="ok", b="ok"), frozenset())
+    assert client.calls == ["GET", "GET"]
+    empty = Paths.under(paths.data_dir.parent / "empty")
+    empty.data_dir.mkdir(parents=True)
+    nothing = StubClient(CallResult(True, 200, []))
+    _gated(empty, Options(sync_interval=5), nothing, Clock()).after_cycle({"repositories": []}, frozenset())
+    assert nothing.calls == []
+
+
+def test_reload_inside_the_window_is_deferred_and_the_boundary_opens_it(
+    paths: Paths, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    options = _gate_options(SPEC_A)
+    client = _registered_stub(paths, options)
+    clock = Clock()
+    registrar = _gated(paths, options, client, clock)
+    registrar.after_cycle(_status(a="ok"))
+    registrar.after_cycle(_status(a="ok"), frozenset({SPEC_A.key}))
+    assert client.calls.count("RELOAD") == 1
+    assert registrar.interval_seconds == INTERVAL
+    clock.now += INTERVAL - 1
+    registrar.after_cycle(_status(a="ok"), frozenset({SPEC_A.key}))
+    assert client.calls.count("RELOAD") == 1
+    assert registrar.reload_pending is True
+    assert _reload_doc(paths)["pending"] is True
+    assert registrar.window_open() is False
+    lines = _store_lines(caplog)
+    assert lines[0] == "store reload: ok"
+    assert lines[1] == "store reload: deferred until 2027-01-15T08:00:01Z"
+    clock.now += 1
+    assert registrar.window_open() is True
+
+
+def test_failed_reload_keeps_pending_and_closes_the_window(paths: Paths, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    options = _gate_options(SPEC_A)
+    hash_ = secrets.token_hex(16)
+    text = f"Can't pull {_url(hash_)}"
+    client = _registered_stub(paths, options, reload=CallResult(False, 400, message=text))
+    clock = Clock()
+    registrar = _gated(paths, options, client, clock)
+    registrar.after_cycle(_status(a="ok"))
+    registrar.after_cycle(_status(a="ok"), frozenset({SPEC_A.key}))
+    assert client.calls.count("RELOAD") == 1
+    state = _reload_doc(paths)
+    assert (state["last_result"], state["pending"]) == ("failed", True)
+    assert hash_ not in state["message"] and state["message"].startswith("Can't pull ")
+    assert hash_ not in paths.supervisor_state_file.read_text()
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "store reload" in r.getMessage()]
+    assert len(warnings) == 1 and warnings[0].getMessage().startswith("store reload: failed: Can't pull ")
+    assert hash_ not in warnings[0].getMessage()
+    clock.now += INTERVAL - 1
+    assert registrar.window_open() is False
+    clock.now += 1
+    assert registrar.window_open() is True
+
+
+def test_reload_window_closes_before_the_call(paths: Paths) -> None:
+    options = _gate_options(SPEC_A)
+    client = _registered_stub(paths, options, reload=RuntimeError("boom"))
+    registrar = _gated(paths, options, client, Clock())
+    registrar.after_cycle(_status(a="ok"))
+    registrar.after_cycle(_status(a="ok"), frozenset({SPEC_A.key}))
+    assert client.calls.count("RELOAD") == 1
+    assert registrar.last_reload_at is not None
+    assert registrar.window_open() is False
+    assert registrar.reload_pending is True
+    assert _reload_doc(paths)["pending"] is True
+
+
+def test_set_reload_validates_and_masks(paths: Paths) -> None:
+    writer = SupervisorStateWriter(paths, hostname=HOST, register_local=True, specs=(SPEC_A,))
+    assert writer.reload_state() == {"last_requested": None, "last_result": None, "pending": False, "message": ""}
+    with pytest.raises(ValueError):
+        writer.set_reload(last_result="maybe")
+    hash_ = secrets.token_hex(16)
+    writer.set_reload(last_result="failed", pending=True, message=f"x {_url(hash_)}")
+    state = writer.reload_state()
+    assert state["pending"] is True and state["last_result"] == "failed"
+    assert hash_ not in state["message"]
+    state["pending"] = False
+    assert writer.reload_state()["pending"] is True  # a copy
