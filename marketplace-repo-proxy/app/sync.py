@@ -34,7 +34,7 @@ def _first_line(text: str) -> str:
     return lines[0] if lines else "no output"
 
 
-def run_cycle(paths: Paths, options: Options, upstream: Upstream, log: logging.Logger) -> None:
+def run_cycle(paths: Paths, options: Options, upstream: Upstream, log: logging.Logger, writer: Any = None) -> None:
     """One pass over the configured repositories, in options order."""
     for spec in options.repositories:
         if not options.github_token:
