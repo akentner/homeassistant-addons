@@ -1,0 +1,562 @@
+"""Self-registration (app.registration) and the /data/supervisor.json contract (app.supervisor_state, D-28, D-29).
+
+Registration runs against the in-process fake Supervisor with an injected clone callable (no network); a stub client
+is used only where the fake cannot express the case (list order, non-list data, a 409 for an unlisted URL).
+"""
+
+from __future__ import annotations
+
+import itertools
+import json
+import logging
+import os
+import re
+import secrets
+import stat
+import threading
+import time
+from pathlib import Path
+from typing import Any, Callable, Iterator
+
+import fake_supervisor
+import pytest
+
+from app import supervisor, supervisor_state
+from app.access import AccessStore
+from app.options import Options, RepoSpec
+from app.paths import Paths
+from app.registration import LOCAL_USER, Registrar
+from app.supervisor import DUPLICATE_ERROR_KEY, CallResult, SupervisorClient, store_slug
+from app.supervisor_state import (
+    ERROR_CODES,
+    MESSAGE_FALLBACK,
+    REGISTRATION_STATES,
+    SupervisorStateWriter,
+    read_supervisor_state,
+    registration_message,
+    registration_value,
+    safe_message,
+)
+from app.urls import internal_base, store_url
+
+HOST = "addon-host"
+SPEC_A = RepoSpec("example-org", "private-addons")
+SPEC_B = RepoSpec("example-org", "other")
+UNSAFE_RE = re.compile(r"https?://|/repo/|[0-9a-fA-F]{32}|github_pat_|gh[pousr]_")
+
+
+def _token() -> str:
+    # Built at runtime so no token-shaped literal sits in the repository
+    return "sentinel" + "-supervisor-" + secrets.token_hex(4)
+
+
+@pytest.fixture(autouse=True)
+def _ticking_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Distinct timestamps, so `registered_at` moves are observable within one second."""
+    counter = itertools.count()
+    monkeypatch.setattr(
+        supervisor_state, "utc_timestamp", lambda ts=None: f"2026-11-18T12:{next(counter) % 60:02d}:00Z"
+    )
+
+
+@pytest.fixture
+def paths(tmp_path: Path) -> Paths:
+    p = Paths.under(tmp_path)
+    p.data_dir.mkdir(parents=True)
+    return p
+
+
+class Fake:
+    """The in-process fake Supervisor plus its base URL; `clone` can be swapped per test."""
+
+    def __init__(self) -> None:
+        self.clones: list[str] = []
+        self.clone_impl: Callable[[str], str] = lambda url: "Fixture"
+        self.state = fake_supervisor.FakeState(_token(), clone=self._clone)
+        self.server = fake_supervisor.serve(self.state)
+        self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
+
+    def _clone(self, url: str) -> str:
+        self.clones.append(url)
+        return self.clone_impl(url)
+
+    def client(self, token: str | None = None) -> SupervisorClient:
+        return SupervisorClient(self.state.token if token is None else token, base=self.base)
+
+    def calls(self) -> list[str]:
+        return [f"{r['method']} {r['path']}" for r in self.state.requests]
+
+    def posts(self) -> int:
+        return sum(1 for r in self.state.requests if r["method"] == "POST")
+
+
+@pytest.fixture
+def fake() -> Iterator[Fake]:
+    f = Fake()
+    try:
+        yield f
+    finally:
+        f.server.shutdown()
+        f.server.server_close()
+
+
+class StubClient:
+    """Records calls and answers from preset results (only where the fake cannot express the case)."""
+
+    def __init__(self, listing: CallResult, add: CallResult | None = None) -> None:
+        self.listing = listing
+        self.add = add or CallResult(True, 200, {})
+        self.calls: list[str] = []
+
+    def list_repositories(self) -> CallResult:
+        self.calls.append("GET")
+        return self.listing
+
+    def add_repository(self, url: str) -> CallResult:
+        self.calls.append("POST")
+        return self.add
+
+
+def _options(*specs: RepoSpec, register_local: bool = True) -> Options:
+    return Options(repositories=specs or (SPEC_A, SPEC_B), register_local=register_local)
+
+
+def _status(**statuses: str) -> dict:
+    """Status doc as status.json holds it; keys `a`/`b` stand for SPEC_A/SPEC_B."""
+    names = {"a": SPEC_A.slug, "b": SPEC_B.slug}
+    return {"repositories": [{"repository": names[k], "status": v} for k, v in statuses.items()]}
+
+
+def _registrar(paths: Paths, options: Options, client: Any) -> Registrar:
+    return Registrar(paths, options, client, HOST, logging.getLogger("test.store"))
+
+
+def _url(hash_: str, spec: RepoSpec = SPEC_A) -> str:
+    return store_url(internal_base(HOST), spec.owner, spec.name, hash_)
+
+
+def assert_d29_shape(doc: dict, options: Options) -> None:
+    """D-29 interface and D-28 value set; reused by later plans."""
+    repos = doc["repositories"]
+    assert isinstance(repos, list)
+    configured = [spec.slug for spec in options.repositories]
+    assert [e["repository"] for e in repos[: len(configured)]] == configured
+    for extra in repos[len(configured) :]:
+        assert extra["configured"] is False
+    for entry in repos:
+        assert isinstance(entry["repository"], str)
+        assert entry["registration"] in REGISTRATION_STATES
+        if "message" in entry:
+            message = entry["message"]
+            assert isinstance(message, str) and message and len(message) <= 200
+            assert not UNSAFE_RE.search(message)
+
+
+def _doc(paths: Paths, options: Options) -> dict:
+    doc = read_supervisor_state(paths)
+    assert doc is not None
+    assert_d29_shape(doc, options)
+    return doc
+
+
+def _entry(doc: dict, spec: RepoSpec) -> dict:
+    return next(e for e in doc["repositories"] if e["repository"] == spec.slug)
+
+
+def _seed_store(fake: Fake, url: str) -> None:
+    """Put a URL into the fake store without an add request."""
+    slug = store_slug(url)
+    fake.state.repos[slug] = {"slug": slug, "name": "x", "source": url, "url": "", "maintainer": ""}
+
+
+def _local(paths: Paths, spec: RepoSpec) -> dict | None:
+    return AccessStore(paths).get(spec.slug, LOCAL_USER)
+
+
+# --- registration pass ---------------------------------------------------------------------------------------------
+
+
+def test_ok_and_missing_is_added_once(paths: Paths, fake: Fake) -> None:
+    options = _options()
+    registrar = _registrar(paths, options, fake.client())
+    registrar.register_pass(_status(a="ok", b="pending"))
+    assert fake.calls() == ["GET /store/repositories", "POST /store/repositories"]
+    local = _local(paths, SPEC_A)
+    assert local is not None and local["source"] == "system"
+    assert paths.link_path(SPEC_A.owner, SPEC_A.name, local["hash"]).is_symlink()
+    url = _url(local["hash"])
+    assert fake.clones == [url]
+    entry = _entry(_doc(paths, options), SPEC_A)
+    assert entry["registration"] == "registered" and "message" not in entry
+    assert entry["in_store"] is True and entry["error"] is None
+    assert entry["store_slug"] == store_slug(url)
+    assert "…" in entry["masked_url"] and local["hash"] not in entry["masked_url"]
+    assert entry["registered_at"] is not None
+    assert _local(paths, SPEC_B) is None
+    assert _entry(_doc(paths, options), SPEC_B)["registration"] == "missing"
+
+
+def test_already_present_needs_only_get(paths: Paths, fake: Fake) -> None:
+    options = _options(SPEC_A)
+    local = AccessStore(paths).add(SPEC_A.slug, LOCAL_USER, source="system", specs=options.repositories)
+    url = _url(local["hash"])
+    _seed_store(fake, url)
+    _registrar(paths, options, fake.client()).register_pass(_status(a="ok"))
+    assert fake.calls() == ["GET /store/repositories"]
+    assert _entry(_doc(paths, options), SPEC_A)["registration"] == "registered"
+
+
+def test_presence_does_not_depend_on_list_order(paths: Paths) -> None:
+    options = _options()
+    store = AccessStore(paths)
+    items = []
+    for spec in options.repositories:
+        local = store.add(spec.slug, LOCAL_USER, source="system", specs=options.repositories)
+        items.append({"slug": store_slug(_url(local["hash"], spec)), "url": "from repository.yaml"})
+    results = []
+    for listing in (items, list(reversed(items))):
+        client = StubClient(CallResult(True, 200, listing))
+        _registrar(paths, options, client).register_pass(_status(a="ok", b="ok"))
+        assert client.calls == ["GET"]
+        doc = _doc(paths, options)
+        results.append([(e["registration"], e["store_slug"]) for e in doc["repositories"]])
+    assert results[0] == results[1]
+    assert [r for r, _ in results[0]] == ["registered", "registered"]
+
+
+def test_url_field_is_never_used_for_presence(paths: Paths) -> None:
+    options = _options(SPEC_A)
+    local = AccessStore(paths).add(SPEC_A.slug, LOCAL_USER, source="system", specs=options.repositories)
+    client = StubClient(CallResult(True, 200, [{"slug": "0000aaaa", "url": _url(local["hash"])}]))
+    _registrar(paths, options, client).register_pass(_status(a="ok"))
+    assert client.calls == ["GET", "POST"]
+
+
+@pytest.mark.parametrize("status", ["pending", "no_repository_yaml", "not_found", "auth_failed", "fetch_failed"])
+def test_no_registration_without_ok(paths: Paths, fake: Fake, status: str) -> None:
+    options = _options(SPEC_A)
+    _registrar(paths, options, fake.client()).register_pass(_status(a=status))
+    entry = _entry(_doc(paths, options), SPEC_A)
+    assert entry["registration"] == "missing" and entry["in_store"] is False
+    assert _local(paths, SPEC_A) is None
+    assert fake.posts() == 0 and fake.calls() == []
+
+
+def test_register_local_false_without_entry_makes_no_call(paths: Paths, fake: Fake) -> None:
+    options = _options(SPEC_A, register_local=False)
+    _registrar(paths, options, fake.client()).register_pass(_status(a="ok"))
+    entry = _entry(_doc(paths, options), SPEC_A)
+    assert entry["registration"] == "missing"
+    assert entry["message"] == "Registration is turned off (register_local: false)"
+    assert fake.calls() == [] and _local(paths, SPEC_A) is None
+
+
+def test_register_local_false_only_stops_adding(paths: Paths, fake: Fake) -> None:
+    options = _options(register_local=False)
+    store = AccessStore(paths)
+    listed = store.add(SPEC_A.slug, LOCAL_USER, source="system", specs=options.repositories)
+    store.add(SPEC_B.slug, LOCAL_USER, source="system", specs=options.repositories)
+    url = _url(listed["hash"])
+    _seed_store(fake, url)
+    _registrar(paths, options, fake.client()).register_pass(_status(a="ok", b="ok"))
+    doc = _doc(paths, options)
+    assert _entry(doc, SPEC_A)["registration"] == "registered"
+    assert _entry(doc, SPEC_B)["registration"] == "missing"
+    assert fake.calls() == ["GET /store/repositories"]
+
+
+def test_duplicate_409_counts_as_registered(paths: Paths) -> None:
+    options = _options(SPEC_A)
+    client = StubClient(CallResult(True, 200, []), CallResult(False, 409, error_key=DUPLICATE_ERROR_KEY))
+    _registrar(paths, options, client).register_pass(_status(a="ok"))
+    assert client.calls == ["GET", "POST"]
+    entry = _entry(_doc(paths, options), SPEC_A)
+    assert entry["registration"] == "registered" and entry["error"] is None
+
+
+def test_clone_failure_is_an_error_without_supervisor_text(
+    paths: Paths, fake: Fake, caplog: pytest.LogCaptureFixture
+) -> None:
+    def failing(url: str) -> str:
+        raise ValueError(f"Can't clone {url}: git clone exited with 128")
+
+    fake.clone_impl = failing
+    options = _options(SPEC_A)
+    registrar = _registrar(paths, options, fake.client())
+    with caplog.at_level(logging.WARNING, logger="test.store"):
+        registrar.register_pass(_status(a="ok"))
+        registrar.register_pass(_status(a="ok"))
+    assert fake.calls() == ["GET /store/repositories", "POST /store/repositories"] * 2
+    entry = _entry(_doc(paths, options), SPEC_A)
+    assert entry["registration"] == "error"
+    assert (entry["error"], entry["error_status"]) == ("add_rejected", 400)
+    assert entry["message"] == "The Supervisor rejected the store URL (HTTP 400)"
+    text = paths.supervisor_state_file.read_text()
+    local = _local(paths, SPEC_A)
+    assert local is not None and local["hash"] not in text
+    assert "Can't clone" not in text and "git clone" not in text
+    failures = [r.getMessage() for r in caplog.records if "registration of" in r.getMessage()]
+    assert len(failures) == 1
+    assert local["hash"] not in failures[0] and local["hash"][:4] + "…" in failures[0]
+
+
+def test_post_timeout_is_an_error_and_the_next_pass_starts_with_get(
+    paths: Paths, fake: Fake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release = threading.Event()
+
+    def slow(url: str) -> str:
+        release.wait(5)  # the Supervisor keeps cloning behind asyncio.shield
+        return "Fixture"
+
+    fake.clone_impl = slow
+    monkeypatch.setitem(supervisor.TIMEOUTS, ("POST", "/store/repositories"), 0.2)
+    options = _options(SPEC_A)
+    registrar = _registrar(paths, options, fake.client())
+    registrar.register_pass(_status(a="ok"))
+    entry = _entry(_doc(paths, options), SPEC_A)
+    assert (entry["registration"], entry["error"], entry["error_status"]) == ("error", "timeout", None)
+    assert entry["message"] == "The Supervisor did not answer in time"
+    release.set()
+    deadline = time.monotonic() + 5
+    while fake.posts() == 0 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    registrar.register_pass(_status(a="ok"))
+    assert fake.calls() == ["GET /store/repositories", "POST /store/repositories", "GET /store/repositories"]
+    assert _entry(_doc(paths, options), SPEC_A)["registration"] == "registered"
+
+
+def test_store_list_failure_keeps_in_store_and_recovers(paths: Paths, fake: Fake) -> None:
+    options = _options()
+    registrar = _registrar(paths, options, fake.client())
+    registrar.register_pass(_status(a="ok", b="pending"))
+    assert _entry(_doc(paths, options), SPEC_A)["registration"] == "registered"
+
+    broken = _registrar(paths, options, fake.client(token=_token()))  # 403 from the middleware
+    broken.register_pass(_status(a="ok", b="pending"))
+    doc = _doc(paths, options)
+    entry = _entry(doc, SPEC_A)
+    assert (entry["registration"], entry["error"], entry["error_status"]) == ("error", "store_list_unavailable", 403)
+    assert entry["in_store"] is True
+    assert entry["message"] == "Store list unavailable (HTTP 403)"
+    assert _entry(doc, SPEC_B)["registration"] == "missing"
+    assert doc["supervisor"]["last_status"] == 403
+    assert fake.posts() == 1
+
+    _registrar(paths, options, fake.client()).register_pass(_status(a="ok", b="pending"))
+    entry = _entry(_doc(paths, options), SPEC_A)
+    assert (entry["registration"], entry["error"], entry["error_status"]) == ("registered", None, None)
+    assert fake.posts() == 1
+
+
+def test_unreachable_supervisor(paths: Paths, fake: Fake) -> None:
+    options = _options(SPEC_A)
+    fake.server.shutdown()
+    fake.server.server_close()
+    _registrar(paths, options, fake.client()).register_pass(_status(a="ok"))
+    entry = _entry(_doc(paths, options), SPEC_A)
+    assert (entry["registration"], entry["error"], entry["in_store"]) == ("error", "unreachable", False)
+    assert entry["message"] == "The Supervisor is unreachable"
+
+
+def test_non_list_data_is_a_failed_contact(paths: Paths) -> None:
+    options = _options(SPEC_A)
+    client = StubClient(CallResult(True, 200, {"repositories": []}))
+    _registrar(paths, options, client).register_pass(_status(a="ok"))
+    assert client.calls == ["GET"]
+    entry = _entry(_doc(paths, options), SPEC_A)
+    assert (entry["error"], entry["error_status"]) == ("store_list_unavailable", 200)
+
+
+def test_two_passes_and_a_restart_post_once(paths: Paths, fake: Fake) -> None:
+    options = _options(SPEC_A)
+    first = _registrar(paths, options, fake.client())
+    first.register_pass(_status(a="ok"))
+    first.register_pass(_status(a="ok"))
+    hash_before = _local(paths, SPEC_A)["hash"]  # type: ignore[index]
+    second = _registrar(paths, options, fake.client())
+    second.register_pass(_status(a="ok"))
+    assert fake.posts() == 1
+    assert _local(paths, SPEC_A)["hash"] == hash_before  # type: ignore[index]
+    assert len([e for e in AccessStore(paths).list_entries(SPEC_A.slug) if e["user"] == LOCAL_USER]) == 1
+
+
+def test_empty_token_records_token_missing(paths: Paths, fake: Fake) -> None:
+    options = _options(SPEC_A)
+    _registrar(paths, options, fake.client(token="")).register_pass(_status(a="ok"))
+    entry = _entry(_doc(paths, options), SPEC_A)
+    assert (entry["registration"], entry["error"]) == ("error", "token_missing")
+    assert entry["message"] == "No Supervisor token in the add-on environment"
+    assert fake.state.requests == []
+
+
+def test_exception_in_one_repository_spares_the_next(paths: Paths, fake: Fake, monkeypatch: pytest.MonkeyPatch) -> None:
+    options = _options()
+    registrar = _registrar(paths, options, fake.client())
+    original = registrar.ensure_local
+
+    def broken(spec: RepoSpec) -> dict:
+        if spec == SPEC_A:
+            raise RuntimeError("boom")
+        return original(spec)
+
+    monkeypatch.setattr(registrar, "ensure_local", broken)
+    registrar.register_pass(_status(a="ok", b="ok"))
+    doc = _doc(paths, options)
+    assert (_entry(doc, SPEC_A)["registration"], _entry(doc, SPEC_A)["error"]) == ("error", "internal_error")
+    assert _entry(doc, SPEC_B)["registration"] == "registered"
+
+
+def test_state_file_mode_order_and_secrets(paths: Paths, fake: Fake) -> None:
+    options = _options(SPEC_B, SPEC_A)
+    _registrar(paths, options, fake.client()).register_pass(_status(a="ok", b="ok"))
+    path = paths.supervisor_state_file
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+    doc = _doc(paths, options)
+    assert [e["repository"] for e in doc["repositories"]] == [SPEC_B.slug, SPEC_A.slug]
+    text = path.read_text()
+    for spec in (SPEC_A, SPEC_B):
+        assert _local(paths, spec)["hash"] not in text  # type: ignore[index]
+    assert fake.state.token not in text
+    assert not re.search(r"/repo/[^ \"]*[0-9a-f]{32}", text)
+
+
+def test_after_cycle_runs_the_pass(paths: Paths, fake: Fake) -> None:
+    options = _options(SPEC_A)
+    _registrar(paths, options, fake.client()).after_cycle(_status(a="ok"))
+    assert _entry(_doc(paths, options), SPEC_A)["registration"] == "registered"
+
+
+# --- D-28: one registration value from four facts ------------------------------------------------------------------
+
+
+def _expected(in_store: bool, error: str | None, configured: bool, has_leftover: bool) -> str:
+    if error:
+        return "error"
+    if has_leftover or (not configured and in_store):
+        return "leftover"
+    return "registered" if in_store else "missing"
+
+
+@pytest.mark.parametrize(
+    ("in_store", "error", "configured", "has_leftover", "value"),
+    [
+        (False, None, False, False, "missing"),
+        (False, None, False, True, "leftover"),
+        (False, None, True, False, "missing"),
+        (False, None, True, True, "leftover"),
+        (False, "timeout", False, False, "error"),
+        (False, "timeout", False, True, "error"),
+        (False, "timeout", True, False, "error"),
+        (False, "timeout", True, True, "error"),
+        (True, None, False, False, "leftover"),
+        (True, None, False, True, "leftover"),
+        (True, None, True, False, "registered"),
+        (True, None, True, True, "leftover"),
+        (True, "timeout", False, False, "error"),
+        (True, "timeout", False, True, "error"),
+        (True, "timeout", True, False, "error"),
+        (True, "timeout", True, True, "error"),
+    ],
+)
+def test_registration_value_precedence(
+    in_store: bool, error: str | None, configured: bool, has_leftover: bool, value: str
+) -> None:
+    got = registration_value(in_store=in_store, error=error, configured=configured, has_leftover=has_leftover)
+    assert got == value == _expected(in_store, error, configured, has_leftover)
+
+
+def test_registration_states_are_exactly_four() -> None:
+    assert REGISTRATION_STATES == ("registered", "missing", "leftover", "error")
+
+
+def test_seeded_foreign_values_are_recomputed(paths: Paths) -> None:
+    options = _options(SPEC_A)
+    seeded = {
+        "schema": 1,
+        "hostname": "old-host",
+        "repositories": [
+            {
+                "repository": SPEC_A.slug,
+                "registration": "pending",
+                "message": "http://old-host:8080/repo/example-org/private-addons/" + "ab" * 16,
+                "in_store": True,
+                "store_slug": "0123abcd",
+                "error": "not-a-code",
+            },
+            {"repository": "example-org/gone", "registration": "orphaned", "in_store": True, "store_slug": "4567cdef"},
+            {"repository": "example-org/never", "registration": "missing"},
+        ],
+        "leftovers": "not a list",
+    }
+    paths.supervisor_state_file.write_text(json.dumps(seeded))
+    writer = SupervisorStateWriter(paths, hostname=HOST, register_local=True, specs=options.repositories)
+    assert writer.previous_hostname == "old-host"
+    doc = _doc(paths, options)
+    entry = _entry(doc, SPEC_A)
+    assert (entry["registration"], entry["error"], entry["store_slug"]) == ("registered", None, "0123abcd")
+    assert "message" not in entry
+    gone = doc["repositories"][1]
+    assert (gone["repository"], gone["configured"], gone["registration"]) == ("example-org/gone", False, "leftover")
+    assert gone["message"] == "No longer configured; its store repository is still listed"
+    assert len(doc["repositories"]) == 2
+    assert doc["leftovers"] == [] and doc["requests"] == []
+
+
+def test_new_document_exists_before_any_pass(paths: Paths) -> None:
+    options = _options()
+    SupervisorStateWriter(paths, hostname=HOST, register_local=True, specs=options.repositories)
+    doc = _doc(paths, options)
+    assert doc["schema"] == 1 and doc["hostname"] == HOST and doc["register_local"] is True
+    assert set(doc) >= {"schema", "updated", "register_local", "hostname", "supervisor", "reload", "repositories",
+                        "leftovers", "requests"}
+    for entry in doc["repositories"]:
+        assert entry["registration"] == "missing"
+        assert entry["message"] == "Not in the store yet; added after the next successful sync"
+
+
+def test_registrar_writes_the_document_at_construction(paths: Paths) -> None:
+    options = _options()
+    _registrar(paths, options, StubClient(CallResult(True, 200, [])))
+    assert [e["registration"] for e in _doc(paths, options)["repositories"]] == ["missing", "missing"]
+
+
+def test_set_repository_rejects_unknown_error_codes(paths: Paths) -> None:
+    writer = SupervisorStateWriter(paths, hostname=HOST, register_local=True, specs=(SPEC_A,))
+    with pytest.raises(ValueError):
+        writer.set_repository(SPEC_A.slug, in_store=False, error="boom")
+
+
+# --- D-29: messages from fixed templates only ----------------------------------------------------------------------
+
+
+def test_safe_message_falls_back_for_unsafe_text() -> None:
+    assert safe_message("Can't remove 'http://h:8080/repo/o/r/abcd…'") == MESSAGE_FALLBACK
+    assert safe_message("hash " + secrets.token_hex(16)) == MESSAGE_FALLBACK
+    assert safe_message("token " + "gh" + "p_" + secrets.token_hex(8)) == MESSAGE_FALLBACK
+    assert safe_message(None) is None
+    assert safe_message("  \n ") is None
+    assert safe_message("two\nlines") == "two lines"
+    assert len(safe_message("x" * 500) or "") == 200
+
+
+def test_registration_message_is_safe_for_every_combination() -> None:
+    for value in REGISTRATION_STATES:
+        for error in (None, *ERROR_CODES):
+            for status in (None, 400, 503):
+                for register_local in (True, False):
+                    for configured in (True, False):
+                        for reasons in ([], ["in_use"], ["in_use", "orphaned"]):
+                            message = registration_message(
+                                value,
+                                error=error,
+                                error_status=status,
+                                register_local=register_local,
+                                configured=configured,
+                                leftover_reasons=reasons,
+                            )
+                            if value == "registered":
+                                assert message is None
+                                continue
+                            assert isinstance(message, str) and message
+                            assert safe_message(message) == message
