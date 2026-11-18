@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 03
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-11-18T21:37:10.815Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-11-18T21:46:59.875Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 03 execution started
-state_head: ac539162107198a90342abe8016fa14fd4c99725
+state_head: 44850926d6612e9f6d348116547a4185fae09c74
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 12
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 workstream: marketplace-repo-proxy
 created: 2026-11-17
@@ -23,7 +23,7 @@ current_phase_name: Management GUI
 
 ## Current Position
 
-**Current Plan:** 2
+**Current Plan:** 3
 **Total Plans in Phase:** 6
 **Status:** Ready to execute
 **Current Phase:** 03
@@ -37,8 +37,8 @@ current_phase_name: Management GUI
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T21:37:10.785Z
-**Stopped At:** Completed 03-01-PLAN.md
+**Last session:** 2026-11-18T21:46:59.844Z
+**Stopped At:** Completed 03-02-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -52,6 +52,7 @@ current_phase_name: Management GUI
 | Phase 01 P05 | 8min | 2 tasks | 1 files |
 | Phase 01 P06 | 6min | 4 tasks | 7 files |
 | Phase 03 P01 | 10min | 2 tasks | 54 files |
+| Phase 03 P02 | 8min | 2 tasks | 7 files |
 
 ## Decisions
 
@@ -73,3 +74,6 @@ current_phase_name: Management GUI
 - [Phase 03]: 03-01: POST api/sync requires exactly the empty JSON object body; anything else is 400 bad_request
 - [Phase 03]: 03-01: registration detail is masked with mask_hashes and cut to 200 characters in the service; reader assumes repositories[].repository/registration/message in /data/supervisor.json
 - [Phase 03]: 03-01: GUI version comes from /opt/marketplace-repo-proxy/BUILD_VERSION (Dockerfile ARG BUILD_VERSION), X.Y.Z-N only, else null
+- [Phase 03]: 03-02: FetchRecorder.record takes optional keyword pairs so the write at a logged fetch prunes removed users; contract record(repository, user, hash_) unchanged
+- [Phase 03]: 03-02: fetchsink drops access records over 512 bytes before decoding and matching (MAX_LINE)
+- [Phase 03]: 03-02: AccessMap records the access.json signature also when unavailable: one read and one content-free error line per change
