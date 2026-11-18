@@ -7,6 +7,12 @@ This add-on has no upstream — every entry below is hand-written by the maintai
 
 ## [Unreleased]
 
+## [1.3.2-2] - 2026-11-18
+
+### Changed
+
+- Use admin-ui lib 0.10.0; no visible change
+
 ## [1.3.2-1] - 2026-11-17
 
 ### Changed

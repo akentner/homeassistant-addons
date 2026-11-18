@@ -131,6 +131,13 @@ All notable changes to the **ntfy** add-on are documented in this file. The form
 [Keep a Changelog](https://keepachangelog.com/). The add-on version follows upstream ntfy; a change that only touches
 the add-on (GUI, options, docs) bumps the subpatch (`-N`).
 
+## [2.38.1-1] - 2026-11-18
+
+### Changed
+
+- Use admin-ui lib 0.10.0: the shared skeleton gains the bearer API listener; this add-on does not use it yet, so its
+  behaviour is unchanged
+
 ## [2.37.2-8] - 2026-11-07
 
 ### Fixed

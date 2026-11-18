@@ -33,7 +33,7 @@ def _view_rules() -> list[dict[str, object]]:
 
 
 def test_view_rule_ids_equal_docs_ids() -> None:
-    assert [r["id"] for r in _view_rules()] == list(_docs_rows()) == [f"R-{n:02d}" for n in range(1, 16)]
+    assert [r["id"] for r in _view_rules()] == list(_docs_rows()) == [f"R-{n:02d}" for n in range(1, 17)]
 
 
 def test_view_statuses_equal_docs_statuses() -> None:
