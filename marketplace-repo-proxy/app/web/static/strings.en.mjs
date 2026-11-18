@@ -64,6 +64,27 @@ export default {
     "These store URLs grant read access to the repository. Treat them like passwords: paste them only into the add-on store of the Home Assistant instance that should use them.",
   "mrp.access.url.internal": "Internal store URL",
   "mrp.access.url.public": "Public store URL",
+  "mrp.access.col.actions": "Actions",
+  "mrp.access.protected": "Managed by the add-on",
+  "mrp.access.inactive": "Inactive entries",
+  "mrp.access.inactive_hint":
+    "These repositories are no longer configured. Their entries grant no access; revoke them to clean up the access store.",
+  "mrp.access.urls.show_aria": "Show the store URLs of {user}",
+  "mrp.access.urls.new": "New store URLs for {user}",
+  "mrp.access.rotate.button": "Rotate",
+  "mrp.access.rotate.aria": "Rotate the store URL of {user}",
+  "mrp.access.rotate.title": "Rotate the store URL",
+  "mrp.access.rotate.message":
+    "{user} gets a new store URL and the old URL stops working immediately. The consuming Supervisor sees the new URL as a new repository: add-ons installed from the old URL must be reinstalled from the new one, so back up their data first.",
+  "mrp.access.rotate.confirm": "Rotate URL",
+  "mrp.access.rotate.done": "New store URL for {user}",
+  "mrp.access.revoke.button": "Revoke",
+  "mrp.access.revoke.aria": "Revoke the access of {user}",
+  "mrp.access.revoke.title": "Revoke access",
+  "mrp.access.revoke.message":
+    "The store URL of {user} stops working immediately. Add-ons installed from it can no longer be updated.",
+  "mrp.access.revoke.confirm": "Revoke access",
+  "mrp.access.revoke.done": "Access of {user} revoked",
 
   "mrp.source.gui": "GUI",
   "mrp.source.cli": "CLI",

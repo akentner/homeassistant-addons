@@ -64,6 +64,27 @@ export default {
     "Diese Store-URLs gewähren Lesezugriff auf das Repository. Behandle sie wie Passwörter: Füge sie nur im Add-on-Store der Home-Assistant-Instanz ein, die sie nutzen soll.",
   "mrp.access.url.internal": "Interne Store-URL",
   "mrp.access.url.public": "Öffentliche Store-URL",
+  "mrp.access.col.actions": "Aktionen",
+  "mrp.access.protected": "Vom Add-on verwaltet",
+  "mrp.access.inactive": "Inaktive Einträge",
+  "mrp.access.inactive_hint":
+    "Diese Repositories sind nicht mehr konfiguriert. Ihre Einträge gewähren keinen Zugriff; entziehe sie, um den Zugriffsspeicher aufzuräumen.",
+  "mrp.access.urls.show_aria": "Store-URLs von {user} anzeigen",
+  "mrp.access.urls.new": "Neue Store-URLs für {user}",
+  "mrp.access.rotate.button": "Erneuern",
+  "mrp.access.rotate.aria": "Store-URL von {user} erneuern",
+  "mrp.access.rotate.title": "Store-URL erneuern",
+  "mrp.access.rotate.message":
+    "{user} erhält eine neue Store-URL, und die alte URL funktioniert sofort nicht mehr. Der nutzende Supervisor sieht die neue URL als neues Repository: Add-ons, die über die alte URL installiert wurden, müssen über die neue neu installiert werden, sichere deshalb vorher ihre Daten.",
+  "mrp.access.rotate.confirm": "URL erneuern",
+  "mrp.access.rotate.done": "Neue Store-URL für {user}",
+  "mrp.access.revoke.button": "Entziehen",
+  "mrp.access.revoke.aria": "Zugriff von {user} entziehen",
+  "mrp.access.revoke.title": "Zugriff entziehen",
+  "mrp.access.revoke.message":
+    "Die Store-URL von {user} funktioniert sofort nicht mehr. Über sie installierte Add-ons können nicht mehr aktualisiert werden.",
+  "mrp.access.revoke.confirm": "Zugriff entziehen",
+  "mrp.access.revoke.done": "Zugriff von {user} entzogen",
 
   "mrp.source.gui": "GUI",
   "mrp.source.cli": "CLI",
