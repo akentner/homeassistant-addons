@@ -37,13 +37,13 @@ the same `Router`, `Request`, `ApiError` and error codes as the ingress GUI.
 5. admin-ui version bumped via `make update-version`, `make sync-admin-ui` run for all consumers, consumer docker
    builds and `make check-admin-ui-sync`, `make check-admin-ui-rules`, `make test-admin-ui` green.
 
-**Plans**: 2/6 plans executed (sequential waves 1-6)
+**Plans**: 3/6 plans executed (sequential waves 1-6)
 
 Plans:
 
 - [x] 01-01-PLAN.md — Tracer: bearer-gated GET with an option token end to end; ingress characterisation test; lib 0.10.0
 - [x] 01-02-PLAN.md — Ingress handler on the shared JSON base, `serve(server, *more)`, complete API request handling
-- [ ] 01-03-PLAN.md — Gate on every method, parser error and credential variant; one byte-identical 401
+- [x] 01-03-PLAN.md — Gate on every method, parser error and credential variant; one byte-identical 401
 - [ ] 01-04-PLAN.md — `OptionToken` validation with the 16-character minimum (D-11), `GeneratedToken` (0600 SHA-256
       file, plaintext once, rotate), no secret in output
 - [ ] 01-05-PLAN.md — Package exports, library reference, rule R-16 in DOCS and the demo rules view
@@ -54,4 +54,4 @@ Plans:
 
 | Phase                   | Plans Complete | Status      | Completed |
 | ----------------------- | -------------- | ----------- | --------- |
-| 1. Bearer API listener  | 2/6 | In Progress | -         |
+| 1. Bearer API listener  | 3/6 | In Progress | -         |

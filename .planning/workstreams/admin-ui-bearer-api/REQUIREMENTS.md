@@ -5,7 +5,7 @@
 - [ ] **AUB-01**: Skeleton API server on its own port and bind address, separate from the ingress server, reusing
   `Router`, `Request`, `ApiError`, `ERROR_STATUS` and the API security headers; JSON only, `Cache-Control: no-store`,
   `MAX_BODY` limit, no static files, no CORS.
-- [ ] **AUB-02**: Bearer gate on every method and path (including unknown paths, `HEAD`, `OPTIONS`): missing, malformed
+- [x] **AUB-02**: Bearer gate on every method and path (including unknown paths, `HEAD`, `OPTIONS`): missing, malformed
   or wrong token → `401 unauthorized` with `WWW-Authenticate: Bearer`, identical response for all failure cases.
 - [ ] **AUB-03**: Token verifiers: `OptionToken` (value from an add-on option, `hmac.compare_digest`) and
   `GeneratedToken` (256-bit from `secrets`, SHA-256 hash file with mode 0600, plaintext available once after
