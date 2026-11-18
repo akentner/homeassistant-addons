@@ -4,6 +4,24 @@ All notable changes to the **Admin UI Blueprint** add-on are documented in this 
 [Keep a Changelog](https://keepachangelog.com/). This is our own code without an upstream project: the version is bumped
 manually with `make update-version`.
 
+## [0.4.0-0] - 2026-11-18
+
+### Added
+
+- Lib 0.10.0: bearer API listener `make_api_server` for a machine-to-machine API on its own port, next to the ingress
+  server. It binds an explicit IPv4 address, gates every method and every path, answers every rejected request with the
+  same 401 `unauthorized` and `WWW-Authenticate: Bearer`, and speaks JSON only
+- Token verifiers: `OptionToken` checks the add-on `password` option (printable ASCII without spaces, at least 16
+  characters); `GeneratedToken` creates a 256-bit token, stores only its SHA-256 in a file with mode 0600, shows the
+  plaintext once and supports rotation
+- `serve(server, *more)` runs several servers (ingress and API listener) in one process
+- Rule R-16 for the bearer API (own server and port, gate on every request, explicit bind, port unpublished by default)
+  in the blueprint rules table and the demo rules view
+
+### Changed
+
+- The ingress handler shares its JSON request and response helpers with the API handler; ingress responses are unchanged
+
 ## [0.3.2-0] - 2026-11-05
 
 ### Changed
@@ -13,7 +31,7 @@ manually with `make update-version`.
 - New component page for the `Topbar` with switches for `showLang`, `infoPath` and `version`; its code example follows
   the switches
 
-- 2026-11-05
+## [0.3.1-0] - 2026-11-05
 
 ### Changed
 
