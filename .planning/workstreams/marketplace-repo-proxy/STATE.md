@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 03
-current_plan: 5
+current_plan: 6
 status: executing
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-11-18T23:49:44.512Z"
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-11-19T00:01:44.960Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 03 execution started
-state_head: 2507ee7dce2adcbdd1f9a9a1043b62747f3a00eb
+state_head: c1d24c807820f5f95bbdd3f295ba5b5a65f8dd90
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
   percent: 0
 workstream: marketplace-repo-proxy
 created: 2026-11-17
@@ -23,7 +23,7 @@ current_phase_name: Management GUI
 
 ## Current Position
 
-**Current Plan:** 5
+**Current Plan:** 6
 **Total Plans in Phase:** 6
 **Status:** Ready to execute
 **Current Phase:** 03
@@ -37,8 +37,8 @@ current_phase_name: Management GUI
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T23:49:44.481Z
-**Stopped At:** Completed 03-03-PLAN.md
+**Last session:** 2026-11-19T00:01:44.926Z
+**Stopped At:** Completed 03-04-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -54,6 +54,7 @@ current_phase_name: Management GUI
 | Phase 03 P01 | 10min | 2 tasks | 54 files |
 | Phase 03 P02 | 8min | 2 tasks | 7 files |
 | Phase 03 P03 | 14min | 3 tasks | 14 files |
+| Phase 03 P04 | 8min | 3 tasks | 14 files |
 
 ## Decisions
 
@@ -83,3 +84,6 @@ current_phase_name: Management GUI
 - [Phase 03]: 03-03: every GUI access write runs read_entries_safe inside the same lock first; unreadable access.json answers 503 access_unavailable and is never replaced
 - [Phase 03]: 03-03: repository path segments match configured specs case-insensitively without trimming; revoke accepts unconfigured repositories, add/URLs/rotate do not
 - [Phase 03]: 03-03: store URLs only in the add, URL and rotate responses; the polled api/access list carries label, source, created and protected only
+- [Phase 03]: 03-04: GUI shows last_fetch only when the record is strictly newer than created (or created is not a valid timestamp); same second means never, so rotation and re-creation show never until the new URL is used
+- [Phase 03]: 03-04: lighttpd access log goes only into the fetch sink (%m %U %>s, appended with server.modules +=); fetchlog is a root s6 longrun without container environment
+- [Phase 03]: 03-04: the Last fetch column is shown in active and inactive Access tables; the GUI reads last-fetch.json without a lock and never writes it
