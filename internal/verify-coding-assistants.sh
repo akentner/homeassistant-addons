@@ -923,7 +923,7 @@ drift_compare() {
             echo "drift: Dockerfile ARG ${key} has no key in build.yaml args"
             rc=1
         }
-    done < <(grep -E '^ARG (HERDR|CODEX|OPENCODE)_[A-Z0-9_]+=' "${dockerfile}" | sed -E 's/^ARG ([A-Z0-9_]+)=.*/\1/')
+    done < <(grep -E '^ARG [A-Z0-9]+(_[A-Z0-9]+)*_(VERSION|SHA256_[A-Z0-9_]+|REF)=' "${dockerfile}" | sed -E 's/^ARG ([A-Z0-9_]+)=.*/\1/')
     return "${rc}"
 }
 
@@ -937,7 +937,9 @@ scenario_drift() {
     fi
     local key
     for key in HERDR_VERSION HERDR_SHA256_X86_64 HERDR_SHA256_AARCH64 HERDR_SUBAGENT_WATCH_REF HERDR_WEB_SERVICE_REF \
-        HERDR_CLAUDE_LIMITS_REF CODEX_VERSION CODEX_SHA256_X86_64 CODEX_SHA256_AARCH64; do
+        HERDR_CLAUDE_LIMITS_REF CODEX_VERSION CODEX_SHA256_X86_64 CODEX_SHA256_AARCH64 YQ_VERSION YQ_SHA256_X86_64 \
+        HA_CLI_VERSION TTYD_VERSION FFF_VERSION EZA_VERSION DELTA_VERSION DIFFTASTIC_VERSION YAZI_VERSION ATUIN_VERSION \
+        TEALDEER_VERSION LAZYGIT_VERSION; do
         assert_eq "build.yaml carries the pin ${key}" \
             "$(build_yaml_args "${by}" | grep -c "^${key}"$'\t')" "1"
     done
@@ -965,6 +967,12 @@ scenario_drift() {
         fail "negative control: a changed CODEX_SHA256_X86_64 did not fail the drift check"
     else
         pass "negative control: a changed CODEX_SHA256_X86_64 fails the drift check"
+    fi
+    sed -E 's/^(  YQ_SHA256_X86_64: ").*(")$/\1deadbeef\2/' "${by}" >"${tmp}/changed-yq-digest.yaml"
+    if drift_compare "${tmp}/changed-yq-digest.yaml" "${df}" >/dev/null; then
+        fail "negative control: a changed YQ_SHA256_X86_64 did not fail the drift check"
+    else
+        pass "negative control: a changed YQ_SHA256_X86_64 fails the drift check"
     fi
     grep -v '^  CODEX_VERSION:' "${by}" >"${tmp}/missing-codex.yaml"
     if drift_compare "${tmp}/missing-codex.yaml" "${df}" >/dev/null; then

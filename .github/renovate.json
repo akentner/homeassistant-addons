@@ -73,6 +73,16 @@
         "OPENCODE_VERSION[:=]\\s*\"?(?<currentValue>\\d+\\.\\d+\\.\\d+)\"?"
       ],
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "fileMatch": [
+        "^coding-assistants/build\\.yaml$"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\n\\s+[A-Z0-9_]+_VERSION:\\s*\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""
+      ],
+      "versioningTemplate": "semver"
     }
   ],
   "extends": [
@@ -144,6 +154,27 @@
       "groupName": "coding-assistants opencode",
       "matchDepNames": [
         "anomalyco/opencode"
+      ],
+      "matchManagers": [
+        "custom.regex"
+      ]
+    },
+    {
+      "additionalBranchPrefix": "coding-assistants-",
+      "description": "Tool bump: also run internal/update-tool-pins.sh (Dockerfile + SHA256 digests) and make update-version before merge",
+      "groupName": "coding-assistants tools",
+      "matchDepNames": [
+        "mikefarah/yq",
+        "home-assistant/cli",
+        "tsl0922/ttyd",
+        "dmtrKovalenko/fff",
+        "eza-community/eza",
+        "dandavison/delta",
+        "Wilfred/difftastic",
+        "sxyazi/yazi",
+        "atuinsh/atuin",
+        "tealdeer-rs/tealdeer",
+        "jesseduffield/lazygit"
       ],
       "matchManagers": [
         "custom.regex"

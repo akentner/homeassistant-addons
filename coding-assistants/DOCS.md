@@ -380,9 +380,9 @@ visible in all others and keeps running after you disconnect.
   the session was emptied.
 - The add-on ships **no herdr configuration and no custom key bindings**: herdr runs with its defaults. If you want to
   change something, create `/data/.config/herdr/config.toml` yourself; it persists.
-- Remote machine profiles added with `herdr machine add` are saved in
-  `/data/.local/state/herdr/client/endpoints.json` and survive container replacement. If a previous container was
-  already replaced and its machine list is gone, add the machines again.
+- Remote machine profiles added with `herdr machine add` are saved in `/data/.local/state/herdr/client/endpoints.json`
+  and survive container replacement. If a previous container was already replaced and its machine list is gone, add the
+  machines again.
 - Restarting the add-on ends all programs running in the panes; herdr restores the saved layout (workspaces, tabs, panes
   and their directories) with fresh shells. Running processes and agent conversations are not carried over.
 

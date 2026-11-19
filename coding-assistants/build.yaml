@@ -18,3 +18,38 @@ args:
   HERDR_SUBAGENT_WATCH_REF: "c47d49b247d8ca3387d88d5bb9731a3b7bf4f6a8"
   HERDR_WEB_SERVICE_REF: "e9082b3fb969064e89153a8c6b2170366982f7f9"
   HERDR_CLAUDE_LIMITS_REF: "9c0c9a1931ac91f9d865031e2dc58d66a7d1b594"
+  # Pinned release tools: the Dockerfile ARG defaults are mirrored 1:1. Renovate bumps *_VERSION (annotations below);
+  # refresh the digests and the Dockerfile with internal/update-tool-pins.sh.
+  # renovate: datasource=github-releases depName=mikefarah/yq extractVersion=^v(?<version>.+)$
+  YQ_VERSION: "4.54.3"
+  YQ_SHA256_X86_64: "129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973"
+  # renovate: datasource=github-releases depName=home-assistant/cli
+  HA_CLI_VERSION: "6.0.0"
+  HA_CLI_SHA256_X86_64: "faab39046723cb68d43e9d5c8ac5a2cf105f3ecb3f5c8a01c0999c2699c56489"
+  # renovate: datasource=github-releases depName=tsl0922/ttyd
+  TTYD_VERSION: "1.7.7"
+  TTYD_SHA256_X86_64: "8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55"
+  # renovate: datasource=github-releases depName=dmtrKovalenko/fff extractVersion=^v(?<version>.+)$
+  FFF_VERSION: "0.11.0"
+  FFF_SHA256_X86_64: "1b645947cfa086f8080cd6419899e32cb2c531b122618c1141d9155e449ce647"
+  # renovate: datasource=github-releases depName=eza-community/eza extractVersion=^v(?<version>.+)$
+  EZA_VERSION: "0.23.5"
+  EZA_SHA256_X86_64: "35c70c5c43c29108075e58b893234c67ef585f0b53a7eaf8e9e7d4eec9f339b4"
+  # renovate: datasource=github-releases depName=dandavison/delta
+  DELTA_VERSION: "0.21.2"
+  DELTA_SHA256_X86_64: "5d41046c4ada17e7d080e1e5dbbd46544146bb5597e2ab56881a8c594272cd06"
+  # renovate: datasource=github-releases depName=Wilfred/difftastic
+  DIFFTASTIC_VERSION: "0.72.0"
+  DIFFTASTIC_SHA256_X86_64: "33ea1f003081e9f2422299a434e6040c89085bd9f102b08f3fe30393720d5d4a"
+  # renovate: datasource=github-releases depName=sxyazi/yazi extractVersion=^v(?<version>.+)$
+  YAZI_VERSION: "26.9.1"
+  YAZI_SHA256_X86_64: "9b9c39decccf8cb0ff53a7d637d38f8a79d93bbd0099f4ea9c619ef6bb392f5d"
+  # renovate: datasource=github-releases depName=atuinsh/atuin extractVersion=^v(?<version>.+)$
+  ATUIN_VERSION: "18.24.8"
+  ATUIN_SHA256_X86_64: "f8dfc3f9d27cadc2e2c9d489394ef7c568291e2382a4d184865701bf1a4ac30a"
+  # renovate: datasource=github-releases depName=tealdeer-rs/tealdeer extractVersion=^v(?<version>.+)$
+  TEALDEER_VERSION: "1.9.1"
+  TEALDEER_SHA256_X86_64: "5a9c3f0691b9cf375ee5c99de802885f3d50498cf686a539e2ddda028eb6b4f6"
+  # renovate: datasource=github-releases depName=jesseduffield/lazygit extractVersion=^v(?<version>.+)$
+  LAZYGIT_VERSION: "0.66.3"
+  LAZYGIT_SHA256_X86_64: "0a23f429a95f0d09db298b3c291536d818de066aa5a85c255806f0490ff6656b"
