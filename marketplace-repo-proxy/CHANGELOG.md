@@ -3,6 +3,29 @@
 All notable changes to the **Marketplace Repo Proxy** add-on are documented in this file. The add-on is our own code
 with no upstream project, so every entry is add-on specific.
 
+## [Unreleased]
+
+### Added
+
+- Management page in Home Assistant (ingress, sidebar panel "Repo Proxy" and **Open Web UI**, administrators only) with
+  the views Repositories, Access and Info, in German and English
+- The full add-on version in the page's top bar, written into the image at build time
+- Repositories view: sync state per repository, one global **Sync now** button and a registration column that appears
+  only when registration data exists
+- Access view: add users, show their store URLs on demand, revoke and rotate them with type-to-confirm dialogs,
+  read-only system users, source badges, inactive entries and the last fetch per user
+- Info view: how to add a store URL, reverse proxy notes and the rotation procedure
+- Fetch sink: a forwarder for lighttpd's access log and the `fetchlog` service record the last fetch per user in
+  `/data/last-fetch.json` (mode 0600, no hash) and log `fetch: {user} → {owner}/{repo}`
+- `internal/verify-marketplace-repo-proxy-gui.sh`: proves the page, the access actions and the fetch sink in the built
+  image without GitHub
+
+### Changed
+
+- lighttpd's access log goes only into the fetch sink; no hash and no request line is written anywhere
+- The add-on has an ingress panel (port 8099 inside the container, never published)
+- DOCS.md documents the management page, the `/data/last-fetch.json` contract and the updated security notes
+
 ## [0.1.0-1] - 2026-11-18
 
 ### Added

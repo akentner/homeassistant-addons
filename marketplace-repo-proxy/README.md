@@ -12,15 +12,17 @@ private repository and serves it as a plain git repository under a hashed, ungue
 like any public repository. Access can optionally be restricted to the internal HA add-on network.
 
 **Status: experimental.** The add-on syncs the configured private repositories with a read-only GitHub token and serves
-them read-only under per-user store URLs on the internal Home Assistant network. Users are managed with the `mrp`
-command inside the container. A management page, self-registration in the local store, a provisioning API and documented
+them read-only under per-user store URLs on the internal Home Assistant network. Users are managed on the add-on's
+management page (**Open Web UI**, or the sidebar panel) or with the `mrp` command inside the container; the page also
+shows the sync state and each user's last fetch. Self-registration in the local store, a provisioning API and documented
 public URLs follow in later versions; see [GOAL.md][goal] for the goal and scope.
 
 It is our own code, not an upstream wrapper (see [DOCS.md][docs]).
 
 ## Configuration
 
-Options, store URLs, user management, sync status and security notes are described in [DOCS.md][docs].
+Options, store URLs, the management page (**Open Web UI**), user management with the page or `mrp`, sync status and
+security notes are described in [DOCS.md][docs].
 
 [docs]: DOCS.md
 [goal]: GOAL.md
