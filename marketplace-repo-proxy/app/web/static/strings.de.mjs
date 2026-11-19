@@ -5,6 +5,7 @@ export default {
 
   "view.repositories": "Repositories",
   "view.access": "Zugriff",
+  "view.info": "Anleitung",
 
   "mrp.repo.title": "Veröffentlichte Repositories",
   "mrp.repo.caption": "Konfigurierte Repositories und ihr Sync-Zustand",
@@ -87,6 +88,29 @@ export default {
     "Die Store-URL von {user} funktioniert sofort nicht mehr. Über sie installierte Add-ons können nicht mehr aktualisiert werden.",
   "mrp.access.revoke.confirm": "Zugriff entziehen",
   "mrp.access.revoke.done": "Zugriff von {user} entzogen",
+
+  "mrp.info.setup.title": "Store-URL in Home Assistant hinzufügen",
+  "mrp.info.setup.copy": "Kopiere eine Store-URL aus der Ansicht Zugriff: über „URLs anzeigen“ oder direkt nach dem Anlegen eines Benutzers.",
+  "mrp.info.setup.add": "Öffne in Home Assistant Einstellungen → Add-ons → Add-on-Store, dann das Menü ⋮ → Repositories, und füge die URL hinzu.",
+  "mrp.info.setup.host":
+    "Verwende pro Home-Assistant-Instanz einen Hostnamen und behalte ihn bei. Der Host gehört zur Identität des Repositorys im Store: Dasselbe Repository unter zwei Hostnamen zählt als zwei Repositories.",
+  "mrp.info.setup.internal":
+    "Die interne URL funktioniert nur auf der Home-Assistant-Instanz, auf der dieses Add-on läuft. Andere Instanzen brauchen die öffentliche URL, die es nur gibt, wenn public_url gesetzt ist.",
+  "mrp.info.setup.secret": "Behandle jede Store-URL als Geheimnis: Wer sie kennt, kann das Repository lesen.",
+  "mrp.info.proxy.title": "Über einen Reverse Proxy veröffentlichen",
+  "mrp.info.proxy.intro": "Andere Home-Assistant-Instanzen erreichen das Add-on über einen Reverse Proxy, den du selbst betreibst. Trage seine Adresse als public_url ein.",
+  "mrp.info.proxy.tls": "Beende TLS am Proxy und leite an Port 8080 des Add-ons weiter; das Add-on selbst spricht nur HTTP.",
+  "mrp.info.proxy.cache": "Speichere /repo/* nie im Cache, weder am Proxy noch davor.",
+  "mrp.info.proxy.log": "Protokolliere keine Anfragepfade: Sie enthalten den Zugriffs-Hash.",
+  "mrp.info.proxy.later": "Ausführliche Anleitungen für bestimmte Proxys (zum Beispiel Traefik oder Cloudflare Tunnel) sind nicht Teil dieser Version.",
+  "mrp.info.rotation.title": "Store-URL erneuern",
+  "mrp.info.rotation.intro":
+    "Beim Erneuern bekommt ein Benutzer eine neue Store-URL. Der nutzende Supervisor sieht die neue URL als neues Repository, plane den Wechsel deshalb:",
+  "mrp.info.rotation.backup": "Sichere die Daten der Add-ons, die über die alte URL installiert wurden.",
+  "mrp.info.rotation.rotate": "Erneuere den Benutzer in der Ansicht Zugriff. Die alte URL funktioniert sofort nicht mehr.",
+  "mrp.info.rotation.replace":
+    "Entferne in Home Assistant das alte Repository aus dem Add-on-Store, füge die neue URL hinzu und installiere die Add-ons darüber neu.",
+  "mrp.info.rotation.restore": "Stelle die Daten der Add-ons aus der Sicherung wieder her.",
 
   "mrp.source.gui": "GUI",
   "mrp.source.cli": "CLI",

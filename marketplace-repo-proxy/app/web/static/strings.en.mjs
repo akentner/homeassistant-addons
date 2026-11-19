@@ -5,6 +5,7 @@ export default {
 
   "view.repositories": "Repositories",
   "view.access": "Access",
+  "view.info": "Info",
 
   "mrp.repo.title": "Published repositories",
   "mrp.repo.caption": "Configured repositories and their sync state",
@@ -87,6 +88,29 @@ export default {
     "The store URL of {user} stops working immediately. Add-ons installed from it can no longer be updated.",
   "mrp.access.revoke.confirm": "Revoke access",
   "mrp.access.revoke.done": "Access of {user} revoked",
+
+  "mrp.info.setup.title": "Add a store URL in Home Assistant",
+  "mrp.info.setup.copy": "Copy a store URL from the Access view: use “Show URLs”, or take it right after adding a user.",
+  "mrp.info.setup.add": "In Home Assistant open Settings → Add-ons → Add-on store, open the menu ⋮ → Repositories and add the URL.",
+  "mrp.info.setup.host":
+    "Use one host name per Home Assistant instance and keep it. The host is part of the repository's identity in the store: the same repository under two host names counts as two repositories.",
+  "mrp.info.setup.internal":
+    "The internal URL works only on the Home Assistant instance that runs this add-on. Other instances need the public URL, which exists only when public_url is set.",
+  "mrp.info.setup.secret": "Treat every store URL as a secret: anyone who has it can read the repository.",
+  "mrp.info.proxy.title": "Publish through a reverse proxy",
+  "mrp.info.proxy.intro": "Other Home Assistant instances reach the add-on through a reverse proxy that you run. Set its address as public_url.",
+  "mrp.info.proxy.tls": "Terminate TLS at the proxy and point it at port 8080 of the add-on; the add-on itself serves plain HTTP.",
+  "mrp.info.proxy.cache": "Never cache /repo/* at the proxy or in front of it.",
+  "mrp.info.proxy.log": "Do not log request paths: they contain the access hash.",
+  "mrp.info.proxy.later": "Detailed guides for specific proxies (for example Traefik or Cloudflare Tunnel) are not part of this version.",
+  "mrp.info.rotation.title": "Rotate a store URL",
+  "mrp.info.rotation.intro":
+    "A rotation gives a user a new store URL. The consuming Supervisor sees the new URL as a new repository, so plan the switch:",
+  "mrp.info.rotation.backup": "Back up the data of the add-ons installed from the old URL.",
+  "mrp.info.rotation.rotate": "Rotate the user in the Access view. The old URL stops working immediately.",
+  "mrp.info.rotation.replace":
+    "In Home Assistant remove the old repository from the add-on store, add the new URL and reinstall the add-ons from it.",
+  "mrp.info.rotation.restore": "Restore the add-ons' data from the backup.",
 
   "mrp.source.gui": "GUI",
   "mrp.source.cli": "CLI",

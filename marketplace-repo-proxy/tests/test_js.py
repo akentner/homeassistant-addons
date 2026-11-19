@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 JS_DIR = Path(__file__).resolve().parent / "js"
-FILES = ("i18n", "model", "repositories", "access")
+FILES = ("i18n", "model", "repositories", "access", "info")
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")

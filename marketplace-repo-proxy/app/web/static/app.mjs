@@ -15,6 +15,7 @@ registerStrings({ de, en });
 export const VIEWS = [
   { id: "repositories", titleKey: "view.repositories" },
   { id: "access", titleKey: "view.access" },
+  { id: "info", titleKey: "view.info" },
 ];
 const IDS = VIEWS.map((v) => v.id);
 const DEFAULT_VIEW = "repositories";
