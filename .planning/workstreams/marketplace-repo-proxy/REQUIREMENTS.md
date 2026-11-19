@@ -34,15 +34,15 @@ Source of the design and its evidence: `marketplace-repo-proxy/SPIKE.md`.
 
 ## Phase 3: Management GUI
 
-- [ ] **MRP-12**: Ingress GUI on the admin-ui lib and skeleton (`ingress_port` 8099, never published), rules R-01 to
+- [x] **MRP-12**: Ingress GUI on the admin-ui lib and skeleton (`ingress_port` 8099, never published), rules R-01 to
   R-15, de/en strings, node and pytest tests in CI.
-- [ ] **MRP-13**: Repositories view with sync status, last sync, HEAD short SHA, found add-ons, registration status and
+- [x] **MRP-13**: Repositories view with sync status, last sync, HEAD short SHA, found add-ons, registration status and
   "Sync now".
-- [ ] **MRP-14**: Access view: add user, revoke and rotate (type-to-confirm with the user label), internal and public
+- [x] **MRP-14**: Access view: add user, revoke and rotate (type-to-confirm with the user label), internal and public
   store URLs as `CopyField`, source badge (`gui`/`api`/`system`).
-- [ ] **MRP-15**: lighttpd access-log sink (`accesslog.filename = "|…"`): maps hash to user label, records last fetch,
+- [x] **MRP-15**: lighttpd access-log sink (`accesslog.filename = "|…"`): maps hash to user label, records last fetch,
   logs `fetch: <user> → <owner>/<repo>` only.
-- [ ] **MRP-16**: Info view with setup steps (store URL, reverse proxy notes, rotation procedure).
+- [x] **MRP-16**: Info view with setup steps (store URL, reverse proxy notes, rotation procedure).
 
 ## Phase 4: Provisioning API
 
