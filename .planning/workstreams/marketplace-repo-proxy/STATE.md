@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 current_phase: 03
 current_plan: 6
-status: executing
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-11-19T00:01:44.960Z"
+status: verifying
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-11-19T00:10:44.488Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 03 execution started
-state_head: c1d24c807820f5f95bbdd3f295ba5b5a65f8dd90
+state_head: 51115b97d0d7cf4d41c2f1f76798a299bc932e26
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
   percent: 0
 workstream: marketplace-repo-proxy
 created: 2026-11-17
@@ -25,7 +25,7 @@ current_phase_name: Management GUI
 
 **Current Plan:** 6
 **Total Plans in Phase:** 6
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Current Phase:** 03
 **Last Activity:** 2026-11-18 — Phase 03 execution started
 **Last Activity Description:** Phase 03 execution started
@@ -37,8 +37,8 @@ current_phase_name: Management GUI
 
 ## Session Continuity
 
-**Last session:** 2026-11-19T00:01:44.926Z
-**Stopped At:** Completed 03-04-PLAN.md
+**Last session:** 2026-11-19T00:10:44.455Z
+**Stopped At:** Completed 03-05-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -55,6 +55,7 @@ current_phase_name: Management GUI
 | Phase 03 P02 | 8min | 2 tasks | 7 files |
 | Phase 03 P03 | 14min | 3 tasks | 14 files |
 | Phase 03 P04 | 8min | 3 tasks | 14 files |
+| Phase 03 P05 | 6min | 3 tasks | 10 files |
 
 ## Decisions
 
@@ -87,3 +88,5 @@ current_phase_name: Management GUI
 - [Phase 03]: 03-04: GUI shows last_fetch only when the record is strictly newer than created (or created is not a valid timestamp); same second means never, so rotation and re-creation show never until the new URL is used
 - [Phase 03]: 03-04: lighttpd access log goes only into the fetch sink (%m %U %>s, appended with server.modules +=); fetchlog is a root s6 longrun without container environment
 - [Phase 03]: 03-04: the Last fetch column is shown in active and inactive Access tables; the GUI reads last-fetch.json without a lock and never writes it
+- [Phase 03]: 03-05: German navigation title of the Info view is Anleitung (real German, i18n allowlist unchanged)
+- [Phase 03]: 03-05: Phase 3 ships as 0.1.0-2 via make update-version NO_TAG=yes; origin/main had 0.1.0-1 and no new add-on commits at both fetches, no rebase

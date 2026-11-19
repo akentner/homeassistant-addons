@@ -4,8 +4,8 @@
   "milestone": null,
   "next": {
     "command": "/gsd-progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 3 of 5 \u00b7 0% \u00b7 executing"
+    "label": "Advance to the next step (verify)",
+    "reason": "Phase 3 of 5 \u00b7 0% \u00b7 ready to verify"
   },
   "phases": [
     {
@@ -34,5 +34,5 @@
       "status": "pending"
     }
   ],
-  "updated_at": "2026-11-19T00:01:44.217Z"
+  "updated_at": "2026-11-19T00:10:43.842Z"
 }
