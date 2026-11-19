@@ -22,7 +22,8 @@ configuration:
         description: Optional branch; empty uses the repository's default branch.
   register_local:
     name: Register in the local store
-    description: Add the internal store URL to this Home Assistant's add-on store. Takes effect in a later version.
+    description: Add the internal store URL to this Home Assistant's add-on store after the first successful sync.
+      Turning it off stops adding; it removes nothing (see the docs).
   api_enabled:
     name: Provisioning API
     description: Enable the provisioning API for IaC tools. Takes effect in a later version.

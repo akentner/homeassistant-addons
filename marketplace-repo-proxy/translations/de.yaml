@@ -22,8 +22,8 @@ configuration:
         description: Optionaler Branch; leer nimmt den Standard-Branch des Repositories.
   register_local:
     name: Im lokalen Store eintragen
-    description: Trägt die interne Store-URL in den Add-on-Store dieses Home Assistant ein. Wirkt erst in einer
-      späteren Version.
+    description: Trägt die interne Store-URL nach dem ersten erfolgreichen Sync in den Add-on-Store dieses Home
+      Assistant ein. Ausschalten verhindert nur neue Einträge und entfernt nichts (siehe Doku).
   api_enabled:
     name: Provisioning-API
     description: Aktiviert die Provisioning-API für IaC-Werkzeuge. Wirkt erst in einer späteren Version.
