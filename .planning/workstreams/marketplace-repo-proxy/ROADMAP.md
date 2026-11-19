@@ -73,7 +73,7 @@ Plans:
 5. Live E2E on the production host: store add → install a test add-on → upstream change → update shown → cleanup
    (test add-on and store repository removed).
 
-**Plans**: 5/7 plans executed
+**Plans**: 6/7 plans executed
 
 Plans:
 **Wave 1**
@@ -92,7 +92,7 @@ Plans:
 - [x] 02-05-PLAN.md — (wave 5) Verify script: recreate, reload limit, confirmed rotation with refusal and retry, all four registration values, removal, request audit, token hygiene
 
 **Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 02-06-PLAN.md — (wave 6) Docs (store registration, rotation warning, supervisor.json incl. registration values, manager-role note), CHANGELOG [0.1.0-2], bump 0.1.0-2
+- [x] 02-06-PLAN.md — (wave 6) Docs (store registration, rotation warning, supervisor.json incl. registration values, manager-role note), CHANGELOG [0.1.0-2], bump 0.1.0-2
 
 **Wave 7** *(executed after the squash merge of 02-01..02-06, as a separate follow-up step with the published `0.1.0-2`; checkpoints before every host and GitHub action)*
 - [ ] 02-07-PLAN.md — (wave 7) Live E2E on the production host with full cleanup (`autonomous: false`); precondition check, private test repository via `gh`
@@ -151,7 +151,7 @@ released.
 | Phase                          | Plans Complete | Status      | Completed |
 | ------------------------------ | -------------- | ----------- | --------- |
 | 1. Git serving core            | 6/6 | In Progress | -         |
-| 2. Supervisor integration      | 5/7 | In Progress | -         |
+| 2. Supervisor integration      | 6/7 | In Progress | -         |
 | 3. Management GUI              | 0/TBD          | Not started | -         |
 | 4. Provisioning API            | 0/TBD          | Not started | -         |
 | 5. Public exposure and release | 0/TBD          | Not started | -         |

@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 02
-current_plan: 6
+current_plan: 7
 status: executing
-stopped_at: Completed 02-05-PLAN.md
-last_updated: "2026-11-18T23:52:55.857Z"
+stopped_at: Completed 02-06-PLAN.md
+last_updated: "2026-11-19T00:03:50.159Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 02 execution started
-state_head: 54a2149c914f4397ab34af8b49453b67eeb3b244
+state_head: 74b3bfab0416e923979c9a3a97e5c8378a904591
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 13
-  completed_plans: 11
+  completed_plans: 12
   percent: 0
 workstream: marketplace-repo-proxy
 created: 2026-11-17
@@ -23,7 +23,7 @@ current_phase_name: Supervisor integration
 
 ## Current Position
 
-**Current Plan:** 6
+**Current Plan:** 7
 **Total Plans in Phase:** 7
 **Status:** Ready to execute
 **Current Phase:** 02
@@ -37,8 +37,8 @@ current_phase_name: Supervisor integration
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T23:52:55.827Z
-**Stopped At:** Completed 02-05-PLAN.md
+**Last session:** 2026-11-19T00:03:50.129Z
+**Stopped At:** Completed 02-06-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -56,6 +56,7 @@ current_phase_name: Supervisor integration
 | Phase 02 P03 | 11min | 2 tasks | 7 files |
 | Phase 02 P04 | 5min | 2 tasks | 4 files |
 | Phase 02 P05 | 9min | 2 tasks | 1 files |
+| Phase 02 P06 | 7min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -89,3 +90,6 @@ current_phase_name: Supervisor integration
 - [Phase 02]: 02-05: verify step (16b) restores the valid PAT before disconnecting the fake Supervisor: only repositories synced ok want a registration (D-07) and report error on a failed store list
 - [Phase 02]: 02-05: negative checks after a recreate or restart wait for the next pass's store-list log line; the deferred-reload check waits for reload.pending true first
 - [Phase 02]: 02-05: Phase 2 container proof needed no product change; the store-list failure log line stays 'store list unavailable: {cause}' as built in Plan 01
+- [Phase 02]: 02-06: DOCS describe supervisor.json as built: later starts carry the last recorded facts; only the first start shows every repository as missing
+- [Phase 02]: 02-06: DOCS state that a hostname change is reported as orphaned only while /data stays; a fresh install does not know the old store repository
+- [Phase 02]: 02-06: Phase 2 released as 0.1.0-2 via make update-version NO_TAG=yes (config.yaml only, no tag); the manager tags after the squash merge
