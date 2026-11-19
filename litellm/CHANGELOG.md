@@ -1,3 +1,29 @@
+## Verify this release
+
+```bash
+cosign verify \
+  --certificate-identity https://github.com/BerriAI/project-releaser/.github/workflows/release.yml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/berriai/litellm:v1.110.1
+```
+
+Same command for `litellm-database`, `litellm-non_root` and the `docker.io/litellm/*` images
+
+## What's new in 1.110.1
+
+3 PRs. 1 fixed, 2 changed. No action needed to upgrade
+
+### Changes
+
+- **OpenAI:** Fixed GPT-6.2 prompt caching for system prompts sent to `/v1/chat/completions` or `/v1/messages` with
+  `store: false` (#52658)
+- **Deployment:** Changed the UI image to slim nginx, which drops `curl` but keeps `wget` and `nc` (#52595)
+- **Deployment:** Changed the Docker images to a newer Wolfi base image (#52749)
+
+---
+
+[Full changelog](https://github.com/BerriAI/litellm/compare/v1.110.0...v1.110.1)
+
 ## Verify Docker Image Signature
 
 ```bash
