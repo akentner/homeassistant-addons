@@ -569,4 +569,79 @@ erin_shown_again() {
 }
 wait_for 15 "erin's last fetch after the rotation" erin_shown_again
 ok "erin's last fetch after the rotation: GET api/access shows $(erin_last_fetch); 'fetch: erin → ${REPO}' logged $(erin_fetch_lines) times"
+echo "==> (14) Fetch sink: privileges, modes, hygiene, outage"
+# usage: pid_of <pgrep -f pattern>  (first matching pid inside the proxy, "" if none)
+pid_of() { docker exec "${PROXY}" pgrep -f "$1" | head -n 1 || true; }
+FWD_PID="$(pid_of 'app/fetchsink[.]py')"
+FETCHLOG_PID="$(pid_of 'python3 -m app[.]fetchlog')"
+if [ -z "${FWD_PID}" ] || [ -z "${FETCHLOG_PID}" ]; then fail "forwarder (app/fetchsink.py) or fetchlog process missing"; fi
+[ "$(docker exec "${PROXY}" stat -c %U "/proc/${FWD_PID}")" = "lighttpd" ] || fail "the forwarder does not run as lighttpd"
+ok "forwarder app/fetchsink.py runs as lighttpd (pid ${FWD_PID})"
+[ "$(docker exec "${PROXY}" stat -c %U "/proc/${FETCHLOG_PID}")" = "root" ] || fail "fetchlog does not run as root"
+ok "fetchlog (python3 -m app.fetchlog) runs as root (pid ${FETCHLOG_PID})"
+# usage: mode_is <path> <stat format> <expected>
+mode_is() { [ "$(docker exec "${PROXY}" stat -c "$2" "$1")" = "$3" ]; }
+mode_is /run/mrp-fetch '%a %U:%G' '710 root:lighttpd' || fail "/run/mrp-fetch is not 710 root:lighttpd"
+mode_is /run/mrp-fetch/fetch.sock '%a %U:%G' '620 root:lighttpd' || fail "/run/mrp-fetch/fetch.sock is not 620 root:lighttpd"
+ok "socket directory /run/mrp-fetch 710 root:lighttpd, fetch.sock 620 root:lighttpd"
+mode_is /data %a 700 || fail "/data is not 700"
+mode_is /data/access.json %a 600 || fail "/data/access.json is not 600"
+mode_is /data/last-fetch.json %a 600 || fail "/data/last-fetch.json is not 600"
+mode_is /srv/git/access %a 711 || fail "/srv/git/access is not 711"
+ok "/data 700, access.json 600, last-fetch.json 600, /srv/git/access 711 (no permission widened)"
+GUI_PID="$(pid_of 'python3 -m app[.]gui')"
+SYNC_PID="$(pid_of 'python3 -m app[.]sync')"
+if [ -z "${GUI_PID}" ] || [ -z "${SYNC_PID}" ]; then fail "app.gui or app.sync process missing"; fi
+docker exec -i "${PROXY}" sh -c 'umask 077; cat > /tmp/needles-pat' <<<"${PAT}"
+docker exec -i "${PROXY}" sh -c 'umask 077; cat > /tmp/needles-supervisor' <<<"${SUPERVISOR_SENTINEL}"
+for pid in "${FWD_PID}" "${GUI_PID}"; do
+    for needles in /tmp/needles-pat /tmp/needles-supervisor; do
+        rc=0
+        environ_has "${needles}" "${pid}" || rc=$?
+        [ "${rc}" = "1" ] || fail "environment of pid ${pid}: ${needles#/tmp/needles-} needle found or unreadable (rc ${rc})"
+    done
+done
+rc=0
+environ_has /tmp/needles-supervisor "${SYNC_PID}" || rc=$?
+[ "${rc}" = "0" ] || fail "positive control: SUPERVISOR_TOKEN sentinel not seen in the sync environment (rc ${rc})"
+ok "forwarder and GUI environments hold neither the PAT nor SUPERVISOR_TOKEN (positive control: sentinel in sync's)"
+docker exec "${PROXY}" rm -f /tmp/needles-pat /tmp/needles-supervisor
+# carol (before and after rotation), local, dave, erin (before and after rotation)
+[ "$(grep -cE '^[0-9a-f]{32}$' "${NEEDLES_HASH}")" = "6" ] || fail "the needles file does not hold the 6 hashes of this run"
+[ "$(stat -c %a "${NEEDLES_HASH}")" = "600" ] || fail "the needles file is not mode 600"
+ok "needles file holds all 6 full hashes used by this run (mode 600)"
+# usage: no_leak_in_logs  (docker logs, stdout and stderr: no needle, no 32-hex run after /repo/ or /access/, no raw
+# access-log record)
+no_leak_in_logs() {
+    LOGS="$(docker logs "${PROXY}" 2>&1)"
+    if grep -qF -f "${NEEDLES_HASH}" <<<"${LOGS}"; then fail "an access hash appears in the add-on log"; fi
+    if grep -Eq '/(repo|access)/[^[:space:]]*[0-9a-f]{32}' <<<"${LOGS}"; then
+        fail "the add-on log holds a 32-hex run after /repo/ or /access/"
+    fi
+    if grep -Eq '(GET|POST) /[^[:space:]]* [0-9]{3}' <<<"${LOGS}"; then fail "the add-on log holds a raw access-log record"; fi
+}
+no_leak_in_logs
+ok "docker logs: no access hash, no 32-hex run after /repo/ or /access/, no raw access-log record"
+LAST_FETCH_DOC="$(docker exec "${PROXY}" cat /data/last-fetch.json)"
+if grep -qF -f "${NEEDLES_HASH}" <<<"${LAST_FETCH_DOC}"; then fail "an access hash appears in /data/last-fetch.json"; fi
+if grep -Eq '[0-9a-f]{32}' <<<"${LAST_FETCH_DOC}"; then fail "/data/last-fetch.json holds a 32-hex run"; fi
+ok "/data/last-fetch.json: no access hash and no 32-hex run at all"
+for path in api/access api/overview; do
+    ingress_get "${path}"
+    if grep -qF -f "${NEEDLES_HASH}" <<<"${GUI_BODY}"; then fail "${path} holds an access hash"; fi
+done
+ok "GET api/access and api/overview hold no access hash"
+docker exec "${PROXY}" pkill -f 'python3 -m app[.]fetchlog' || fail "pkill of fetchlog failed"
+[ "$(refs_code "${URL_ERIN_NEW}")" = "200" ] || fail "info/refs of erin's URL is not 200 with fetchlog killed"
+clone_as erin-outage "${URL_ERIN_NEW}" || fail "git clone --depth 1 failed with fetchlog killed"
+ok "with fetchlog killed, info/refs (200) and a clone of erin's URL still work"
+fetchlog_back() {
+    local pid
+    pid="$(pid_of 'python3 -m app[.]fetchlog')"
+    [ -n "${pid}" ] && [ "${pid}" != "${FETCHLOG_PID}" ] && mode_is /run/mrp-fetch/fetch.sock '%a %U:%G' '620 root:lighttpd'
+}
+wait_for 30 "s6 to restart fetchlog with a fresh socket" fetchlog_back
+ok "s6 restarted fetchlog (new pid $(pid_of 'python3 -m app[.]fetchlog')) with fetch.sock 620 root:lighttpd"
+no_leak_in_logs
+ok "docker logs after the outage: no access hash, no 32-hex run after /repo/ or /access/, no raw access-log record"
 echo "✓ GUI verify: all checks passed"
