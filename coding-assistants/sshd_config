@@ -18,6 +18,7 @@ AuthorizedKeysFile /root/.ssh/authorized_keys
 
 # Allow passing through common env vars from SSH client
 AcceptEnv LANG LC_* TERM COLORTERM
+SetEnv XDG_STATE_HOME=/data/.local/state
 
 PrintMotd yes
 PrintLastLog no

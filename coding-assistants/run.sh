@@ -7,7 +7,15 @@ bashio::log.level "${LOG_LEVEL}"
 # Persist /data directories for all coding assistants
 mkdir -p \
     /data/.config/opencode \
-    /data/.local/share/opencode
+    /data/.local/share/opencode \
+    /data/.local/state/herdr/client
+
+# Carry over saved machines and the selected machine if the old container files still exist.
+for state_file in endpoints.json endpoint-selection.json; do
+    if [[ -f "/root/.local/state/herdr/client/${state_file}" ]]; then
+        cp -pn "/root/.local/state/herdr/client/${state_file}" /data/.local/state/herdr/client/
+    fi
+done
 
 # Git config persistence — copy on first run, then symlink
 if [[ -f /root/.gitconfig ]] && [[ ! -f /data/.gitconfig ]]; then
@@ -447,6 +455,7 @@ export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 export XDG_CONFIG_HOME="/data/.config"
 export XDG_DATA_HOME="/data/.local/share"
+export XDG_STATE_HOME="/data/.local/state"
 export CODEX_HOME="/data/.codex"
 export PATH="/root/.opencode/bin:/root/.local/bin:/usr/local/bin:$PATH"
 EOF
@@ -476,6 +485,7 @@ fi
 export PATH="/root/.opencode/bin:/root/.local/bin:/usr/local/bin:$PATH"
 export XDG_CONFIG_HOME="/data/.config"
 export XDG_DATA_HOME="/data/.local/share"
+export XDG_STATE_HOME="/data/.local/state"
 export HA_URL
 export HA_TOKEN
 export SUPERVISOR_TOKEN
@@ -526,6 +536,7 @@ set -x LANG en_US.UTF-8
 set -x LC_ALL en_US.UTF-8
 set -x XDG_CONFIG_HOME /data/.config
 set -x XDG_DATA_HOME /data/.local/share
+set -x XDG_STATE_HOME /data/.local/state
 set -x CODEX_HOME /data/.codex
 set -U fish_user_paths (string match -rv '^/homeassistant/(bin|scripts/bin)' $fish_user_paths)
 fish_add_path /root/.opencode/bin /root/.local/bin /usr/local/bin
@@ -595,11 +606,34 @@ for key_type in rsa ecdsa ed25519; do
     fi
 done
 
+# Link the directory so SSH updates via rename (for example ssh-keygen -R) stay on /data.
+install -d -m 700 /data/.ssh
+if [[ -d /root/.ssh && ! -L /root/.ssh ]]; then
+    if cp -an /root/.ssh/. /data/.ssh/; then
+        if ssh_backup=$(mktemp -d /root/.ssh-before-persistence.XXXXXX); then
+            mv /root/.ssh "${ssh_backup}/.ssh"
+        fi
+    else
+        bashio::log.warning "Could not migrate /root/.ssh; keeping the original directory"
+    fi
+fi
+if [[ ! -e /root/.ssh && ! -L /root/.ssh ]]; then
+    ln -s /data/.ssh /root/.ssh
+fi
+chmod 700 /root/.ssh /data/.ssh
+
 # Write authorized keys from addon config (one key per list entry)
-mkdir -p /root/.ssh
-chmod 700 /root/.ssh
-jq -r '.authorized_keys[]?' /data/options.json > /root/.ssh/authorized_keys
-chmod 600 /root/.ssh/authorized_keys
+if authorized_keys_tmp=$(mktemp /root/.ssh/.authorized_keys.XXXXXX); then
+    if ! { jq -r '.authorized_keys[]?' /data/options.json > "${authorized_keys_tmp}" \
+        && mv -fT "${authorized_keys_tmp}" /root/.ssh/authorized_keys; }; then
+        rm -f "${authorized_keys_tmp}"
+        bashio::log.error "Could not write SSH authorized_keys"
+        exit 1
+    fi
+else
+    bashio::log.error "Could not create temporary SSH authorized_keys file"
+    exit 1
+fi
 
 KEY_COUNT=$(wc -l < /root/.ssh/authorized_keys)
 if [[ "${KEY_COUNT}" -eq 0 ]]; then

@@ -7,6 +7,12 @@ This add-on has no upstream — every entry below is hand-written by the maintai
 
 ## [Unreleased]
 
+## [1.3.3-0] - 2026-11-19
+
+### Fixed
+
+- Persist saved herdr machines and outbound SSH settings across add-on updates and restarts.
+
 ## [1.3.2-2] - 2026-11-18
 
 ### Changed

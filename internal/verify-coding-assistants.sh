@@ -1293,6 +1293,27 @@ scenario_herdr_attach() {
         fail "ssh round trip produced no output (${line})"
     fi
 
+    # Write the same catalog format as machine add without requiring a remote Herdr server.
+    # shellcheck disable=SC2016
+    assert_ok "write Herdr catalog and SSH client fixtures through their normal paths" ca_exec herdr-attach bash -lc '
+        printf "%s\n" "Host verify-machine" "    HostName verify.example" > ~/.ssh/config
+        printf "verify.example %s\n" "$(cat /data/ssh/ssh_host_ed25519_key.pub)" > ~/.ssh/known_hosts
+        jq -n '"'"'{version: 1, ssh: [{id: "0123456789abcdef0123456789abcdef", label: "Verify",
+            target: "verify-machine", session: "default", enabled: true}]}'"'"' \
+            > "${XDG_STATE_HOME}/herdr/client/endpoints.json"
+    '
+    restart_ca herdr-attach
+    wait_ca herdr-attach || return 0
+    out="$(ca_exec herdr-attach bash -lc 'herdr machine list --json')"
+    assert_match "saved Herdr machine is visible in a replacement container" "${out}" 'verify-machine'
+    assert_eq "SSH resolves the saved alias after container replacement" \
+        "$(ca_exec herdr-attach ssh -G verify-machine 2>/dev/null | awk '$1 == "hostname" {print $2}')" \
+        "verify.example"
+    assert_ok "SSH trusts the stored host after container replacement" \
+        ca_exec herdr-attach ssh-keygen -F verify.example
+    assert_ok "authorized_keys is regenerated from the configured options" \
+        ca_exec herdr-attach bash -c '[[ -f ~/.ssh/authorized_keys && ! -s ~/.ssh/authorized_keys ]]'
+
     # The previous multiplexer is gone: image and repository.
     assert_fail "the previous multiplexer is not installed in the image" \
         ca_exec herdr-attach sh -c 'command -v tmux'
