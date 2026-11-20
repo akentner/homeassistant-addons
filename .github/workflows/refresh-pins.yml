@@ -1,0 +1,84 @@
+# Refresh the SHA256 pins on Renovate PRs for the coding-assistants add-on.
+#
+# Renovate (GitHub App, no postUpgradeTasks) only bumps the *_VERSION values in coding-assistants/build.yaml. Merged
+# as-is, such a PR breaks the build (checksum mismatch) and scenario `drift`. This workflow runs
+# internal/refresh-pins-ci.sh on the PR branch (pin scripts, drift check, add-on subpatch bump, CHANGELOG entry) and
+# pushes the result as github-actions[bot].
+#
+# Security model: plain `pull_request` (never pull_request_target), same-repo `renovate/*` branches only (fork PRs get
+# a read-only token and are skipped). The branch name is only passed through env, never interpolated into a script.
+#
+# Re-trigger problem: pushes made with GITHUB_TOKEN start no workflows, so Lint would keep showing the stale result of
+# Renovate's commit. `workflow_dispatch` is exempt from that rule, so the last step dispatches lint.yml on the branch
+# (needs `actions: write`); the run is attached to the new head commit and shows up in the PR checks. No PAT, no
+# GitHub App, no secret required.
+name: Refresh pins
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "coding-assistants/**"
+      - "internal/*pins*.sh"
+      - "internal/refresh-pins-ci.sh"
+      - ".github/workflows/refresh-pins.yml"
+
+# One run per PR branch; a newer Renovate push supersedes a running refresh.
+concurrency:
+  group: refresh-pins-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  refresh:
+    name: Refresh coding-assistants pins
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && startsWith(github.head_ref, 'renovate/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # push the refresh commit to the Renovate branch
+      actions: write    # dispatch lint.yml on the new commit (see header)
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_REF: ${{ github.head_ref }}
+      REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Refresh pins, drift check, subpatch bump
+        run: |
+          git fetch --quiet origin main
+          BASE_REF=origin/main internal/refresh-pins-ci.sh
+
+      - name: Commit and push
+        id: push
+        run: |
+          if git diff --quiet; then
+            echo "Pins already up to date, nothing to push."
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add coding-assistants/
+          git commit -m "chore(coding-assistants): refresh SHA256 pins and add-on version"
+          # No credential helper was persisted: authenticate this one push explicitly.
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git" "HEAD:refs/heads/${HEAD_REF}"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Re-run lint on the new commit
+        if: steps.push.outputs.pushed == 'true'
+        run: gh workflow run lint.yml --repo "${REPOSITORY}" --ref "${HEAD_REF}"
