@@ -7,6 +7,12 @@ This add-on has no upstream — every entry below is hand-written by the maintai
 
 ## [Unreleased]
 
+## [1.3.3-2] - 2026-11-20
+
+### Changed
+
+- OpenCode 2.2.6 → 2.3.2 and Codex CLI 0.167.0 → 0.171.0 (SHA256 pins refreshed).
+
 ## [1.3.3-1] - 2026-11-19
 
 ### Fixed
