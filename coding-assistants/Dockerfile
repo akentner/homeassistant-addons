@@ -35,7 +35,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends gnupg \
 # No GitHub API call at build time: the unauthenticated API is rate limited on shared CI runners and returned an empty
 # tag (curl exit 22). Every tool is an ARG version plus the SHA256 of its x86_64 asset (the add-on builds for amd64
 # only); the ARG defaults are mirrored 1:1 in build.yaml (verify scenario `drift`). Renovate bumps the *_VERSION values;
-# refresh the digests with internal/update-tool-pins.sh on the same branch. A digest mismatch fails the build.
+# on Renovate PRs the workflow refresh-pins.yml refreshes the digests (internal/refresh-pins-ci.sh, which runs
+# internal/update-*-pins.sh) and pushes to the branch; run that script by hand only for non-Renovate bumps. A digest
+# mismatch fails the build.
 
 # yq — not in Debian repos, install from GitHub
 ARG YQ_VERSION=4.54.3

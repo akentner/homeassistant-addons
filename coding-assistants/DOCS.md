@@ -310,8 +310,7 @@ new as the image is never touched. Delete `/data/opencode/bin/opencode` to fall 
 ### Updating the bundled version
 
 Renovate opens a PR that bumps `OPENCODE_VERSION` in the `Dockerfile` and `build.yaml` (2.x releases only). It cannot
-update the digests: on that branch run `internal/update-opencode-pins.sh` (fetches the release asset digests with `gh`),
-then `make update-version ADDON=coding-assistants VERSION=<new add-on version>`.
+update the digests; see [Renovate PRs and pins](#renovate-prs-and-pins).
 
 ## Claude Code
 
@@ -477,8 +476,25 @@ and the sessions. `sessions/` and `log/` are excluded from backups.
 The version is pinned in the image: `CODEX_VERSION` and the two package SHA256 digests (`CODEX_SHA256_X86_64`,
 `CODEX_SHA256_AARCH64`) are `ARG` defaults in the `Dockerfile`, mirrored 1:1 in `build.yaml` (checked by
 `internal/verify-coding-assistants.sh drift`). Renovate opens a PR that bumps `CODEX_VERSION` in both files, but it
-cannot update the digests: on that branch run `internal/update-codex-pins.sh` (fetches the release asset digests with
-`gh`), then `make update-version ADDON=coding-assistants VERSION=<new add-on version>`.
+cannot update the digests; see [Renovate PRs and pins](#renovate-prs-and-pins).
+
+### Renovate PRs and pins
+
+Renovate (GitHub App, no `postUpgradeTasks`) only bumps the `*_VERSION` values in `build.yaml`. On every PR from a
+`renovate/*` branch of this repository that touches `coding-assistants/`, the workflow
+`.github/workflows/refresh-pins.yml` runs `internal/refresh-pins-ci.sh`:
+
+- `internal/update-tool-pins.sh`, `update-codex-pins.sh` and `update-opencode-pins.sh` (Dockerfile ARGs and SHA256
+  pins),
+- scenario `drift` of `internal/verify-coding-assistants.sh`,
+- add-on subpatch bump (`make update-version --no-tag` equivalent) plus a CHANGELOG entry, only when the PR has no
+  version bump yet,
+- one commit as `github-actions[bot]` pushed to the Renovate branch.
+
+Pushes with `GITHUB_TOKEN` start no workflows, so the last step dispatches `lint.yml` on the branch (`workflow_dispatch`
+is exempt); the run is attached to the new head commit. `gitIgnoredAuthors` in `.github/renovate.json` keeps Renovate
+rebasing the branch despite the bot commit (the workflow then runs again). For a bump outside Renovate run
+`BASE_REF=origin/main internal/refresh-pins-ci.sh` (needs `gh` auth) or the single scripts by hand.
 
 ### Updating herdr
 
