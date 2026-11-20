@@ -4,6 +4,51 @@
 cosign verify \
   --certificate-identity https://github.com/BerriAI/project-releaser/.github/workflows/release.yml@refs/heads/main \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/berriai/litellm:v1.110.2
+```
+
+Same command for `litellm-database`, `litellm-non_root` and the `docker.io/litellm/*` images
+
+## What's new in 1.110.2
+
+11 PRs. 8 fixed. No action needed to upgrade
+
+### Changes
+
+- **Anthropic:** Fixed `temperature=1` returning 400 on Claude models that removed sampling params on Anthropic, Vertex
+  AI and Azure AI, broken since v1.110.0-rc.2 (#52341)
+- **Responses API:** Fixed streams retrying after output reached the client, which sent duplicate events and billed
+  extra calls (#52461)
+- **Responses API:** Fixed streams that fail after reasoning output restarting on a fallback group and sending a second
+  response (#52616)
+- **Caching:** Fixed GPT-6.2 system prompts missing the prompt cache on `/v1/chat/completions` and `/v1/messages` unless
+  `store: false` (#52906) <sup>Also in [1.106.12](https://github.com/BerriAI/litellm/releases/tag/v1.106.12),
+  [1.108.13](https://github.com/BerriAI/litellm/releases/tag/v1.108.13),
+  [1.109.3](https://github.com/BerriAI/litellm/releases/tag/v1.109.3)</sup>
+- **Cost tracking and pricing:** Fixed forwarded Anthropic credentials on `/v1/messages` ignoring the deployment's
+  custom prices, broken since v1.109.0 (#52313)
+- **Keys, teams and auth:** Fixed JWT key mappings without `jwt_issuer` taking 5 minutes to apply when
+  `litellm_jwtauth.issuers` is set, broken since v1.103.0 (#52350) <sup>Also in
+  [1.108.13](https://github.com/BerriAI/litellm/releases/tag/v1.108.13),
+  [1.109.3](https://github.com/BerriAI/litellm/releases/tag/v1.109.3)</sup>
+- **Keys, teams and auth:** Fixed `/key/info` letting a key with no user read other userless keys by hash or alias
+  (#52838, #52925) <sup>Also in [1.106.12](https://github.com/BerriAI/litellm/releases/tag/v1.106.12),
+  [1.108.13](https://github.com/BerriAI/litellm/releases/tag/v1.108.13),
+  [1.109.3](https://github.com/BerriAI/litellm/releases/tag/v1.109.3)</sup>
+- **Performance:** Fixed memory growth from every finished request staying in memory until a full GC pass, broken since
+  v1.110.0-rc.1 (#51888)
+
+---
+
+Backport #52463 · Backport #52469 · Backport #52690 · Backport #52751 · Backport #52920 · Backport #52938 ·
+[Full changelog](https://github.com/BerriAI/litellm/compare/v1.110.1...v1.110.2)
+
+## Verify this release
+
+```bash
+cosign verify \
+  --certificate-identity https://github.com/BerriAI/project-releaser/.github/workflows/release.yml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/berriai/litellm:v1.110.1
 ```
 
