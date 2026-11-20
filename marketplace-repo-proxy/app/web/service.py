@@ -314,13 +314,30 @@ class GuiService:
                 raise AccessError("user_unknown")
         LOG.info("gui: revoked user %s from %s", _label(user), spec.slug if spec is not None else _repo_label(target))
 
+    def _restore_after_failed_add(
+        self, store: AccessStore, spec: RepoSpec, user: str, source: Any, old_hash: Any
+    ) -> None:
+        """Rotate rollback, called under the store lock: re-add the old hash only when the failed `add` wrote nothing.
+
+        Never raises, so the caller re-raises the original `add` error. When the new entry is already stored (`add`
+        failed after its write), nothing is rolled back; re-adding would only fail with `user_exists`.
+        """
+        try:
+            current = next((e for e in read_entries_safe(store) if _matches(e, spec.key, user)), None)
+            if current is None and isinstance(old_hash, str) and HASH_RE.fullmatch(old_hash):
+                store.add(spec.slug, user, source=source, hash_=old_hash, specs=self.config.options.repositories)
+        except Exception as exc:  # noqa: BLE001 - must not replace the add error
+            LOG.error("gui: rotate rollback failed for %s of %s (%s)", _label(user), spec.slug, type(exc).__name__)
+
     def rotate_user(self, repository: str, user: str, confirm: Any) -> dict[str, Any]:
         """A new random hash for an existing (repository, user): revoke + add inside ONE store lock (D-10, D-11).
 
         Every check runs before the first write. A concurrent locked reader never sees the user missing; git clients
-        see the old link go before the new one exists, never both. When `add` fails after the revoke, the old hash is
-        re-added and the error re-raised. `created` is reset, `source` kept, unknown fields of the entry are dropped. A
-        process crash between the two writes leaves the user without access (fail closed); recovery is a new add.
+        see the old link go before the new one exists, never both. When `add` fails after the revoke, the original error
+        is always re-raised: if `add` wrote nothing, the old hash is re-added first; if it failed after its write (link
+        tree), the new hash stays and `access-watch` completes the tree. `created` is reset, `source` kept, unknown
+        fields of the entry are dropped. A process crash between the two writes leaves the user without access (fail
+        closed); recovery is a new add.
         """
         spec = self._require_spec(repository)
         _check_confirm(user, confirm)
@@ -340,9 +357,8 @@ class GuiService:
             try:
                 new = store.add(spec.slug, user, source=source, specs=specs)
             except Exception:
-                if isinstance(old_hash, str) and HASH_RE.fullmatch(old_hash):
-                    store.add(spec.slug, user, source=source, hash_=old_hash, specs=specs)
-                raise
+                self._restore_after_failed_add(store, spec, user, source, old_hash)
+                raise  # the add error, never one from the rollback
         LOG.info("gui: rotated user %s of %s", _label(user), spec.slug)
         return {
             "repository": spec.slug,

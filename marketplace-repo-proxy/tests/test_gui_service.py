@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+import app.access
 from app.access import AccessError, AccessStore
 from app.accessread import AccessUnavailable
 from app.paths import Paths
@@ -643,6 +644,44 @@ def test_rotate_restores_the_old_hash_when_add_fails(paths: Paths, monkeypatch: 
     entry = entry_of(paths, REPO, "carol")
     assert entry is not None and entry["hash"] == old["hash"] and entry["source"] == "gui"
     assert links(paths) == {f"{REPO}/{old['hash']}"}
+
+
+def test_rotate_keeps_the_add_error_when_add_fails_after_its_write(
+    paths: Paths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WR-01: reconcile_tree fails after add() replaced access.json; no rollback, the OSError surfaces unchanged."""
+    old = seed(paths, REPO, "carol", "gui")
+    real_reconcile = app.access.reconcile_tree
+    calls = {"n": 0}
+
+    def flaky_reconcile(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 2:  # 1 = revoke, 2 = add (after its atomic write)
+            raise OSError(28, "No space left on device")
+        return real_reconcile(*args, **kwargs)
+
+    monkeypatch.setattr(app.access, "reconcile_tree", flaky_reconcile)
+    with pytest.raises(OSError) as info:
+        service(paths).rotate_user(REPO, "carol", "carol")
+    assert not isinstance(info.value, AccessError)
+    assert info.value.errno == 28
+    entries = [e for e in access_doc(paths)["entries"] if e["user"] == "carol"]
+    assert len(entries) == 1
+    assert entries[0]["hash"] != old["hash"] and entries[0]["source"] == "gui"
+    assert calls["n"] == 2  # no rollback add (it would reconcile a third time)
+
+
+def test_rotate_keeps_the_add_error_when_the_rollback_fails(paths: Paths, monkeypatch: pytest.MonkeyPatch) -> None:
+    seed(paths, REPO, "carol", "gui")
+
+    def failing_add(self, *args, **kwargs):
+        raise OSError(28, "No space left on device") if "hash_" not in kwargs else OSError(5, "I/O error")
+
+    monkeypatch.setattr(AccessStore, "add", failing_add)
+    with pytest.raises(OSError) as info:
+        service(paths).rotate_user(REPO, "carol", "carol")
+    assert info.value.errno == 28
+    assert entry_of(paths, REPO, "carol") is None  # fail closed: revoked, rollback failed
 
 
 _READER = r"""
