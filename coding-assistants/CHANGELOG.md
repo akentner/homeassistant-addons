@@ -7,6 +7,12 @@ This add-on has no upstream — every entry below is hand-written by the maintai
 
 ## [Unreleased]
 
+## [1.3.3-3] - 2026-11-20
+
+### Changed
+
+- atuin 18.24.8 → 18.25.0 (SHA256 pin refreshed).
+
 ## [1.3.3-2] - 2026-11-20
 
 ### Changed

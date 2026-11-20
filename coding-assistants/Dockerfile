@@ -183,8 +183,8 @@ RUN curl -fsSL \
     && rm /tmp/yazi.zip
 
 # atuin — shell history with TUI search; glibc release requires GLIBC_2.39 (Bookworm has 2.36), use musl build
-ARG ATUIN_VERSION=18.24.8
-ARG ATUIN_SHA256_X86_64=f8dfc3f9d27cadc2e2c9d489394ef7c568291e2382a4d184865701bf1a4ac30a
+ARG ATUIN_VERSION=18.25.0
+ARG ATUIN_SHA256_X86_64=9ebfb49d9f5cc5fb03588315f8f54277fe9e3648bd98de7666a350000670cd19
 RUN mkdir -p /tmp/atuin \
     && curl -fsSL \
         "https://github.com/atuinsh/atuin/releases/download/v${ATUIN_VERSION}/atuin-x86_64-unknown-linux-musl.tar.gz" \
