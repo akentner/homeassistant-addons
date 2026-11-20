@@ -231,9 +231,9 @@ RUN uv tool install graphifyy
 # The binary is placed where the official installer (and `opencode upgrade`) writes it, $HOME/.opencode/bin, and a copy is
 # stashed at /opt/opencode-initial/ so run.sh can seed it into the persistent /data volume (only when it is newer than
 # what is persisted); user-initiated upgrades persist across container rebuilds.
-ARG OPENCODE_VERSION=2.2.6
-ARG OPENCODE_SHA256_X86_64=08bb21d6326ce740d91cce7ebe88a6536933f6e1e30353b91a06b01f25da306c
-ARG OPENCODE_SHA256_AARCH64=f2d27600c367e45057d6a16f6a5c2aa8d77b41a9b10d4bc3d849c2f88870e944
+ARG OPENCODE_VERSION=2.3.2
+ARG OPENCODE_SHA256_X86_64=563b5d663637226b6e3bb4bb6803281bc39b0d2cd88db06d674b6420aab009b0
+ARG OPENCODE_SHA256_AARCH64=9d10185acdb72336e086e699ca363a6065f410fd3c1caed0dc8046e95ac06ccb
 RUN ARCH=$(uname -m) \
     && case "${ARCH}" in \
         x86_64) OPENCODE_ASSET="opencode-linux-x64"; OPENCODE_SHA256="${OPENCODE_SHA256_X86_64}" ;; \
@@ -278,9 +278,9 @@ RUN npm install -g @github/copilot fx mcp-server-mysql
 # in build.yaml (verify scenario `drift`); the digests are the GitHub release asset digests of tag rust-v<version>.
 # Renovate bumps CODEX_VERSION only — refresh the digests with internal/update-codex-pins.sh. Keep the package layout:
 # bin/ contains the CLI and tool hosts; codex-resources/ includes bubblewrap. State lives in CODEX_HOME=/data/.codex.
-ARG CODEX_VERSION=0.167.0
-ARG CODEX_SHA256_X86_64=3bbf75e83de6b58aed28f2cf6e33ad423ec31fd4700a1457b94be557ea5a7c6e
-ARG CODEX_SHA256_AARCH64=0de261ecf1e7f3028a7952f03fca2093f749277d38590b78bb32f8567756bbb7
+ARG CODEX_VERSION=0.171.0
+ARG CODEX_SHA256_X86_64=8391d67757496bfd14893eca6cbf0c96994bf2627566ff1f018f70600c9ef6b3
+ARG CODEX_SHA256_AARCH64=d8c43bee6cf11b01eb18b95f4d7961092bc40228180808859e70dabb7784c1c9
 RUN ARCH=$(uname -m) \
     && case "${ARCH}" in \
         x86_64) CODEX_SHA256="${CODEX_SHA256_X86_64}" ;; \
