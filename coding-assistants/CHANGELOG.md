@@ -7,6 +7,18 @@ This add-on has no upstream — every entry below is hand-written by the maintai
 
 ## [Unreleased]
 
+## [1.3.3-1] - 2026-11-19
+
+### Fixed
+
+- Image build no longer fails when the unauthenticated GitHub API rate-limits the CI runner (yq download exited with
+  curl 22, so 1.3.3-0 was never published).
+
+### Changed
+
+- yq, ha CLI, ttyd, fff-mcp, eza, delta, difftastic, yazi, atuin, tealdeer and lazygit are pinned to a version with a
+  SHA256 check instead of resolving "latest" through the GitHub API (`internal/update-tool-pins.sh` refreshes the pins).
+
 ## [1.3.3-0] - 2026-11-19
 
 ### Fixed

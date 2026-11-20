@@ -31,12 +31,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends gnupg \
     && node --version \
     && npm --version
 
+# Pinned GitHub release tools (yq, ha CLI, ttyd, fff-mcp, eza, delta, difftastic, yazi, atuin, tealdeer, lazygit).
+# No GitHub API call at build time: the unauthenticated API is rate limited on shared CI runners and returned an empty
+# tag (curl exit 22). Every tool is an ARG version plus the SHA256 of its x86_64 asset (the add-on builds for amd64
+# only); the ARG defaults are mirrored 1:1 in build.yaml (verify scenario `drift`). Renovate bumps the *_VERSION values;
+# refresh the digests with internal/update-tool-pins.sh on the same branch. A digest mismatch fails the build.
+
 # yq — not in Debian repos, install from GitHub
-RUN YQ_VER=$(curl -sf https://api.github.com/repos/mikefarah/yq/releases/latest | jq -r '.tag_name') \
-    && curl -fsSL \
-        "https://github.com/mikefarah/yq/releases/download/${YQ_VER}/yq_linux_amd64" \
-        -o /usr/local/bin/yq \
-    && chmod +x /usr/local/bin/yq
+ARG YQ_VERSION=4.54.3
+ARG YQ_SHA256_X86_64=129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973
+RUN curl -fsSL "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64" -o /usr/local/bin/yq \
+    && echo "${YQ_SHA256_X86_64}  /usr/local/bin/yq" | sha256sum -c - \
+    && chmod +x /usr/local/bin/yq \
+    && [ "$(yq --version | grep -oE '[0-9]+[.][0-9]+[.][0-9]+' | head -n 1)" = "${YQ_VERSION}" ]
 
 # uv — Python package manager (used for all Python package installs)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
@@ -72,19 +79,17 @@ RUN chmod +x \
     /usr/local/bin/git-submodule-changes
 
 # Home Assistant CLI — uses $SUPERVISOR_TOKEN injected by HA supervisor
-RUN HA_CLI_VER=$(curl -sf https://api.github.com/repos/home-assistant/cli/releases/latest \
-        | jq -r .tag_name) \
-    && curl -fsSL \
-        "https://github.com/home-assistant/cli/releases/download/${HA_CLI_VER}/ha_amd64" \
-        -o /usr/local/bin/ha \
+ARG HA_CLI_VERSION=6.0.0
+ARG HA_CLI_SHA256_X86_64=faab39046723cb68d43e9d5c8ac5a2cf105f3ecb3f5c8a01c0999c2699c56489
+RUN curl -fsSL "https://github.com/home-assistant/cli/releases/download/${HA_CLI_VERSION}/ha_amd64" -o /usr/local/bin/ha \
+    && echo "${HA_CLI_SHA256_X86_64}  /usr/local/bin/ha" | sha256sum -c - \
     && chmod +x /usr/local/bin/ha
 
 # ttyd — static web terminal binary
-RUN TTYD_VER=$(curl -sf https://api.github.com/repos/tsl0922/ttyd/releases/latest \
-        | jq -r .tag_name) \
-    && curl -fsSL \
-        "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VER}/ttyd.x86_64" \
-        -o /usr/local/bin/ttyd \
+ARG TTYD_VERSION=1.7.7
+ARG TTYD_SHA256_X86_64=8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55
+RUN curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.x86_64" -o /usr/local/bin/ttyd \
+    && echo "${TTYD_SHA256_X86_64}  /usr/local/bin/ttyd" | sha256sum -c - \
     && chmod +x /usr/local/bin/ttyd
 
 # herdr — terminal workspace manager for coding agents (static release binary, replaces the previous multiplexer).
@@ -109,11 +114,12 @@ RUN ARCH=$(uname -m) \
     && [ "$(herdr --version | cut -d' ' -f2)" = "${HERDR_VERSION}" ]
 
 # fff-mcp — fast file search MCP server for AI agents (glibc build for Debian)
-RUN FFF_VER=$(curl -sf https://api.github.com/repos/dmtrKovalenko/fff/releases/latest \
-        | jq -r '.tag_name | ltrimstr("v")') \
-    && curl -fsSL \
-        "https://github.com/dmtrKovalenko/fff/releases/download/v${FFF_VER}/fff-mcp-x86_64-unknown-linux-gnu" \
+ARG FFF_VERSION=0.11.0
+ARG FFF_SHA256_X86_64=1b645947cfa086f8080cd6419899e32cb2c531b122618c1141d9155e449ce647
+RUN curl -fsSL \
+        "https://github.com/dmtrKovalenko/fff/releases/download/v${FFF_VERSION}/fff-mcp-x86_64-unknown-linux-gnu" \
         -o /usr/local/bin/fff-mcp \
+    && echo "${FFF_SHA256_X86_64}  /usr/local/bin/fff-mcp" | sha256sum -c - \
     && chmod +x /usr/local/bin/fff-mcp
 
 # MCP2ZigBee2MQTT — Zigbee2MQTT MCP server for AI assistants (TypeScript, no releases — build from main)
@@ -131,64 +137,81 @@ RUN apt-get update && apt-get install -y --no-install-recommends g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # eza — modern ls replacement, glibc build for Debian
-RUN EZA_VER=$(curl -sf https://api.github.com/repos/eza-community/eza/releases/latest \
-        | jq -r '.tag_name | ltrimstr("v")') \
-    && mkdir -p /tmp/eza \
+ARG EZA_VERSION=0.23.5
+ARG EZA_SHA256_X86_64=35c70c5c43c29108075e58b893234c67ef585f0b53a7eaf8e9e7d4eec9f339b4
+RUN mkdir -p /tmp/eza \
     && curl -fsSL \
-        "https://github.com/eza-community/eza/releases/download/v${EZA_VER}/eza_x86_64-unknown-linux-gnu.tar.gz" \
-        | tar xz -C /tmp/eza \
+        "https://github.com/eza-community/eza/releases/download/v${EZA_VERSION}/eza_x86_64-unknown-linux-gnu.tar.gz" \
+        -o /tmp/eza/eza.tar.gz \
+    && echo "${EZA_SHA256_X86_64}  /tmp/eza/eza.tar.gz" | sha256sum -c - \
+    && tar xzf /tmp/eza/eza.tar.gz -C /tmp/eza \
     && mv /tmp/eza/eza /usr/local/bin/ \
     && rm -rf /tmp/eza
 
 # delta — git diff pager with syntax highlighting (glibc build)
-RUN TAG=$(curl -sf https://api.github.com/repos/dandavison/delta/releases/latest | jq -r '.tag_name') \
-    && VER=${TAG#v} \
-    && mkdir -p /tmp/delta \
+ARG DELTA_VERSION=0.21.2
+ARG DELTA_SHA256_X86_64=5d41046c4ada17e7d080e1e5dbbd46544146bb5597e2ab56881a8c594272cd06
+RUN mkdir -p /tmp/delta \
     && curl -fsSL \
-        "https://github.com/dandavison/delta/releases/download/${TAG}/delta-${VER}-x86_64-unknown-linux-gnu.tar.gz" \
-        | tar xz -C /tmp/delta \
+        "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/delta-${DELTA_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+        -o /tmp/delta/delta.tar.gz \
+    && echo "${DELTA_SHA256_X86_64}  /tmp/delta/delta.tar.gz" | sha256sum -c - \
+    && tar xzf /tmp/delta/delta.tar.gz -C /tmp/delta \
     && mv /tmp/delta/delta-*/delta /usr/local/bin/ \
     && rm -rf /tmp/delta
 
 # difftastic — structural diff (understands syntax), glibc build
+ARG DIFFTASTIC_VERSION=0.72.0
+ARG DIFFTASTIC_SHA256_X86_64=33ea1f003081e9f2422299a434e6040c89085bd9f102b08f3fe30393720d5d4a
 RUN mkdir -p /tmp/difft \
     && curl -fsSL \
-        "$(curl -sf https://api.github.com/repos/Wilfred/difftastic/releases/latest \
-            | jq -r '.assets[] | select(.name | test("^difft-(.+-)?x86_64-unknown-linux-gnu[.]tar[.]gz$")) | .browser_download_url')" \
-        | tar xz -C /tmp/difft \
+        "https://github.com/Wilfred/difftastic/releases/download/${DIFFTASTIC_VERSION}/difft-${DIFFTASTIC_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+        -o /tmp/difft/difft.tar.gz \
+    && echo "${DIFFTASTIC_SHA256_X86_64}  /tmp/difft/difft.tar.gz" | sha256sum -c - \
+    && tar xzf /tmp/difft/difft.tar.gz -C /tmp/difft \
     && mv /tmp/difft/difft /usr/local/bin/ \
     && rm -rf /tmp/difft
 
 # yazi — terminal file manager; glibc release requires GLIBC_2.39 (Bookworm has 2.36), use musl build
-RUN YAZI_VER=$(curl -sf https://api.github.com/repos/sxyazi/yazi/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
-    && curl -fsSL \
-        "https://github.com/sxyazi/yazi/releases/download/v${YAZI_VER}/yazi-x86_64-unknown-linux-musl.zip" \
+ARG YAZI_VERSION=26.9.1
+ARG YAZI_SHA256_X86_64=9b9c39decccf8cb0ff53a7d637d38f8a79d93bbd0099f4ea9c619ef6bb392f5d
+RUN curl -fsSL \
+        "https://github.com/sxyazi/yazi/releases/download/v${YAZI_VERSION}/yazi-x86_64-unknown-linux-musl.zip" \
         -o /tmp/yazi.zip \
+    && echo "${YAZI_SHA256_X86_64}  /tmp/yazi.zip" | sha256sum -c - \
     && unzip -j /tmp/yazi.zip '*/yazi' '*/ya' -d /usr/local/bin \
     && rm /tmp/yazi.zip
 
 # atuin — shell history with TUI search; glibc release requires GLIBC_2.39 (Bookworm has 2.36), use musl build
-RUN ATUIN_VER=$(curl -sf https://api.github.com/repos/atuinsh/atuin/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
-    && mkdir -p /tmp/atuin \
+ARG ATUIN_VERSION=18.24.8
+ARG ATUIN_SHA256_X86_64=f8dfc3f9d27cadc2e2c9d489394ef7c568291e2382a4d184865701bf1a4ac30a
+RUN mkdir -p /tmp/atuin \
     && curl -fsSL \
-        "https://github.com/atuinsh/atuin/releases/download/v${ATUIN_VER}/atuin-x86_64-unknown-linux-musl.tar.gz" \
-        | tar xz -C /tmp/atuin \
+        "https://github.com/atuinsh/atuin/releases/download/v${ATUIN_VERSION}/atuin-x86_64-unknown-linux-musl.tar.gz" \
+        -o /tmp/atuin/atuin.tar.gz \
+    && echo "${ATUIN_SHA256_X86_64}  /tmp/atuin/atuin.tar.gz" | sha256sum -c - \
+    && tar xzf /tmp/atuin/atuin.tar.gz -C /tmp/atuin \
     && mv /tmp/atuin/atuin-*/atuin /usr/local/bin/ \
     && rm -rf /tmp/atuin
 
 # tealdeer — fast tldr client; only musl builds available upstream, but musl binaries work fine on glibc
-RUN TLDR_VER=$(curl -sf https://api.github.com/repos/tealdeer-rs/tealdeer/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
-    && curl -fsSL \
-        "https://github.com/tealdeer-rs/tealdeer/releases/download/v${TLDR_VER}/tealdeer-linux-x86_64-musl" \
+ARG TEALDEER_VERSION=1.9.1
+ARG TEALDEER_SHA256_X86_64=5a9c3f0691b9cf375ee5c99de802885f3d50498cf686a539e2ddda028eb6b4f6
+RUN curl -fsSL \
+        "https://github.com/tealdeer-rs/tealdeer/releases/download/v${TEALDEER_VERSION}/tealdeer-linux-x86_64-musl" \
         -o /usr/local/bin/tldr \
+    && echo "${TEALDEER_SHA256_X86_64}  /usr/local/bin/tldr" | sha256sum -c - \
     && chmod +x /usr/local/bin/tldr
 
 # lazygit — Go binary, statically compiled, works everywhere
-RUN LG_VER=$(curl -sf https://api.github.com/repos/jesseduffield/lazygit/releases/latest \
-        | jq -r '.tag_name | ltrimstr("v")') \
-    && curl -fsSL \
-        "https://github.com/jesseduffield/lazygit/releases/download/v${LG_VER}/lazygit_${LG_VER}_Linux_x86_64.tar.gz" \
-        | tar xz -C /usr/local/bin lazygit
+ARG LAZYGIT_VERSION=0.66.3
+ARG LAZYGIT_SHA256_X86_64=0a23f429a95f0d09db298b3c291536d818de066aa5a85c255806f0490ff6656b
+RUN curl -fsSL \
+        "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_linux_x86_64.tar.gz" \
+        -o /tmp/lazygit.tar.gz \
+    && echo "${LAZYGIT_SHA256_X86_64}  /tmp/lazygit.tar.gz" | sha256sum -c - \
+    && tar xzf /tmp/lazygit.tar.gz -C /usr/local/bin lazygit \
+    && rm /tmp/lazygit.tar.gz
 
 # task — taskfile.dev task runner
 RUN curl -fsSL https://taskfile.dev/install.sh | sh -s -- -d -b /usr/local/bin
