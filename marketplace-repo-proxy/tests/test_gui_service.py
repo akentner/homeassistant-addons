@@ -22,6 +22,8 @@ from pathlib import Path
 import pytest
 
 import app.access
+import app.accessread
+import app.web.service
 from app.access import AccessError, AccessStore
 from app.accessread import AccessUnavailable
 from app.paths import Paths
@@ -757,6 +759,63 @@ def test_unreadable_access_file_is_refused_and_left_alone(paths: Paths, content:
         calls[action]()
     assert paths.access_file.read_text(encoding="utf-8") == content
     assert not paths.access_file.with_name("access.json.corrupt").exists()
+
+
+def fail_one_access_read(paths: Paths, monkeypatch: pytest.MonkeyPatch, fail_at: int) -> dict[str, int]:
+    """Make the `fail_at`-th read of access.json raise OSError, whichever module reads it (store, reader or GUI)."""
+    real = app.access.read_json
+    calls = {"n": 0}
+
+    def flaky(path, *args, **kwargs):
+        if Path(path) == paths.access_file:
+            calls["n"] += 1
+            if calls["n"] == fail_at:
+                raise OSError(5, "I/O error")
+        return real(path, *args, **kwargs)
+
+    for module in (app.access, app.accessread, app.web.service):
+        if hasattr(module, "read_json"):
+            monkeypatch.setattr(module, "read_json", flaky)
+    return calls
+
+
+# read 1 is the guard under the lock; read 2 is the store's own load() (rotate: revoke), read 3 rotate's add()
+@pytest.mark.parametrize(("action", "fail_at"), [("add", 2), ("revoke", 2), ("rotate", 2), ("rotate", 3)])
+def test_read_failure_after_the_guard_keeps_every_user(
+    paths: Paths, monkeypatch: pytest.MonkeyPatch, action: str, fail_at: int
+) -> None:
+    """WR-02: one transient read error between the guard and the write never moves access.json aside or shrinks it."""
+    for user in ("alice", "bob", "carol"):
+        seed(paths, REPO, user)
+    before = {e["user"]: e["hash"] for e in access_doc(paths)["entries"]}
+    svc = service(paths)
+    calls = fail_one_access_read(paths, monkeypatch, fail_at)
+    run = {
+        "add": lambda: svc.add_user(REPO, "dave"),
+        "revoke": lambda: svc.revoke_user(REPO, "bob", "bob"),
+        "rotate": lambda: svc.rotate_user(REPO, "carol", "carol"),
+    }
+    with pytest.raises(AccessUnavailable):
+        run[action]()
+    assert calls["n"] >= fail_at
+    after = {e["user"]: e["hash"] for e in access_doc(paths)["entries"]}
+    assert after == before  # rotate (read 3): revoked, then rolled back to the old hash
+    assert not paths.access_file.with_name("access.json.corrupt").exists()
+    assert links(paths) == {f"{REPO}/{h}" for h in before.values()}
+
+
+def test_rotate_stops_when_revoke_finds_no_entry(paths: Paths, monkeypatch: pytest.MonkeyPatch) -> None:
+    """WR-02: a False from revoke() (entry gone since the check) ends the rotation; add() is never called."""
+    seed(paths, REPO, "carol")
+    monkeypatch.setattr(AccessStore, "revoke", lambda self, *args, **kwargs: False)
+
+    def no_add(self, *args, **kwargs):
+        raise AssertionError("add() must not run after a failed revoke")
+
+    monkeypatch.setattr(AccessStore, "add", no_add)
+    with pytest.raises(AccessError) as info:
+        service(paths).rotate_user(REPO, "carol", "carol")
+    assert info.value.code == "user_unknown"
 
 
 def test_access_log_lines_name_labels_only(paths: Paths, caplog: pytest.LogCaptureFixture) -> None:

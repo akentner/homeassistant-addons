@@ -6,9 +6,11 @@ from the isolated reader in `app.web.registration` (D-19). The add-on version is
 image build writes (D-30); no Supervisor call and no environment variable are involved.
 
 Access (MRP-14): `/data/access.json` is written only through `AccessStore` (D-09, D-10). Every read goes through
-`read_entries_safe` (never renames the file, WR-04), and every write first runs it inside the same store lock, so an
-unreadable file is refused instead of replaced by a file holding only the new user. The list never carries a hash or a
-URL; store URLs are built with `app.urls.store_urls` only for the add, URL and rotate responses (D-16), never logged.
+`read_entries_safe` (never renames the file, WR-04), and every write first runs it inside the same store lock. Writes
+use `_GuiStore`, whose `load()` raises `AccessUnavailable` instead of renaming, so a file that turns unreadable between
+that check and the write is still refused instead of replaced by a file holding only the new user. The list never
+carries a hash or a URL; store URLs are built with `app.urls.store_urls` only for the add, URL and rotate responses
+(D-16), never logged.
 
 Last fetch (MRP-15, D-21): `/data/last-fetch.json` has a single writer (`fetchlog`, atomic replace), so the list reads
 it without a lock, once per call, and never writes or renames it. A user's `last_fetch` is shown only when it is newer
@@ -25,9 +27,9 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from app.access import HASH_RE, RESERVED_USERS, SOURCES, USER_RE, AccessError, AccessStore
-from app.accessread import read_entries_safe
-from app.jsonio import atomic_write_json
+from app.access import HASH_RE, RESERVED_USERS, SCHEMA, SOURCES, USER_RE, AccessError, AccessStore, _valid_shape
+from app.accessread import AccessUnavailable, read_entries_safe
+from app.jsonio import atomic_write_json, read_json
 from app.lastfetch import TIMESTAMP_RE, LastFetchRecord, read_last_fetch
 from app.logsetup import mask_hashes
 from app.options import Options, RepoSpec, load_options, parse_repository
@@ -139,6 +141,26 @@ def _user_row(entry: dict[str, Any], record: LastFetchRecord | None = None) -> d
     }
 
 
+class _GuiStore(AccessStore):
+    """`AccessStore` for GUI writes: `load()` fails closed without renaming (WR-04; `app/access.py` stays as is, D-10).
+
+    The base `load()` moves an unreadable file to access.json.corrupt and returns no users, so `add` would write a file
+    holding only the new user. Here any read error, invalid shape or newer schema raises `AccessUnavailable` (503) and
+    nothing is written; `access-watch` keeps doing the fail-closed handling of a really corrupt file.
+    """
+
+    def load(self) -> dict[str, Any]:
+        try:
+            doc = read_json(self.paths.access_file)
+        except (OSError, ValueError):
+            raise AccessUnavailable() from None
+        if doc is None:
+            return {"schema": SCHEMA, "entries": []}
+        if not _valid_shape(doc) or doc["schema"] > SCHEMA:
+            raise AccessUnavailable()
+        return doc
+
+
 class GuiService:
     def __init__(
         self,
@@ -219,7 +241,7 @@ class GuiService:
     # --- access (MRP-14) --------------------------------------------------------------------------------------------
 
     def _store(self) -> AccessStore:
-        return AccessStore(self.paths)
+        return _GuiStore(self.paths)
 
     def _spec(self, repository: Any) -> RepoSpec | None:
         """The configured spec for `owner/repo`, matched case-insensitively and without trimming."""
@@ -353,7 +375,8 @@ class GuiService:
             if source not in SOURCES or not USER_RE.fullmatch(user):
                 raise AccessError("invalid_user")  # validated BEFORE the revoke: add() must not fail afterwards
             old_hash = entry.get("hash")
-            store.revoke(spec.slug, user, specs=specs)
+            if not store.revoke(spec.slug, user, specs=specs):
+                raise AccessError("user_unknown")  # gone since the check: never go on to add() on that state
             try:
                 new = store.add(spec.slug, user, source=source, specs=specs)
             except Exception:

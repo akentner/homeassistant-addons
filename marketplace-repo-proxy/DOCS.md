@@ -138,7 +138,8 @@ into the image at build time, and a local build without it shows no version. The
 - **Last fetch** is the time of the user's last clone or fetch with the current URL (definition in
   [/data/last-fetch.json](#datalast-fetchjson)), shown relative, or "never". After a rotation or a re-creation it shows
   "never" until the new URL is used.
-- When `/data/access.json` cannot be read, every action is refused with an error and nothing is changed.
+- When `/data/access.json` cannot be read, every action is refused with an error. The page never moves the file aside
+  and never drops other users; a rotation that fails after the revoke puts the old URL back when it can.
 
 ### Info
 
