@@ -58,10 +58,10 @@ jobs:
           npm install -g markdownlint-cli2@0.23.2
 
       - name: Install actionlint
+        env: { GH_TOKEN: "${{ github.token }}" }  # authenticated lookup: the anonymous API is rate limited
         run: |
-          # Install actionlint binary directly
-          ACTIONLINT_VERSION=$(curl -s https://api.github.com/repos/rhysd/actionlint/releases/latest | jq -r .tag_name)
-          curl -sL "https://github.com/rhysd/actionlint/releases/download/${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION#v}_linux_amd64.tar.gz" | tar xz -C /tmp
+          ACTIONLINT_VERSION=$(gh api repos/rhysd/actionlint/releases/latest --jq .tag_name)
+          curl -fsSL --retry 3 "https://github.com/rhysd/actionlint/releases/download/${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION#v}_linux_amd64.tar.gz" | tar xz -C /tmp
           sudo mv /tmp/actionlint /usr/local/bin/
           actionlint --version
 
