@@ -415,6 +415,7 @@ PYEOF
 
     # Per connection: generate env-baked wrapper script + register as MCP server
     CLAUDE_MARIADB_COUNT=0
+    CODEX_MARIADB_COUNT=0
     while IFS= read -r entry; do
         name=$(echo "${entry}" | jq -r '.name')
         host=$(echo "${entry}" | jq -r '.host')
@@ -452,10 +453,17 @@ PYEOF
             '{ ($n): { type: "stdio", command: $cmd, args: [], env: {} } }')"; then
             CLAUDE_MARIADB_COUNT=$((CLAUDE_MARIADB_COUNT + 1))
         fi
+
+        # Register in Codex (config.toml); same wrapper, env stays empty
+        if codex_mcp_merge "$(jq -cn --arg n "${mcp_name}" --arg cmd "${mcp_script}" \
+            '{ ($n): { command: $cmd, args: [], env: {} } }')"; then
+            CODEX_MARIADB_COUNT=$((CODEX_MARIADB_COUNT + 1))
+        fi
     done < <(jq -c '.mycli.connections[]' /data/options.json)
 
     bashio::log.info "Registered ${CONNECTION_COUNT} mariadb-mcp server(s) in OpenCode config"
     bashio::log.info "Registered ${CLAUDE_MARIADB_COUNT} mariadb-mcp server(s) in Claude Code config"
+    bashio::log.info "Registered ${CODEX_MARIADB_COUNT} mariadb-mcp server(s) in Codex config"
 
     # Stash default-connection values for the late fish append (below)
     MYCLI_DEFAULT_HOST=$(jq -r --arg n "${MYCLI_DEFAULT}" '.mycli.connections[] | select(.name == $n) | .host' /data/options.json)

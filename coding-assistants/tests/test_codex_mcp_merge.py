@@ -92,6 +92,11 @@ class WiringTests(unittest.TestCase):
         self.assertIn('codex_mcp_merge "${MCP_OBJ_CODEX}"', run_sh)
         self.assertIn('codex_mcp_merge "${Z2M_OBJ_CODEX}"', run_sh)
 
+    def test_run_sh_merges_mariadb_connections_into_codex(self):
+        run_sh = (self.ADDON / "run.sh").read_text()
+        self.assertIn("CODEX_MARIADB_COUNT=$((CODEX_MARIADB_COUNT + 1))", run_sh)
+        self.assertIn("{ command: $cmd, args: [], env: {} }", run_sh)
+
     def test_dockerfile_installs_the_helper(self):
         dockerfile = (self.ADDON / "Dockerfile").read_text()
         self.assertIn("codex-mcp-merge", dockerfile.split("# HA API tools", 1)[1].split("# Home Assistant CLI", 1)[0])
