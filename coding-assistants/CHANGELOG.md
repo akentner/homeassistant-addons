@@ -7,6 +7,14 @@ This add-on has no upstream — every entry below is hand-written by the maintai
 
 ## [Unreleased]
 
+## [1.3.3-5] - 2026-11-22
+
+### Fixed
+
+- Codex login and sessions were lost on every restart when Codex ran without `CODEX_HOME` (for example started by a
+  non-interactive SSH command): it then used `/root/.codex` in the ephemeral container layer. `/root/.codex` is now a
+  symlink to `/data/.codex`; files left in a real `/root/.codex` are merged into `/data/.codex` without overwriting.
+
 ## [1.3.3-4] - 2026-11-22
 
 ### Fixed

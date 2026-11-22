@@ -461,7 +461,11 @@ Codex (`codex`) uses the complete musl release package of [openai/codex](https:/
 The package lives in `/opt/codex`, including the code-mode host, exec server and bundled sandbox resources. The three
 executables are linked into `/usr/local/bin`; keep the package layout when updating them manually. State lives in
 `CODEX_HOME=/data/.codex` (mode 700, exported for web terminal, SSH and fish): `auth.json`, `config.toml`, `AGENTS.md`
-and the sessions. `sessions/` and `log/` are excluded from backups.
+and the sessions. `sessions/` and `log/` are excluded from backups. `/root/.codex` is a symlink to `/data/.codex`. Codex
+processes started without `CODEX_HOME` (for example a non-interactive SSH command such as a remote app-server: root's
+login shell is bash, which does not read `/etc/profile.d` there) would otherwise write to `/root/.codex`, which is lost
+on every restart together with the login and the sessions. A leftover real `/root/.codex` is merged into `/data/.codex`
+on start without overwriting files.
 
 - **Login:** `codex login --device-auth` (works without a browser in the container), or set the `openai_api_key` option.
 - **Tool context:** TOOLS.md is injected into `/data/.codex/AGENTS.md` as a marked block on every start; text outside

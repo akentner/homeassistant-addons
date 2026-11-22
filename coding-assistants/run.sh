@@ -119,6 +119,15 @@ ln -s /data/.claude.json /root/.claude.json
 export CODEX_HOME="/data/.codex"
 mkdir -p "${CODEX_HOME}"
 chmod 700 "${CODEX_HOME}"
+# Processes started without CODEX_HOME (e.g. a non-interactive SSH command: root's login shell is bash and does not
+# read /etc/profile.d there) fall back to $HOME/.codex. /root is part of the ephemeral container layer, so auth and
+# sessions written there are lost on restart: route it to /data like /root/.claude. A real directory left over from
+# such a process is merged into /data/.codex without overwriting existing files.
+if [[ -d /root/.codex && ! -L /root/.codex ]]; then
+    cp -an /root/.codex/. "${CODEX_HOME}/" || bashio::log.warning "Could not merge /root/.codex into ${CODEX_HOME}"
+fi
+rm -rf /root/.codex
+ln -s "${CODEX_HOME}" /root/.codex
 
 # Tool context for Claude Code and Codex — TOOLS.md is injected into the user-level /data/.claude/CLAUDE.md and
 # /data/.codex/AGENTS.md as a marked block that is rewritten on every start; all text outside the markers is
