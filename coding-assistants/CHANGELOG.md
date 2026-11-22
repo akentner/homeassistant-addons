@@ -7,6 +7,14 @@ This add-on has no upstream — every entry below is hand-written by the maintai
 
 ## [Unreleased]
 
+## [1.3.3-4] - 2026-11-22
+
+### Fixed
+
+- MCP servers from the `mcp_servers` option, the Zigbee2MQTT server and the `mariadb-<name>` servers of `mycli` are now
+  also registered in Codex (`/data/.codex/config.toml`), not only in OpenCode and Claude Code. Existing entries and user
+  settings are kept.
+
 ## [1.3.3-3] - 2026-11-20
 
 ### Changed

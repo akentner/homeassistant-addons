@@ -141,8 +141,8 @@ zigbee2mqtt:
 
 Configures one or more MariaDB/MySQL connections for the bundled `mycli` client and `mcp-server-mysql` MCP server. When
 enabled, each connection becomes a DSN alias in `/data/.myclirc` (chmod 600) and an auto-registered MCP server
-(`mariadb-<name>`) for OpenCode and Claude Code. The active default connection is exposed as `MYCLI_HOST` / `MYCLI_PORT`
-/ `MYCLI_USER` / `MYCLI_PASSWORD` / `MYCLI_DATABASE` env vars in every shell.
+(`mariadb-<name>`) for OpenCode, Claude Code and Codex. The active default connection is exposed as `MYCLI_HOST` /
+`MYCLI_PORT` / `MYCLI_USER` / `MYCLI_PASSWORD` / `MYCLI_DATABASE` env vars in every shell.
 
 Connection names must match `[a-zA-Z0-9_-]+` and must be unique. Names are case-insensitive DSN aliases — pass them to
 mycli via `mycli -D <name>`. Without an explicit `default`, the first entry is used.
@@ -466,7 +466,10 @@ and the sessions. `sessions/` and `log/` are excluded from backups.
 - **Login:** `codex login --device-auth` (works without a browser in the container), or set the `openai_api_key` option.
 - **Tool context:** TOOLS.md is injected into `/data/.codex/AGENTS.md` as a marked block on every start; text outside
   the markers is preserved.
-- **MCP:** not synced yet. Add MCP servers to `~/.codex/config.toml` manually.
+- **MCP:** the `mcp_servers` option, the Zigbee2MQTT server and the `mariadb-<name>` servers of `mycli` are merged into
+  `/data/.codex/config.toml` on every start as `[mcp_servers.NAME]` tables (`http` entries as `url`, others as
+  `command`/`args`/`env`). Only tables that do not exist yet are appended: your own entries and settings win and the
+  rest of the file stays untouched. If the file cannot be parsed, it is left as is and a warning is logged.
 - **Sandbox:** bundled bubblewrap is included, but container restrictions can still prevent its mount operations. If it
   fails, run `codex --sandbox danger-full-access` or set `sandbox_mode = "danger-full-access"` in
   `~/.codex/config.toml`. The add-on writes no Codex sandbox or approval defaults.
