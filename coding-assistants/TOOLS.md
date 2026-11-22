@@ -62,9 +62,9 @@ Persistent storage is at `/data`.
   options are registered for it at user scope
 - `opencode` — OpenCode 2 AI CLI (`opencode upgrade` updates it persistently); MCP servers live under `mcp.servers` in
   `~/.config/opencode/opencode.json`
-- `codex` — OpenAI Codex CLI (static binary, state in `CODEX_HOME=/data/.codex` (`/root/.codex` is a symlink to it)).
-  Login with `codex login --device-auth` or the add-on option `openai_api_key`. MCP servers are not synced for it: add
-  them to `~/.codex/config.toml` by hand
+- `codex` — OpenAI Codex CLI (static binary, state in `CODEX_HOME=/data/.codex`; `/root/.codex` is a symlink to it).
+  Login with `codex login --device-auth` or the add-on option `openai_api_key`. MCP servers (`mcp_servers` option,
+  Zigbee2MQTT, `mariadb-<name>`) are merged into `~/.codex/config.toml` on every start; your own entries win
 - `gh copilot` — GitHub Copilot CLI (`gh copilot suggest`, `gh copilot explain`)
 - `fff-mcp` — fast file search MCP server (auto-registered in OpenCode via the `mcp_servers:` config block)
 - `node /opt/mcp2zigbee2mqtt/dist/index.js` — Zigbee2MQTT MCP server; auto-registered in OpenCode when the
