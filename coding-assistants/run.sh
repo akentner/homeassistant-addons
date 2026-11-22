@@ -204,6 +204,19 @@ claude_mcp_merge() {
     return 1
 }
 
+# codex_mcp_merge JSON_OBJECT — merge MCP servers into Codex's config.toml (/data/.codex). Argument: one JSON object
+# mapping server name to {url} or {command, args, env}. The helper only appends tables that do not exist yet, so user
+# edits win, and leaves the file untouched on any error. Returns 1 after a warning (callers must test it: errexit).
+codex_mcp_merge() {
+    local target="${CODEX_HOME}/config.toml" count
+    count=$(jq -r 'length' <<< "$1" 2>/dev/null) || count="?"
+    if codex-mcp-merge "${target}" <<< "$1" > /dev/null; then
+        return 0
+    fi
+    bashio::log.warning "Could not merge MCP servers (${count} entries) into ${target}; leaving it untouched"
+    return 1
+}
+
 # MCP server auto-registration — merge addon config into OpenCode's opencode.json
 if jq -e '.mcp_servers | length > 0' /data/options.json > /dev/null 2>&1; then
     # OpenCode 2 format: mcp.servers = { name: { type: "local", command: [...] } }
@@ -236,6 +249,20 @@ if jq -e '.mcp_servers | length > 0' /data/options.json > /dev/null 2>&1; then
     ' /data/options.json)
     if claude_mcp_merge "${MCP_OBJ_CLAUDE}"; then
         bashio::log.info "Registered $(jq -r 'length' <<< "${MCP_OBJ_CLAUDE}") MCP server(s) in Claude Code config"
+    fi
+
+    # Codex format (config.toml): http -> url; everything else -> command/args/env
+    MCP_OBJ_CODEX=$(jq -c '
+        .mcp_servers
+        | map(if .type == "http"
+              then { (.name): { url: .url } }
+              else { (.name): { command: .command, args: (.args // []),
+                                env: ((.env // []) | map({ (.name): .value }) | add // {}) } }
+              end)
+        | add // {}
+    ' /data/options.json)
+    if codex_mcp_merge "${MCP_OBJ_CODEX}"; then
+        bashio::log.info "Registered $(jq -r 'length' <<< "${MCP_OBJ_CODEX}") MCP server(s) in Codex config"
     fi
 fi
 
@@ -291,6 +318,14 @@ if bashio::config.true 'zigbee2mqtt.enabled'; then
     }')
     if claude_mcp_merge "${Z2M_OBJ_CLAUDE}"; then
         bashio::log.info "Registered zigbee2mqtt MCP server in Claude Code config"
+    fi
+
+    # Codex (config.toml): explicit env as well, for the same reason as Claude
+    Z2M_OBJ_CODEX=$(jq -n --argjson env "${Z2M_ENV_JSON}" '{
+        zigbee2mqtt: { command: "node", args: ["/opt/mcp2zigbee2mqtt/dist/index.js"], env: $env }
+    }')
+    if codex_mcp_merge "${Z2M_OBJ_CODEX}"; then
+        bashio::log.info "Registered zigbee2mqtt MCP server in Codex config"
     fi
 
     # Inject MQTT env vars into profile scripts for use by other tools

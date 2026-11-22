@@ -68,7 +68,7 @@ RUN fish -c "curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main
 
 # HA API tools
 COPY ha-api ha-ws lovelace-sync ha-check-logs ha-check-repairs \
-     generate-commit-prompt git-commit-with-ai git-submodule-changes \
+     generate-commit-prompt git-commit-with-ai git-submodule-changes codex-mcp-merge \
      /usr/local/bin/
 RUN chmod +x \
     /usr/local/bin/ha-api \
@@ -76,6 +76,7 @@ RUN chmod +x \
     /usr/local/bin/lovelace-sync \
     /usr/local/bin/ha-check-logs \
     /usr/local/bin/ha-check-repairs \
+    /usr/local/bin/codex-mcp-merge \
     /usr/local/bin/generate-commit-prompt \
     /usr/local/bin/git-commit-with-ai \
     /usr/local/bin/git-submodule-changes

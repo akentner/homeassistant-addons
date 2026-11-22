@@ -466,7 +466,10 @@ and the sessions. `sessions/` and `log/` are excluded from backups.
 - **Login:** `codex login --device-auth` (works without a browser in the container), or set the `openai_api_key` option.
 - **Tool context:** TOOLS.md is injected into `/data/.codex/AGENTS.md` as a marked block on every start; text outside
   the markers is preserved.
-- **MCP:** not synced yet. Add MCP servers to `~/.codex/config.toml` manually.
+- **MCP:** the `mcp_servers` option and the Zigbee2MQTT server are merged into `/data/.codex/config.toml` on every start
+  as `[mcp_servers.NAME]` tables (`http` entries as `url`, others as `command`/`args`/`env`). Only tables that do not
+  exist yet are appended: your own entries and settings win and the rest of the file stays untouched. If the file cannot
+  be parsed, it is left as is and a warning is logged.
 - **Sandbox:** bundled bubblewrap is included, but container restrictions can still prevent its mount operations. If it
   fails, run `codex --sandbox danger-full-access` or set `sandbox_mode = "danger-full-access"` in
   `~/.codex/config.toml`. The add-on writes no Codex sandbox or approval defaults.
