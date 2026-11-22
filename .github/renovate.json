@@ -88,6 +88,9 @@
   "extends": [
     "config:recommended"
   ],
+  "gitIgnoredAuthors": [
+    "41898282+github-actions[bot]@users.noreply.github.com"
+  ],
   "labels": [
     "dependencies"
   ],
@@ -139,7 +142,7 @@
     },
     {
       "additionalBranchPrefix": "coding-assistants-",
-      "description": "Codex bump: also run internal/update-codex-pins.sh (SHA256 digests) and make update-version before merge",
+      "description": "Codex bump: .github/workflows/refresh-pins.yml refreshes the SHA256 digests and the add-on subpatch on this branch",
       "groupName": "coding-assistants codex",
       "matchDepNames": [
         "openai/codex"
@@ -150,7 +153,7 @@
     },
     {
       "additionalBranchPrefix": "coding-assistants-",
-      "description": "OpenCode bump: also run internal/update-opencode-pins.sh (SHA256 digests) and make update-version before merge",
+      "description": "OpenCode bump: .github/workflows/refresh-pins.yml refreshes the SHA256 digests and the add-on subpatch on this branch",
       "groupName": "coding-assistants opencode",
       "matchDepNames": [
         "anomalyco/opencode"
@@ -161,7 +164,7 @@
     },
     {
       "additionalBranchPrefix": "coding-assistants-",
-      "description": "Tool bump: also run internal/update-tool-pins.sh (Dockerfile + SHA256 digests) and make update-version before merge",
+      "description": "Tool bump: .github/workflows/refresh-pins.yml refreshes Dockerfile ARGs, SHA256 digests and the add-on subpatch on this branch",
       "groupName": "coding-assistants tools",
       "matchDepNames": [
         "mikefarah/yq",

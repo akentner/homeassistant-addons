@@ -19,7 +19,7 @@ args:
   HERDR_WEB_SERVICE_REF: "e9082b3fb969064e89153a8c6b2170366982f7f9"
   HERDR_CLAUDE_LIMITS_REF: "9c0c9a1931ac91f9d865031e2dc58d66a7d1b594"
   # Pinned release tools: the Dockerfile ARG defaults are mirrored 1:1. Renovate bumps *_VERSION (annotations below);
-  # refresh the digests and the Dockerfile with internal/update-tool-pins.sh.
+  # the refresh-pins.yml workflow refreshes digests and Dockerfile (internal/update-tool-pins.sh) on Renovate PRs.
   # renovate: datasource=github-releases depName=mikefarah/yq extractVersion=^v(?<version>.+)$
   YQ_VERSION: "4.54.3"
   YQ_SHA256_X86_64: "129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973"
