@@ -235,8 +235,8 @@ RUN uv tool install graphifyy
 # stashed at /opt/opencode-initial/ so run.sh can seed it into the persistent /data volume (only when it is newer than
 # what is persisted); user-initiated upgrades persist across container rebuilds.
 ARG OPENCODE_VERSION=2.4.1
-ARG OPENCODE_SHA256_X86_64=563b5d663637226b6e3bb4bb6803281bc39b0d2cd88db06d674b6420aab009b0
-ARG OPENCODE_SHA256_AARCH64=9d10185acdb72336e086e699ca363a6065f410fd3c1caed0dc8046e95ac06ccb
+ARG OPENCODE_SHA256_X86_64=9ddd18e3faf64eaeccf6a0fcbc96a5c7a14520ae5fd5b61e5be51d894f478b47
+ARG OPENCODE_SHA256_AARCH64=cb28cf94541aeb62a4b2ea5997a99b5dd6bae595a772f36fbe279299f2032a4f
 RUN ARCH=$(uname -m) \
     && case "${ARCH}" in \
         x86_64) OPENCODE_ASSET="opencode-linux-x64"; OPENCODE_SHA256="${OPENCODE_SHA256_X86_64}" ;; \

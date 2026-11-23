@@ -7,6 +7,12 @@ This add-on has no upstream — every entry below is hand-written by the maintai
 
 ## [Unreleased]
 
+## [1.3.3-6] - 2026-11-23
+
+### Changed
+
+- opencode 2.3.2 → 2.4.1 (SHA256 pin refreshed).
+
 ## [1.3.3-5] - 2026-11-22
 
 ### Fixed
