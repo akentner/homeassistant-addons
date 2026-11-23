@@ -37,7 +37,7 @@ args:
   EZA_SHA256_X86_64: "35c70c5c43c29108075e58b893234c67ef585f0b53a7eaf8e9e7d4eec9f339b4"
   # renovate: datasource=github-releases depName=dandavison/delta
   DELTA_VERSION: "0.22.0"
-  DELTA_SHA256_X86_64: "5d41046c4ada17e7d080e1e5dbbd46544146bb5597e2ab56881a8c594272cd06"
+  DELTA_SHA256_X86_64: "10d20fd7b7e0350e7996ff191a68bfd52093a2361c72b08f6fa10b31dd6782ce"
   # renovate: datasource=github-releases depName=Wilfred/difftastic
   DIFFTASTIC_VERSION: "0.72.0"
   DIFFTASTIC_SHA256_X86_64: "33ea1f003081e9f2422299a434e6040c89085bd9f102b08f3fe30393720d5d4a"
@@ -46,7 +46,7 @@ args:
   YAZI_SHA256_X86_64: "9b9c39decccf8cb0ff53a7d637d38f8a79d93bbd0099f4ea9c619ef6bb392f5d"
   # renovate: datasource=github-releases depName=atuinsh/atuin extractVersion=^v(?<version>.+)$
   ATUIN_VERSION: "18.25.1"
-  ATUIN_SHA256_X86_64: "9ebfb49d9f5cc5fb03588315f8f54277fe9e3648bd98de7666a350000670cd19"
+  ATUIN_SHA256_X86_64: "f2bc97588d5aa91f49b992298544e13776df044cb4baf606875c7cc8444e9e00"
   # renovate: datasource=github-releases depName=tealdeer-rs/tealdeer extractVersion=^v(?<version>.+)$
   TEALDEER_VERSION: "1.9.1"
   TEALDEER_SHA256_X86_64: "5a9c3f0691b9cf375ee5c99de802885f3d50498cf686a539e2ddda028eb6b4f6"

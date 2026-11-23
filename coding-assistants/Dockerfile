@@ -152,8 +152,8 @@ RUN mkdir -p /tmp/eza \
     && rm -rf /tmp/eza
 
 # delta — git diff pager with syntax highlighting (glibc build)
-ARG DELTA_VERSION=0.21.2
-ARG DELTA_SHA256_X86_64=5d41046c4ada17e7d080e1e5dbbd46544146bb5597e2ab56881a8c594272cd06
+ARG DELTA_VERSION=0.22.0
+ARG DELTA_SHA256_X86_64=10d20fd7b7e0350e7996ff191a68bfd52093a2361c72b08f6fa10b31dd6782ce
 RUN mkdir -p /tmp/delta \
     && curl -fsSL \
         "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/delta-${DELTA_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
@@ -186,8 +186,8 @@ RUN curl -fsSL \
     && rm /tmp/yazi.zip
 
 # atuin — shell history with TUI search; glibc release requires GLIBC_2.39 (Bookworm has 2.36), use musl build
-ARG ATUIN_VERSION=18.25.0
-ARG ATUIN_SHA256_X86_64=9ebfb49d9f5cc5fb03588315f8f54277fe9e3648bd98de7666a350000670cd19
+ARG ATUIN_VERSION=18.25.1
+ARG ATUIN_SHA256_X86_64=f2bc97588d5aa91f49b992298544e13776df044cb4baf606875c7cc8444e9e00
 RUN mkdir -p /tmp/atuin \
     && curl -fsSL \
         "https://github.com/atuinsh/atuin/releases/download/v${ATUIN_VERSION}/atuin-x86_64-unknown-linux-musl.tar.gz" \
