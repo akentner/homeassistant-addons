@@ -363,18 +363,26 @@ jobs:
             secrets_sync:
               - 'secrets-sync/**'
               - 'admin-ui/**'
+              - 'Makefile'
+              - 'internal/**'
               - '.github/workflows/lint.yml'
             ntfy:
               - 'ntfy/**'
               - 'admin-ui/**'
+              - 'Makefile'
+              - 'internal/**'
               - '.github/workflows/lint.yml'
             haos_monitor:
               - 'haos-monitor/**'
               - 'admin-ui/**'
+              - 'Makefile'
+              - 'internal/**'
               - '.github/workflows/lint.yml'
             coding_assistants:
               - 'coding-assistants/**'
               - 'admin-ui/**'
+              - 'Makefile'
+              - 'internal/**'
               - '.github/workflows/lint.yml'
             marketplace_repo_proxy:
               - 'marketplace-repo-proxy/**'
