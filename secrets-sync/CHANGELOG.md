@@ -3,6 +3,13 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.7.6-2] - 2026-11-24
+
+### Added
+
+- Support for aarch64 hosts: `aarch64` is now listed in `arch` and `build.yaml` builds the image from
+  `aarch64-base:3.24`. Behaviour is unchanged on amd64
+
 ## [0.7.6-1] - 2026-11-18
 
 ### Changed
