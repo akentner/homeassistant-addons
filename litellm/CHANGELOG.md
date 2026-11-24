@@ -1,3 +1,26 @@
+## Verify Docker Image Signature
+
+```bash
+cosign verify \
+  --certificate-identity https://github.com/BerriAI/project-releaser/.github/workflows/release.yml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/berriai/litellm:v1.110.3
+```
+
+## What's Changed
+
+- fix(mcp)!: backport gateway DCR opt-in to 1.110 (#53059) by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/53178
+- fix(proxy): backport audit log fixes to stable/1.110.x (#50929, #53305) by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/53298
+- chore(release): backport #53171, #53210 to stable/1.110.x by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/53207
+- fix(router): fall back by the group a pick was routed to (backport #52510 to stable/1.110.x) by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/53109
+- chore: bump versions on stable/1.110.x by @yuneng-berri in https://github.com/BerriAI/litellm/pull/54010
+
+**Full Changelog**: https://github.com/BerriAI/litellm/compare/v1.110.2...v1.110.3
+
 ## Verify this release
 
 ```bash
