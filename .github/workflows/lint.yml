@@ -158,17 +158,23 @@ jobs:
           echo "✅ Common issues check passed"
 
   lint-results:
-    needs: [lint, admin-ui, ntfy]
+    needs: [lint, changes, admin-ui, secrets-sync, ntfy, haos-monitor, coding-assistants]
     runs-on: ubuntu-latest
     # Reporting job: echoes a verdict and exits. Seconds, not minutes.
     timeout-minutes: 5
     if: always()
+    env:
+      NEEDS: ${{ toJSON(needs) }}
     steps:
       - name: Report results
         run: |
-          if [[ "${{ needs.lint.result }}" == "success" && "${{ needs.admin-ui.result }}" == "success" && "${{ needs.ntfy.result }}" == "success" ]]; then
+          # success and skipped (path-filtered out) pass; failure and cancelled fail.
+          # marketplace-repo-proxy is deliberately not a need (work in progress, gates nothing).
+          bad=$(printf '%s' "$NEEDS" | jq -r 'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "\(.key): \(.value.result)"')
+          if [[ -z "$bad" ]]; then
             echo "✅ All lint checks passed!"
           else
+            printf '%s\n' "$bad"
             echo "❌ Lint checks failed. Please fix the issues above."
             exit 1
           fi
@@ -176,6 +182,8 @@ jobs:
   # Appended on purpose: zizmor.yml deferrals for this file are line-anchored,
   # so no line above this job may move.
   admin-ui:
+    needs: changes
+    if: needs.changes.outputs.admin_ui == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -207,22 +215,10 @@ jobs:
 
       - name: Lib copies in sync
         run: make check-admin-ui-sync STRICT=yes
-
-      - name: ntfy consumer tests
-        run: python -m pytest ntfy/tests -q
-
-      - name: Secrets Sync consumer web tests
-        run: python -m pytest secrets-sync/tests/web -q
-
-      - name: HAOS Monitor consumer tests
-        run: python -m pytest haos-monitor/tests -q
-
-      - name: Coding Assistants consumer tests
-        run: |
-          node --test coding-assistants/tests/*.test.mjs
-          python -m unittest discover -s coding-assistants/tests -p 'test_*.py'
   # Appended on purpose, like admin-ui above (line-anchored zizmor deferrals).
   secrets-sync:
+    needs: changes
+    if: needs.changes.outputs.secrets_sync == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -258,6 +254,8 @@ jobs:
 
   # Appended on purpose, like admin-ui above (line-anchored zizmor deferrals).
   ntfy:
+    needs: changes
+    if: needs.changes.outputs.ntfy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -295,6 +293,8 @@ jobs:
 
   # Appended on purpose, like admin-ui above (line-anchored zizmor deferrals).
   marketplace-repo-proxy:
+    needs: changes
+    if: needs.changes.outputs.marketplace_repo_proxy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -315,3 +315,133 @@ jobs:
 
       - name: Add-on tests (pytest)
         run: python -m pytest marketplace-repo-proxy/tests -q
+
+  # Appended on purpose, like admin-ui above (line-anchored zizmor deferrals).
+  # Decides which test jobs are affected. push to main and workflow_dispatch run everything;
+  # a change to this file sets every flag.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      admin_ui: ${{ steps.scope.outputs.all == 'true' || steps.filter.outputs.admin_ui == 'true' }}
+      secrets_sync: ${{ steps.scope.outputs.all == 'true' || steps.filter.outputs.secrets_sync == 'true' }}
+      ntfy: ${{ steps.scope.outputs.all == 'true' || steps.filter.outputs.ntfy == 'true' }}
+      haos_monitor: ${{ steps.scope.outputs.all == 'true' || steps.filter.outputs.haos_monitor == 'true' }}
+      coding_assistants: ${{ steps.scope.outputs.all == 'true' || steps.filter.outputs.coding_assistants == 'true' }}
+      marketplace_repo_proxy: ${{ steps.scope.outputs.all == 'true' || steps.filter.outputs.marketplace_repo_proxy == 'true' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Decide scope
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || ( "$EVENT_NAME" == "push" && "$REF" == "refs/heads/main" ) ]]; then
+            echo "all=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "all=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            admin_ui:
+              - 'admin-ui/**'
+              - 'Makefile'
+              - 'internal/**'
+              - '.github/workflows/lint.yml'
+            secrets_sync:
+              - 'secrets-sync/**'
+              - 'admin-ui/**'
+              - '.github/workflows/lint.yml'
+            ntfy:
+              - 'ntfy/**'
+              - 'admin-ui/**'
+              - '.github/workflows/lint.yml'
+            haos_monitor:
+              - 'haos-monitor/**'
+              - 'admin-ui/**'
+              - '.github/workflows/lint.yml'
+            coding_assistants:
+              - 'coding-assistants/**'
+              - 'admin-ui/**'
+              - '.github/workflows/lint.yml'
+            marketplace_repo_proxy:
+              - 'marketplace-repo-proxy/**'
+              - '.github/workflows/lint.yml'
+
+  # Appended on purpose, like admin-ui above (line-anchored zizmor deferrals).
+  haos-monitor:
+    needs: changes
+    if: needs.changes.outputs.haos_monitor == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install test dependencies
+        run: python -m pip install 'pytest==9.1.1' 'pyyaml==6.0.3'
+
+      - name: Add-on tests (pytest)
+        run: python -m pytest haos-monitor/tests -q
+
+  # Appended on purpose, like admin-ui above (line-anchored zizmor deferrals).
+  coding-assistants:
+    needs: changes
+    if: needs.changes.outputs.coding_assistants == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install test dependencies
+        run: python -m pip install 'pytest==9.1.1' 'pyyaml==6.0.3'
+
+      - name: GUI unit tests (node)
+        run: node --test coding-assistants/tests/*.test.mjs
+
+      - name: Add-on tests (unittest)
+        run: python -m unittest discover -s coding-assistants/tests -p 'test_*.py'
+
+      - name: Lib copies in sync
+        run: make check-admin-ui-sync
