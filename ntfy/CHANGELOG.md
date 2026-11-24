@@ -1,3 +1,34 @@
+This is a security release. It upgrades the SMTP server library used for e-mail publishing, which fixes a memory
+exhaustion attack, and closes two holes in topic reservations, where a user could reserve topics covered by an admin's
+wildcard access entry, or reserve topics at all on a tier without reservations. It also stops clients behind proxies
+like HAProxy from spoofing their IP address to get around rate limits. Upgrading is recommended if you enable e-mail
+publishing, reservations, or run ntfy behind a proxy.
+
+**Security:**
+
+- E-mail publishing: upgrade the SMTP server library ([go-smtp](https://github.com/emersion/go-smtp)) from v0.17.0 to
+  v0.26.0, which fixes unbounded memory allocation when a client sends a command between two `BDAT` chunks
+  ([GO-2026-7029](https://pkg.go.dev/vuln/GO-2026-7029)); incoming mail now has to use CRLF line endings, as required by
+  the SMTP standard
+- Reservations: wildcard access entries with an underscore (e.g. `mytopic_*`) now block reservations of topics they
+  cover, so users can no longer reserve a topic inside such a namespace and become its owner (thanks to @DogukanK for
+  reporting)
+- Reservations: users on a tier with a reservation limit of 0 can no longer reserve topics (the limit was treated as
+  unlimited) (thanks to @DogukanK for reporting)
+- Rate limiting: read all `X-Forwarded-For` (or configured proxy header) lines, not just the first, so clients behind
+  proxies like HAProxy can no longer spoof their IP address to bypass the per-IP rate and login limits (thanks to
+  @immanuel-lam for reporting)
+
+**Bug fixes + maintenance:**
+
+- Web app: the config hash is now the same on all nodes of a cluster, so the web app no longer asks for a refresh when a
+  version check lands on another node, and it no longer covers the database and S3 URLs (which can contain credentials)
+- Firebase: log the HTTP status, `Retry-After` header and response body of failed sends, to help diagnose quota errors
+  ([#2222](https://github.com/binwiederhier/ntfy/pull/2222))
+- E-mail publishing: line breaks in messages published by e-mail no longer contain a carriage return (`\r`) from the
+  mail's CRLF line endings
+- Update Go and web app dependencies
+
 This is a security release. It hardens message templating against a set of denial-of-service attacks, where a crafted
 template could crash the server, exhaust its memory or outrun the execution deadline in a single request. It also stops
 slow S3 attachment uploads and unresponsive web push endpoints from tying up memory, connections and goroutines, and
