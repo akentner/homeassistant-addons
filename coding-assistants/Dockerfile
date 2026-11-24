@@ -281,7 +281,7 @@ RUN npm install -g @github/copilot fx mcp-server-mysql
 # in build.yaml (verify scenario `drift`); the digests are the GitHub release asset digests of tag rust-v<version>.
 # Renovate bumps CODEX_VERSION only — refresh the digests with internal/update-codex-pins.sh. Keep the package layout:
 # bin/ contains the CLI and tool hosts; codex-resources/ includes bubblewrap. State lives in CODEX_HOME=/data/.codex.
-ARG CODEX_VERSION=0.171.0
+ARG CODEX_VERSION=0.172.0
 ARG CODEX_SHA256_X86_64=8391d67757496bfd14893eca6cbf0c96994bf2627566ff1f018f70600c9ef6b3
 ARG CODEX_SHA256_AARCH64=d8c43bee6cf11b01eb18b95f4d7961092bc40228180808859e70dabb7784c1c9
 RUN ARCH=$(uname -m) \
