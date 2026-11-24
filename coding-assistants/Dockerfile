@@ -282,8 +282,8 @@ RUN npm install -g @github/copilot fx mcp-server-mysql
 # Renovate bumps CODEX_VERSION only — refresh the digests with internal/update-codex-pins.sh. Keep the package layout:
 # bin/ contains the CLI and tool hosts; codex-resources/ includes bubblewrap. State lives in CODEX_HOME=/data/.codex.
 ARG CODEX_VERSION=0.172.0
-ARG CODEX_SHA256_X86_64=8391d67757496bfd14893eca6cbf0c96994bf2627566ff1f018f70600c9ef6b3
-ARG CODEX_SHA256_AARCH64=d8c43bee6cf11b01eb18b95f4d7961092bc40228180808859e70dabb7784c1c9
+ARG CODEX_SHA256_X86_64=63e3b00065ed7f62166d0522e17f663cb866a31d80d03e63365482ed34a1d991
+ARG CODEX_SHA256_AARCH64=faf17b8071927f33346a805dc8cb45de4e08c0d75cf0e5e68cecddca28b8861e
 RUN ARCH=$(uname -m) \
     && case "${ARCH}" in \
         x86_64) CODEX_SHA256="${CODEX_SHA256_X86_64}" ;; \

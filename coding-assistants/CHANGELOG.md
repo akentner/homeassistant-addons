@@ -7,6 +7,12 @@ This add-on has no upstream — every entry below is hand-written by the maintai
 
 ## [Unreleased]
 
+## [1.3.3-6] - 2026-11-24
+
+### Changed
+
+- codex 0.171.0 → 0.172.0 (SHA256 pin refreshed).
+
 ## [1.3.3-5] - 2026-11-22
 
 ### Fixed
