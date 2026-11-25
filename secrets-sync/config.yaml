@@ -46,11 +46,6 @@ options:
     source: "file"
     file: "/config/secrets.sops.yaml"
     flatten_separator: "_"
-    git_url: ""
-    git_branch: "main"
-    git_path: "secrets.sops.yaml"
-    git_username: "x-access-token"
-    git_token: ""
 schema:
   providers:
     - "list(bitwarden|sops)"
@@ -73,5 +68,12 @@ schema:
     key_style: "list(legacy)"
     notes_dir: "str"
   sops:
+    source: "list(file|git)?"
     file: "str"
     flatten_separator: "str"
+    git_url: "str?"
+    git_branch: "str?"
+    git_path: "str?"
+    git_username: "str?"
+    git_token: "password?"
+    age_key_file: "str?"
