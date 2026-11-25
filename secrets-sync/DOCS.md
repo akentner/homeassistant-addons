@@ -12,35 +12,37 @@ are manual. The Bitwarden CLI version is pinned in `build.yaml` (`BW_CLI_VERSION
 
 ## Options
 
-| Option                      | Default                     | Description                                                                                  |
-| --------------------------- | --------------------------- | -------------------------------------------------------------------------------------------- |
-| `providers`                 | `[bitwarden]`               | Enabled providers, order = priority for `collision_policy: priority`                         |
-| `interval`                  | `300`                       | Seconds between cycles (60 to 86400); manual sync at most every 10 s                         |
-| `check_interval`            | `60`                        | Seconds between cheap change checks of the SOPS git source (0 = off, 1 to 29 become 30)      |
-| `collision_policy`          | `error`                     | `error`: nothing is written on a duplicate key; `priority`: earlier wins                     |
-| `shrink_guard_percent`      | `30`                        | Refuse to write when items drop by more than this share (1 to 100)                           |
-| `log_level`                 | `info`                      | `debug`, `info`, `warning`, `error`; values are never logged                                 |
-| `usage_scan`                | `all`                       | `off`, `config` (HA config) or `all` (plus other add-on configs, read-only)                  |
-| `synthetic_keys`            | `[]`                        | List of `name` + `template`; keys composed from other keys (see "Synthetic keys")            |
-| `bitwarden.server_url`      | `https://bitwarden.com`     | Server URL (also Vaultwarden)                                                                |
-| `bitwarden.client_id`       | empty                       | API key `client_id` (`user.xxxx`), passed via env                                            |
-| `bitwarden.client_secret`   | empty                       | API key `client_secret`, passed via env                                                      |
-| `bitwarden.master_password` | empty                       | Unlocks the vault, passed via env                                                            |
-| `bitwarden.organization_id` | empty                       | Optional: only items of this organization (name or UUID)                                     |
-| `bitwarden.collection_id`   | empty                       | Optional: only items of this collection (name or UUID)                                       |
-| `bitwarden.key_style`       | `legacy`                    | Key naming scheme (only `legacy` so far)                                                     |
-| `bitwarden.notes_dir`       | `bitwarden`                 | Directory for secure-note files below `/config/secrets_files`                                |
-| `sops.source`               | `file`                      | `file` (local path) or `git` (repository)                                                    |
-| `sops.file`                 | `/config/secrets.sops.yaml` | SOPS-encrypted YAML file                                                                     |
-| `sops.flatten_separator`    | `_`                         | Joins nested keys                                                                            |
-| `sops.git_url`              | empty                       | Repository URL: `git@host:org/repo.git`, `ssh://...` or `https://...`, no credentials inside |
-| `sops.git_branch`           | `main`                      | Branch to read                                                                               |
-| `sops.git_path`             | `secrets.sops.yaml`         | Path of the encrypted file in the repository                                                 |
-| `sops.git_username`         | `x-access-token`            | User name for https token login                                                              |
-| `sops.git_token`            | empty                       | https access token, passed via env only                                                      |
+| Option                      | Default                         | Description                                                                                  |
+| --------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------- |
+| `providers`                 | `[bitwarden]`                   | Enabled providers, order = priority for `collision_policy: priority`                         |
+| `interval`                  | `300`                           | Seconds between cycles (60 to 86400); manual sync at most every 10 s                         |
+| `check_interval`            | `60`                            | Seconds between cheap change checks of the SOPS git source (0 = off, 1 to 29 become 30)      |
+| `collision_policy`          | `error`                         | `error`: nothing is written on a duplicate key; `priority`: earlier wins                     |
+| `shrink_guard_percent`      | `30`                            | Refuse to write when items drop by more than this share (1 to 100)                           |
+| `log_level`                 | `info`                          | `debug`, `info`, `warning`, `error`; values are never logged                                 |
+| `usage_scan`                | `all`                           | `off`, `config` (HA config) or `all` (plus other add-on configs, read-only)                  |
+| `synthetic_keys`            | `[]`                            | List of `name` + `template`; keys composed from other keys (see "Synthetic keys")            |
+| `bitwarden.server_url`      | `https://bitwarden.com`         | Server URL (also Vaultwarden)                                                                |
+| `bitwarden.client_id`       | empty                           | API key `client_id` (`user.xxxx`), passed via env                                            |
+| `bitwarden.client_secret`   | empty                           | API key `client_secret`, passed via env                                                      |
+| `bitwarden.master_password` | empty                           | Unlocks the vault, passed via env                                                            |
+| `bitwarden.organization_id` | empty                           | Optional: only items of this organization (name or UUID)                                     |
+| `bitwarden.collection_id`   | empty                           | Optional: only items of this collection (name or UUID)                                       |
+| `bitwarden.key_style`       | `legacy`                        | Key naming scheme (only `legacy` so far)                                                     |
+| `bitwarden.notes_dir`       | `bitwarden`                     | Directory for secure-note files below `/config/secrets_files`                                |
+| `sops.source`               | `file`                          | `file` (local path) or `git` (repository)                                                    |
+| `sops.file`                 | `/config/secrets.sops.yaml`     | SOPS-encrypted YAML file                                                                     |
+| `sops.flatten_separator`    | `_`                             | Joins nested keys                                                                            |
+| `sops.git_url`              | unset                           | Repository URL: `git@host:org/repo.git`, `ssh://...` or `https://...`, no credentials inside |
+| `sops.git_branch`           | unset (`main`)                  | Branch to read                                                                               |
+| `sops.git_path`             | unset (`secrets.sops.yaml`)     | Path of the encrypted file in the repository                                                 |
+| `sops.git_username`         | unset (`x-access-token`)        | User name for https token login                                                              |
+| `sops.git_token`            | unset                           | https access token, passed via env only                                                      |
+| `sops.age_key_file`         | unset (`/addon_config/age.key`) | Path of the age private key file                                                             |
 
-Both provider blocks are always present in the options. Missing or empty parts are reported as problems (UI and
-`state.json`) and the provider is skipped, the add-on keeps running.
+Both provider blocks are always present in the options. The optional `sops.git_*` and `sops.age_key_file` options are
+absent until you set them, the values in parentheses apply when unset. Missing or empty parts are reported as problems
+(UI and `state.json`) and the provider is skipped, the add-on keeps running.
 
 ## Paths
 

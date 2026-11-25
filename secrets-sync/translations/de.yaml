@@ -94,3 +94,6 @@ configuration:
         name: Git-Token (https)
         description: Zugriffstoken mit Leserecht (z. B. Fine-grained PAT mit contents:read). Nur per Umgebungsvariable
           übergeben. Leer lassen bei öffentlichen Repositories oder ssh.
+      age_key_file:
+        name: Age-Schlüsseldatei
+        description: Pfad der privaten age-Schlüsseldatei. Leer lassen für /addon_config/age.key.

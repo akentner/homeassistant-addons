@@ -191,11 +191,13 @@ options:
     source: "file" # list(file|git)
     file: "/config/secrets.sops.yaml" # used when source: file
     flatten_separator: "_"
+    # Optional, absent unless set (schema "?"); the defaults named here are applied by the app
     git_url: "" # str?  ssh (git@host:org/repo.git, ssh://...) or https://...; no credentials inside the URL
-    git_branch: "main" # str
-    git_path: "secrets.sops.yaml" # str   path of the encrypted file inside the repo
-    git_username: "x-access-token" # str   https only
-    git_token: "" # password  https only; run.sh exports it as SS_GIT_TOKEN, never argv/URL
+    git_branch: "main" # str?  default main
+    git_path: "secrets.sops.yaml" # str?  default; path of the encrypted file inside the repo
+    git_username: "x-access-token" # str?  https only; default x-access-token
+    git_token: "" # password?  https only; run.sh exports it as SS_GIT_TOKEN, never argv/URL
+    age_key_file: "/addon_config/age.key" # str?  default
 ```
 
 `source: git` ignores `file`. `validate()` reports `sops_git_missing_url`, `sops_git_url_credentials` (userinfo in URL),

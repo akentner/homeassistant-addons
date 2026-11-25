@@ -90,3 +90,6 @@ configuration:
         name: Git token (https)
         description: Access token with read access (e.g. fine-grained PAT with contents:read). Passed via environment
           only. Leave empty for public repositories or ssh.
+      age_key_file:
+        name: Age key file
+        description: Path of the age private key file. Leave empty to use /addon_config/age.key.
