@@ -4,6 +4,1148 @@
 cosign verify \
   --certificate-identity https://github.com/BerriAI/project-releaser/.github/workflows/release.yml@refs/heads/main \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/berriai/litellm:v1.111.0
+```
+
+## What's Changed
+
+- test(integration): follow cached prepared statements in the held statement relay by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50651
+- feat(proxy): add OpenSearch index pass-through with per-key read/write grants by @quietjules in
+  https://github.com/BerriAI/litellm/pull/50573
+- test(e2e): repin the Together reasoning replay backend to MiniMax-M3.1-Flash by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/50601
+- fix(proxy): build plugin session claims from FIPS provider services in fips_mode by @yucheng-berri in
+  https://github.com/BerriAI/litellm/pull/50544
+- feat(anthropic): add claude-fable-5-2 and its Claude Platform on AWS mirror by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50715
+- feat(cost-map): rolling registry update (Anthropic and Bedrock Fable 5.2, Azure realtime cache, Vertex, Friendli) by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/50707
+- fix(proxy): show committed spend in the remaining budget gauges by @zoveki in
+  https://github.com/BerriAI/litellm/pull/49199
+- feat(azure): add azure_ai/claude-fable-5-2 and claude-fable-5-2-fast from the Foundry Claude page by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/50723
+- build(ui): fail lint on hardcoded English in dashboard JSX by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/50593
+- fix(prompt_templates): keep moved private helpers importable from common_utils by @zoveki in
+  https://github.com/BerriAI/litellm/pull/50721
+- perf(router): look up host step answers by id instead of scanning every candidate by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/50704
+- feat(cost-map): add Claude Fable 5.2 on Vertex AI and repoint claude-fable-latest by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/50713
+- test(integration): cover claude-fable-5-2 capability flags and prompt-cache pricing on the scripted Anthropic upstream
+  by @kerry-berri in https://github.com/BerriAI/litellm/pull/50722
+- fix(cost)!: bill transcriptions by the seconds the provider reports by @ryan-crabbe-berri in
+  https://github.com/BerriAI/litellm/pull/50727
+- fix(logging): bill a refused response the router falls back from by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/50735
+- fix(audio): measure duration for PathLike multipart tuple contents by @raunakpandey1 in
+  https://github.com/BerriAI/litellm/pull/49806
+- feat(auth): grant access groups through principal attribute rules by @krrish-berri-2 in
+  https://github.com/BerriAI/litellm/pull/50455
+- fix(minimax): forward reasoning_effort instead of dropping it by @jeevan1098 in
+  https://github.com/BerriAI/litellm/pull/49583
+- fix(ollama_chat): give each streamed tool call its own index by @tedswinyar in
+  https://github.com/BerriAI/litellm/pull/49183
+- fix(redis): accept a bare service account email for GCP Memorystore IAM by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/50676
+- fix(rust): install the rustls crypto provider at the Python host boundary by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/50502
+- feat(cost-map): add GovCloud regional rows for Bedrock Claude Fable 5.2 and Mythos 5.2 by @devin-ai-integration[bot]
+  in https://github.com/BerriAI/litellm/pull/50746
+- fix(bedrock): answer 400, not 500, for malformed count-tokens requests by @paveln83 in
+  https://github.com/BerriAI/litellm/pull/50708
+- feat(router): let deployments declare a shared encrypted content boundary by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/50750
+- test(integration): cover claude-fable-5-2 capability flags and prompt-cache pricing on Vertex AI and Bedrock Converse
+  by @kerry-berri in https://github.com/BerriAI/litellm/pull/50742
+- fix(proxy): fail-closed budget enforcement returns 403 naming /team/member_add for a team user with no membership row
+  by @kerry-berri in https://github.com/BerriAI/litellm/pull/50603
+- fix(complexity_router): keep Claude Code subagent and side-request traffic off other agents' tier pins by
+  @joshua-berri in https://github.com/BerriAI/litellm/pull/50741
+- test(audio): bill reported transcription seconds for measurable uploads by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50767
+- chore(cost-map): add openai gpt-6-cyber long context prices from the pricing page by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50770
+- feat(proxy): let a key's logging entry reference a proxy credential by @jesus-berri in
+  https://github.com/BerriAI/litellm/pull/50572
+- fix(messages): let proxy /v1/messages requests run on the rust path by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/50335
+- fix(messages): log native messages success once, after the proxy releases it by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/50420
+- fix(messages): log native messages request fields like python by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/50421
+- fix(messages): pass non-message bodies through and refuse non-string headers as bad requests by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/50422
+- fix(rust): run native async calls through python's async wrapper steps by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/50423
+- fix(messages): raise native messages failures as python's errors by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/50424
+- fix(messages): bill a native stream the client abandoned like python by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/50425
+- fix(messages): write the native unary cache entry after the router stamps it like python by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/50426
+- test(integration): assert response ids stay scoped to their minting key by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50703
+- chore(cost-map): add github_copilot/claude-fable-5.2 from the Copilot models-and-pricing table by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/50775
+- test(integration): assert team model visibility follows caller scope by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50772
+- fix(cost-map): price wandb DeepSeek-V4.1-Flash-1017 from the CoreWeave Forge listing by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50776
+- fix(proxy): write SpendLogs failure rows for config-defined pass-through endpoints by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/41831
+- test(integration): repair tests that merged changes left stale by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/50782
+- fix(router): merge default metadata under the request's instead of replacing it by @paveln83 in
+  https://github.com/BerriAI/litellm/pull/50700
+- fix(anthropic-messages): apply additional_drop_params before the unsupported param checks by @tavren27 in
+  https://github.com/BerriAI/litellm/pull/50753
+- fix(router): honor request fallbacks in the mid-stream continuation check by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/50260
+- fix(router): let a retry leave a pinned deployment after a retryable failure by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/50769
+- test(integration): drop the empty-string n case from the Gemini long decode test by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/50796
+- feat(rust): add litellm-s3 crate, AwsCredentialsProvider and cost map fetch by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/50547
+- refactor(model-cost): move the cost map inputs, fetch and register_model overlay into Rust by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/50501
+- fix(prometheus): record litellm_overhead_latency_metric for streams, stamp plus the proxy's first-chunk work by
+  @kerry-berri in https://github.com/BerriAI/litellm/pull/49920
+- fix(accounting): keep delivering spend when another worker's maintenance lock is orphaned by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/50774
+- fix(sso): read the SSO client secret before the refresh-token DB check by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/50773
+- test(integration): expect the 400 for a content-less leading system on Mantle count_tokens after #50708 by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/50820
+- fix(proxy): serve Codex its own Bedrock catalog entries for Bedrock deployments by @ryan-crabbe-berri in
+  https://github.com/BerriAI/litellm/pull/50743
+- feat(usage): split customer spend by the key's current team by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/50764
+- fix(proxy): list images in the Codex catalog only for models known to read them by @ryan-crabbe-berri in
+  https://github.com/BerriAI/litellm/pull/50738
+- fix(hosted_vllm): omit empty tools list from chat requests by @krrish-berri-2 in
+  https://github.com/BerriAI/litellm/pull/50812
+- feat(proxy): log keys and teams still on the deprecated empty models defaults at boot by @paveln83 in
+  https://github.com/BerriAI/litellm/pull/50720
+- fix(router): count a Responses WebSocket turn's tokens before the next turn is admitted by @norkelbyte in
+  https://github.com/BerriAI/litellm/pull/50730
+- chore(cost-map): add the openai gpt-image-2 shutdown date from the deprecations page by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50829
+- chore(cost-map): add together_ai/elorian-labs/glimpse-1.0 from the Together models API by @devin-ai-integration[bot]
+  in https://github.com/BerriAI/litellm/pull/50830
+- fix(proxy)!: return managed file ids from rag ingest and use team credentials on vector store file routes by @tavren27
+  in https://github.com/BerriAI/litellm/pull/50459
+- test(decisions): ignore Ollama model-info calls in the decoy check by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/50827
+- fix(complexity_router): hold the default model for a user_turn ask whose classifier failed by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/50793
+- test: update the spend tests that still expected the pre-ledger accounting queues by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/50814
+- feat(budgets): add per-model tpm and rpm limit maps to budgets and customers by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/50797
+- fix(ui): keep the credential action menu open when the models page re-renders by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50845
+- fix(transcription): stop billing a FLAC with no sample count as 576 trillion seconds by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/50842
+- fix: make scheduled key, user, and team spend resets idempotent by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/50298
+- feat(cost-map): add meta/muse-ember-1.0 with long-context rates from the Meta pricing page by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/50847
+- test(accounting): assert spend is delivered under another leader's maintenance lock by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50843
+- fix(proxy): send the whole Codex model catalog to Codex 0.166.0-alpha.1 and newer by @ryan-crabbe-berri in
+  https://github.com/BerriAI/litellm/pull/50736
+- fix(proxy): let the OS assign Prisma engine ports by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50850
+- fix(ui): keep the request log model cell to one model by @Bytechoreographer in
+  https://github.com/BerriAI/litellm/pull/49619
+- test(integration): empty the shared client cache before the tier pin batch test by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/50854
+- feat(cost-map): rolling registry update (claude-mythos-5-2, Azure Mythos 5.2, Friendli GLM-5.1 date, GovCloud Fable
+  5.2 token counting) by @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/50777
+- fix(proxy): bill an OpenAI pass-through background response once across repeated reads by @tavren27 in
+  https://github.com/BerriAI/litellm/pull/50841
+- feat(cost-map): add gemini/gemini-4-carbon from the Gemini API pricing page by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50931
+- fix(redis): free each request's Redis batch scope once the request ends by @emerzon in
+  https://github.com/BerriAI/litellm/pull/50751
+- fix(openai): download PDF URLs off the event loop and transform async chat messages once by @norkelbyte in
+  https://github.com/BerriAI/litellm/pull/49176
+- feat(cost-map): add vertex_ai/gemini-4-carbon and gemini-4-carbon-cyber-permissive from the Vertex pricing page by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/50942
+- refactor: clean up fresh tech debt in stream cost flag, masked httpx error and encrypted reasoning helpers by
+  @mateo-berri in https://github.com/BerriAI/litellm/pull/50617
+- fix(proxy): open the Logs drawer by request_id without scanning for litellm_call_id by @tavren27 in
+  https://github.com/BerriAI/litellm/pull/50789
+- fix(cost-map): give the Gemini 4 Carbon rows the shared Gemini 3 search free tier by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/50951
+- perf(streaming): reuse the upstream choice for plain litellm HTTP-handler stream chunks by @quietjules in
+  https://github.com/BerriAI/litellm/pull/50786
+- fix(responses): replay Claude tool search on follow-up turns by @zoveki in
+  https://github.com/BerriAI/litellm/pull/50821
+- feat(rate-limit): enforce per-customer per-model tpm and rpm limits in the v3 limiter by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/50857
+- test(cost): sync vertex 3.1 pro price fields and bedrock converse usage shapes by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50956
+- fix(decisions): keep box questions on a deployment when a same-model sibling turns them off by @tavren27 in
+  https://github.com/BerriAI/litellm/pull/50724
+- feat: add claude mythos 5.2 to vertex ai cost map by @kerry-berri in https://github.com/BerriAI/litellm/pull/50940
+- fix(router): hold the registry lock across router-core writes and mirror reads by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/50933
+- test(budgets): expect per-model tpm and rpm limits in budget info by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50967
+- feat(ui): customer portal (beta) surfacing the existing customer endpoints and customer usage by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/50807
+- feat(customers): reject unknown fields on /customer/new and /customer/update instead of dropping them by @kerry-berri
+  in https://github.com/BerriAI/litellm/pull/50965
+- fix(proxy): send a prompt-only call_endpoint token count to every provider count API by @paveln83 in
+  https://github.com/BerriAI/litellm/pull/50783
+- test(integration): cap the OAuth metadata lookup in the mixed capabilities subscription case by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/50867
+- fix(mcp): accept comma-separated vendor scope grants on the connect check by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/50717
+- fix(cost-map): give the Gemini 4 Argon rows the shared Gemini 3 search free tier by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/50959
+- test(http2): drain client traffic after sending GOAWAY by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50972
+- fix(responses): keep unset-effort gpt-5.4/5.5 tool calls on chat completions by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50968
+- fix(cost-map): mark the azure_ai Claude rows that bill web search as supporting it by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/50960
+- test(integration): recognize the model list's lock in the held write helper by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/50974
+- test(anthropic): scope structured output captures to inference routes by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50983
+- feat(proxy): let teams use their own allowed S3 buckets for batch files by @mrinal-berri in
+  https://github.com/BerriAI/litellm/pull/50571
+- fix(router): let an explicit routing tag outrank the encrypted content pin by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/50975
+- feat(cost): bill batch cached image input tokens for OpenAI image models by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/50997
+- fix: audit registry metadata for Together, Mistral, Fireworks, Azure AI and Copilot by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51003
+- fix(cost-map): sync together_ai together/Tev1-4B-experimental input price with /v1/models by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51013
+- chore(cost-map): add github_copilot/gemini-4-carbon from the Copilot changelog launch post by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51012
+- fix(proxy)!: reject client-supplied Vertex location and project unless the admin opts in by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/47028
+- fix(router): sync responses() applies the Router's num_retries and fallbacks by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51011
+- feat(spend): report guardrail spend separately in daily activity by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51010
+- fix(tool_choice): accept the Responses API's flat allowed_tools layout on chat completions by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/50467
+- test(integration): keep owned test peers off ephemeral ports by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51019
+- fix(bedrock): forward x-pass- headers on the /bedrock/model pass-through routes by @norkelbyte in
+  https://github.com/BerriAI/litellm/pull/50728
+- fix(proxy): send the streamed Responses fallback metadata as a typed Responses event by @paveln83 in
+  https://github.com/BerriAI/litellm/pull/50804
+- fix(proxy): recheck missing users when resolving session grants by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51030
+- feat(cli): connect a per-user GitHub Copilot credential from the command line by @ryan-crabbe-berri in
+  https://github.com/BerriAI/litellm/pull/50863
+- fix(responses): keep the namespace == name shape for deferred top-level tools by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/50602
+- chore(cost-map): add fal_ai image and video rows priced from the fal.ai model pages (first fal-ai sync) by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51035
+- fix(vertex_ai): bill gemini image edits by token usage by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51038
+- feat(search): add Microsoft Web IQ provider by @giladk1221 in https://github.com/BerriAI/litellm/pull/50883
+- fix(otel): serialize pydantic Message objects in langfuse_otel, weave_otel and langtrace by @taxfree-python in
+  https://github.com/BerriAI/litellm/pull/46845
+- perf(spend): narrow user and team spend log reads to the owner's api_keys so the (api_key, startTime) index is used by
+  @kerry-berri in https://github.com/BerriAI/litellm/pull/51026
+- fix(mcp): challenge a single-server listing whose credential the upstream rejected by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/50389
+- fix(ci): install tzdata so zoneinfo tests pass on runners without legacy tz aliases by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51057
+- fix(guardrails/rubrik): moderate text-completion prompts and forward rac_agent_id by @seph-barker in
+  https://github.com/BerriAI/litellm/pull/49912
+- fix(model-prices): use current Hy4 promotional rates by @moe-berri in https://github.com/BerriAI/litellm/pull/51072
+- fix(proxy): allow management_routes keys to call PATCH /model/{model_id}/update by @nurlanmnn in
+  https://github.com/BerriAI/litellm/pull/50979
+- fix(proxy): drop the beta label from the /v1/messages swagger tags by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51046
+- fix(router): re-check and reserve per-model rate limits on fallback targets by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/50994
+- chore(cost-map): add 61 fal_ai image and video rows priced from the fal.ai model pages (second fal-ai sync) by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51077
+- feat(auto_router): report a session's whole spend and name why savings stay unestimated by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51066
+- chore(pricing): sync replicate model prices from replicate.com model pages by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51067
+- chore(databricks): add claude-fable-5-2, date glm-5-2 retirement and fix llama-3-1-8b context from the
+  supported-models page by @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51076
+- refactor(rust_bridge): route every Rust-to-Python call through host modules by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/50822
+- fix(spend): write a background response's settling read in-process when the spend collector is on by @tavren27 in
+  https://github.com/BerriAI/litellm/pull/50957
+- fix(proxy): judge the zero-cost budget waiver by the model a key or team alias serves by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51058
+- feat(docker)!: one shipped image, one entrypoint beside the Dockerfile, one compose file by @devin-ai-integration[bot]
+  in https://github.com/BerriAI/litellm/pull/43332
+- feat(anthropic): forward message threads on native /v1/messages by @paveln83 in
+  https://github.com/BerriAI/litellm/pull/50976
+- fix(router): send managed batch uploads to batch deployments when a chat deployment has a lower order by @mika-lt in
+  https://github.com/BerriAI/litellm/pull/50971
+- fix(rate-limit): settle a fallback's tokens on the model group that served it by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51082
+- fix(proxy): keep the upgrade notice off the request path and count area-labelled release notes by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51027
+- fix(vertex_ai): bill gemini image text, thinking and priority tokens at their own rates by @devin-ai-integration[bot]
+  in https://github.com/BerriAI/litellm/pull/51017
+- test(spend): expect token billing for Vertex image edits with usage by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51109
+- fix(reasoning): log the GPT-5 reasoning_effort drop warning only when the provider gets no effort by @paveln83 in
+  https://github.com/BerriAI/litellm/pull/50995
+- test(mcp): read the comma grant through real credential storage by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/51065
+- fix(proxy): keep a request's cache opt-in when its key has cache metadata by @quietjules in
+  https://github.com/BerriAI/litellm/pull/50999
+- feat(replicate): add google/gemini-4-carbon from the Replicate model page by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51125
+- fix(mcp)!: forward the LiteLLM key when the admin configures it by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/50604
+- feat(azure): add azure_ai/mistral-large-4-latest from the Azure Models API, priced from Mistral's model page by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51047
+- ci(image-scan): build Rust with a fast ci cargo profile instead of fat-LTO release by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51075
+- test(unit): deflake db metrics spans and drain timeout tests, split proxy-infra shard by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51078
+- chore(cost-map): add 3 fal_ai rows priced from the fal pricing API and model page (third fal-ai sync) by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51126
+- fix(bedrock): govcloud eol dates from the lifecycle table, gpt-5.6 cyber govcloud mantle row and daybreak blue input
+  limit by @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51095
+- feat(helm): single chart with monolith mode and shared image, remove litellm-helm by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/43330
+- feat(terraform): run every AWS and GCP workload from the one litellm image by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/43358
+- fix(spend): keep empty-key rows in owner-scoped spend log reads by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51127
+- fix(proxy): list callable ids for partial aliases over a catch-all deployment by @quietjules in
+  https://github.com/BerriAI/litellm/pull/50963
+- test(providers): preserve unspecified Gemini image output modality by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51149
+- test(spend): expect token billing for Vertex image edits by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51148
+- fix(gemini): batch and flex tier fields the -latest alias rows were missing by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51150
+- fix(spend): keep free response reads and cancels off the creation spend row by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51110
+- fix(proxy): add tzdata to the proxy extra so a legacy TZ doesn't stop startup by @satwik-bankapur in
+  https://github.com/BerriAI/litellm/pull/49914
+- fix(tls)!: exclude RSA key exchange and ChaCha20 from the outbound cipher list in FIPS mode by @yucheng-berri in
+  https://github.com/BerriAI/litellm/pull/50671
+- fix(vertex): drop floor-only retirement dates, veo 3.1 successor and gemini token limits from the Vertex model pages
+  by @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51180
+- docs(security): updated mailinglist and vdp in security.md by @ojensen-berri in
+  https://github.com/BerriAI/litellm/pull/51199
+- chore(cost-map): rolling registry PR, fal_ai rows, databricks gemini-4-carbon, deepinfra and bedrock tier prices by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51193
+- fix(router): preserve held tiers for OpenCode subagent results by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51176
+- refactor: clean up fresh tech debt in rubrik, passthrough headers and plugin mode comments by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51163
+- test(security): expect the async release check on offline mode by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51213
+- fix(management): keep classifier deployments serving during reloads by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51111
+- chore(cost-map): add 24 runwayml models and correct seedance2 and eleven_multilingual_v2 rates by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51216
+- fix(azure): use supported API versions for Responses requests by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/51116
+- feat(proxy): count a rate-limit fallback in x-litellm-attempted-fallbacks and name it in x-litellm-fallback-reason by
+  @kerry-berri in https://github.com/BerriAI/litellm/pull/51138
+- refactor(proxy): let the gunicorn server take a private listener by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/50871
+- feat(proxy): supervise the opt-in Rust forwarding server by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/49606
+- fix(streaming): report zero cost for explicitly free calls by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51093
+- feat(gemini): file-backed batch jobs on /v1/batches with output download and spend tracking by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51032
+- fix(router): map Gemini stream-opening errors by @joshua-berri in https://github.com/BerriAI/litellm/pull/51218
+- fix(auth): enforce model access on Google and image URL routes by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51226
+- test(integration): fix the baseline accounting and series cap flakes by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/51096
+- fix(proxy): let /team/delete transactions wait for a pooled connection by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/51099
+- fix(completion)!: answer 400 for a chat message without a role by @zoveki in
+  https://github.com/BerriAI/litellm/pull/51124
+- fix(proxy): stream the guardrail block response when the block comes after an SSE keepalive ping by @paveln83 in
+  https://github.com/BerriAI/litellm/pull/51114
+- feat(otel): let a team or key OTel v2 destination add its own request metadata keys by @mrinal-berri in
+  https://github.com/BerriAI/litellm/pull/50813
+- refactor(typing): clear 1141 basedpyright Any errors across 182 files by @quietjules in
+  https://github.com/BerriAI/litellm/pull/50711
+- fix(proxy): reset a deleted customer's admission spend counter so a re-created one is not refused by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51224
+- fix(proxy): answer x-litellm-call-id on every token count response by @tavren27 in
+  https://github.com/BerriAI/litellm/pull/51037
+- feat(rate-limit): name the limit that rejected a request in a rate_limited_by header on the 429 by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51228
+- refactor(ui): remove the deprecated Learning Resources sidebar link by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/51251
+- feat(helm): add scheme and tlsConfig to the gateway ServiceMonitor by @mrinal-berri in
+  https://github.com/BerriAI/litellm/pull/50759
+- fix(proxy): name the deployment in stream error alerts on chat, completions, responses and messages by @quietjules in
+  https://github.com/BerriAI/litellm/pull/51034
+- refactor(ui): remove the deprecated API Reference page by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/51246
+- test(e2e): remove the secret manager suite by @yuneng-berri in https://github.com/BerriAI/litellm/pull/51241
+- fix(bedrock): forward the compact-2026-09-04 compaction param on Invoke /v1/messages by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51223
+- fix(fallback): preserve concurrent writes and serve saved configuration by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51245
+- chore: remove dead files from the repo root by @yassin-berriai in https://github.com/BerriAI/litellm/pull/50936
+- chore: remove cookbook and preserve live assets by @yassin-berriai in https://github.com/BerriAI/litellm/pull/50944
+- ci: remove CircleCI by @yassin-berriai in https://github.com/BerriAI/litellm/pull/50950
+- security(proxy): stop request body fields from conflicting with admin-set deployment fields by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/51254
+- test(proxy): make the cancelled supervisor test deterministic by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/51258
+- fix(responses): keep reasoning item IDs consistent across streaming events by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51243
+- feat(guardrails): write guardrail changes to the audit log by @mrinal-berri in
+  https://github.com/BerriAI/litellm/pull/51118
+- fix(llms-types): let the compact-2026-09-04 beta through on bedrock to match the headers config by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51272
+- feat(messages): serve anthropic messages on rust only by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51119
+- fix(health): log Test Connection spend with the mode's call type and model id by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/50987
+- feat(bedrock): search knowledge bases by image and return image hits by @zoveki in
+  https://github.com/BerriAI/litellm/pull/51063
+- fix(fips): hash MCP advisory-lock keys with SHA-256 in fips_mode and compute the OCI body digest as a security hash by
+  @yucheng-berri in https://github.com/BerriAI/litellm/pull/51165
+- test(proxy): await background spend counters before asserting by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51249
+- chore(databricks): price claude-fable-5-2 from the proprietary pricing page by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51232
+- feat(azure_ai): support gpt-image edits on Azure AI Foundry by @Bytechoreographer in
+  https://github.com/BerriAI/litellm/pull/49650
+- fix(proxy): keep a cost settings update from being undone by an in-flight config reload by @devin-ai-integration[bot]
+  in https://github.com/BerriAI/litellm/pull/51273
+- chore(cost-map): source the fireworks deepseek v4 flash deprecation and name its replacement by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51285
+- test(guardrails): expect the content_filter finish on a blocked chat stream by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51281
+- fix(llms-types): drop the duplicate compact-2026-09-04 arm that fails rust-lint on main by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51280
+- perf(router): list a group's deployments once per registry change on the acompletion path by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/50749
+- feat(guardrails): add the CollieAi guardrail integration by @collieai-dev in
+  https://github.com/BerriAI/litellm/pull/49224
+- fix(anthropic_messages): bound the detached pump so it cannot outlive its stream by @nuernber in
+  https://github.com/BerriAI/litellm/pull/51268
+- fix(auth): allow video retrieval after budget exhaustion by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51227
+- fix(proxy): bill anthropic pass-through calls at the deployment's custom price by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51267
+- ci(unit): split proxy-infra-root in two, isolate the child-python tests, make its file exclusions take effect by
+  @kerry-berri in https://github.com/BerriAI/litellm/pull/51316
+- fix(gemini): attribute /gemini batchGenerateContent batches to the calling key by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51279
+- ci(unit): deselect test_unit_test_proxy_hooks from the q-z shard it matches, pin the dead proxy-infra-root codecov
+  flag by @kerry-berri in https://github.com/BerriAI/litellm/pull/51324
+- test(integration): remove the openapi docs gate detached worktree test that cannot run offline by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51300
+- feat(gemini): add gemini-decision-1, the Decisions API model priced at $0.10 per 1M input tokens by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51215
+- feat(proxy): run spend log cleanup from a DB-backed scheduled job table by @jesus-berri in
+  https://github.com/BerriAI/litellm/pull/50131
+- feat(ui): add Activity tabs to resource details by @moe-berri in https://github.com/BerriAI/litellm/pull/50630
+- feat(alerts): add persisted alerts and status APIs by @moe-berri in https://github.com/BerriAI/litellm/pull/50658
+- feat(alerts): detect daily changes in recorded usage by @moe-berri in https://github.com/BerriAI/litellm/pull/50666
+- feat(ui): show performance alerts in the Alerts page by @moe-berri in https://github.com/BerriAI/litellm/pull/51104
+- feat(alerts): enable monitoring by default with a five-alert free allowance by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/51123
+- feat(skills): add admin-only version restore by @tin-berri in https://github.com/BerriAI/litellm/pull/51309
+- chore: move config and docs off the repo root by @yassin-berriai in https://github.com/BerriAI/litellm/pull/50966
+- feat(gemini): support gemini-decision-1 on /v1/decisions and /v1/systemone by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51220
+- fix(proxy): reject unknown guardrail names on key, user, team and project writes by @mrinal-berri in
+  https://github.com/BerriAI/litellm/pull/51080
+- fix(cost-map): drop the duplicate gemini/gemini-decision-1 entry that fails the root unit job on main by @yuneng-berri
+  in https://github.com/BerriAI/litellm/pull/51341
+- test(providers): expect Rust routing for quiet Messages streams by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51346
+- test(observability): include CollieAi in guardrail scope settings by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51345
+- ci(integration): install the Rust gateway and fail forwarded_proxy when Rust is not in front by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51307
+- chore: move deployment sources under litellm/deploy by @yassin-berriai in
+  https://github.com/BerriAI/litellm/pull/50981
+- chore: move ui and vscode-extension under litellm and delete docs by @yassin-berriai in
+  https://github.com/BerriAI/litellm/pull/50992
+- chore: move workspace packages under litellm by @yassin-berriai in https://github.com/BerriAI/litellm/pull/51000
+- chore: move scripts and runtime sources under litellm by @yassin-berriai in
+  https://github.com/BerriAI/litellm/pull/51006
+- ci: fail when the repo root grows past 15 entries by @yassin-berriai in https://github.com/BerriAI/litellm/pull/51007
+- fix(alerts): stop detecting traffic drops by @moe-berri in https://github.com/BerriAI/litellm/pull/51338
+- feat(rate-limit): team_model_limit_borrows_idle_capacity_from_other_teams lets a team's model TPM and RPM limits
+  borrow idle capacity in the dynamic rate limiter by @kerry-berri in https://github.com/BerriAI/litellm/pull/51328
+- fix(fal_ai): give MiniMax H3 Max video endpoints their own resolution profile by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51348
+- fix(anthropic): close strict JSON schemas on the Messages to Responses bridge by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/51337
+- test(providers): expect Rust routing for idle Messages streams by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51364
+- feat(rate-limit): team_model_limit_max_borrow_multiple caps how far a team borrows idle model capacity by @kerry-berri
+  in https://github.com/BerriAI/litellm/pull/51359
+- fix(gemini): add batch and priority image output token prices to gemini/gemini-2.5-flash-image by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51368
+- ci: stop PR runs from thrashing the Actions cache and stop smoke compiling from source by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/51343
+- feat(dynamic_rate_limiter_v3): steer flexible teams to a permitted alternate when their preferred model is saturated
+  by @kerry-berri in https://github.com/BerriAI/litellm/pull/51350
+- feat(dynamic_rate_limiter_v3): priority_class_share_splits_equally_among_active_teams splits a priority class share
+  among the teams active on a model by @kerry-berri in https://github.com/BerriAI/litellm/pull/51366
+- fix(rate-limit): hold router fallbacks, nested calls, WebSocket turns and oversized prompts to a borrowing team's
+  model share by @kerry-berri in https://github.com/BerriAI/litellm/pull/51367
+- feat(model-catalog): read output_cost_per_billable_unit in the rust registry check by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51365
+- chore(cost-map): rolling registry audit 2026-11-12, xAI retired image rates, Kling 4, GMI rows and -latest aliases by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51395
+- feat(skills): let authors edit and withdraw pending submissions by @tin-berri in
+  https://github.com/BerriAI/litellm/pull/51312
+- chore(cost-map): add 7 fal_ai rows for seedream 5.5, flux virtual try-on, patina material and vidu templates (fifth
+  fal-ai sync) by @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51407
+- feat(replicate): add video generation, image generation and text to speech through the predictions API by @kerry-berri
+  in https://github.com/BerriAI/litellm/pull/51360
+- feat(mcp): cache upstream tool lists with an admin-set lifetime by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/51160
+- fix(auth): enforce customer budget rpm/tpm limits under JWT auth by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51405
+- feat(fal_ai): add Nano Banana 2.1, bill it from fal billable units, fix google/ routing by @devin-ai-integration[bot]
+  in https://github.com/BerriAI/litellm/pull/51410
+- fix(messages): name the deployment on a rust stream's transport error by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51358
+- fix(token-counter): count Anthropic server tool history by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/51334
+- feat(ui): add daily model usage to customer pages by @ishaan-j-berri in https://github.com/BerriAI/litellm/pull/51419
+- feat(proxy): publish opted-in pass-through endpoints on the Model Hub by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/43905
+- feat(gemini): add gemini/gemini-4-hydrogen from the Gemini API pricing page by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51423
+- refactor(ui): remove standalone Model Leaderboard by @moe-berri in https://github.com/BerriAI/litellm/pull/51426
+- feat(alerts): add management controls and opt-in daily summaries by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/51418
+- fix(skills): honor dashboard user and team grants by @tin-berri in https://github.com/BerriAI/litellm/pull/51416
+- fix(proxy): fetch blog posts without blocking the event loop by @yassin-berriai in
+  https://github.com/BerriAI/litellm/pull/51369
+- feat(vertex_ai): add vertex_ai/gemini-4-hydrogen from the Vertex pricing page by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51432
+- test(providers): expect rust for anthropic messages after rust-only cutover by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51351
+- fix(spend-logs): mask token-shaped secrets in stored request and resp… by @krrish-berri-2 in
+  https://github.com/BerriAI/litellm/pull/48968
+- fix(otel): report the provider model in experimental GenAI traces by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51430
+- fix(azure): strip GPT-5 routing marker from Responses deployments by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51438
+- fix(messages): keep signed empty thinking blocks on rust by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51349
+- fix(messages): hand rust only the anthropic metadata user_id by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51355
+- fix(anthropic_messages): preserve first-round web search spend logs by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51441
+- fix(token-counting): count mid-conversation tool changes by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51447
+- test(integration): point database tests at the moved litellm/proxy-extras package by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51453
+- fix(otel): distinguish missing usage from prompt estimates on chat failures by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51443
+- fix(model_prices): add Azure DeepSeek V4.1 Flash 1017 and two Perplexity Agent API rows by @devin-ai-integration[bot]
+  in https://github.com/BerriAI/litellm/pull/51444
+- test(messages): expect rust to drop a null thinking signature on retry by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51461
+- fix(proxy): refuse blocked and over-limit keys before reading the request body by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51428
+- fix(ui): serve navigation payloads under the ui prefix by @mrinal-berri in
+  https://github.com/BerriAI/litellm/pull/50758
+- feat(model-catalog): read output_cost_per_video in the rust registry check by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/51433
+- feat(access-groups): grant vector stores through access groups by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/50290
+- fix(openai): point gpt-image-1-mini, gpt-image-1.5 and chatgpt-image-latest at gpt-image-2.6-sunburst as successor by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51475
+- fix(ui): remove the Chargebacks page from Customer Portal by @tin-berri in
+  https://github.com/BerriAI/litellm/pull/51474
+- feat(proxy): customer org, team and member hierarchy with budget templates by @ishaan-j-berri in
+  https://github.com/BerriAI/litellm/pull/51459
+- feat(fal_ai): bill flat per-video fal.ai models with output_cost_per_video by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/51225
+- feat(cost-map): load LITELLM_MODEL_COST_MAP_URL from gs:// with Google application default credentials by @jesus-berri
+  in https://github.com/BerriAI/litellm/pull/51108
+- feat(dynamic_rate_limiter_v3): prometheus share, borrowed and throttle metrics per team and model by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51417
+- fix(dynamic_rate_limiter_v3): a borrower gets its full share back once the model saturates by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51415
+- fix(fal_ai): bill Luma Ray v3.2 videos at fal's 540p default resolution by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51477
+- feat(ui): set per-threshold budget alert recipients on virtual keys by @jesus-berri in
+  https://github.com/BerriAI/litellm/pull/51061
+- fix(embeddings): unwrap extra_body for providers with their own embedding handlers by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/51335
+- fix(bedrock): send max_tokens and priority in Cohere embedding requests by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/51435
+- chore: bump litellm-enterprise 0.1.83 -> 0.1.84, litellm-proxy-extras 0.4.114 -> 0.4.115, litellm 1.110.0 -> 1.111.0
+  by @yucheng-berri in https://github.com/BerriAI/litellm/pull/51486
+- chore(cost-map): point the fireworks deepseek v4 flash successor at deepseek-v4p1-flash by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51478
+- fix(cost): preserve Bedrock cross-region pricing for Messages by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51479
+- test(image): point admin MCP schema push at /app/litellm/schema.prisma by @maciej-berri in
+  https://github.com/BerriAI/litellm/pull/51446
+- feat(proxy): add customer usage tracking and drilldowns by @ishaan-j-berri in
+  https://github.com/BerriAI/litellm/pull/51495
+- fix(dynamic_rate_limiter_v3): a capped borrower keeps its cap on its own counter and gets a fresh share at saturation
+  by @kerry-berri in https://github.com/BerriAI/litellm/pull/51494
+- perf(rust): stop re-serializing the Messages request body in Python logging callbacks by @maciej-berri in
+  https://github.com/BerriAI/litellm/pull/51440
+- feat(ui): add deployment-wide Aria visibility setting by @tin-berri in https://github.com/BerriAI/litellm/pull/51506
+- test(ui): give the skills panel's first render 5s to show the catalog by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51509
+- fix(router): validate request fields and ignore scalar fallback overrides by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51502
+- feat(ui): show customer organization usage and budget utilization by @tin-berri in
+  https://github.com/BerriAI/litellm/pull/51483
+- feat(ui): manage customer organizations, teams, and members by @ishaan-j-berri in
+  https://github.com/BerriAI/litellm/pull/51507
+- test: drop the unit tests that flaked on main this week by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51488
+- refactor(proxy): name customer member budget columns budget_id and budget_override_id by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51490
+- test(security): finish request accounting before changing Vault config by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51515
+- fix(ui): align customer member budget form with API contract by @tin-berri in
+  https://github.com/BerriAI/litellm/pull/51523
+- chore(cost-map): add together_ai/thinkingmachines/Inkling-2-Small from the Together models API by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51501
+- chore(cost-map): add fal_ai/google/gemini-omni-flash/v1.2/upscale priced per second of upscaled video by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51500
+- fix(dynamic_rate_limiter_v3): read a model's saturation from Redis so every worker agrees on it by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51519
+- test(providers): compare sagemaker embedding bodies exactly and assert caller encoding wins by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51536
+- refactor(router): move Redis key construction out of router-core into the stores by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/50356
+- feat(redis): serve the health checks' deployment states from a native store by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/50357
+- refactor(router): count the whole router_usage family on the native store by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/50862
+- feat(redis): serve the router's session pins from a native store by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/50870
+- refactor(redis): replace the Python RedisBatch with Rust by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/51383
+- fix(proxy): keep call id, model and key logging on keys refused before the body is read by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51525
+- feat(budgets): support annual calendar reset periods by @tin-berri in https://github.com/BerriAI/litellm/pull/51508
+- chore(cost-map): add fal_ai/decart/lucy-5b/image-to-video at $0.15 per video from its fal.ai page by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51551
+- feat(proxy): enforce customer org, team and member budgets and limits on the request path by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51489
+- test(observability): identify team datastore spans by team id in otel excluded services matrix by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51554
+- fix(langfuse): reserve span capacity for failure usage attributes by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51538
+- feat(proxy): register unknown customer members in the aliased organization's default team by @ishaan-j-berri in
+  https://github.com/BerriAI/litellm/pull/51546
+- feat(nace): add Drex Max decisions and inline images by @saruar-dev in https://github.com/BerriAI/litellm/pull/48426
+- fix(files): match every spelling of a provider file id in the ownership check by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51498
+- feat(proxy): router_settings.fallback_on_saturation walks key and team fallbacks before a model saturates, replacing
+  team model_preferences by @kerry-berri in https://github.com/BerriAI/litellm/pull/51439
+- fix(openai): point gpt-5, gpt-5-mini, gpt-5-nano, gpt-5-pro, o3 and o3-pro at the GPT-6 models as successor by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51492
+- fix(openai): record the successor for the gpt-4o-mini audio and realtime preview snapshots by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51563
+- fix(utils): register ollama deployment prices from the built-in catalog without calling the provider by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51561
+- fix(proxy): import soundfile lazily in the transcribe logging handler by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51480
+- fix(router): enforce access groups for pinned deployments by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51442
+- fix(interactions): route Vertex lifecycle calls through the selected deployment by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51511
+- fix(interactions): bind Deep Research agents and record their costs by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51517
+- fix(databricks): record the November 19 retirement and successor for databricks-gemini-3-6-flash by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51593
+- fix(deps): bump soupsieve past GHSA-4j63-6c4x-wfg4 and GHSA-mmhr-3c5m-f64f by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51585
+- fix(proxy): preserve team aliases in Responses WebSockets by @brianhong-dev in
+  https://github.com/BerriAI/litellm/pull/51380
+- fix(cost-map): mark together_ai/elorian-labs/glimpse-1.0 as supporting function calling and structured outputs by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51612
+- fix(proxy): enforce settled customer budgets across workers by @ishaan-j-berri in
+  https://github.com/BerriAI/litellm/pull/51568
+- fix(mcp): treat the mcp_all scope as a wildcard any grant covers by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/51578
+- feat(access-groups): name group vector stores and list them on team info by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/51484
+- feat(proxy): customer budget rollup, reset on the budget row's window, named templates, team overrides, multi-window
+  limits and pause_allow_increase by @ishaan-j-berri in https://github.com/BerriAI/litellm/pull/51582
+- feat(proxy): run requests with unknown customer ids untracked instead of refusing them by @ishaan-j-berri in
+  https://github.com/BerriAI/litellm/pull/51548
+- feat(proxy): pick the customer organization's default budget template by name on create and by id on patch by
+  @ishaan-j-berri in https://github.com/BerriAI/litellm/pull/51636
+- feat(proxy): register an unknown customer organization alias as a new organization charged for the request by
+  @ishaan-j-berri in https://github.com/BerriAI/litellm/pull/51637
+- fix(proxy): alert on customer org, customer team, and customer member budgets by @ishaan-j-berri in
+  https://github.com/BerriAI/litellm/pull/51579
+- feat(ui): show and pick vector stores for access groups by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/51581
+- fix(proxy): display customer identity in spend logs by @ishaan-j-berri in
+  https://github.com/BerriAI/litellm/pull/51596
+- fix(fireworks_ai): read fractional sizes like 1p5b in the size bucket fallback by @Abelo9996 in
+  https://github.com/BerriAI/litellm/pull/51451
+- chore: bump litellm-enterprise 0.1.84 -> 0.1.85, litellm-proxy-extras 0.4.115 -> 0.4.116 by @yucheng-berri in
+  https://github.com/BerriAI/litellm/pull/51643
+- feat(customer-portal): complete hierarchy management by @ishaan-j-berri in
+  https://github.com/BerriAI/litellm/pull/51521
+- fix: restore customer budget alerts after hierarchy schema changes by @ishaan-j-berri in
+  https://github.com/BerriAI/litellm/pull/51645
+- fix(proxy): upsert customer orgs and customer members safely by @ishaan-j-berri in
+  https://github.com/BerriAI/litellm/pull/51607
+- test(spend): synchronize concurrent member resets before validation completes by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51655
+- fix(gemini): move the November 17 shutdown date on TTS and Live preview rows to the dates on the deprecations page by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51657
+- fix(openai): add gpt-image-2.6 batch prices and drop gpt-5.5-pro long context batch prices by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51647
+- fix(huggingface): honor HUGGINGFACE_API_BASE and env endpoints for chat by @Abelo9996 in
+  https://github.com/BerriAI/litellm/pull/51449
+- fix(budgets): invalidate customer hierarchy caches through stored team IDs by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51654
+- fix(proxy): register a customer member in a customer org with no default budget by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51660
+- fix(ui): show member spend above top models on customer usage page by @tin-berri in
+  https://github.com/BerriAI/litellm/pull/51677
+- fix(proxy): refuse a key pinned to another customer org before registering an unknown org alias by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51674
+- fix(budgets): reset 12months and other long unit spellings on their short form's schedule by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51672
+- ci(mcp-deps): build unoptimized in the MCP dependency resolution workflow by @michelligabriele in
+  https://github.com/BerriAI/litellm/pull/51684
+- test(observability): give K3 the calibrated proxy budget instead of a fixed 300s by @yucheng-berri in
+  https://github.com/BerriAI/litellm/pull/51592
+- fix(tests): run the worker-replacement chaos test under strict supervision by @yucheng-berri in
+  https://github.com/BerriAI/litellm/pull/51590
+- fix(proxy): /customer/new budgets reset on the same schedule as other budgets by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51689
+- fix(vertex_ai): report PDF tokens and cost on Gemini embedContent responses by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/51673
+- fix(proxy): drop a customer override expiry sent without an override by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51667
+- fix(router): prevent Responses fallback from replaying delivered tool calls by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51683
+- feat(customer-portal): add free tier limits with Enterprise upgrade path by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/51687
+- fix(sdk): stop requiring redis to import the Messages streaming path by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51685
+- test(security): resolve budget request route identifiers from their own fixtures by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51659
+- fix(customers): align budget displays with recorded reset windows by @tin-berri in
+  https://github.com/BerriAI/litellm/pull/51658
+- fix(vertex_ai): send document_ocr, audio_track_extraction and auto_truncate on Gemini embeddings by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/51686
+- fix(mistral): declare low, medium and high reasoning effort for mistral-large-4 by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/51693
+- feat(customer-portal): configure budget groups atomically by @tin-berri in
+  https://github.com/BerriAI/litellm/pull/51661
+- chore(cost-map): add github_copilot/gemini-4-hydrogen from the Copilot changelog launch post by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51696
+- fix(ui): make customer org settings tab full width by @tin-berri in https://github.com/BerriAI/litellm/pull/51700
+- chore(cost-map): add Soniox v6 and date Soniox, Bedrock Claude and Azure Whisper retirements by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51620
+- fix(mcp): route aggregate resources/read to the server that lists the URI by @mrinal-berri in
+  https://github.com/BerriAI/litellm/pull/51462
+- fix(customer-portal): keep existing memberships and scope free tier capacity locks by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/51698
+- fix(types): build Usage schemas eagerly so parallel first requests cannot race by @yucheng-berri in
+  https://github.com/BerriAI/litellm/pull/51591
+- feat(fal_ai): bill fal video clips by duration and resolution by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/51679
+- fix(proxy): delete a customer team's override budget when the team has no overall budget by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51703
+- fix(cache-memory): rebuild the in-memory cache on an exact expiry index by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/51388
+- feat(ui): let admins control Aria access for internal users by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/51641
+- test(streaming): make unbuffered Noma secret exposure deterministic by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51707
+- fix(proxy): retain unwritten rollups after database disconnects by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51706
+- fix(docker): refresh Wolfi base to patched glibc by @ishaan-j-berri in https://github.com/BerriAI/litellm/pull/51550
+- chore(cost-map): add the 4K output rate to runwayml/seedance2_5 by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51697
+- fix(bedrock): log and bill Titan embedding replies on the invoke passthrough by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/51701
+- fix(deps): bump opentelemetry, dnspython and tornado past the Nov 13 advisories so osv-scan passes by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51712
+- test(integration): saturate the model before measuring dynamic limiter team share metrics by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51714
+- chore(cost-map): move azure_ai claude-haiku-4-5 and claude-opus-4-5 retirement to 2027-03-16 by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51716
+- feat(ui): add overall customer usage and sortable budgets by @tin-berri in
+  https://github.com/BerriAI/litellm/pull/51713
+- feat(custom-logger-v2): add types, dispatcher and route callback call sites (step 0) by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51214
+- fix(auth): let dashboard sessions use the user's team models by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/51663
+- fix(proxy): keep a customer budget reset from being undone by a stale hierarchy cache entry by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51694
+- fix(spend-logs): make token redaction opt-in by @moe-berri in https://github.com/BerriAI/litellm/pull/51729
+- fix(dynamic_rate_limiter_v3): publish a team's share gauges for requests served while the model is idle by
+  @mateo-berri in https://github.com/BerriAI/litellm/pull/51709
+- fix(helm): route every gateway allowlist path to the gateway in the componentized ingress by @mrinal-berri in
+  https://github.com/BerriAI/litellm/pull/50760
+- fix(cost-map): restore backward compatibility after the Rust loader move by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/51545
+- fix(model-prices): drop Flex prices from Vertex AI Gemini 4 Argon and Hydrogen by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51735
+- test(s3_v2): give the slow-sink ramp test a callback limit that outlasts its burst by @yucheng-berri in
+  https://github.com/BerriAI/litellm/pull/51744
+- fix: preserve routed prompt generation settings by @joshua-berri in https://github.com/BerriAI/litellm/pull/51702
+- fix(proxy): preserve caller metadata on auth failures by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51745
+- fix(logging): keep a content-block system prompt in logged messages by @ryan-crabbe-berri in
+  https://github.com/BerriAI/litellm/pull/51699
+- refactor(mcp): let the semantic filter take its MCP tool loader as a parameter by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/50483
+- fix(mcp): scope the gateway sign-in to the servers picked on the connect page by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/50973
+- fix(proxy): keep carried end-user spend when a budget reset is retried by @PyExtreme in
+  https://github.com/BerriAI/litellm/pull/51143
+- test(otel): keep proxy startup out of the per-test timeout in the excluded services matrix by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51759
+- fix(bedrock): answer 400 for service tiers Bedrock cannot serve, forward reserved by @quietjules in
+  https://github.com/BerriAI/litellm/pull/50516
+- feat(model-catalog): read min_billed_input_tokens so cost map rows that set it pass the guard by @quietjules in
+  https://github.com/BerriAI/litellm/pull/51128
+- fix(gemini): stream TTS audio in delta.audio on chat completions by @mika-lt in
+  https://github.com/BerriAI/litellm/pull/51750
+- fix(proxy): count tokens with the thinking, effort, and tool_choice that inference sends by @norkelbyte in
+  https://github.com/BerriAI/litellm/pull/51079
+- feat(custom-logger-v2): add the contract for rust callbacks and bind the proxy request scope by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51526
+- fix: raise on failed OpenRouter non-streaming completions by @Jeongho0805 in
+  https://github.com/BerriAI/litellm/pull/50880
+- fix(opencode): stream Go Messages-protocol models through chat completions by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/51715
+- feat(opensearch): map vector store search filters to k-NN filters and add hybrid search by @zoveki in
+  https://github.com/BerriAI/litellm/pull/51131
+- fix(cli): let Claude Code renew a --pkce login's key through lite's apiKeyHelper by @norkelbyte in
+  https://github.com/BerriAI/litellm/pull/51319
+- fix(count_tokens): answer 400, not 500, for a message without role or content on Anthropic and Azure AI by @mika-lt in
+  https://github.com/BerriAI/litellm/pull/51284
+- ci(integration): point the rust gateway install step at litellm/packaging by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51743
+- fix(bedrock): send s3:// image, document and video URLs to Converse as S3 sources by @norkelbyte in
+  https://github.com/BerriAI/litellm/pull/50577
+- fix(mistral): send Magistral reasoning as supported native levels by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51329
+- fix(anthropic): restore sync messages streams for OpenAI and Azure by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51305
+- test(logging): isolate bridged call recorder per request by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51339
+- feat(vertex_ai): label Vertex requests with the caller's key, team, org, and project by @zoveki in
+  https://github.com/BerriAI/litellm/pull/50732
+- fix(proxy): list key and team aliases on /model_group/info and apply listing callbacks to them by @tavren27 in
+  https://github.com/BerriAI/litellm/pull/51754
+- fix(azure_ai): send reasoning_effort to Foundry Kimi K3 and keep its reasoning_content by @paveln83 in
+  https://github.com/BerriAI/litellm/pull/51747
+- fix(gateway): return Claude thinking blocks on chat completions instead of a 500 by @quietjules in
+  https://github.com/BerriAI/litellm/pull/51774
+- fix(azure): drop the traceback from stream-cut errors sent to clients and alerts by @tavren27 in
+  https://github.com/BerriAI/litellm/pull/51760
+- fix(vertex_ai): reuse one Google token across RAG Engine searches and cold bursts by @quietjules in
+  https://github.com/BerriAI/litellm/pull/51239
+- feat(mistral): add native upstream token counting support (#50652) by @yogeshwaran10 in
+  https://github.com/BerriAI/litellm/pull/50653
+- fix(proxy): honor cancel_on_disconnect on the rerank endpoints by @jesus-berri in
+  https://github.com/BerriAI/litellm/pull/51252
+- refactor: drop a comprehension suppression and restating comments from new customer hierarchy and v2 callback code by
+  @mateo-berri in https://github.com/BerriAI/litellm/pull/51804
+- fix(cohere): honor COHERE_API_BASE for embeddings by @zhengqiuyang in https://github.com/BerriAI/litellm/pull/50249
+- fix(responses): accept a string or tuple allowed_openai_params on Responses models instead of answering 500 by
+  @tavren27 in https://github.com/BerriAI/litellm/pull/51751
+- fix(proxy): retrieve and delete a managed file when the request also names a model by @paveln83 in
+  https://github.com/BerriAI/litellm/pull/51780
+- fix(responses): send cache_control as a prompt_cache_breakpoint on the chat-to-Responses bridge by @paveln83 in
+  https://github.com/BerriAI/litellm/pull/51783
+- fix(azure): send no api-version on Foundry project /openai/v1 Responses bases by @tavren27 in
+  https://github.com/BerriAI/litellm/pull/51767
+- feat(custom_llm): let custom providers serve native generateContent by @mika-lt in
+  https://github.com/BerriAI/litellm/pull/51083
+- fix(logging): send one async success log per sync bridged Responses stream by @norkelbyte in
+  https://github.com/BerriAI/litellm/pull/51787
+- feat(proxy): support budget_limits windows on internal users by @quietjules in
+  https://github.com/BerriAI/litellm/pull/51763
+- fix(openrouter): suppress empty post-finish choice before usage trailer by @VISHNU0906 in
+  https://github.com/BerriAI/litellm/pull/50210
+- fix(proxy): count the request's tool_choice on the token count routes by @tavren27 in
+  https://github.com/BerriAI/litellm/pull/51133
+- fix(proxy): run baggage tag mappings and budget checks on /queue/chat/completions by @norkelbyte in
+  https://github.com/BerriAI/litellm/pull/51753
+- feat(decisions): support Vercel AI Gateway decision models by @mishdotdev in
+  https://github.com/BerriAI/litellm/pull/50642
+- test(e2e): move audio, realtime, and Langfuse tests off model ids with shutdown dates by @paveln83 in
+  https://github.com/BerriAI/litellm/pull/51816
+- feat(github_copilot): support GitHub App authentication with PEM upload by @giladk1221 in
+  https://github.com/BerriAI/litellm/pull/51427
+- fix(together_ai): stop listing retired Together ids by @mika-lt in https://github.com/BerriAI/litellm/pull/51827
+- fix(gateway)!: apply a deployment's Messages params and fill model capabilities from the cost map by @norkelbyte in
+  https://github.com/BerriAI/litellm/pull/51834
+- fix(scim): skip groups with no team so a PATCH or PUT still deactivates the user by @mika-lt in
+  https://github.com/BerriAI/litellm/pull/51829
+- fix(aiohttp): reset the upstream connection when a stream closes early, so aborted Bedrock Invoke streams stop by
+  @princejain756 in https://github.com/BerriAI/litellm/pull/50657
+- fix(bedrock): map OpenAI vector store search filters to AWS RetrievalFilter by @zoveki in
+  https://github.com/BerriAI/litellm/pull/51291
+- chore: move LiteLLM's configs and e2e tests off gpt-4o and gpt-4.1 before their 2027-01-14 shutdown by @tavren27 in
+  https://github.com/BerriAI/litellm/pull/51800
+- test(streaming): assert queued first-error JSON response by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51849
+- test(spend): align queued baggage mapping fixtures by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51847
+- test(configuration): restore isolated gateway launcher imports by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51848
+- fix(openai): cap and bill web search rounds on Responses-pinned chat completions by @paveln83 in
+  https://github.com/BerriAI/litellm/pull/51802
+- feat(proxy): add per-model project batch enqueued token limits by @kirti22jain in
+  https://github.com/BerriAI/litellm/pull/51608
+- fix(otel): send the Langfuse environment, release and version on OTel v2 by @yucheng-berri in
+  https://github.com/BerriAI/litellm/pull/51385
+- fix(router)!: name the request size when usage-based routing refuses an over-tpm request by @norkelbyte in
+  https://github.com/BerriAI/litellm/pull/51838
+- test(anthropic): expect adaptive thinking temperature dropping under drop_params by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51859
+- fix(sdk): stop global model_fallbacks from recursing on every completion call by @norkelbyte in
+  https://github.com/BerriAI/litellm/pull/51817
+- fix(proxy): stop wildcard aliases over unknown orgs listing every catalog id by @tavren27 in
+  https://github.com/BerriAI/litellm/pull/51805
+- feat(messages): serve azure ai foundry messages on rust only by @maciej-berri in
+  https://github.com/BerriAI/litellm/pull/51721
+- feat: email key owners before opted-in virtual keys expire by @mrinal-berri in
+  https://github.com/BerriAI/litellm/pull/51482
+- feat(guardrails): straiker stream_mode, per-phase logging and prompt-block replies by @srik-straiker in
+  https://github.com/BerriAI/litellm/pull/51401
+- perf(logging): scan opt-in spend-log tokens natively by @moe-berri in https://github.com/BerriAI/litellm/pull/51770
+- fix(vertex-ai): send union-root tool schemas as parametersJsonSchema by @quietjules in
+  https://github.com/BerriAI/litellm/pull/51835
+- fix(proxy): close streams before rebuilding the served output for logging by @maciej-berri in
+  https://github.com/BerriAI/litellm/pull/51487
+- fix(vertex_ai): resolve correct default max_tokens for versioned claude ids by @hktitof in
+  https://github.com/BerriAI/litellm/pull/40376
+- feat(s3-log): replace the python s3_v2 logger with a rust callback by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51539
+- refactor(router): shape attempt kwargs in router-core by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51644
+- feat(db): add the SQLx pool foundation with the writer pool by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/49798
+- feat(db): add an optional native reader pool with explicit routing by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/49804
+- feat(db): emit DB service events from native operations by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/49810
+- feat(db): classify errors and recycle poisoned pools like Prisma by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/49801
+- feat(db): take the rollup lock_timeout from the caller and keep team lock statements unnamed under PgBouncer by
+  @yujonglee-berri in https://github.com/BerriAI/litellm/pull/51549
+- ci(unit): cut unit check time with cheaper per-test resets and fewer non-unit tests by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/51864
+- feat(otel v2): proxy-level default langfuse_span_scope for key and team destinations by @shivamrawat1 in
+  https://github.com/BerriAI/litellm/pull/51726
+- test(router): hold the concurrent upsert where its build reads the list back by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51878
+- chore(cost-map): add fal_ai seedream v5 pro US edit and text-to-image rows priced per image from their fal.ai pages by
+  @devin-ai-integration[bot] in https://github.com/BerriAI/litellm/pull/51881
+- chore: bump litellm-enterprise 0.1.85 -> 0.1.86, litellm-proxy-extras 0.4.116 -> 0.4.117 by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/51876
+- test(e2e): run the batch lifecycle with a key that only reaches its own deployment by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/51857
+- fix(spend): support PostgreSQL 12 delivery migrations by @joshua-berri in
+  https://github.com/BerriAI/litellm/pull/51868
+- fix(packaging): keep the litellm-proxy package version in step with litellm by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/51807
+- fix(ui): rename Customer Portal to Customer Management by @ishaan-j-berri in
+  https://github.com/BerriAI/litellm/pull/51891
+- test(database): expect no native pool in proxy lifespan cleanup by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51911
+- fix(ui): clarify customer usage periods and preserve date ranges by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/51899
+- feat(ui): reuse usage spend design for customer teams and members by @tin-berri in
+  https://github.com/BerriAI/litellm/pull/51724
+- feat(customers): move existing members between teams by @moe-berri in https://github.com/BerriAI/litellm/pull/51913
+- feat(customers): search customer members by ID or alias in the Members tab by @kenneth-berri in
+  https://github.com/BerriAI/litellm/pull/51896
+- test(e2e): drop two batch waits that never finish in time by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/51882
+- test(integration): record a stack when an owned proxy crashes by @devin-ai-integration[bot] in
+  https://github.com/BerriAI/litellm/pull/51922
+- refactor(s3-log): move the rust-backed s3 logger from s3_v3 to s3_v2 by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51893
+- perf(host-python): settle ready async values inline instead of spawning on tokio by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51906
+- perf(streaming): extract usage once per chunk when assembling stream usage by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51903
+- perf(caching): format dual cache debug logs lazily by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51902
+- perf(auth): read token model fields from the class instead of deprecated **fields** by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51901
+- refactor(s3-log): move python-compatible helpers into python-compat by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51895
+- fix(proxy): join default teams on the team member budget when the team has one by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51728
+- fix(proxy): let an exhausted key keep listing models and counting tokens by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51675
+- fix(proxy): run the /fal_ai passthrough price gate on the path sent upstream by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51671
+- fix(fal_ai): send versioned seedream and flux-pro image models to the endpoint they name by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51668
+- fix(replicate): answer malformed video seconds with a 400 and drop non-decimal size digits instead of a 500 by
+  @kerry-berri in https://github.com/BerriAI/litellm/pull/51670
+- fix(perplexity): bill cached prompt tokens at the cache read rate when the response has no cost by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51669
+- fix(vertex_ai): send extra_body fields as predict parameters for BGE embedding models by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51662
+- fix(bedrock): put extra_body fields inside modelInput for async-invoke embeddings by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51676
+- fix(fal_ai): bill a video request without a resolution at the row's default rate by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51665
+- fix(router): stop the rust router keeping every finished request in memory until a full gc by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51888
+- fix(customers): keep uncapped customer spend across scheduled budget resets by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/51918
+- fix(budgets): match window starts to stored millisecond precision by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/51921
+- fix(ui): default customer usage range to month to date by @moe-berri in https://github.com/BerriAI/litellm/pull/51923
+- fix(cost): keep a deployment's per-second video price over the catalog row's flat price by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51688
+- feat(dynamic_rate_limiter): customer organizations and keys borrow idle model capacity and split class shares by
+  @kerry-berri in https://github.com/BerriAI/litellm/pull/51705
+- fix(count_tokens): return 400 for malformed Anthropic server-tool blocks by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51957
+- fix(admin-mcp): restore the budget route operation ids the connector pins by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51959
+- fix(proxy): hold the logging object weakly in the detached stream failure hook by @kaizen-38 in
+  https://github.com/BerriAI/litellm/pull/51318
+- fix(responses): retry a stream that breaks before output in its own model group by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51953
+- perf(customers): index member team, budget and override lookups by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/51961
+- feat(customers): sort organizations, teams and members by budget limit by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/51924
+- chore(lint): flag conditionals with more than 3 boolean clauses via ruff PLR0916 by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51964
+- refactor(vertex_ai): remove unreachable VertexAIFilesHandler.afile_content by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51966
+- fix(router): free a failed rust router call's request without waiting for a full gc by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/51963
+- perf(auth): reuse validated models on UserApiKeyCache memory hits by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51912
+- fix(proxy): reset members given default team member models on the team's budget window by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51960
+- fix(customers): cascade delete large organizations within the transaction timeout by @moe-berri in
+  https://github.com/BerriAI/litellm/pull/51969
+- feat(budgets): replace the python budget hold and settle engine with a rust engine admitted at auth by
+  @narmstrong-berri in https://github.com/BerriAI/litellm/pull/51535
+- fix(dynamic_rate_limiter): charge tokens used while the model was idle against a team's class share by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/51952
+- feat(messages): serve bedrock invoke messages on rust only by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51330
+- fix(proxy): stop team model writes from pulling in proxy-level settings by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/51874
+- fix(proxy)!: match the sign-in email fallback to the right user by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/51897
+- fix(messages): clamp bedrock effort before the drop_params effort gate by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51972
+- refactor(proxy): keep the detached stream failure hook state on the logging object by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/51962
+- feat(fnmatch): add a crate for Python's fnmatchcase glob dialect by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/51530
+- refactor(auth): decide route rules in Rust by @yujonglee-berri in https://github.com/BerriAI/litellm/pull/51531
+- refactor(auth): plan the authentication path in Rust by @yujonglee-berri in
+  https://github.com/BerriAI/litellm/pull/51605
+- test: backport stale integration and UI test fixes to rc/1.111.0 by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/52111
+- fix: backport #52005 to rc/1.111.0 by @yuneng-berri in https://github.com/BerriAI/litellm/pull/52125
+- fix(messages): close high and medium rust messages parity bugs (rc 1.111.0) by @narmstrong-berri in
+  https://github.com/BerriAI/litellm/pull/52115
+- fix(messages): load the anthropic beta map only when a filter has a beta to filter (rc 1.111.0) by @maciej-berri in
+  https://github.com/BerriAI/litellm/pull/52206
+- fix: backport #52169, #52175 and #52102 to rc/1.111.0 by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/52186
+- chore(deps): backport next 16.4.5 (#52102) to rc/1.111.0 by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/52237
+- test(integration): stop requiring safeguards calls to wait for the anthropic beta map (rc/1.111.0) by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/52330
+- bump: litellm-proxy-extras 0.4.117 -> 0.4.118 (rc/1.111.0) by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/52370
+- fix(responses): restore GPT-6.2 prompt caching for store:false on 1.111 RC by @mateo-berri in
+  https://github.com/BerriAI/litellm/pull/52657
+- fix(router): do not retry a Responses stream after an output item reached the client (#52461) [rc/1.111.0] by
+  @kerry-berri in https://github.com/BerriAI/litellm/pull/52691
+- fix(proxy): backport #52080 to rc/1.111.0, serve a burst of first requests on new customer org aliases by @kerry-berri
+  in https://github.com/BerriAI/litellm/pull/52462
+- fix: backport #52213, #52313, #52341, #52350 and #52378 to rc/1.111.0 by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/52470
+- fix(proxy): backport failed-request body release to rc/1.111.0 by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/52764
+- fix(responses): prevent stream restarts after non-text output (#52616) [rc/1.111.0] by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/52752
+- fix(key-management): backport #52838 and #52925 to rc/1.111.0 by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/52939
+- fix(responses): cache bridged system prompts on stored GPT-6.2 requests (backport #52906 to rc/1.111.0) by
+  @mateo-berri in https://github.com/BerriAI/litellm/pull/52914
+- test(e2e): allow a 3-token floor and 10% on provider token counts (backport #53023 to rc/1.111.0) by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/53024
+- chore(release): backport #53171, #53210 to rc/1.111.0 by @kerry-berri in https://github.com/BerriAI/litellm/pull/53206
+- fix(proxy): backport audit log fixes to rc/1.111.0 (#50929, #53305) by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/53299
+- test: backport #52365, #52815, #53000, #53243 and #53193 to rc/1.111.0 and wait for the Codex MCP server by
+  @yuneng-berri in https://github.com/BerriAI/litellm/pull/53927
+- chore: bump versions on rc/1.111.0 by @yuneng-berri in https://github.com/BerriAI/litellm/pull/53975
+- fix(mcp)!: backport gateway DCR opt-in to 1.111 RC (#53059) by @shrey-berri in
+  https://github.com/BerriAI/litellm/pull/53181
+- fix(router): fall back by the group a pick was routed to (backport #52510 to rc/1.111.0) by @kerry-berri in
+  https://github.com/BerriAI/litellm/pull/53110
+- fix(auth): backport #51772 restricted end-user index to rc/1.111.0 by @yuneng-berri in
+  https://github.com/BerriAI/litellm/pull/54243
+
+## New Contributors
+
+- @raunakpandey1 made their first contribution in https://github.com/BerriAI/litellm/pull/49806
+- @tedswinyar made their first contribution in https://github.com/BerriAI/litellm/pull/49183
+- @taxfree-python made their first contribution in https://github.com/BerriAI/litellm/pull/46845
+- @nurlanmnn made their first contribution in https://github.com/BerriAI/litellm/pull/50979
+- @satwik-bankapur made their first contribution in https://github.com/BerriAI/litellm/pull/49914
+- @collieai-dev made their first contribution in https://github.com/BerriAI/litellm/pull/49224
+- @brianhong-dev made their first contribution in https://github.com/BerriAI/litellm/pull/51380
+- @Abelo9996 made their first contribution in https://github.com/BerriAI/litellm/pull/51451
+- @zhengqiuyang made their first contribution in https://github.com/BerriAI/litellm/pull/50249
+- @VISHNU0906 made their first contribution in https://github.com/BerriAI/litellm/pull/50210
+- @mishdotdev made their first contribution in https://github.com/BerriAI/litellm/pull/50642
+- @princejain756 made their first contribution in https://github.com/BerriAI/litellm/pull/50657
+- @kirti22jain made their first contribution in https://github.com/BerriAI/litellm/pull/51608
+- @hktitof made their first contribution in https://github.com/BerriAI/litellm/pull/40376
+- @kaizen-38 made their first contribution in https://github.com/BerriAI/litellm/pull/51318
+
+**Full Changelog**: https://github.com/BerriAI/litellm/compare/v1.110.4...v1.111.0
+
+## Verify Docker Image Signature
+
+```bash
+cosign verify \
+  --certificate-identity https://github.com/BerriAI/project-releaser/.github/workflows/release.yml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/berriai/litellm:v1.110.3
 ```
 
