@@ -3,6 +3,18 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.7.6-3] - 2026-11-25
+
+### Fixed
+
+- The options schema now declares the optional `sops.source`, `sops.git_*` and `sops.age_key_file` keys, so saving the
+  configuration no longer fails for these options in the Supervisor
+
+### Changed
+
+- The `sops.git_*` defaults are no longer written into the options. An unset git source is now absent instead of an
+  empty string; the app applies the same defaults as before (`main`, `secrets.sops.yaml`, `x-access-token`)
+
 ## [0.7.6-2] - 2026-11-24
 
 ### Added
