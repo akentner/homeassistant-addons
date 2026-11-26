@@ -3,6 +3,12 @@
 All notable changes to the **Secrets Sync** add-on are documented in this file. The add-on is our own code with no
 upstream project, so every entry is add-on specific.
 
+## [0.7.6-4] - 2026-11-26
+
+### Changed
+
+- Bitwarden CLI updated from 2026.10.0 to 2026.11.1
+
 ## [0.7.6-3] - 2026-11-25
 
 ### Fixed
