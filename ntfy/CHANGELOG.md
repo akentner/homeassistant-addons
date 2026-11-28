@@ -1,3 +1,22 @@
+This is a security release. It closes a gap in the web push endpoint check, which let anyone who can read a topic make
+the server send requests to hosts of their choosing, and adds an option to limit Firebase messages per visitor and
+topic. Upgrading is recommended if you enable web push.
+
+**Security:**
+
+- Web push: check endpoints against the parsed URL host instead of the raw string, so endpoints like
+  `https://attacker.example?x.mozaws.net/` that only look like an allowed push service are rejected; such endpoints that
+  were already stored are removed, and redirects are no longer followed
+  ([GHSA-j5px-666m-5p3f](https://github.com/binwiederhier/ntfy/security/advisories/GHSA-j5px-666m-5p3f),
+  [GHSA-h4w9-5cmv-92hv](https://github.com/binwiederhier/ntfy/security/advisories/GHSA-h4w9-5cmv-92hv), thanks to
+  @jpabeem and @brennocm for reporting)
+
+**Bug fixes + maintenance:**
+
+- Add `experimental-firebase-limit` option to limit Firebase messages per visitor and topic for users without a paid
+  plan (this option will go away in a future release) to stay within FCM's hourly fanout budget, which recently caused
+  about half of all Firebase messages to fail ([#2249](https://github.com/binwiederhier/ntfy/issues/2249))
+
 This is a security release. It upgrades the SMTP server library used for e-mail publishing, which fixes a memory
 exhaustion attack, and closes two holes in topic reservations, where a user could reserve topics covered by an admin's
 wildcard access entry, or reserve topics at all on a tier without reservations. It also stops clients behind proxies
