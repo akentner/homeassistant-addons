@@ -152,8 +152,8 @@ RUN mkdir -p /tmp/eza \
     && rm -rf /tmp/eza
 
 # delta — git diff pager with syntax highlighting (glibc build)
-ARG DELTA_VERSION=0.21.2
-ARG DELTA_SHA256_X86_64=5d41046c4ada17e7d080e1e5dbbd46544146bb5597e2ab56881a8c594272cd06
+ARG DELTA_VERSION=0.22.0
+ARG DELTA_SHA256_X86_64=10d20fd7b7e0350e7996ff191a68bfd52093a2361c72b08f6fa10b31dd6782ce
 RUN mkdir -p /tmp/delta \
     && curl -fsSL \
         "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/delta-${DELTA_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
@@ -186,8 +186,8 @@ RUN curl -fsSL \
     && rm /tmp/yazi.zip
 
 # atuin — shell history with TUI search; glibc release requires GLIBC_2.39 (Bookworm has 2.36), use musl build
-ARG ATUIN_VERSION=18.25.0
-ARG ATUIN_SHA256_X86_64=9ebfb49d9f5cc5fb03588315f8f54277fe9e3648bd98de7666a350000670cd19
+ARG ATUIN_VERSION=18.25.1
+ARG ATUIN_SHA256_X86_64=f2bc97588d5aa91f49b992298544e13776df044cb4baf606875c7cc8444e9e00
 RUN mkdir -p /tmp/atuin \
     && curl -fsSL \
         "https://github.com/atuinsh/atuin/releases/download/v${ATUIN_VERSION}/atuin-x86_64-unknown-linux-musl.tar.gz" \
@@ -234,9 +234,9 @@ RUN uv tool install graphifyy
 # The binary is placed where the official installer (and `opencode upgrade`) writes it, $HOME/.opencode/bin, and a copy is
 # stashed at /opt/opencode-initial/ so run.sh can seed it into the persistent /data volume (only when it is newer than
 # what is persisted); user-initiated upgrades persist across container rebuilds.
-ARG OPENCODE_VERSION=2.3.2
-ARG OPENCODE_SHA256_X86_64=563b5d663637226b6e3bb4bb6803281bc39b0d2cd88db06d674b6420aab009b0
-ARG OPENCODE_SHA256_AARCH64=9d10185acdb72336e086e699ca363a6065f410fd3c1caed0dc8046e95ac06ccb
+ARG OPENCODE_VERSION=2.4.1
+ARG OPENCODE_SHA256_X86_64=9ddd18e3faf64eaeccf6a0fcbc96a5c7a14520ae5fd5b61e5be51d894f478b47
+ARG OPENCODE_SHA256_AARCH64=cb28cf94541aeb62a4b2ea5997a99b5dd6bae595a772f36fbe279299f2032a4f
 RUN ARCH=$(uname -m) \
     && case "${ARCH}" in \
         x86_64) OPENCODE_ASSET="opencode-linux-x64"; OPENCODE_SHA256="${OPENCODE_SHA256_X86_64}" ;; \
@@ -281,9 +281,9 @@ RUN npm install -g @github/copilot fx mcp-server-mysql
 # in build.yaml (verify scenario `drift`); the digests are the GitHub release asset digests of tag rust-v<version>.
 # Renovate bumps CODEX_VERSION only — refresh the digests with internal/update-codex-pins.sh. Keep the package layout:
 # bin/ contains the CLI and tool hosts; codex-resources/ includes bubblewrap. State lives in CODEX_HOME=/data/.codex.
-ARG CODEX_VERSION=0.171.0
-ARG CODEX_SHA256_X86_64=8391d67757496bfd14893eca6cbf0c96994bf2627566ff1f018f70600c9ef6b3
-ARG CODEX_SHA256_AARCH64=d8c43bee6cf11b01eb18b95f4d7961092bc40228180808859e70dabb7784c1c9
+ARG CODEX_VERSION=0.172.0
+ARG CODEX_SHA256_X86_64=63e3b00065ed7f62166d0522e17f663cb866a31d80d03e63365482ed34a1d991
+ARG CODEX_SHA256_AARCH64=faf17b8071927f33346a805dc8cb45de4e08c0d75cf0e5e68cecddca28b8861e
 RUN ARCH=$(uname -m) \
     && case "${ARCH}" in \
         x86_64) CODEX_SHA256="${CODEX_SHA256_X86_64}" ;; \
